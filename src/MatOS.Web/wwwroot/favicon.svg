@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="matOS">
+  <defs>
+    <linearGradient id="fbg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C6BFF"/>
+      <stop offset="0.55" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#C026D3"/>
+    </linearGradient>
+    <linearGradient id="ftile" x1="13" y1="34" x2="30" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34E7E4"/>
+      <stop offset="1" stop-color="#22B8FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#fbg)"/>
+  <rect x="13" y="13" width="17" height="17" rx="5" fill="#ffffff" fill-opacity="0.96"/>
+  <rect x="34" y="13" width="17" height="17" rx="5" fill="#ffffff" fill-opacity="0.55"/>
+  <rect x="13" y="34" width="17" height="17" rx="5" fill="url(#ftile)"/>
+  <rect x="34" y="34" width="17" height="17" rx="5" fill="#ffffff" fill-opacity="0.80"/>
+</svg>

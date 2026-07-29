@@ -1,0 +1,14 @@
+# Build artefacts / IDE / local state. NOTE: do NOT ignore source "Data/" folders
+# (the pattern below is case-sensitive and only targets runtime data dirs).
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/.vscode/
+**/data/
+**/appdata/
+*.db
+*.user
+.git/
+.github/
+**/node_modules/

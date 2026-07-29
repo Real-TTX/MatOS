@@ -1,0 +1,84 @@
+/* ---- matOS design tokens + base ------------------------------------------ */
+:root {
+  --bg: #0b0f1a;
+  --bg-grad-1: #141a2e;
+  --bg-grad-2: #0b0f1a;
+  --surface: rgba(255, 255, 255, 0.055);
+  --surface-2: rgba(255, 255, 255, 0.09);
+  --surface-3: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --text: #eef1f8;
+  --muted: #a6adc2;
+  --faint: #6c7590;
+  --accent: #8b5cf6;
+  --accent-2: #22b8ff;
+  --accent-grad: linear-gradient(135deg, #7c6bff 0%, #8b5cf6 55%, #c026d3 100%);
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --danger: #f4506b;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0.6rem 1rem; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.05s;
+  white-space: nowrap; line-height: 1;
+}
+.btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent-grad); border-color: transparent; color: #fff; }
+.btn-primary:hover { filter: brightness(1.08); background: var(--accent-grad); }
+.btn-danger { background: rgba(244, 80, 107, 0.16); border-color: rgba(244, 80, 107, 0.4); color: #ffb3c0; }
+.btn-danger:hover { background: rgba(244, 80, 107, 0.28); }
+.btn-ghost { background: transparent; }
+.btn-block { width: 100%; }
+.btn-sm { padding: 0.4rem 0.7rem; font-size: 0.85rem; }
+.btn-icon { padding: 0.45rem; border-radius: 9px; }
+
+/* ---- Inputs / fields ---- */
+.input, select.input, textarea.input {
+  width: 100%; padding: 0.6rem 0.75rem; border-radius: 10px;
+  border: 1px solid var(--border); background: rgba(0, 0, 0, 0.25);
+  color: var(--text); font: inherit; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25); }
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.check { display: flex; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.9rem; }
+.check input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
+
+/* ---- Badges ---- */
+.badge {
+  display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.55rem;
+  border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--muted);
+}
+.badge-ok { color: #7ff0c4; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.35); }
+.badge-warn { color: #ffe08a; background: rgba(251, 191, 36, 0.14); border-color: rgba(251, 191, 36, 0.35); }
+.badge-off { color: #ffb3c0; background: rgba(244, 80, 107, 0.14); border-color: rgba(244, 80, 107, 0.35); }
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: currentColor; }
+
+.muted { color: var(--muted); }

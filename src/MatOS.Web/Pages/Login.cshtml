@@ -1,0 +1,31 @@
+@page
+@model LoginModel
+@{
+    ViewData["Title"] = "Sign in · matOS";
+    Layout = "_LoginLayout";
+}
+
+<h1 class="auth-title">Welcome back</h1>
+<p class="auth-subtitle">Sign in to your matOS desktop.</p>
+
+@if (Model.Error is not null)
+{
+    <div class="auth-error" role="alert">@Model.Error</div>
+}
+
+<form method="post" class="auth-form">
+    <input type="hidden" asp-for="ReturnUrl" />
+    <label class="field">
+        <span class="field-label">Username</span>
+        <input asp-for="Username" class="input" autocomplete="username" autofocus required />
+    </label>
+    <label class="field">
+        <span class="field-label">Password</span>
+        <input asp-for="Password" type="password" class="input" autocomplete="current-password" required />
+    </label>
+    <label class="check">
+        <input asp-for="RememberMe" type="checkbox" />
+        <span>Keep me signed in</span>
+    </label>
+    <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+</form>

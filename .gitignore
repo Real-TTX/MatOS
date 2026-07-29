@@ -1,0 +1,20 @@
+# Build output
+**/bin/
+**/obj/
+[Bb]in/
+[Oo]bj/
+
+# IDE / editor
+.vs/
+.idea/
+.vscode/
+*.user
+
+# Local runtime data (JSON configs, keys, backups)
+data/
+appdata/
+*.db
+
+# OS junk
+Thumbs.db
+.DS_Store

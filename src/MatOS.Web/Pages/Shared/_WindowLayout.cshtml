@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] ?? "matOS")</title>
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="~/css/windows.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/controls.css" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body>
+    <div class="win-wrap">
+        <div class="win-header">
+            <h1>@ViewData["Title"]</h1>
+            @if (ViewData["Description"] is string d && !string.IsNullOrEmpty(d))
+            {
+                <p>@d</p>
+            }
+        </div>
+        @RenderBody()
+    </div>
+    <script src="~/js/controls.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

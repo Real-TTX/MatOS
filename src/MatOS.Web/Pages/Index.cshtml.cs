@@ -1,0 +1,21 @@
+using MatOS.Web.Auth;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+
+namespace MatOS.Web.Pages;
+
+public class IndexModel : PageModel
+{
+    public record SystemApp(string Key, string Title, string Url, string Icon, bool AdminOnly);
+
+    private static readonly SystemApp[] Apps =
+    {
+        new("task-manager", "Task Manager", "/apps/task-manager", "tasks", false),
+        new("store", "Store", "/apps/store", "store", false),
+        new("users", "Users", "/apps/users", "users", true),
+        new("settings", "Settings", "/apps/settings", "settings", false),
+    };
+
+    public IEnumerable<SystemApp> VisibleApps => Apps.Where(a => !a.AdminOnly || User.IsAdmin());
+
+    public void OnGet() { }
+}

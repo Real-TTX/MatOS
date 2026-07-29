@@ -1,0 +1,131 @@
+@page "/apps/task-manager"
+@model MatOS.Web.Pages.Apps.TaskManagerModel
+@{
+    ViewData["Title"] = "Task Manager";
+    ViewData["Description"] = "Containers on this Docker host — matOS-managed and foreign.";
+    Layout = "_WindowLayout";
+}
+
+<div class="win-toolbar">
+    <input id="tm-filter" class="ui-input" type="search" placeholder="Filter containers…" />
+    <label class="check" style="color:var(--mat-text-muted)"><input type="checkbox" id="tm-all" checked /> Show stopped</label>
+    <span class="spacer"></span>
+    <span id="tm-status" class="mono" style="color:var(--mat-text-muted)"></span>
+    <button id="tm-refresh" class="ui-btn">Refresh</button>
+</div>
+
+<div id="tm-error" class="card" style="display:none;border-color:#fecaca;background:#fff5f5;color:#b91c1c"></div>
+
+<div class="card" style="padding:0;overflow:hidden">
+    <table class="mat-table" style="width:100%;border-collapse:collapse">
+        <thead>
+            <tr>
+                <th style="text-align:left;padding:0.6rem 0.9rem">State</th>
+                <th style="text-align:left;padding:0.6rem 0.9rem">Name</th>
+                <th style="text-align:left;padding:0.6rem 0.9rem">Image</th>
+                <th style="text-align:left;padding:0.6rem 0.9rem">Ports</th>
+                <th style="text-align:right;padding:0.6rem 0.9rem">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="tm-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+    </table>
+</div>
+
+<div id="tm-logs" class="card" style="margin-top:1rem;display:none">
+    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
+        <strong id="tm-logs-title">Logs</strong>
+        <span id="tm-stats" class="mono" style="color:var(--mat-text-muted)"></span>
+        <span class="spacer" style="flex:1"></span>
+        <button id="tm-logs-close" class="ui-btn">Close</button>
+    </div>
+    <div id="tm-logbox" class="logbox"></div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+  const rows = document.getElementById("tm-rows");
+  const filter = document.getElementById("tm-filter");
+  const showAll = document.getElementById("tm-all");
+  const statusEl = document.getElementById("tm-status");
+  const errEl = document.getElementById("tm-error");
+  const focusId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
+  let data = [];
+  let logSrc = null, statSrc = null;
+
+  function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+  function portsText(c){ if(!c.ports||!c.ports.length) return "—";
+    return c.ports.map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}`:`${p.privatePort}`).join(", "); }
+
+  function draw(){
+    const q=(filter.value||"").toLowerCase();
+    const list=data.filter(c=>(showAll.checked||c.running) && (!q||(c.name+c.image).toLowerCase().includes(q)));
+    if(!list.length){ rows.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No containers.</td></tr>`; return; }
+    rows.innerHTML="";
+    for(const c of list){
+      const tr=document.createElement("tr");
+      tr.style.borderTop="1px solid var(--mat-border)";
+      const pill=c.running?`<span class="pill on">running</span>`:`<span class="pill off">${esc(c.state||"stopped")}</span>`;
+      const web=c.hasWebUi?`<button class="ui-btn" data-open="${esc(c.appUrl)}">Open</button>`:"";
+      tr.innerHTML=`
+        <td style="padding:0.55rem 0.9rem">${pill}</td>
+        <td style="padding:0.55rem 0.9rem"><strong>${esc(c.name)}</strong><div class="mono" style="color:var(--mat-text-muted);font-size:0.75rem">${esc(c.shortId)}</div></td>
+        <td style="padding:0.55rem 0.9rem" class="mono">${esc(c.image)}</td>
+        <td style="padding:0.55rem 0.9rem" class="mono">${esc(portsText(c))}</td>
+        <td style="padding:0.55rem 0.9rem;text-align:right;white-space:nowrap">
+          ${web}
+          ${c.running?`<button class="ui-btn" data-act="stop" data-id="${c.id}">Stop</button>
+                       <button class="ui-btn" data-act="restart" data-id="${c.id}">Restart</button>`
+                     :`<button class="ui-btn primary" data-act="start" data-id="${c.id}">Start</button>`}
+          <button class="ui-btn" data-logs="${c.id}" data-name="${esc(c.name)}">Logs</button>
+        </td>`;
+      rows.appendChild(tr);
+    }
+  }
+
+  async function load(){
+    try{
+      const r=await fetch("/api/v1/docker/containers",{headers:{Accept:"application/json"}});
+      const j=await r.json();
+      data=j.containers||[];
+      statusEl.textContent=`${data.length} container(s)`;
+      if(j.lastError){ errEl.style.display=""; errEl.textContent="Docker: "+j.lastError; } else { errEl.style.display="none"; }
+      draw();
+      if(focusId){ const c=data.find(x=>x.id===focusId||x.shortId===focusId); if(c){ openLogs(c.id,c.name); } focusId=null; }
+    }catch(e){ errEl.style.display=""; errEl.textContent="Docker is not reachable."; }
+  }
+
+  async function act(id,action){
+    try{ await fetch(`/api/v1/docker/containers/${id}/${action}`,{method:"POST"}); }catch(_){}
+    setTimeout(load,600);
+  }
+
+  function openLogs(id,name){
+    document.getElementById("tm-logs").style.display="";
+    document.getElementById("tm-logs-title").textContent="Logs · "+name;
+    const box=document.getElementById("tm-logbox"); box.textContent="";
+    const stats=document.getElementById("tm-stats"); stats.textContent="";
+    if(logSrc) logSrc.close(); if(statSrc) statSrc.close();
+    logSrc=new EventSource(`/api/v1/docker/containers/${id}/logs/stream?tail=200`);
+    logSrc.addEventListener("log",e=>{ box.textContent+=e.data+"\n"; box.scrollTop=box.scrollHeight; });
+    logSrc.onerror=()=>{};
+    statSrc=new EventSource(`/api/v1/docker/containers/${id}/stats/stream`);
+    statSrc.addEventListener("stat",e=>{ try{const s=JSON.parse(e.data);
+      stats.textContent=`CPU ${s.cpuPercent}%  ·  MEM ${(s.memoryBytes/1048576).toFixed(0)} MB (${s.memoryPercent}%)`;}catch(_){}} );
+    statSrc.onerror=()=>{};
+  }
+  function closeLogs(){ if(logSrc)logSrc.close(); if(statSrc)statSrc.close(); document.getElementById("tm-logs").style.display="none"; }
+
+  rows.addEventListener("click",e=>{
+    const a=e.target.closest("[data-act]"); if(a){ act(a.dataset.id,a.dataset.act); return; }
+    const l=e.target.closest("[data-logs]"); if(l){ openLogs(l.dataset.logs,l.dataset.name); return; }
+    const o=e.target.closest("[data-open]"); if(o){ window.open(o.dataset.open,"_blank","noopener"); return; }
+  });
+  document.getElementById("tm-logs-close").addEventListener("click",closeLogs);
+  document.getElementById("tm-refresh").addEventListener("click",load);
+  filter.addEventListener("input",draw);
+  showAll.addEventListener("change",draw);
+  load(); setInterval(load,10000);
+})();
+</script>
+}

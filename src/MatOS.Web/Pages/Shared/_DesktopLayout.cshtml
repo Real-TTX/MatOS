@@ -1,0 +1,69 @@
+@using MatOS.Web.Config
+@using MatOS.Web.Services
+@inject JsonConfigService Config
+@{
+    var desktop = Config.Get<DesktopConfig>("desktop");
+    var system = Config.Get<SystemConfig>("system");
+    var wallpaper = Wallpapers.Normalize(desktop.Wallpaper);
+    var name = User.Identity?.Name ?? "user";
+    var role = User.IsAdmin() ? "Administrator" : "User";
+    var initial = string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
+}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>@(ViewData["Title"] ?? system.InstanceName)</title>
+    <meta name="theme-color" content="#0b0f1a" />
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="~/favicon.ico" />
+    <link rel="apple-touch-icon" href="~/apple-touch-icon.png" />
+    <link rel="manifest" href="~/site.webmanifest" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/desktop.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/window.css" asp-append-version="true" />
+</head>
+<body>
+    <div id="mat-wallpaper" class="wp-@wallpaper"></div>
+
+    <header id="mat-topbar">
+        <div class="mat-topbar-brand">
+            <img src="~/favicon.svg" alt="" />
+            <span>mat<b>OS</b></span>
+        </div>
+        <input id="mat-search" type="search" placeholder="Search apps…" aria-label="Search apps" autocomplete="off" />
+        <div class="mat-topbar-spacer"></div>
+        <div class="mat-clock" id="mat-clock"></div>
+        <div class="mat-user">
+            <button class="mat-user-btn" id="mat-user-btn" aria-haspopup="true">
+                <span class="mat-avatar">@initial</span>
+                <span>@name</span>
+            </button>
+            <div class="mat-user-menu" id="mat-user-menu" role="menu">
+                <div class="who">
+                    <div class="name">@name</div>
+                    <div class="role">@role</div>
+                </div>
+                <button class="mat-menu-item" role="menuitem"
+                        data-open-url="/apps/settings" data-open-title="Settings" data-open-key="settings">Settings</button>
+                <button class="mat-menu-item" role="menuitem"
+                        data-open-url="/apps/task-manager" data-open-title="Task Manager" data-open-key="task-manager">Task Manager</button>
+                <form method="post" action="/logout">
+                    <button class="mat-menu-item" type="submit" role="menuitem">Sign out</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main id="mat-desktop">
+        @RenderBody()
+    </main>
+
+    <div id="mat-windows"></div>
+    <nav id="mat-dock"><div id="mat-dock-tasks" style="display:contents"></div></nav>
+
+    <script src="~/js/window-manager.js" asp-append-version="true"></script>
+    <script src="~/js/desktop.js" asp-append-version="true"></script>
+</body>
+</html>

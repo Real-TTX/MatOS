@@ -1,0 +1,95 @@
+/* ---- Window chrome + dock (dark OS chrome) ------------------------------- */
+#mat-windows { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+
+.mat-window {
+  position: absolute;
+  display: flex; flex-direction: column;
+  min-width: 320px; min-height: 220px;
+  background: rgba(17, 21, 34, 0.86);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  pointer-events: auto;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.mat-window.focused { border-color: var(--border-strong); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65); }
+.mat-window.maximized {
+  left: 8px !important; top: 52px !important;
+  width: calc(100vw - 16px) !important; height: calc(100vh - 130px) !important;
+  border-radius: 12px;
+}
+.mat-window.minimized { display: none; }
+
+.mat-titlebar {
+  display: flex; align-items: center; gap: 0.5rem;
+  height: 44px; padding: 0 0.5rem 0 0.8rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+  cursor: grab; user-select: none; touch-action: none;
+}
+.mat-titlebar:active { cursor: grabbing; }
+.mat-win-icon { width: 20px; height: 20px; border-radius: 5px; flex: 0 0 auto; object-fit: cover; }
+.mat-win-icon-fallback {
+  display: grid; place-items: center; background: var(--accent-grad);
+  color: #fff; font-size: 0.7rem; font-weight: 800;
+}
+.mat-title { flex: 1 1 auto; font-size: 0.86rem; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mat-win-actions { display: flex; gap: 0.15rem; }
+.mat-win-btn {
+  width: 30px; height: 30px; border: none; border-radius: 8px; background: transparent;
+  color: var(--muted); font-size: 0.9rem; cursor: pointer; line-height: 1;
+  display: grid; place-items: center;
+}
+.mat-win-btn:hover { background: var(--surface-3); color: var(--text); }
+.mat-close:hover { background: rgba(244, 80, 107, 0.25); color: #fff; }
+
+.mat-win-body { position: relative; flex: 1 1 auto; background: #0e1220; }
+.mat-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+.mat-frame-shield { position: absolute; inset: 0; z-index: 5; background: transparent; }
+.mat-win-loading { position: absolute; inset: 0; display: grid; place-items: center; background: #0e1220; z-index: 2; }
+.mat-spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.15); border-top-color: var(--accent);
+  animation: mat-spin 0.8s linear infinite;
+}
+@keyframes mat-spin { to { transform: rotate(360deg); } }
+
+/* resize handles (invisible hit zones) */
+.mat-resize { position: absolute; z-index: 6; }
+.mat-resize-n { top: -3px; left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+.mat-resize-s { bottom: -3px; left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+.mat-resize-e { right: -3px; top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+.mat-resize-w { left: -3px; top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+.mat-resize-ne { top: -4px; right: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+.mat-resize-nw { top: -4px; left: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.mat-resize-se { bottom: -4px; right: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.mat-resize-sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+
+/* ---- Dock (open windows) ---- */
+#mat-dock {
+  position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+  z-index: 30; display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem; border-radius: 16px;
+  background: rgba(17, 21, 34, 0.6); border: 1px solid var(--border);
+  backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  box-shadow: var(--shadow); max-width: calc(100vw - 24px); overflow-x: auto;
+}
+#mat-dock:empty { display: none; }
+.mat-dock-task {
+  display: flex; align-items: center; gap: 0.45rem; max-width: 210px;
+  padding: 0.35rem 0.6rem; border-radius: 11px; border: 1px solid transparent;
+  background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; font-size: 0.82rem;
+}
+.mat-dock-task:hover { background: var(--surface-3); }
+.mat-dock-task.active { border-color: var(--accent); background: rgba(139, 92, 246, 0.2); }
+.mat-dock-task img, .mat-dock-task span:first-child { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+.mat-dock-task .mat-dock-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 640px) {
+  .mat-window.maximized { top: 48px !important; height: calc(100vh - 120px) !important; }
+  .mat-dock-task .mat-dock-label { display: none; }
+}

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>@(ViewData["Title"] ?? "matOS")</title>
+    <meta name="theme-color" content="#0b0f1a" />
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="~/favicon.ico" />
+    <link rel="apple-touch-icon" href="~/apple-touch-icon.png" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/auth.css" asp-append-version="true" />
+</head>
+<body class="auth-body">
+    <div class="auth-shell">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <img src="~/img/logo.svg" alt="matOS" class="auth-logo" />
+                <div class="auth-wordmark">mat<span>OS</span></div>
+            </div>
+            @RenderBody()
+        </div>
+        <div class="auth-footer">matOS · @BuildInfo.Version</div>
+    </div>
+</body>
+</html>

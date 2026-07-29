@@ -1,0 +1,65 @@
+@page "/apps/settings"
+@model MatOS.Web.Pages.Apps.SettingsModel
+@{
+    ViewData["Title"] = "Settings";
+    ViewData["Description"] = "Personalise your desktop and configure the app proxy domain.";
+    Layout = "_WindowLayout";
+}
+
+@if (Model.Saved)
+{
+    <div class="card" style="margin-bottom:1rem;border-color:#bbf7d0;background:#f0fdf4;color:#166534">Settings saved.</div>
+}
+
+<form method="post">
+    <div class="card" style="margin-bottom:1rem">
+        <h2 style="margin:0 0 0.75rem;font-size:1rem">Wallpaper</h2>
+        <div class="wp-picker" id="wp-picker">
+            @foreach (var w in Model.AllWallpapers)
+            {
+                <label class="wp-tile @(Model.Wallpaper == w.Key ? "selected" : "")" data-key="@w.Key">
+                    <input type="radio" name="Wallpaper" value="@w.Key" @(Model.Wallpaper == w.Key ? "checked" : "") hidden />
+                    <span class="swatch wp-@w.Key"></span>
+                    <span class="nm">@w.Name</span>
+                </label>
+            }
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+        <h2 style="margin:0 0 0.75rem;font-size:1rem">General</h2>
+        <div class="field" style="max-width:360px;margin-bottom:0.9rem">
+            <span class="field-label" style="color:var(--mat-text-muted)">Instance name</span>
+            <input class="ui-input" name="InstanceName" value="@Model.InstanceName" />
+        </div>
+        <div class="field" style="max-width:360px">
+            <span class="field-label" style="color:var(--mat-text-muted)">App base domain</span>
+            <input class="ui-input" name="BaseDomain" value="@Model.BaseDomain" />
+            <small style="color:var(--mat-text-muted)">
+                Installed apps get a subdomain here (e.g. <span class="mono">nextcloud-2.@Model.BaseDomain</span>),
+                proxied by Caddy/Matcad. <span class="mono">apps.localhost</span> works locally with no DNS setup.
+            </small>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:0.6rem">
+        <button type="submit" class="ui-btn primary">Save changes</button>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+(function () {
+  const picker = document.getElementById("wp-picker");
+  function preview(key){ try { window.parent.postMessage({ type:"matos:wallpaper", wallpaper:key }, location.origin); } catch(_){} }
+  picker.addEventListener("click", e => {
+    const tile = e.target.closest(".wp-tile"); if(!tile) return;
+    picker.querySelectorAll(".wp-tile").forEach(t => t.classList.toggle("selected", t===tile));
+    preview(tile.dataset.key);
+  });
+  // keep the desktop in sync with the persisted wallpaper whenever settings loads
+  const cur = picker.querySelector(".wp-tile.selected");
+  if (cur) preview(cur.dataset.key);
+})();
+</script>
+}

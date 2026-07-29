@@ -1,0 +1,19 @@
+@page "/apps/users"
+@model MatOS.Web.Pages.Apps.Users.IndexModel
+@{
+    ViewData["Title"] = "Users";
+    ViewData["Description"] = "Local accounts and roles. Entra/AD login is planned for a later release.";
+    Layout = "_WindowLayout";
+}
+
+<div class="win-toolbar">
+    <a class="ui-btn primary" href="/apps/users/edit">+ New user</a>
+</div>
+
+<mat-table id="users" items="Model.Users" edit-page="/apps/users/edit"
+           search-placeholder="Search users…" empty-text="No users yet.">
+    <mat-column field="Username" title="Username" sortable="true" />
+    <mat-column field="Role" title="Role" template="badges" sortable="true" />
+    <mat-column field="CreateDate" title="Created" format="yyyy-MM-dd" sortable="true" />
+    <mat-column template="actions" title="" align="right" />
+</mat-table>

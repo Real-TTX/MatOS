@@ -1,0 +1,92 @@
+/* ---- Desktop shell ------------------------------------------------------- */
+html, body { overflow: hidden; height: 100%; }
+
+#mat-wallpaper { position: fixed; inset: 0; z-index: 0; background: #0b0f1a; transition: opacity 0.4s; }
+#mat-wallpaper::after { content: ""; position: absolute; inset: 0; backdrop-filter: saturate(1.05); }
+
+/* Wallpapers (umbrelOS-style gradients) */
+.wp-aurora  { background: radial-gradient(1200px 800px at 12% -8%, #6d5efc 0%, transparent 55%), radial-gradient(1100px 900px at 108% 112%, #c026d3 0%, transparent 52%), linear-gradient(150deg, #141a2e, #0b0f1a); }
+.wp-dusk    { background: radial-gradient(1000px 700px at 80% -10%, #4338ca 0%, transparent 55%), linear-gradient(160deg, #1e1b4b, #0b0f1a); }
+.wp-ocean   { background: radial-gradient(1100px 800px at 10% 0%, #0ea5e9 0%, transparent 55%), radial-gradient(900px 800px at 100% 100%, #0d9488 0%, transparent 55%), linear-gradient(160deg, #0f2537, #08131f); }
+.wp-sunset  { background: radial-gradient(1000px 700px at 0% 0%, #f97316 0%, transparent 50%), radial-gradient(1000px 800px at 100% 100%, #db2777 0%, transparent 52%), linear-gradient(160deg, #3b1e3a, #12101f); }
+.wp-forest  { background: radial-gradient(1000px 800px at 15% -5%, #16a34a 0%, transparent 52%), radial-gradient(900px 700px at 100% 110%, #0d9488 0%, transparent 52%), linear-gradient(160deg, #0f2417, #0a1410); }
+.wp-nebula  { background: radial-gradient(900px 700px at 90% -5%, #a21caf 0%, transparent 52%), radial-gradient(1000px 900px at -5% 100%, #4f46e5 0%, transparent 52%), linear-gradient(160deg, #1a1030, #0b0f1a); }
+.wp-graphite{ background: radial-gradient(1000px 800px at 20% 0%, #334155 0%, transparent 55%), linear-gradient(160deg, #1e222b, #0c0e12); }
+
+/* ---- Top bar ---- */
+#mat-topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 44px; z-index: 15;
+  display: flex; align-items: center; gap: 0.75rem; padding: 0 0.75rem;
+  background: rgba(11, 15, 26, 0.55); border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.mat-topbar-brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.mat-topbar-brand img { width: 22px; height: 22px; border-radius: 6px; }
+.mat-topbar-brand span b { background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mat-topbar-spacer { flex: 1 1 auto; }
+#mat-search {
+  width: min(340px, 40vw); padding: 0.35rem 0.7rem; border-radius: 999px;
+  border: 1px solid var(--border); background: rgba(0,0,0,0.25); color: var(--text); font: inherit; font-size: 0.85rem;
+}
+#mat-search:focus { outline: none; border-color: var(--accent); }
+.mat-clock { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.85rem; }
+
+.mat-user { position: relative; }
+.mat-user-btn {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem 0.25rem 0.35rem;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  cursor: pointer; font: inherit; font-size: 0.85rem;
+}
+.mat-user-btn:hover { background: var(--surface-3); }
+.mat-avatar { width: 24px; height: 24px; border-radius: 999px; background: var(--accent-grad);
+  display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.72rem; }
+.mat-user-menu {
+  position: absolute; right: 0; top: 40px; min-width: 200px; padding: 0.4rem;
+  background: rgba(17,21,34,0.92); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); backdrop-filter: blur(20px); display: none;
+}
+.mat-user-menu.open { display: block; }
+.mat-user-menu .who { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); margin-bottom: 0.3rem; }
+.mat-user-menu .who .name { font-weight: 700; }
+.mat-user-menu .who .role { color: var(--muted); font-size: 0.78rem; }
+.mat-menu-item { display: flex; width: 100%; align-items: center; gap: 0.5rem; padding: 0.55rem 0.6rem;
+  border: none; background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; font: inherit; text-align: left; }
+.mat-menu-item:hover { background: var(--surface-3); }
+
+/* ---- Icon grid ---- */
+#mat-desktop { position: absolute; inset: 44px 0 0 0; z-index: 5; overflow-y: auto; padding: 2.2rem 1.5rem 6rem; }
+.mat-grid-section-title { color: rgba(255,255,255,0.72); font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; margin: 0.5rem 0.4rem 0.9rem; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+.mat-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 1.4rem 1rem;
+  max-width: 1100px; margin: 0 auto 2rem;
+}
+.mat-app { background: none; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.55rem;
+  padding: 0; font: inherit; color: #fff; }
+.mat-app-icon {
+  position: relative; width: 68px; height: 68px; border-radius: 18px; display: grid; place-items: center;
+  background: var(--surface-2); border: 1px solid var(--border); box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+  transition: transform 0.12s, box-shadow 0.12s; overflow: hidden;
+}
+.mat-app:hover .mat-app-icon { transform: translateY(-3px) scale(1.04); box-shadow: 0 14px 30px rgba(0,0,0,0.5); }
+.mat-app:active .mat-app-icon { transform: scale(0.97); }
+.mat-app-icon img { width: 100%; height: 100%; object-fit: cover; }
+.mat-app-icon svg { width: 34px; height: 34px; }
+.mat-app-icon.sys { background: var(--accent-grad); border-color: transparent; }
+.mat-app-label { font-size: 0.8rem; font-weight: 600; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.55);
+  max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mat-state-dot { position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 999px;
+  border: 2px solid rgba(0,0,0,0.35); }
+.mat-state-dot.on { background: var(--ok); }
+.mat-state-dot.off { background: var(--faint); }
+.mat-web-badge { position: absolute; bottom: 5px; right: 5px; width: 16px; height: 16px; border-radius: 5px;
+  background: rgba(0,0,0,0.45); display: grid; place-items: center; }
+.mat-web-badge svg { width: 11px; height: 11px; }
+.mat-empty-hint { color: rgba(255,255,255,0.7); text-align: center; padding: 1rem; font-size: 0.9rem; }
+
+@media (max-width: 640px) {
+  .mat-topbar-brand span { display: none; }
+  #mat-search { width: 40vw; }
+  .mat-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .mat-app-icon { width: 60px; height: 60px; }
+}

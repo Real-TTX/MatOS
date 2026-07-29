@@ -1,0 +1,30 @@
+@page
+@model SetupModel
+@{
+    ViewData["Title"] = "Set up matOS";
+    Layout = "_LoginLayout";
+}
+
+<h1 class="auth-title">Welcome to matOS</h1>
+<p class="auth-subtitle">Create your administrator account to get started.</p>
+
+@if (Model.Error is not null)
+{
+    <div class="auth-error" role="alert">@Model.Error</div>
+}
+
+<form method="post" class="auth-form">
+    <label class="field">
+        <span class="field-label">Username</span>
+        <input asp-for="Username" class="input" autocomplete="username" autofocus required />
+    </label>
+    <label class="field">
+        <span class="field-label">Password</span>
+        <input asp-for="Password" type="password" class="input" autocomplete="new-password" required />
+    </label>
+    <label class="field">
+        <span class="field-label">Confirm password</span>
+        <input asp-for="ConfirmPassword" type="password" class="input" autocomplete="new-password" required />
+    </label>
+    <button type="submit" class="btn btn-primary btn-block">Create account</button>
+</form>

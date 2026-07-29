@@ -1,0 +1,63 @@
+/* ---- System-app window content (light panels inside the dark OS chrome) --- */
+:root {
+  --mat-accent: #7c3aed;
+  --mat-bg: #f6f7fb;
+  --mat-surface: #ffffff;
+  --mat-border: #e6e8ef;
+  --mat-text: #0f172a;
+  --mat-text-muted: #64748b;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--mat-bg);
+  color: var(--mat-text);
+  -webkit-font-smoothing: antialiased;
+}
+.win-wrap { padding: 1.25rem 1.5rem 2.5rem; max-width: 1100px; margin: 0 auto; }
+.win-header { margin-bottom: 1.1rem; }
+.win-header h1 { margin: 0 0 0.2rem; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+.win-header p { margin: 0; color: var(--mat-text-muted); font-size: 0.92rem; }
+.win-toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 1rem; }
+.win-toolbar .spacer { flex: 1 1 auto; }
+
+.card { background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: 12px; padding: 1rem 1.1rem; }
+.stat-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.stat { flex: 1 1 150px; background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: 12px; padding: 0.8rem 0.9rem; }
+.stat .k { color: var(--mat-text-muted); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat .v { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* generic buttons/inputs for pages that don't use the form control */
+.ui-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.85rem; border-radius: 9px;
+  border: 1px solid var(--mat-border); background: #fff; color: var(--mat-text); font: inherit; font-weight: 600; cursor: pointer; }
+.ui-btn:hover { background: #f1f5f9; }
+.ui-btn.primary { background: var(--mat-accent); border-color: transparent; color: #fff; }
+.ui-btn.primary:hover { filter: brightness(1.07); }
+.ui-btn.danger { color: #b91c1c; border-color: #fecaca; background: #fff5f5; }
+.ui-input, .ui-select { padding: 0.5rem 0.65rem; border-radius: 9px; border: 1px solid var(--mat-border); background: #fff; color: var(--mat-text); font: inherit; }
+.pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+.pill.on { background: #dcfce7; color: #166534; }
+.pill.off { background: #fee2e2; color: #991b1b; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
+
+/* logs / terminal view */
+.logbox { background: #0b0f1a; color: #d7def0; border-radius: 10px; padding: 0.8rem 0.9rem; height: 320px; overflow: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.45; }
+
+/* wallpaper picker */
+.wp-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.9rem; }
+.wp-tile { border: 2px solid transparent; border-radius: 12px; overflow: hidden; cursor: pointer; background: none; padding: 0; }
+.wp-tile .swatch { height: 84px; }
+.wp-tile .nm { padding: 0.45rem 0.6rem; font-size: 0.85rem; font-weight: 600; text-align: left; }
+.wp-tile.selected { border-color: var(--mat-accent); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
+
+/* wallpaper gradient swatches (mirror of desktop.css wp-*) */
+.wp-aurora  { background: radial-gradient(220px 160px at 12% -8%, #6d5efc 0%, transparent 55%), radial-gradient(200px 180px at 108% 112%, #c026d3 0%, transparent 52%), linear-gradient(150deg, #141a2e, #0b0f1a); }
+.wp-dusk    { background: radial-gradient(200px 150px at 80% -10%, #4338ca 0%, transparent 55%), linear-gradient(160deg, #1e1b4b, #0b0f1a); }
+.wp-ocean   { background: radial-gradient(220px 160px at 10% 0%, #0ea5e9 0%, transparent 55%), radial-gradient(180px 160px at 100% 100%, #0d9488 0%, transparent 55%), linear-gradient(160deg, #0f2537, #08131f); }
+.wp-sunset  { background: radial-gradient(200px 150px at 0% 0%, #f97316 0%, transparent 50%), radial-gradient(200px 160px at 100% 100%, #db2777 0%, transparent 52%), linear-gradient(160deg, #3b1e3a, #12101f); }
+.wp-forest  { background: radial-gradient(200px 160px at 15% -5%, #16a34a 0%, transparent 52%), radial-gradient(180px 140px at 100% 110%, #0d9488 0%, transparent 52%), linear-gradient(160deg, #0f2417, #0a1410); }
+.wp-nebula  { background: radial-gradient(180px 140px at 90% -5%, #a21caf 0%, transparent 52%), radial-gradient(200px 180px at -5% 100%, #4f46e5 0%, transparent 52%), linear-gradient(160deg, #1a1030, #0b0f1a); }
+.wp-graphite{ background: radial-gradient(200px 160px at 20% 0%, #334155 0%, transparent 55%), linear-gradient(160deg, #1e222b, #0c0e12); }

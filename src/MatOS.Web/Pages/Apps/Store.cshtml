@@ -1,0 +1,19 @@
+@page "/apps/store"
+@model MatOS.Web.Pages.Apps.StoreModel
+@{
+    ViewData["Title"] = "Store";
+    ViewData["Description"] = "Install apps from the matOS catalog.";
+    Layout = "_WindowLayout";
+}
+
+<div class="card" style="text-align:center;padding:2.5rem 1.5rem">
+    <div style="font-size:2.2rem;margin-bottom:0.5rem">🛍️</div>
+    <h2 style="margin:0 0 0.4rem">App Store — coming soon</h2>
+    <p style="color:var(--mat-text-muted);max-width:560px;margin:0 auto 1.25rem">
+        The Store will install apps from a Git-hosted catalog of Compose templates. matOS resolves
+        each template's <span class="mono">$PORT-*</span> and <span class="mono">$VAR</span> placeholders,
+        assigns a port from its pool and a Caddy subdomain, and lets you install the same app
+        <strong>multiple times</strong>. Update monitoring compares installed images against the catalog.
+    </p>
+    <p class="mono" style="color:var(--mat-text-muted);font-size:0.8rem">Planned for the next milestone (M2).</p>
+</div>

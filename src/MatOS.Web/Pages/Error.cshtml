@@ -1,0 +1,14 @@
+@page
+@model ErrorModel
+@{
+    ViewData["Title"] = "Error · matOS";
+    Layout = "_LoginLayout";
+}
+
+<h1 class="auth-title">Something went wrong</h1>
+<p class="auth-subtitle">An unexpected error occurred while processing your request.</p>
+@if (Model.ShowRequestId)
+{
+    <p class="auth-subtitle"><code>Request ID: @Model.RequestId</code></p>
+}
+<a class="btn btn-primary btn-block" href="/">Back to desktop</a>

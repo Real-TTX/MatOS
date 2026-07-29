@@ -1,0 +1,64 @@
+# matOS — release stack. Pulls prebuilt images from GHCR.
+#
+#   pwsh scripts/deploy.ps1 -Mode release
+#   MATOS_VERSION=0.1.1-20260730 docker compose -f docker-compose.release.yml up -d
+#
+# GHCR images may be private: run `docker login ghcr.io` first if the pull is denied.
+name: matos
+
+services:
+  matos:
+    image: ghcr.io/real-ttx/matos:${MATOS_VERSION:-latest}
+    pull_policy: always
+    container_name: matos
+    ports:
+      - "4333:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+      MATOS_VERSION: ${MATOS_VERSION:-latest}
+      MATOS_DATA_DIR: "/app/data"
+      MatOS__Docker__Endpoint: "unix:///var/run/docker.sock"
+    volumes:
+      - matos-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [ matnet ]
+    restart: unless-stopped
+
+  caddy:
+    image: ghcr.io/real-ttx/matcad-caddy:${MATCAD_VERSION:-latest}
+    pull_policy: always
+    container_name: matos-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [ matnet ]
+    restart: unless-stopped
+
+  matcad:
+    image: ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}
+    pull_policy: always
+    container_name: matos-matcad
+    environment:
+      Matcad__DataDir: "/data"
+      Matcad__ConfigDir: "/data/config"
+      Matcad__Caddy__AdminUrl: "http://caddy:2019"
+    volumes:
+      - matcad-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [ matnet ]
+    restart: unless-stopped
+
+volumes:
+  matos-data:
+  caddy-data:
+  caddy-config:
+  matcad-data:
+
+networks:
+  matnet:
+    name: matos

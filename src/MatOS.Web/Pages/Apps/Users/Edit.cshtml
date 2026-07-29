@@ -1,0 +1,27 @@
+@page "/apps/users/edit/{id:long?}"
+@model MatOS.Web.Pages.Apps.Users.EditModel
+@{
+    ViewData["Title"] = Model.PageTitle;
+    ViewData["Description"] = Model.IsEdit ? "Update the account details or role." : "Create a new local account.";
+    Layout = "_WindowLayout";
+}
+
+@if (!ViewData.ModelState.IsValid && ViewData.ModelState[string.Empty]?.Errors.Count > 0)
+{
+    <div class="card" style="margin-bottom:1rem;border-color:#fecaca;background:#fff5f5;color:#b91c1c">
+        @ViewData.ModelState[string.Empty]!.Errors[0].ErrorMessage
+    </div>
+}
+
+<div class="card" style="max-width:520px">
+    <mat-form>
+        <mat-field name="Username" value="@Model.Username" label="Username" required="true" autofocus="true" />
+        <mat-field name="Password" value="" label="Password" type="password"
+                   help="@(Model.IsEdit ? "Leave blank to keep the current password." : "At least 6 characters.")"
+                   required="@(!Model.IsEdit)" />
+        <mat-field name="Role" value="@Model.Role" label="Role" type="select" options="Model.RoleOptions" />
+        <mat-form-actions save-text="Save" back-url="/apps/users" back-text="Back"
+                          show-delete="@Model.IsEdit" delete-text="Delete"
+                          delete-confirm="Delete this user?" />
+    </mat-form>
+</div>
