@@ -3,19 +3,26 @@ using MatOS.Web.Engine;
 
 namespace MatOS.Web.Api;
 
-/// <summary>App Store: catalog, install/uninstall, and the list of installed instances.</summary>
+/// <summary>App Store: catalog (built-in + custom apps), install/uninstall, and custom-app authoring.</summary>
 public static class StoreApi
 {
     public record InstallBody(string AppId);
     public record UninstallBody(string Id, bool RemoveVolume);
+    public record DeleteAppBody(string Id);
 
     public static void MapStoreApi(this IEndpointRouteBuilder api)
     {
         var g = api.MapGroup("/store");
 
-        g.MapGet("/catalog", () => Results.Ok(new
+        g.MapGet("/catalog", (StoreService store) => Results.Ok(new
         {
-            apps = StoreCatalog.Apps.Select(a => new { a.Id, a.Name, a.Tagline, a.Description, a.Category, a.Icon, a.Image, a.UiPort })
+            apps = store.AllApps().Select(a => new
+            {
+                a.Id, a.Name, a.Tagline, a.Description, a.Category, a.Icon, a.Image, a.UiPort, a.BuiltIn,
+                volumes = a.Volumes,
+                env = a.Env,
+                actions = a.Actions.Select(x => new { x.Label, x.Url })
+            })
         }));
 
         g.MapGet("/installs", async (DockerService docker, HttpRequest req, CancellationToken ct) =>
@@ -43,6 +50,21 @@ public static class StoreApi
         {
             var r = await svc.UninstallAsync(b.Id, b.RemoveVolume, ct);
             return r.Ok ? Results.Ok(new { ok = true }) : Results.Problem(r.Error);
+        }).RequireAuthorization("Admin");
+
+        // ---- Custom app authoring ----
+        g.MapPost("/apps", async (CustomApp app, StoreService store) =>
+        {
+            if (string.IsNullOrWhiteSpace(app.Name)) return Results.BadRequest(new { error = "A display name is required." });
+            if (string.IsNullOrWhiteSpace(app.Image)) return Results.BadRequest(new { error = "A Docker image is required." });
+            var id = await store.Upsert(app);
+            return Results.Ok(new { id });
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/apps/delete", async (DeleteAppBody b, StoreService store) =>
+        {
+            await store.Delete(b.Id);
+            return Results.Ok(new { ok = true });
         }).RequireAuthorization("Admin");
     }
 

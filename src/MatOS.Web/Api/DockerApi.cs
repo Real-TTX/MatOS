@@ -150,6 +150,8 @@ public static class DockerApi
             createdUtc = c.CreatedUtc,
             running = c.IsRunning,
             matosManaged = c.MatosManaged,
+            matosApp = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.App, out var mapp) ? mapp : null,
+            matosTitle = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.Title, out var mtitle) ? mtitle : null,
             appUrl,
             hasWebUi = appUrl is not null,
             ports = c.Ports.Select(p => new { p.Type, p.PrivatePort, p.PublicPort }).ToArray()

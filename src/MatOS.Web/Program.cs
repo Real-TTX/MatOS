@@ -24,6 +24,7 @@ builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<DesktopLayoutService>();
 builder.Services.AddSingleton<MatOS.Web.Docker.VolumeFilesService>();
+builder.Services.AddSingleton<MatOS.Web.Engine.StoreService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.InstallService>();
 builder.Services.AddScoped<MatOS.Web.Controls.Common.ControlIdGenerator>();
 builder.Services.AddHostedService<SessionCleanupService>();

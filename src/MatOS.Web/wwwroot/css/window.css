@@ -36,10 +36,14 @@
   display: grid; place-items: center; background: var(--accent-grad);
   color: #fff; font-size: 0.7rem; font-weight: 800;
 }
-.mat-win-icon-svg { display: grid; place-items: center; }
+.mat-win-icon-svg { display: grid; place-items: center; overflow: hidden; }
 .mat-win-icon-svg svg { width: 18px; height: 18px; }
-.mat-task-ico-svg { display: grid; place-items: center; }
+.mat-win-icon-svg img { width: 20px; height: 20px; object-fit: cover; border-radius: 5px; }
+.mat-win-icon-svg .mat-emoji { font-size: 15px; line-height: 1; }
+.mat-task-ico-svg { display: grid; place-items: center; overflow: hidden; }
 .mat-task-ico-svg svg { width: 16px; height: 16px; }
+.mat-task-ico-svg img { width: 18px; height: 18px; object-fit: cover; border-radius: 5px; }
+.mat-task-ico-svg .mat-emoji { font-size: 14px; line-height: 1; }
 .mat-title { flex: 1 1 auto; font-size: 0.86rem; font-weight: 600; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mat-win-actions { display: flex; gap: 0.15rem; }

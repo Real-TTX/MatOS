@@ -30,7 +30,8 @@
   // ---- launch helpers ----
   function iconForKey(key) {
     if (!key) return null;
-    if (key.startsWith("stack:") || key.startsWith("container:") || key.startsWith("set:")) return CUBE;
+    if (key.startsWith("stack:")) { const s = stackData.find(x => x.name === key.slice(6)); const d = s ? stackDef(s) : null; return (d && appIconHtml(d.icon)) || CUBE; }
+    if (key.startsWith("container:") || key.startsWith("set:") || key.startsWith("act:")) return CUBE;
     const s = systemApps().find(a => a.key === key);
     return s ? s.iconHtml : null;
   }
@@ -47,20 +48,50 @@
     }
   });
 
-  // ---- stacks (a stack = the app) ----
+  // ---- stacks (a stack = the app) + app definitions ----
   let stackData = [];
+  let appDefs = {}; // id -> app definition (icon, name, actions)
   const stackKey = s => "stack:" + s.name;
   const primaryWeb = s => (s.containers || []).find(c => c.hasWebUi && c.running && c.appUrl);
+
+  async function loadDefs() {
+    try { const d = await (await fetch("/api/v1/store/catalog")).json(); const m = {}; for (const a of d.apps) m[a.id] = a; appDefs = m; } catch (_) {}
+  }
+  function appIconHtml(icon) {
+    if (!icon) return null;
+    if (/^(https?:|data:)/i.test(icon)) return `<img src="${escAttr(icon)}" alt="">`;
+    return `<span class="mat-emoji">${esc(icon)}</span>`;
+  }
+  function stackApp(s) { const c = (s.containers || []).find(x => x.matosApp); return c ? c.matosApp : null; }
+  function stackDef(s) { const a = stackApp(s); return a ? appDefs[a] : null; }
+  function stackTitle(s) {
+    const c = (s.containers || []).find(x => x.matosTitle);
+    if (c && c.matosTitle) return c.matosTitle;
+    const d = stackDef(s); return d ? d.name : s.name;
+  }
+
   function stackSettingsUrl(s) {
     return (s.standalone && s.containers[0]) ? "/apps/container/" + encodeURIComponent(s.containers[0].id)
                                              : "/apps/stack/" + encodeURIComponent(s.name);
   }
   function stackOpenUrl(s) { const w = primaryWeb(s); return w ? w.appUrl : stackSettingsUrl(s); }
   function stackInner(s) {
+    const d = stackDef(s);
+    const base = (d && appIconHtml(d.icon)) || CUBE;
     const dot = s.anyRunning ? "on" : "off";
     const web = primaryWeb(s) ? `<span class="mat-web-badge" title="Has web UI">${GLOBE}</span>` : "";
     const count = (!s.standalone && s.total > 1) ? `<span class="mat-count-badge" title="${s.running}/${s.total} running">${s.running}/${s.total}</span>` : "";
-    return `${CUBE}<span class="mat-state-dot ${dot}"></span>${web}${count}`;
+    return `${base}<span class="mat-state-dot ${dot}"></span>${web}${count}`;
+  }
+  function resolveActionUrl(s, ac) {
+    if (/^https?:/i.test(ac.url) || ac.url.startsWith("//")) return ac.url;
+    const w = primaryWeb(s); if (!w) return null;
+    return w.appUrl.replace(/\/+$/, "") + (ac.url.startsWith("/") ? ac.url : "/" + ac.url);
+  }
+  function openAction(s, ac) {
+    const u = resolveActionUrl(s, ac);
+    if (!u) { alert("This action needs the app's web UI to be running."); return; }
+    open({ key: "act:" + s.name + ":" + ac.label, title: stackTitle(s) + " · " + ac.label, url: u, width: 1024, height: 680 });
   }
 
   // ---- free-placement icon field ----
@@ -140,8 +171,12 @@
     for (const [key, el] of iconEls) { if (systemKeys.has(key)) continue; if (!wanted.has(key)) { el.remove(); iconEls.delete(key); } }
     for (const s of stackData) {
       const key = stackKey(s); let el = iconEls.get(key);
-      if (!el) { el = makeIcon(key, s.name, stackOpenUrl(s), "1024", "680", "", stackInner(s)); el.dataset.stackName = s.name; }
-      else { el.dataset.url = stackOpenUrl(s); const ico = el.querySelector(".mat-app-icon"); if (ico) ico.innerHTML = stackInner(s); }
+      if (!el) { el = makeIcon(key, stackTitle(s), stackOpenUrl(s), "1024", "680", "", stackInner(s)); el.dataset.stackName = s.name; }
+      else {
+        el.dataset.title = stackTitle(s); el.dataset.url = stackOpenUrl(s);
+        const ico = el.querySelector(".mat-app-icon"); if (ico) ico.innerHTML = stackInner(s);
+        const lbl = el.querySelector(".mat-app-label"); if (lbl) lbl.textContent = stackTitle(s);
+      }
     }
   }
   async function autoArrange() {
@@ -155,6 +190,9 @@
       if (!res.ok) throw new Error(res.status);
       const data = await res.json(); stackData = data.stacks || [];
     } catch (_) { stackData = []; }
+    const needed = new Set();
+    for (const s of stackData) for (const c of (s.containers || [])) if (c.matosApp) needed.add(c.matosApp);
+    if ([...needed].some(id => !(id in appDefs))) await loadDefs();
     reconcileStacks();
     renderStartMenu(startSearch ? startSearch.value : "");
   }
@@ -180,7 +218,7 @@
     const match = t => !q || (t || "").toLowerCase().includes(q);
     const sys = systemApps().filter(a => match(a.title));
     smSystem.innerHTML = sys.map(a => smItem(a, "sys", a.iconHtml)).join("");
-    const apps = stackData.filter(s => match(s.name)).map(s => ({ key: stackKey(s), title: s.name, url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) }));
+    const apps = stackData.filter(s => match(stackTitle(s))).map(s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) }));
     smApps.innerHTML = apps.map(a => smItem(a, "", a.inner)).join("");
     smAppsTitle.style.display = apps.length ? "" : "none";
     smEmpty.hidden = (sys.length + apps.length) > 0;
@@ -218,7 +256,9 @@
         const s = stackData.find(x => x.name === iconEl.dataset.stackName);
         const items = [{ label: "Open", action: () => launchEl(iconEl) }];
         if (s) {
-          items.push({ label: "Settings", action: () => open({ key: "set:" + s.name, title: "Settings · " + s.name, url: stackSettingsUrl(s), width: 1024, height: 680 }) });
+          items.push({ label: "Settings", action: () => open({ key: "set:" + s.name, title: "Settings · " + stackTitle(s), url: stackSettingsUrl(s), width: 1024, height: 680 }) });
+          const def = stackDef(s);
+          if (def && def.actions && def.actions.length) { items.push({ sep: true }); for (const ac of def.actions) items.push({ label: ac.label, action: () => openAction(s, ac) }); }
           items.push({ sep: true });
           if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }); items.push({ label: "Restart", action: () => stackAction(s.name, "restart") }); }
           if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
@@ -240,6 +280,7 @@
   async function init() {
     try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; } }
     catch (_) { layout = {}; }
+    await loadDefs();
     buildSystem(); await load(); setInterval(load, 15000);
   }
   init();

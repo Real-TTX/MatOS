@@ -2,7 +2,7 @@
 @model MatOS.Web.Pages.Apps.StoreModel
 @{
     ViewData["Title"] = "App Store";
-    ViewData["Description"] = "Install apps as containers. The same app can be installed multiple times.";
+    ViewData["Description"] = "Install apps as containers. Add your own with a custom icon, name and right-click actions.";
     Layout = "_WindowLayout";
 }
 
@@ -10,10 +10,53 @@
     <div class="tabbar" id="store-tabs" style="margin-bottom:1rem">
         <button class="tab active" data-tab="catalog">Discover</button>
         <button class="tab" data-tab="installed">Installed <span id="store-count" class="fx-muted"></span></button>
+        <button class="tab" data-tab="add">+ Add app</button>
     </div>
     <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
+
     <div id="store-catalog" class="store-grid"></div>
     <div id="store-installed" style="display:none"></div>
+
+    <div id="store-add" style="display:none">
+        <div class="card" style="max-width:640px">
+            <h2 style="margin:0 0 0.9rem;font-size:1rem" id="add-title">Add a custom app</h2>
+            <input type="hidden" id="a-id" />
+            <div class="grid2">
+                <label class="fl"><span>Display name *</span><input id="a-name" class="ui-input" placeholder="My App" /></label>
+                <label class="fl"><span>Docker image *</span><input id="a-image" class="ui-input mono" placeholder="nginx:alpine" /></label>
+                <label class="fl"><span>UI port</span><input id="a-port" class="ui-input" type="number" value="80" /></label>
+                <label class="fl"><span>Category</span><input id="a-cat" class="ui-input" placeholder="Custom" /></label>
+            </div>
+            <label class="fl"><span>Tagline</span><input id="a-tag" class="ui-input" placeholder="Short one-liner" /></label>
+            <label class="fl"><span>Description</span><textarea id="a-desc" class="ui-input" rows="2"></textarea></label>
+
+            <div class="fl">
+                <span>Icon <span class="fx-muted">(emoji, image URL, or upload)</span></span>
+                <div style="display:flex;align-items:center;gap:0.6rem">
+                    <span class="app-ico" id="a-icon-prev" style="width:44px;height:44px">📦</span>
+                    <input id="a-icon" class="ui-input" placeholder="📦  or  https://…/icon.png" style="flex:1" />
+                    <button type="button" class="ui-btn" id="a-icon-upload">Upload…</button>
+                    <input type="file" id="a-icon-file" accept="image/*" hidden />
+                </div>
+            </div>
+
+            <div class="grid2">
+                <label class="fl"><span>Volumes <span class="fx-muted">(one container path per line)</span></span><textarea id="a-vols" class="ui-input mono" rows="2" placeholder="/data"></textarea></label>
+                <label class="fl"><span>Environment <span class="fx-muted">(KEY=value per line)</span></span><textarea id="a-env" class="ui-input mono" rows="2" placeholder="TZ=Europe/Berlin"></textarea></label>
+            </div>
+
+            <div class="fl">
+                <span>Right-click actions <span class="fx-muted">(label + URL — absolute, or path relative to the app)</span></span>
+                <div id="a-actions"></div>
+                <button type="button" class="ui-btn" id="a-add-action" style="align-self:flex-start;margin-top:0.4rem">+ Add action</button>
+            </div>
+
+            <div style="display:flex;gap:0.6rem;margin-top:1rem">
+                <button class="ui-btn primary" id="a-save">Save app</button>
+                <button class="ui-btn" id="a-cancel">Reset</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @section Head {
@@ -24,15 +67,21 @@
 .store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:0.9rem; }
 .app-card { display:flex; flex-direction:column; gap:0.5rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1rem; }
 .app-card .top { display:flex; align-items:center; gap:0.7rem; }
-.app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; background:linear-gradient(135deg,#eef2ff,#f5f3ff); border:1px solid var(--mat-border); }
+.app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; overflow:hidden; background:linear-gradient(135deg,#eef2ff,#f5f3ff); border:1px solid var(--mat-border); flex:0 0 auto; }
+.app-ico img { width:100%; height:100%; object-fit:cover; }
 .app-card h3 { margin:0; font-size:1rem; } .app-card .tag { color:var(--mat-text-muted); font-size:0.8rem; }
 .app-card p { margin:0; color:var(--mat-text-muted); font-size:0.86rem; flex:1 1 auto; }
-.app-card .foot { display:flex; align-items:center; gap:0.5rem; }
+.app-card .foot { display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; }
 .app-card .mono { font-size:0.72rem; color:var(--mat-text-muted); }
+.chip { font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:999px; background:#eef2ff; color:#4338ca; }
 .inst { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.9rem; border:1px solid var(--mat-border); border-radius:12px; margin-bottom:0.6rem; background:var(--mat-surface); }
 .inst .g { flex:1 1 auto; min-width:0; } .inst .nm { font-weight:700; } .inst .sub { color:var(--mat-text-muted); font-size:0.78rem; }
+.fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 0.8rem; }
+.act-row { display:flex; gap:0.4rem; margin-bottom:0.4rem; } .act-row input { flex:1; } .act-row .lbl { max-width:150px; }
 .spin { width:14px; height:14px; border-radius:50%; border:2px solid rgba(0,0,0,.15); border-top-color:var(--mat-accent); display:inline-block; animation:sp .7s linear infinite; }
 @@keyframes sp { to { transform:rotate(360deg); } }
+@@media (max-width:560px){ .grid2 { grid-template-columns:1fr; } }
 </style>
 }
 
@@ -41,60 +90,101 @@
 (function(){
   const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
-  const catEl=document.getElementById("store-catalog"), instEl=document.getElementById("store-installed"), msg=document.getElementById("store-msg");
-  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"#bbf7d0":"#fecaca"; msg.style.background=ok?"#f0fdf4":"#fff5f5"; msg.style.color=ok?"#166534":"#b91c1c"; msg.textContent=t; setTimeout(()=>msg.style.display="none",4000); }
+  const isImg=s=>/^(https?:|data:)/i.test(s||"");
+  const iconHtml=ic=> isImg(ic) ? `<img src="${escA(ic)}" alt="">` : `<span>${esc(ic||"📦")}</span>`;
+  const catEl=document.getElementById("store-catalog"), instEl=document.getElementById("store-installed"), addEl=document.getElementById("store-add"), msg=document.getElementById("store-msg");
+  let catalog=[];
+  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"#bbf7d0":"#fecaca"; msg.style.background=ok?"#f0fdf4":"#fff5f5"; msg.style.color=ok?"#166534":"#b91c1c"; msg.textContent=t; setTimeout(()=>msg.style.display="none",4500); }
 
   document.querySelectorAll("#store-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll("#store-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
-    const inst=t.dataset.tab==="installed";
-    catEl.style.display=inst?"none":""; instEl.style.display=inst?"":"none"; if(inst) loadInstalls();
+    const tab=t.dataset.tab;
+    catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none";
+    if(tab==="installed") loadInstalls(); if(tab==="add" && !document.getElementById("a-id").value) resetForm();
   }));
 
   async function loadCatalog(){
-    let d; try{ d=await (await fetch("/api/v1/store/catalog")).json(); }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
-    catEl.innerHTML=d.apps.map(a=>`<div class="app-card">
-      <div class="top"><div class="app-ico">${esc(a.icon)}</div><div><h3>${esc(a.name)}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
+    try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
+    catEl.innerHTML=catalog.map(a=>`<div class="app-card">
+      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${a.builtIn?'':'<span class="chip">custom</span>'}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
       <p>${esc(a.description)}</p>
       <div class="foot"><button class="ui-btn primary" data-install="${escA(a.id)}">Install</button>
+        ${a.builtIn?'':`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`}
         <span class="spacer" style="flex:1"></span><span class="mono">${esc(a.image)}</span></div>
     </div>`).join("");
     catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>install(b)));
+    catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
+    catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
   }
 
   async function install(btn){
-    const id=btn.dataset.install, orig=btn.innerHTML;
-    btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Installing…`;
-    try{
-      const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id})});
+    const id=btn.dataset.install, orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Installing…`;
+    try{ const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.title||r.status); }
-      const j=await r.json();
-      flash(`Installed ${id} → ${j.name} (port ${j.hostPort}).`,true);
-    }catch(e){ flash("Install failed: "+e.message,false); }
-    finally{ btn.disabled=false; btn.innerHTML=orig; }
+      const j=await r.json(); flash(`Installed ${id} → ${j.name} (port ${j.hostPort}).`,true);
+    }catch(e){ flash("Install failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; }
   }
 
   async function loadInstalls(){
     let d; try{ d=await (await fetch("/api/v1/store/installs")).json(); }catch(_){ instEl.innerHTML="Failed to load."; return; }
     document.getElementById("store-count").textContent=d.installs.length?`(${d.installs.length})`:"";
-    if(!d.installs.length){ instEl.innerHTML=`<div class="fx-muted" style="padding:1rem">No apps installed yet. Install one from Discover — you can install the same app multiple times.</div>`; return; }
-    instEl.innerHTML=d.installs.map(i=>`<div class="inst">
+    if(!d.installs.length){ instEl.innerHTML=`<div class="fx-muted" style="padding:1rem">No apps installed yet.</div>`; return; }
+    instEl.innerHTML=d.installs.map(i=>{ const def=catalog.find(a=>a.id===i.app);
+      return `<div class="inst"><div class="app-ico" style="width:36px;height:36px;font-size:1.1rem">${iconHtml(def?def.icon:"📦")}</div>
       <div class="g"><div class="nm">${esc(i.title)} <span class="fx-muted" style="font-weight:400">· ${esc(i.name)}</span></div>
         <div class="sub">${i.running?'<span class="pill on">running</span>':'<span class="pill off">'+esc(i.state)+'</span>'} · ${esc(i.image)}</div></div>
       ${i.appUrl?`<button class="ui-btn" data-open="${escA(i.appUrl)}">Open</button>`:""}
-      <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.name)}">Uninstall</button></div>`).join("");
+      <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.name)}">Uninstall</button></div>`; }).join("");
     instEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
     instEl.querySelectorAll("[data-uninstall]").forEach(b=>b.addEventListener("click",()=>uninstall(b.dataset.uninstall,b.dataset.name)));
   }
-
   async function uninstall(id,name){
     if(!confirm(`Uninstall ${name}? This removes the container.`))return;
     const rmVol=confirm("Also delete its data volume? (OK = delete data, Cancel = keep data)");
-    try{
-      const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})});
-      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||r.status); }
-      flash("Uninstalled "+name+".",true); loadInstalls();
+    try{ const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||r.status); } flash("Uninstalled "+name+".",true); loadInstalls();
     }catch(e){ flash("Uninstall failed: "+e.message,false); }
   }
+
+  // ---- custom app form ----
+  const $=id=>document.getElementById(id);
+  const iconPrev=$("a-icon-prev"), iconInput=$("a-icon");
+  iconInput.addEventListener("input",()=>iconPrev.innerHTML=iconHtml(iconInput.value));
+  $("a-icon-upload").addEventListener("click",()=>$("a-icon-file").click());
+  $("a-icon-file").addEventListener("change",()=>{ const f=$("a-icon-file").files[0]; if(!f)return;
+    if(f.size>256*1024){ flash("Icon too large (max 256 KB).",false); return; }
+    const r=new FileReader(); r.onload=()=>{ iconInput.value=r.result; iconPrev.innerHTML=iconHtml(r.result); }; r.readAsDataURL(f); });
+
+  function actionRow(label,url){ const d=document.createElement("div"); d.className="act-row";
+    d.innerHTML=`<input class="ui-input lbl" placeholder="Label" value="${escA(label||"")}"><input class="ui-input" placeholder="/path or https://…" value="${escA(url||"")}"><button type="button" class="ui-btn danger">✕</button>`;
+    d.querySelector("button").addEventListener("click",()=>d.remove()); return d; }
+  $("a-add-action").addEventListener("click",()=>$("a-actions").appendChild(actionRow("","")));
+
+  function resetForm(){ $("add-title").textContent="Add a custom app"; ["a-id","a-name","a-image","a-tag","a-desc","a-cat","a-vols","a-env"].forEach(i=>$(i).value="");
+    $("a-port").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; }
+  function editApp(id){ const a=catalog.find(x=>x.id===id); if(!a)return;
+    document.querySelector('#store-tabs .tab[data-tab="add"]').click();
+    $("add-title").textContent="Edit "+a.name; $("a-id").value=a.id; $("a-name").value=a.name; $("a-image").value=a.image; $("a-port").value=a.uiPort;
+    $("a-cat").value=a.category; $("a-tag").value=a.tagline; $("a-desc").value=a.description; iconInput.value=a.icon; iconPrev.innerHTML=iconHtml(a.icon);
+    $("a-vols").value=(a.volumes||[]).join("\n"); $("a-env").value=Object.entries(a.env||{}).map(([k,v])=>k+"="+v).join("\n");
+    $("a-actions").innerHTML=""; (a.actions||[]).forEach(ac=>$("a-actions").appendChild(actionRow(ac.label,ac.url))); }
+  $("a-cancel").addEventListener("click",resetForm);
+
+  $("a-save").addEventListener("click",async()=>{
+    const vols=$("a-vols").value.split("\n").map(s=>s.trim()).filter(Boolean);
+    const env={}; $("a-env").value.split("\n").map(s=>s.trim()).filter(Boolean).forEach(l=>{ const i=l.indexOf("="); if(i>0) env[l.slice(0,i)]=l.slice(i+1); });
+    const actions=[...$("a-actions").querySelectorAll(".act-row")].map(r=>({label:r.children[0].value.trim(),url:r.children[1].value.trim()})).filter(a=>a.label&&a.url);
+    const app={ id:$("a-id").value||"", name:$("a-name").value.trim(), image:$("a-image").value.trim(), uiPort:parseInt($("a-port").value||"80",10),
+      category:$("a-cat").value.trim()||"Custom", tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(), icon:iconInput.value.trim()||"📦",
+      volumes:vols, env, actions };
+    if(!app.name||!app.image){ flash("Display name and Docker image are required.",false); return; }
+    try{ const r=await fetch("/api/v1/store/apps",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(app)});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
+      flash("Saved.",true); resetForm(); await loadCatalog(); document.querySelector('#store-tabs .tab[data-tab="catalog"]').click();
+    }catch(e){ flash("Save failed: "+e.message,false); }
+  });
+  async function delApp(id,name){ if(!confirm(`Delete custom app "${name}"? (Installed instances are not affected.)`))return;
+    try{ await fetch("/api/v1/store/apps/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); flash("Deleted.",true); loadCatalog(); }catch(e){ flash("Delete failed.",false); } }
 
   loadCatalog();
 })();

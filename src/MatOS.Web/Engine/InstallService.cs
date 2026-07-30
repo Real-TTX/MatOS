@@ -22,19 +22,20 @@ public class InstallService
 {
     private readonly DockerService _docker;
     private readonly JsonConfigService _config;
+    private readonly StoreService _store;
     private readonly ILogger<InstallService> _log;
     private readonly string _network;
     private readonly object _gate = new();
 
-    public InstallService(DockerService docker, JsonConfigService config, IConfiguration cfg, ILogger<InstallService> log)
+    public InstallService(DockerService docker, JsonConfigService config, StoreService store, IConfiguration cfg, ILogger<InstallService> log)
     {
-        _docker = docker; _config = config; _log = log;
+        _docker = docker; _config = config; _store = store; _log = log;
         _network = cfg["MatOS:Docker:Network"] ?? "matos";
     }
 
     public async Task<InstallResult> InstallAsync(string appId, CancellationToken ct = default)
     {
-        var app = StoreCatalog.Find(appId);
+        var app = _store.Find(appId);
         if (app == null) return new(false, null, 0, "Unknown app.");
 
         int instance;

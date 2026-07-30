@@ -1,7 +1,10 @@
 /* ---- Desktop shell (Windows-style: desktop + bottom taskbar + start menu) -- */
 html, body { overflow: hidden; height: 100%; }
 
-#mat-wallpaper { position: fixed; inset: 0; z-index: 0; background: #0b0f1a; transition: opacity 0.4s; }
+/* No background here: an ID-level background would override the .wp-* gradient
+   classes (ID beats class), so the wallpaper could never change. Body provides
+   the dark fallback behind this layer. */
+#mat-wallpaper { position: fixed; inset: 0; z-index: 0; transition: opacity 0.4s; }
 
 /* Wallpapers (umbrelOS-style gradients) */
 .wp-aurora  { background: radial-gradient(1200px 800px at 12% -8%, #6d5efc 0%, transparent 55%), radial-gradient(1100px 900px at 108% 112%, #c026d3 0%, transparent 52%), linear-gradient(150deg, #141a2e, #0b0f1a); }
@@ -31,6 +34,7 @@ html, body { overflow: hidden; height: 100%; }
 .mat-app:active .mat-app-icon { transform: scale(0.97); }
 .mat-app-icon img { width: 100%; height: 100%; object-fit: cover; }
 .mat-app-icon svg { width: 34px; height: 34px; }
+.mat-app-icon .mat-emoji { font-size: 34px; line-height: 1; }
 .mat-app-icon.sys { background: var(--accent-grad); border-color: transparent; }
 .mat-app-label { font-size: 0.8rem; font-weight: 600; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.55);
   max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -149,6 +153,7 @@ html, body { overflow: hidden; height: 100%; }
   background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
 .sm-ico.sys { background: var(--accent-grad); border-color: transparent; }
 .sm-ico svg { width: 24px; height: 24px; }
+.sm-ico .mat-emoji { font-size: 24px; line-height: 1; }
 .sm-ico img { width: 100%; height: 100%; object-fit: cover; }
 .sm-ico .mat-state-dot { top: 3px; right: 3px; width: 8px; height: 8px; }
 .sm-label { font-size: 0.76rem; text-align: center; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
