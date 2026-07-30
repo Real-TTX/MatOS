@@ -12,16 +12,23 @@ namespace MatOS.Web.Docker;
 /// basic lifecycle actions and the log/stats streams. Failures degrade gracefully (empty
 /// inventory + <see cref="LastError"/>) so the desktop still renders when Docker is unreachable.
 /// </summary>
-public class DockerService
+public partial class DockerService
 {
     private readonly string _endpoint;
     private readonly ILogger<DockerService> _log;
+
+    /// <summary>Host path where Docker stores named-volume data (bind-mounted into matOS
+    /// so the File Explorer / volume sizing can read it). One dir per volume, data under _data.</summary>
+    public string VolumesPath { get; }
 
     public DockerService(IConfiguration config, ILogger<DockerService> log)
     {
         _endpoint = config["MatOS:Docker:Endpoint"]
                     ?? Environment.GetEnvironmentVariable("MATOS_DOCKER_ENDPOINT")
                     ?? "unix:///var/run/docker.sock";
+        VolumesPath = config["MatOS:Docker:VolumesPath"]
+                    ?? Environment.GetEnvironmentVariable("MATOS_DOCKER_VOLUMES_PATH")
+                    ?? "/var/lib/docker/volumes";
         _log = log;
     }
 

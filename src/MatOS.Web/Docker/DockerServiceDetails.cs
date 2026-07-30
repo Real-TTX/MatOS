@@ -1,0 +1,192 @@
+using Docker.DotNet.Models;
+
+namespace MatOS.Web.Docker;
+
+/// <summary>Stacks (compose grouping), container inspect, volumes and images.</summary>
+public partial class DockerService
+{
+    // ---- Stacks (a stack = a compose project = the app) ----
+
+    public async Task<IReadOnlyList<StackInfo>> ListStacksAsync(CancellationToken ct = default)
+    {
+        var all = await ListContainersAsync(true, ct);
+        var stacks = new List<StackInfo>();
+
+        foreach (var g in all.Where(c => c.Labels.ContainsKey(ComposeLabels.Project))
+                             .GroupBy(c => c.Labels[ComposeLabels.Project]))
+        {
+            var list = g.OrderBy(c => c.Name).ToList();
+            stacks.Add(new StackInfo(g.Key, false, list.Count, list.Count(x => x.IsRunning), list));
+        }
+        foreach (var c in all.Where(c => !c.Labels.ContainsKey(ComposeLabels.Project)))
+            stacks.Add(new StackInfo(c.Name, true, 1, c.IsRunning ? 1 : 0, new[] { c }));
+
+        return stacks.OrderByDescending(s => s.AnyRunning).ThenBy(s => s.Name).ToList();
+    }
+
+    public async Task<StackInfo?> GetStackAsync(string name, CancellationToken ct = default)
+        => (await ListStacksAsync(ct)).FirstOrDefault(s => s.Name == name);
+
+    public async Task StackActionAsync(string project, string action, CancellationToken ct = default)
+    {
+        var all = await ListContainersAsync(true, ct);
+        var targets = all.Where(c => c.Labels.TryGetValue(ComposeLabels.Project, out var p) && p == project).ToList();
+        if (targets.Count == 0) targets = all.Where(c => c.Name == project).ToList(); // standalone by name
+        foreach (var c in targets)
+        {
+            switch (action)
+            {
+                case "start": await StartAsync(c.Id, ct); break;
+                case "stop": await StopAsync(c.Id, ct); break;
+                case "restart": await RestartAsync(c.Id, ct); break;
+            }
+        }
+    }
+
+    // ---- Inspect (settings window) ----
+
+    public async Task<ContainerDetail?> InspectDetailAsync(string id, CancellationToken ct = default)
+    {
+        try
+        {
+            using var client = CreateClient();
+            var r = await client.Containers.InspectContainerAsync(id, ct);
+            var labels = r.Config?.Labels != null
+                ? new Dictionary<string, string>(r.Config.Labels)
+                : new Dictionary<string, string>();
+            var name = (r.Name ?? "").TrimStart('/');
+
+            var ports = new List<PortMapping>();
+            if (r.NetworkSettings?.Ports != null)
+                foreach (var kv in r.NetworkSettings.Ports)
+                {
+                    var parts = kv.Key.Split('/');
+                    int priv = int.TryParse(parts[0], out var pp) ? pp : 0;
+                    var type = parts.Length > 1 ? parts[1] : "tcp";
+                    if (kv.Value != null && kv.Value.Count > 0)
+                        foreach (var b in kv.Value)
+                            ports.Add(new PortMapping(type, priv, int.TryParse(b.HostPort, out var hp) ? hp : null, b.HostIP));
+                    else
+                        ports.Add(new PortMapping(type, priv, null, null));
+                }
+
+            labels.TryGetValue(MatcadLabels.Host, out var webHost);
+            var info = new ContainerInfo(
+                r.ID ?? id,
+                (r.ID ?? "").Length >= 12 ? r.ID![..12] : r.ID ?? "",
+                name, r.Config?.Image ?? r.Image ?? "",
+                r.State?.Status ?? "", r.State?.Status ?? "", r.Created,
+                ports, labels,
+                string.IsNullOrWhiteSpace(webHost) ? null : webHost,
+                labels.TryGetValue(MatosLabels.Managed, out var m) && m == "true");
+
+            var mounts = (r.Mounts ?? new List<MountPoint>())
+                .Select(mt => new MountInfo(mt.Type ?? "", string.IsNullOrEmpty(mt.Name) ? null : mt.Name,
+                    mt.Source ?? "", mt.Destination ?? "", mt.RW))
+                .ToList();
+            var networks = r.NetworkSettings?.Networks?.Keys.ToList() ?? new List<string>();
+            labels.TryGetValue(ComposeLabels.Project, out var proj);
+            labels.TryGetValue(ComposeLabels.Service, out var svc);
+
+            return new ContainerDetail(
+                info,
+                r.Config?.Cmd != null ? string.Join(" ", r.Config.Cmd) : null,
+                r.Config?.Env?.ToList() ?? new List<string>(),
+                networks, mounts,
+                r.HostConfig?.RestartPolicy?.Name.ToString() ?? "no",
+                proj, svc);
+        }
+        catch (Exception ex) { LastError = ex.Message; return null; }
+    }
+
+    public async Task RemoveContainerAsync(string id, bool force, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        await client.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = force }, ct);
+    }
+
+    // ---- Volumes ----
+
+    public async Task<IReadOnlyList<VolumeInfo>> ListVolumesAsync(bool withSize = true, CancellationToken ct = default)
+    {
+        try
+        {
+            using var client = CreateClient();
+            var resp = await client.Volumes.ListAsync(ct);
+            var containers = await client.Containers.ListContainersAsync(new ContainersListParameters { All = true }, ct);
+
+            var usedBy = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var c in containers)
+            {
+                var cname = (c.Names?.FirstOrDefault() ?? "").TrimStart('/');
+                if (c.Mounts == null) continue;
+                foreach (var mt in c.Mounts)
+                    if (mt.Type == "volume" && !string.IsNullOrEmpty(mt.Name))
+                    {
+                        if (!usedBy.TryGetValue(mt.Name, out var l)) usedBy[mt.Name] = l = new List<string>();
+                        l.Add(cname);
+                    }
+            }
+
+            var list = new List<VolumeInfo>();
+            foreach (var v in resp.Volumes ?? new List<VolumeResponse>())
+            {
+                DateTime? created = DateTime.TryParse(v.CreatedAt, out var dt) ? dt.ToUniversalTime() : null;
+                long size = withSize ? VolumeSize(v.Name) : -1;
+                usedBy.TryGetValue(v.Name, out var uses);
+                list.Add(new VolumeInfo(v.Name, v.Driver ?? "", v.Mountpoint ?? "", created, size, uses ?? new List<string>()));
+            }
+            LastError = null;
+            return list.OrderBy(v => v.Name).ToList();
+        }
+        catch (Exception ex) { LastError = ex.Message; return Array.Empty<VolumeInfo>(); }
+    }
+
+    /// <summary>Best-effort on-disk size of a named volume via the bind-mounted volumes path.</summary>
+    public long VolumeSize(string name)
+    {
+        try
+        {
+            var dir = Path.Combine(VolumesPath, name, "_data");
+            if (!Directory.Exists(dir)) return -1;
+            long total = 0;
+            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            {
+                try { total += new FileInfo(f).Length; } catch { /* skip */ }
+            }
+            return total;
+        }
+        catch { return -1; }
+    }
+
+    // ---- Images ----
+
+    public async Task<IReadOnlyList<ImageInfo>> ListImagesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var client = CreateClient();
+            var imgs = await client.Images.ListImagesAsync(new ImagesListParameters { All = false }, ct);
+            var list = new List<ImageInfo>();
+            foreach (var i in imgs)
+            {
+                var id = i.ID ?? "";
+                var shortId = id.StartsWith("sha256:") ? id.Substring(7, 12) : (id.Length >= 12 ? id[..12] : id);
+                var tags = i.RepoTags?.Where(t => t != "<none>:<none>").ToList() ?? new List<string>();
+                if (tags.Count == 0)
+                    list.Add(new ImageInfo(id, shortId, "<none>", "<none>", i.Size, i.Created, true));
+                else
+                    foreach (var t in tags)
+                    {
+                        var idx = t.LastIndexOf(':');
+                        var repo = idx > 0 ? t[..idx] : t;
+                        var tag = idx > 0 ? t[(idx + 1)..] : "latest";
+                        list.Add(new ImageInfo(id, shortId, repo, tag, i.Size, i.Created, false));
+                    }
+            }
+            LastError = null;
+            return list.OrderBy(i => i.Repository).ThenBy(i => i.Tag).ToList();
+        }
+        catch (Exception ex) { LastError = ex.Message; return Array.Empty<ImageInfo>(); }
+    }
+}

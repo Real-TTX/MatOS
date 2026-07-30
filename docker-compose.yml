@@ -28,6 +28,8 @@ services:
       - matos-data:/app/data
       # matOS is a control panel for Docker -> it needs the engine socket (read+write).
       - /var/run/docker.sock:/var/run/docker.sock
+      # Named-volume data, so the File Explorer can browse/edit and sizes can be read.
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
     networks: [ matnet ]
     restart: unless-stopped
 

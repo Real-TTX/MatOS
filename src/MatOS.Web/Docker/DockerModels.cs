@@ -30,3 +30,45 @@ public record ContainerStatSample(double CpuPercent, long MemoryBytes, long Memo
 {
     public double MemoryPercent => MemoryLimitBytes > 0 ? Math.Round(MemoryBytes * 100.0 / MemoryLimitBytes, 1) : 0;
 }
+
+/// <summary>Docker Compose labels used to group containers into stacks (apps).</summary>
+public static class ComposeLabels
+{
+    public const string Project = "com.docker.compose.project";
+    public const string Service = "com.docker.compose.service";
+    public const string WorkingDir = "com.docker.compose.project.working_dir";
+}
+
+/// <summary>A stack = a Compose project (the "app"). Standalone containers (no compose
+/// project) are represented as a one-container stack so everything has a uniform shape.</summary>
+public record StackInfo(string Name, bool Standalone, int Total, int Running, IReadOnlyList<ContainerInfo> Containers)
+{
+    public bool AllRunning => Running == Total && Total > 0;
+    public bool AnyRunning => Running > 0;
+    public bool MatosManaged => Containers.Any(c => c.MatosManaged);
+    public string? WorkingDir => Containers.Select(c => c.Labels.TryGetValue(ComposeLabels.WorkingDir, out var w) ? w : null)
+                                           .FirstOrDefault(w => !string.IsNullOrEmpty(w));
+}
+
+/// <summary>A mount on a container (named volume or bind).</summary>
+public record MountInfo(string Type, string? Name, string Source, string Destination, bool ReadWrite);
+
+/// <summary>Detailed container info for the settings window.</summary>
+public record ContainerDetail(
+    ContainerInfo Info,
+    string? Command,
+    IReadOnlyList<string> Env,
+    IReadOnlyList<string> Networks,
+    IReadOnlyList<MountInfo> Mounts,
+    string RestartPolicy,
+    string? ComposeProject,
+    string? ComposeService);
+
+/// <summary>A Docker named volume.</summary>
+public record VolumeInfo(string Name, string Driver, string Mountpoint, DateTime? CreatedUtc, long SizeBytes, IReadOnlyList<string> UsedBy)
+{
+    public bool InUse => UsedBy.Count > 0;
+}
+
+/// <summary>A Docker image.</summary>
+public record ImageInfo(string Id, string ShortId, string Repository, string Tag, long SizeBytes, DateTime CreatedUtc, bool Dangling);

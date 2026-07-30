@@ -31,6 +31,64 @@ public static class DockerApi
         g.MapPost("/containers/{id}/restart", (string id, DockerService docker, CancellationToken ct) =>
             Guard(() => docker.RestartAsync(id, ct)));
 
+        g.MapGet("/containers/{id}/inspect", async (string id, DockerService docker, HttpRequest req, CancellationToken ct) =>
+        {
+            var d = await docker.InspectDetailAsync(id, ct);
+            if (d is null) return Results.NotFound();
+            return Results.Ok(new
+            {
+                info = ToDto(d.Info, req),
+                command = d.Command,
+                env = d.Env,
+                networks = d.Networks,
+                mounts = d.Mounts.Select(m => new { m.Type, m.Name, m.Source, m.Destination, m.ReadWrite }),
+                restartPolicy = d.RestartPolicy,
+                composeProject = d.ComposeProject,
+                composeService = d.ComposeService
+            });
+        });
+
+        g.MapPost("/containers/{id}/remove", (string id, bool? force, DockerService docker, CancellationToken ct) =>
+            Guard(() => docker.RemoveContainerAsync(id, force ?? true, ct)));
+
+        g.MapGet("/stacks", async (DockerService docker, HttpRequest req, CancellationToken ct) =>
+        {
+            var stacks = await docker.ListStacksAsync(ct);
+            return Results.Ok(new { docker.LastError, stacks = stacks.Select(s => StackDto(s, req)) });
+        });
+
+        g.MapGet("/stacks/{name}", async (string name, DockerService docker, HttpRequest req, CancellationToken ct) =>
+        {
+            var s = await docker.GetStackAsync(name, ct);
+            return s is null ? Results.NotFound() : Results.Ok(StackDto(s, req));
+        });
+
+        g.MapPost("/stacks/{name}/{action}", (string name, string action, DockerService docker, CancellationToken ct) =>
+        {
+            if (action is not ("start" or "stop" or "restart")) return Task.FromResult(Results.BadRequest());
+            return Guard(() => docker.StackActionAsync(name, action, ct));
+        });
+
+        g.MapGet("/volumes", async (DockerService docker, CancellationToken ct) =>
+        {
+            var vols = await docker.ListVolumesAsync(true, ct);
+            return Results.Ok(new
+            {
+                docker.LastError,
+                volumes = vols.Select(v => new { v.Name, v.Driver, v.Mountpoint, v.CreatedUtc, v.SizeBytes, v.InUse, usedBy = v.UsedBy })
+            });
+        });
+
+        g.MapGet("/images", async (DockerService docker, CancellationToken ct) =>
+        {
+            var imgs = await docker.ListImagesAsync(ct);
+            return Results.Ok(new
+            {
+                docker.LastError,
+                images = imgs.Select(i => new { i.Id, i.ShortId, i.Repository, i.Tag, i.SizeBytes, i.CreatedUtc, i.Dangling })
+            });
+        });
+
         g.MapGet("/containers/{id}/logs", async (string id, int? tail, DockerService docker, CancellationToken ct) =>
         {
             var text = await docker.GetLogsAsync(id, tail ?? 200, ct);
@@ -65,6 +123,18 @@ public static class DockerApi
         try { await action(); return Results.Ok(new { ok = true }); }
         catch (Exception ex) { return Results.Problem(ex.Message); }
     }
+
+    private static object StackDto(StackInfo s, HttpRequest req) => new
+    {
+        s.Name,
+        s.Standalone,
+        s.Total,
+        s.Running,
+        s.AnyRunning,
+        s.AllRunning,
+        s.MatosManaged,
+        containers = s.Containers.Select(c => ToDto(c, req))
+    };
 
     private static object ToDto(ContainerInfo c, HttpRequest req)
     {
