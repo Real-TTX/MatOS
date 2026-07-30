@@ -7,19 +7,40 @@
 
 <div class="fx" data-volume="@(Model.Volume ?? "")" data-path="@(Model.Path ?? "")">
     <aside class="fx-side">
-        <div class="fx-side-head">Volumes</div>
+        <div class="fx-side-head">
+            <span>Explorer</span>
+            <div class="fx-seg" id="fx-treemode">
+                <button data-mode="volume" class="active">Volumes</button>
+                <button data-mode="stack">Stacks</button>
+            </div>
+        </div>
         <div class="fx-tree" id="fx-tree"><div class="fx-muted" style="padding:0.6rem">Loading…</div></div>
     </aside>
+
     <section class="fx-main">
-        <div class="fx-toolbar">
+        <div class="fx-bar">
+            <button class="fx-ico-btn" id="fx-up" title="Up one level">↑</button>
             <nav class="fx-crumb" id="fx-crumb"></nav>
-            <span style="flex:1"></span>
-            <div class="fx-tools" id="fx-tools" hidden>
-                <button class="ui-btn" id="fx-newfolder">New folder</button>
-                <button class="ui-btn" id="fx-upload">Upload</button>
-                <button class="ui-btn" id="fx-export" title="Download whole volume as .tar.gz">Export</button>
-                <button class="ui-btn" id="fx-import" title="Import a .tar.gz into this volume">Import</button>
+        </div>
+        <div class="fx-ribbon" id="fx-ribbon" hidden>
+            <button class="fx-rb" id="fx-newfolder">📁 New folder</button>
+            <button class="fx-rb" id="fx-upload">⬆ Upload</button>
+            <span class="fx-sep"></span>
+            <button class="fx-rb" id="fx-copy" disabled>⧉ Copy</button>
+            <button class="fx-rb" id="fx-cut" disabled>✂ Cut</button>
+            <button class="fx-rb" id="fx-paste" disabled>📋 Paste</button>
+            <span class="fx-sep"></span>
+            <button class="fx-rb" id="fx-rename" disabled>✎ Rename</button>
+            <button class="fx-rb danger" id="fx-delete" disabled>🗑 Delete</button>
+            <span class="spacer" style="flex:1"></span>
+            <div class="fx-seg" id="fx-view">
+                <button data-view="grid" title="Grid">▦</button>
+                <button data-view="list" title="List">≣</button>
+                <button data-view="details" class="active" title="Details">☰</button>
             </div>
+            <span class="fx-sep"></span>
+            <button class="fx-rb" id="fx-export" title="Download whole volume">⤓ Export</button>
+            <button class="fx-rb" id="fx-import" title="Import a .tar.gz">⤒ Import</button>
         </div>
         <div class="fx-list" id="fx-list"><div class="fx-muted" style="padding:1.2rem">Select a volume to browse its files.</div></div>
     </section>
@@ -42,37 +63,65 @@
 
 @section Head {
 <style>
-.fx { position:absolute; inset:0; display:flex; }
-.fx-side { width:230px; flex:0 0 auto; border-right:1px solid var(--mat-border); overflow:auto; background:#fbfcfe; }
-.fx-side-head { padding:0.7rem 0.9rem; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--mat-text-muted); }
-.fx-tree { padding:0 0.3rem 1rem; }
+.fx { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; background:var(--mat-bg); }
+.fx-side { width:250px; flex:0 0 auto; border-right:1px solid var(--mat-border); overflow:auto; background:#fbfcfe; }
+.fx-side-head { display:flex; flex-direction:column; gap:0.5rem; padding:0.7rem 0.8rem; border-bottom:1px solid var(--mat-border); }
+.fx-side-head > span { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--mat-text-muted); }
+.fx-seg { display:inline-flex; background:#eef1f6; border-radius:8px; padding:2px; }
+.fx-seg button { border:none; background:transparent; padding:0.28rem 0.55rem; font:inherit; font-size:0.8rem; border-radius:6px; cursor:pointer; color:var(--mat-text-muted); }
+.fx-seg button.active { background:#fff; color:var(--mat-text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+.fx-tree { padding:0.3rem; }
 .fx-node { }
 .fx-row { display:flex; align-items:center; gap:0.25rem; padding:0.3rem 0.4rem; border-radius:7px; cursor:pointer; font-size:0.86rem; white-space:nowrap; }
 .fx-row:hover { background:#eef1f6; }
 .fx-row.sel { background:var(--mat-accent); color:#fff; }
-.fx-caret { width:16px; text-align:center; color:var(--mat-text-muted); font-size:0.7rem; flex:0 0 auto; }
+.fx-caret { width:15px; text-align:center; color:var(--mat-text-muted); font-size:0.65rem; flex:0 0 auto; }
 .fx-row.sel .fx-caret { color:#fff; }
-.fx-children { margin-left:0.9rem; display:none; } .fx-node.open > .fx-children { display:block; }
+.fx-caret.leaf { visibility:hidden; }
+.fx-children { margin-left:0.85rem; display:none; } .fx-node.open > .fx-children { display:block; }
+.fx-stackhead { font-size:0.7rem; font-weight:700; color:var(--mat-text-muted); padding:0.5rem 0.4rem 0.2rem; }
+
 .fx-main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; }
-.fx-toolbar { display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); flex-wrap:wrap; }
-.fx-crumb { display:flex; align-items:center; gap:0.25rem; font-size:0.9rem; flex-wrap:wrap; }
-.fx-crumb a { cursor:pointer; color:var(--mat-accent); } .fx-crumb span.sep { color:var(--mat-text-muted); }
-.fx-tools { display:flex; gap:0.4rem; }
+.fx-bar { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.8rem; border-bottom:1px solid var(--mat-border); }
+.fx-ico-btn { width:30px; height:30px; border:1px solid var(--mat-border); border-radius:8px; background:#fff; cursor:pointer; flex:0 0 auto; }
+.fx-ico-btn:hover { background:#f1f5f9; }
+.fx-crumb { display:flex; align-items:center; gap:0.2rem; font-size:0.9rem; flex-wrap:wrap; min-width:0; }
+.fx-crumb a { cursor:pointer; color:var(--mat-accent); padding:0.1rem 0.2rem; border-radius:5px; } .fx-crumb a:hover { background:#eef2ff; }
+.fx-crumb span.sep { color:var(--mat-text-muted); }
+.fx-ribbon { display:flex; align-items:center; gap:0.3rem; padding:0.45rem 0.8rem; border-bottom:1px solid var(--mat-border); flex-wrap:wrap; background:#fbfcfe; }
+.fx-rb { display:inline-flex; align-items:center; gap:0.3rem; padding:0.35rem 0.6rem; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--mat-text); font:inherit; font-size:0.82rem; cursor:pointer; }
+.fx-rb:hover:not(:disabled) { background:#eef1f6; } .fx-rb:disabled { opacity:0.4; cursor:default; } .fx-rb.danger:hover:not(:disabled){ background:#fff1f2; color:#b91c1c; }
+.fx-sep { width:1px; align-self:stretch; background:var(--mat-border); margin:0.1rem 0.2rem; }
+
 .fx-list { flex:1 1 auto; overflow:auto; }
+/* details view */
 table.fx-tbl { width:100%; border-collapse:collapse; }
-table.fx-tbl td, table.fx-tbl th { padding:0.5rem 0.9rem; text-align:left; }
-table.fx-tbl thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); position:sticky; top:0; background:var(--mat-surface); }
-table.fx-tbl tbody tr { border-bottom:1px solid var(--mat-border); }
+table.fx-tbl td, table.fx-tbl th { padding:0.45rem 0.9rem; text-align:left; }
+table.fx-tbl thead th { font-size:0.76rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); position:sticky; top:0; background:var(--mat-bg); }
+table.fx-tbl tbody tr { border-bottom:1px solid #eef1f6; cursor:default; }
 table.fx-tbl tbody tr:hover { background:#f6f8fc; }
-.fx-name { display:flex; align-items:center; gap:0.5rem; cursor:pointer; }
-.fx-name .i { width:18px; text-align:center; }
-.fx-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
-.fx-acts .ui-btn { padding:0.3rem 0.55rem; font-size:0.8rem; }
+table.fx-tbl tbody tr.sel { background:#e0e7ff; }
+.fx-name { display:flex; align-items:center; gap:0.5rem; } .fx-name .i { width:20px; text-align:center; }
+/* grid view */
+.fx-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:0.4rem; padding:0.8rem; }
+.fx-tile { display:flex; flex-direction:column; align-items:center; gap:0.4rem; padding:0.7rem 0.4rem; border-radius:10px; cursor:default; border:1px solid transparent; }
+.fx-tile:hover { background:#f1f5f9; } .fx-tile.sel { background:#e0e7ff; border-color:#c7d2fe; }
+.fx-tile .i { font-size:2rem; } .fx-tile .n { font-size:0.78rem; text-align:center; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* list view */
+.fx-listv { columns: 2; column-gap:1rem; padding:0.6rem 0.9rem; }
+.fx-li { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.5rem; border-radius:7px; cursor:default; break-inside:avoid; }
+.fx-li:hover { background:#f1f5f9; } .fx-li.sel { background:#e0e7ff; }
+
 .fx-muted { color:var(--mat-text-muted); }
 .fx-editor { position:absolute; inset:0; background:var(--mat-bg); display:flex; flex-direction:column; z-index:5; }
 .fx-editor[hidden] { display:none; }
 .fx-editor-head { display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); }
 #fx-text { flex:1 1 auto; border:none; outline:none; resize:none; padding:1rem; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85rem; line-height:1.5; background:#0b0f1a; color:#d7def0; }
+#fx-ctx { position:fixed; z-index:50; min-width:170px; background:#fff; border:1px solid var(--mat-border); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:0.3rem; }
+#fx-ctx[hidden]{ display:none; }
+.fx-ctx-item { display:block; width:100%; text-align:left; padding:0.45rem 0.6rem; border:none; background:transparent; border-radius:7px; cursor:pointer; font:inherit; font-size:0.85rem; color:var(--mat-text); }
+.fx-ctx-item:hover { background:#eef1f6; } .fx-ctx-item.danger { color:#b91c1c; } .fx-ctx-item:disabled { opacity:0.4; }
+.fx-ctx-sep { height:1px; background:var(--mat-border); margin:0.25rem 0.2rem; }
 </style>
 }
 
@@ -84,139 +133,169 @@ table.fx-tbl tbody tr:hover { background:#f6f8fc; }
   const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
   const fmtBytes=b=>{ if(b==null||b<0)return ""; const u=["B","KB","MB","GB","TB"];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
   const join=(a,b)=>a?(a+"/"+b):b;
+  const parent=p=>{ const i=(p||"").lastIndexOf("/"); return i<0?"":p.slice(0,i); };
   const api=(v,op,q)=>`/api/v1/files/${encodeURIComponent(v)}/${op}`+(q?`?${q}`:"");
   const dl=document.getElementById("fx-dl");
-  let cur={volume:null,path:""};
+  let cur={volume:null,path:""}, sel=null, clip=null, entries=[];
+  let view=localStorage.getItem("fx-view")||"details";
+  let treeMode=localStorage.getItem("fx-tree")||"volume";
+  let treeData=null;
+
+  function fileIcon(name,isDir){ if(isDir)return "📁"; const e=(name.split(".").pop()||"").toLowerCase();
+    if(["png","jpg","jpeg","gif","svg","webp","ico","bmp"].includes(e))return "🖼️";
+    if(["zip","gz","tar","tgz","rar","7z"].includes(e))return "🗜️";
+    if(["json","xml","yml","yaml","js","ts","css","html","cs","sh","conf","ini","env","md","txt","log"].includes(e))return "📄";
+    if(["mp3","wav","ogg","mp4","mkv","mov","webm"].includes(e))return "🎵"; if(["pdf"].includes(e))return "📕"; if(["db","sqlite"].includes(e))return "🗃️"; return "📄"; }
 
   async function jget(url){ const r=await fetch(url); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
   async function jpost(url,body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
 
   // ---- tree ----
   const treeEl=document.getElementById("fx-tree");
-  function makeNode(volume,path,name,isVol){
+  document.querySelectorAll("#fx-treemode button").forEach(b=>b.addEventListener("click",()=>{
+    treeMode=b.dataset.mode; localStorage.setItem("fx-tree",treeMode);
+    document.querySelectorAll("#fx-treemode button").forEach(x=>x.classList.toggle("active",x===b)); buildTree();
+  }));
+  function volNode(volume,path,name,leaf,isVol){
     const node=document.createElement("div"); node.className="fx-node";
     const row=document.createElement("div"); row.className="fx-row"; row.dataset.volume=volume; row.dataset.path=path;
-    row.innerHTML=`<span class="fx-caret">▸</span><span class="i">${isVol?"🗄️":"📁"}</span><span class="fx-lbl">${esc(name)}</span>`;
-    const kids=document.createElement("div"); kids.className="fx-children";
-    node.appendChild(row); node.appendChild(kids);
-    let loaded=false;
-    row.querySelector(".fx-caret").addEventListener("click",async(e)=>{
-      e.stopPropagation();
-      if(node.classList.contains("open")){ node.classList.remove("open"); return; }
-      node.classList.add("open");
+    row.innerHTML=`<span class="fx-caret${leaf?' leaf':''}">▸</span><span class="i">${isVol?"🗄️":"📁"}</span><span>${esc(name)}</span>`;
+    const kids=document.createElement("div"); kids.className="fx-children"; node.append(row,kids); let loaded=false;
+    row.querySelector(".fx-caret").addEventListener("click",async e=>{ e.stopPropagation();
+      if(node.classList.contains("open")){ node.classList.remove("open"); return; } node.classList.add("open");
       if(!loaded){ loaded=true; try{ const d=await jget(api(volume,"list",`path=${encodeURIComponent(path)}`));
-        for(const en of d.entries.filter(x=>x.isDir)) kids.appendChild(makeNode(volume, join(path,en.name), en.name,false));
-        if(!d.entries.some(x=>x.isDir)) kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.6rem;font-size:0.8rem">No subfolders</div>`;
-      }catch(err){ kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.6rem">${esc(err.message)}</div>`; } }
+        const dirs=d.entries.filter(x=>x.isDir); if(!dirs.length){ kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.5rem;font-size:0.78rem">No subfolders</div>`; }
+        for(const en of dirs) kids.appendChild(volNode(volume,join(path,en.name),en.name,false,false));
+      }catch(err){ kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.5rem">${esc(err.message)}</div>`; } }
     });
     row.addEventListener("click",()=>openFolder(volume,path));
     return node;
   }
-  async function loadVolumes(){
-    try{ const d=await jget("/api/v1/docker/volumes");
-      treeEl.innerHTML="";
-      for(const v of d.volumes) treeEl.appendChild(makeNode(v.name,"",v.name+"  ("+fmtBytes(v.sizeBytes)+")",true));
-      if(!d.volumes.length) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No volumes.</div>`;
-    }catch(e){ treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">${esc(e.message)}</div>`; }
+  async function buildTree(){
+    treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">Loading…</div>`;
+    try{ if(!treeData){ const [v,s]=await Promise.all([jget("/api/v1/docker/volumes"),jget("/api/v1/docker/stacks").catch(()=>({stacks:[]}))]); treeData={volumes:v.volumes||[],stacks:s.stacks||[]}; } }
+    catch(e){ treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">${esc(e.message)}</div>`; return; }
+    treeEl.innerHTML="";
+    if(treeMode==="volume"){
+      for(const v of treeData.volumes) treeEl.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true));
+      if(!treeData.volumes.length) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No volumes.</div>`;
+    } else {
+      let any=false;
+      for(const st of treeData.stacks){
+        const names=new Set((st.containers||[]).map(c=>c.name));
+        const vols=treeData.volumes.filter(v=>(v.usedBy||[]).some(u=>names.has(u)));
+        if(!vols.length) continue; any=true;
+        const head=document.createElement("div"); head.className="fx-stackhead"; head.textContent="🧱 "+st.name; treeEl.appendChild(head);
+        for(const v of vols) treeEl.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true));
+      }
+      if(!any) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No stacks with named volumes.</div>`;
+    }
+    highlightTree();
   }
+  function highlightTree(){ treeEl.querySelectorAll(".fx-row").forEach(r=>r.classList.toggle("sel", r.dataset.volume===cur.volume && r.dataset.path===cur.path)); }
 
-  function highlightTree(){
-    treeEl.querySelectorAll(".fx-row").forEach(r=>r.classList.toggle("sel", r.dataset.volume===cur.volume && r.dataset.path===cur.path));
-  }
-
-  // ---- main list ----
-  function crumb(){
-    const el=document.getElementById("fx-crumb"); el.innerHTML="";
+  // ---- main pane ----
+  function crumb(){ const el=document.getElementById("fx-crumb"); el.innerHTML="";
     if(!cur.volume){ el.innerHTML=`<span class="fx-muted">No volume selected</span>`; return; }
-    const mk=(label,vol,path)=>{ const a=document.createElement("a"); a.textContent=label; a.addEventListener("click",()=>openFolder(vol,path)); return a; };
-    el.appendChild(mk("🗄️ "+cur.volume, cur.volume, ""));
-    let acc=""; for(const part of cur.path.split("/").filter(Boolean)){ acc=join(acc,part);
-      const s=document.createElement("span"); s.className="sep"; s.textContent="›"; el.appendChild(s); el.appendChild(mk(part,cur.volume,acc)); }
+    const mk=(t,p)=>{ const a=document.createElement("a"); a.textContent=t; a.onclick=()=>openFolder(cur.volume,p); return a; };
+    el.appendChild(mk("🗄️ "+cur.volume,"")); let acc="";
+    for(const part of cur.path.split("/").filter(Boolean)){ acc=join(acc,part); const s=document.createElement("span"); s.className="sep"; s.textContent="›"; el.append(s,mk(part,acc)); }
   }
+  document.getElementById("fx-up").addEventListener("click",()=>{ if(cur.volume) openFolder(cur.volume,parent(cur.path)); });
+
   async function openFolder(volume,path){
-    cur={volume,path:path||""};
-    document.getElementById("fx-editor").hidden=true;
-    document.getElementById("fx-tools").hidden=false;
-    crumb(); highlightTree();
+    cur={volume,path:path||""}; sel=null; document.getElementById("fx-editor").hidden=true; document.getElementById("fx-ribbon").hidden=false;
+    crumb(); highlightTree(); updateOps();
     const list=document.getElementById("fx-list"); list.innerHTML=`<div class="fx-muted" style="padding:1rem">Loading…</div>`;
-    let d; try{ d=await jget(api(volume,"list",`path=${encodeURIComponent(cur.path)}`)); }
+    try{ const d=await jget(api(volume,"list",`path=${encodeURIComponent(cur.path)}`)); entries=d.entries; }
     catch(e){ list.innerHTML=`<div class="fx-muted" style="padding:1rem">${esc(e.message)}</div>`; return; }
-    const rows=d.entries.map(en=>{
-      const p=join(cur.path,en.name);
-      const acts = en.isDir
-        ? `<button class="ui-btn" data-open-dir="${escA(p)}">Open</button>`
-        : `<button class="ui-btn" data-open-file="${escA(p)}">Open</button><button class="ui-btn" data-dl="${escA(p)}">Download</button>`;
-      return `<tr>
-        <td><span class="fx-name" data-${en.isDir?"open-dir":"open-file"}="${escA(p)}"><span class="i">${en.isDir?"📁":"📄"}</span>${esc(en.name)}</span></td>
-        <td class="fx-muted">${en.isDir?"":fmtBytes(en.size)}</td>
-        <td class="fx-muted">${(en.modifiedUtc||"").replace("T"," ").replace(/\..*/,"")}</td>
-        <td><div class="fx-acts">${acts}
-          <button class="ui-btn" data-rename="${escA(p)}" data-name="${escA(en.name)}">Rename</button>
-          <button class="ui-btn danger" data-del="${escA(p)}">Delete</button></div></td></tr>`;
-    }).join("");
-    list.innerHTML=`<table class="fx-tbl"><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="4" class="fx-muted" style="padding:1rem">Empty folder.</td></tr>`}</tbody></table>`;
+    renderMain();
+  }
+  function renderMain(){
+    const list=document.getElementById("fx-list");
+    if(!entries.length){ list.innerHTML=`<div class="fx-muted" style="padding:1.2rem">Empty folder.</div>`; return; }
+    if(view==="details") list.innerHTML=`<table class="fx-tbl"><thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead><tbody>${
+      entries.map(en=>`<tr data-name="${escA(en.name)}" data-dir="${en.isDir}"><td><span class="fx-name"><span class="i">${fileIcon(en.name,en.isDir)}</span>${esc(en.name)}</span></td>
+        <td class="fx-muted">${en.isDir?"":fmtBytes(en.size)}</td><td class="fx-muted">${(en.modifiedUtc||"").replace("T"," ").replace(/\..*/,"")}</td></tr>`).join("")}</tbody></table>`;
+    else if(view==="grid") list.innerHTML=`<div class="fx-grid">${entries.map(en=>`<div class="fx-tile" data-name="${escA(en.name)}" data-dir="${en.isDir}"><div class="i">${fileIcon(en.name,en.isDir)}</div><div class="n">${esc(en.name)}</div></div>`).join("")}</div>`;
+    else list.innerHTML=`<div class="fx-listv">${entries.map(en=>`<div class="fx-li" data-name="${escA(en.name)}" data-dir="${en.isDir}"><span class="i">${fileIcon(en.name,en.isDir)}</span><span>${esc(en.name)}</span></div>`).join("")}</div>`;
+    list.querySelectorAll("[data-name]").forEach(row=>{
+      row.addEventListener("click",()=>select(row));
+      row.addEventListener("dblclick",()=>{ const n=row.dataset.name, isDir=row.dataset.dir==="true"; if(isDir) openFolder(cur.volume,join(cur.path,n)); else openFile(join(cur.path,n)); });
+      row.addEventListener("contextmenu",e=>{ e.preventDefault(); select(row); showCtx(e.clientX,e.clientY,true); });
+    });
+  }
+  function select(row){ sel={name:row.dataset.name,isDir:row.dataset.dir==="true",path:join(cur.path,row.dataset.name)}; markSel(); updateOps(); }
+  function markSel(){ document.querySelectorAll("#fx-list [data-name]").forEach(r=>r.classList.toggle("sel", sel && r.dataset.name===sel.name)); }
 
-    list.querySelectorAll("[data-open-dir]").forEach(x=>x.addEventListener("click",()=>openFolder(cur.volume,x.dataset.openDir)));
-    list.querySelectorAll("[data-open-file]").forEach(x=>x.addEventListener("click",()=>openFile(x.dataset.openFile)));
-    list.querySelectorAll("[data-dl]").forEach(x=>x.addEventListener("click",()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(x.dataset.dl)}`); }));
-    list.querySelectorAll("[data-rename]").forEach(x=>x.addEventListener("click",()=>doRename(x.dataset.rename,x.dataset.name)));
-    list.querySelectorAll("[data-del]").forEach(x=>x.addEventListener("click",()=>doDelete(x.dataset.del)));
-  }
+  // ---- view toggle ----
+  document.querySelectorAll("#fx-view button").forEach(b=>{ b.classList.toggle("active",b.dataset.view===view);
+    b.addEventListener("click",()=>{ view=b.dataset.view; localStorage.setItem("fx-view",view); document.querySelectorAll("#fx-view button").forEach(x=>x.classList.toggle("active",x===b)); renderMain(); markSel(); }); });
 
-  // ---- file ops ----
-  let editing=null;
-  async function openFile(path){
-    let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ alert(e.message); return; }
-    if(d.binary){ if(confirm("This looks like a binary file. Download instead?")) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
-    editing=path;
-    document.getElementById("fx-editor-name").textContent=path;
-    document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated — first 2 MB) ":"")+fmtBytes(d.size);
-    document.getElementById("fx-text").value=d.text||"";
-    document.getElementById("fx-editor").hidden=false;
-  }
-  document.getElementById("fx-close").addEventListener("click",()=>{ document.getElementById("fx-editor").hidden=true; editing=null; });
-  document.getElementById("fx-save").addEventListener("click",async()=>{
-    if(editing==null)return;
-    try{ await jpost(api(cur.volume,"write"),{path:editing,content:document.getElementById("fx-text").value});
-      document.getElementById("fx-editor-info").textContent="Saved ✓"; setTimeout(()=>openFolder(cur.volume,cur.path),300);
-    }catch(e){ alert("Save failed: "+e.message); }
-  });
-  async function doRename(path,name){
-    const nn=prompt("Rename to:",name); if(!nn||nn===name)return;
-    try{ await jpost(api(cur.volume,"rename"),{path,newName:nn}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); }
-  }
-  async function doDelete(path){
-    if(!confirm("Delete '"+path+"'? This cannot be undone."))return;
-    try{ await jpost(api(cur.volume,"delete"),{path}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); }
-  }
-
-  // ---- toolbar ----
-  document.getElementById("fx-newfolder").addEventListener("click",async()=>{
-    if(!cur.volume)return; const n=prompt("New folder name:"); if(!n)return;
-    try{ await jpost(api(cur.volume,"mkdir"),{path:join(cur.path,n)}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); }
-  });
+  // ---- ops ----
+  function updateOps(){ const has=!!sel; ["fx-copy","fx-cut","fx-rename","fx-delete"].forEach(id=>document.getElementById(id).disabled=!has); document.getElementById("fx-paste").disabled=!clip; }
+  document.getElementById("fx-newfolder").addEventListener("click",async()=>{ const n=prompt("New folder name:"); if(!n)return; try{ await jpost(api(cur.volume,"mkdir"),{path:join(cur.path,n)}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); } });
   const fileInput=document.getElementById("fx-file");
   document.getElementById("fx-upload").addEventListener("click",()=>{ if(cur.volume) fileInput.click(); });
-  fileInput.addEventListener("change",async()=>{
-    if(!fileInput.files.length)return; const fd=new FormData(); fd.append("path",cur.path); fd.append("file",fileInput.files[0]);
-    try{ const r=await fetch(api(cur.volume,"upload"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); openFolder(cur.volume,cur.path); }
-    catch(e){ alert("Upload failed: "+e.message); } finally{ fileInput.value=""; }
-  });
+  fileInput.addEventListener("change",async()=>{ if(!fileInput.files.length)return; const fd=new FormData(); fd.append("path",cur.path); fd.append("file",fileInput.files[0]);
+    try{ const r=await fetch(api(cur.volume,"upload"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); openFolder(cur.volume,cur.path); }catch(e){ alert("Upload failed: "+e.message); }finally{ fileInput.value=""; } });
+  document.getElementById("fx-copy").addEventListener("click",()=>{ if(sel){ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); } });
+  document.getElementById("fx-cut").addEventListener("click",()=>{ if(sel){ clip={op:"cut",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); } });
+  document.getElementById("fx-paste").addEventListener("click",paste);
+  async function paste(){ if(!clip)return; const body={srcVolume:clip.volume,srcPath:clip.path,dstVolume:cur.volume,dstDir:cur.path};
+    try{ await jpost("/api/v1/files/"+(clip.op==="cut"?"move":"copy"),body); if(clip.op==="cut")clip=null; updateOps(); openFolder(cur.volume,cur.path); }catch(e){ alert("Paste failed: "+e.message); } }
+  document.getElementById("fx-rename").addEventListener("click",doRename);
+  async function doRename(){ if(!sel)return; const nn=prompt("Rename to:",sel.name); if(!nn||nn===sel.name)return; try{ await jpost(api(cur.volume,"rename"),{path:sel.path,newName:nn}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); } }
+  document.getElementById("fx-delete").addEventListener("click",doDelete);
+  async function doDelete(){ if(!sel)return; if(!confirm(`Delete "${sel.name}"? This cannot be undone.`))return; try{ await jpost(api(cur.volume,"delete"),{path:sel.path}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); } }
   document.getElementById("fx-export").addEventListener("click",()=>{ if(cur.volume) dl.src=api(cur.volume,"export"); });
   const archiveInput=document.getElementById("fx-archive");
-  document.getElementById("fx-import").addEventListener("click",()=>{ if(cur.volume && confirm("Import a .tar.gz into '"+cur.volume+"'? Existing files with the same names will be overwritten.")) archiveInput.click(); });
-  archiveInput.addEventListener("change",async()=>{
-    if(!archiveInput.files.length)return; const fd=new FormData(); fd.append("file",archiveInput.files[0]);
-    try{ const r=await fetch(api(cur.volume,"import"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); alert("Import complete."); openFolder(cur.volume,cur.path); }
-    catch(e){ alert("Import failed: "+e.message); } finally{ archiveInput.value=""; }
-  });
+  document.getElementById("fx-import").addEventListener("click",()=>{ if(cur.volume && confirm("Import a .tar.gz into '"+cur.volume+"'? Existing files may be overwritten.")) archiveInput.click(); });
+  archiveInput.addEventListener("change",async()=>{ if(!archiveInput.files.length)return; const fd=new FormData(); fd.append("file",archiveInput.files[0]);
+    try{ const r=await fetch(api(cur.volume,"import"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); alert("Import complete."); openFolder(cur.volume,cur.path); }catch(e){ alert("Import failed: "+e.message); }finally{ archiveInput.value=""; } });
+
+  // ---- context menu ----
+  const ctx=document.createElement("div"); ctx.id="fx-ctx"; ctx.hidden=true; document.body.appendChild(ctx);
+  function hideCtx(){ ctx.hidden=true; }
+  function showCtx(x,y,onItem){
+    const items = onItem ? [
+      {label:"Open",fn:()=>{ if(sel.isDir)openFolder(cur.volume,sel.path); else openFile(sel.path); }},
+      {label:"Download",fn:()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(sel.path)}`); },hide:sel.isDir},
+      {sep:true},{label:"Copy",fn:()=>{ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }},
+      {label:"Cut",fn:()=>{ clip={op:"cut",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }},
+      {label:"Rename",fn:doRename},{sep:true},{label:"Delete",fn:doDelete,danger:true}
+    ] : [
+      {label:"Paste",fn:paste,dis:!clip},{label:"New folder",fn:()=>document.getElementById("fx-newfolder").click()},{label:"Upload",fn:()=>document.getElementById("fx-upload").click()}
+    ];
+    ctx.innerHTML=""; for(const it of items){ if(it.hide)continue; if(it.sep){ const s=document.createElement("div"); s.className="fx-ctx-sep"; ctx.appendChild(s); continue; }
+      const b=document.createElement("button"); b.className="fx-ctx-item"+(it.danger?" danger":""); b.textContent=it.label; b.disabled=!!it.dis; b.onclick=()=>{ hideCtx(); it.fn(); }; ctx.appendChild(b); }
+    ctx.hidden=false; ctx.style.left=Math.min(x,window.innerWidth-ctx.offsetWidth-8)+"px"; ctx.style.top=Math.min(y,window.innerHeight-ctx.offsetHeight-8)+"px";
+  }
+  document.addEventListener("click",hideCtx); document.addEventListener("scroll",hideCtx,true);
+
+  // ---- keyboard ----
+  document.addEventListener("keydown",e=>{ if(e.target.tagName==="TEXTAREA"||e.target.tagName==="INPUT")return;
+    if(e.key==="Delete"&&sel)doDelete(); else if(e.key==="F2"&&sel)doRename();
+    else if((e.ctrlKey||e.metaKey)&&e.key==="c"&&sel){ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }
+    else if((e.ctrlKey||e.metaKey)&&e.key==="x"&&sel){ clip={op:"cut",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }
+    else if((e.ctrlKey||e.metaKey)&&e.key==="v"&&clip)paste();
+    else if(e.key==="Backspace"&&cur.volume){ openFolder(cur.volume,parent(cur.path)); } });
+
+  // ---- editor ----
+  let editing=null;
+  async function openFile(path){ let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ alert(e.message); return; }
+    if(d.binary){ if(confirm("Binary file. Download instead?")) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
+    editing=path; document.getElementById("fx-editor-name").textContent=path; document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated) ":"")+fmtBytes(d.size);
+    document.getElementById("fx-text").value=d.text||""; document.getElementById("fx-editor").hidden=false; }
+  document.getElementById("fx-close").addEventListener("click",()=>{ document.getElementById("fx-editor").hidden=true; editing=null; });
+  document.getElementById("fx-save").addEventListener("click",async()=>{ if(editing==null)return; try{ await jpost(api(cur.volume,"write"),{path:editing,content:document.getElementById("fx-text").value});
+    document.getElementById("fx-editor-info").textContent="Saved ✓"; }catch(e){ alert("Save failed: "+e.message); } });
+
+  // empty-area context menu (bound once)
+  document.getElementById("fx-list").addEventListener("contextmenu",e=>{ if(cur.volume && !e.target.closest("[data-name]")){ e.preventDefault(); sel=null; markSel(); updateOps(); showCtx(e.clientX,e.clientY,false); } });
 
   // ---- init ----
-  (async function(){
-    await loadVolumes();
-    if(root.dataset.volume) openFolder(root.dataset.volume, root.dataset.path||"");
-  })();
+  buildTree(); if(root.dataset.volume) openFolder(root.dataset.volume,root.dataset.path||"");
 })();
 </script>
 }

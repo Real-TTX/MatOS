@@ -120,6 +120,61 @@ public class VolumeFilesService
         else throw new FileNotFoundException();
     }
 
+    // ---- Copy / move (within or across volumes) ----
+
+    public void Copy(string srcVol, string srcPath, string dstVol, string dstDir) => Transfer(srcVol, srcPath, dstVol, dstDir, move: false);
+    public void Move(string srcVol, string srcPath, string dstVol, string dstDir) => Transfer(srcVol, srcPath, dstVol, dstDir, move: true);
+
+    private void Transfer(string srcVol, string srcPath, string dstVol, string dstDir, bool move)
+    {
+        var src = Resolve(VolRoot(srcVol), srcPath);
+        var name = Path.GetFileName(src);
+        if (string.IsNullOrEmpty(name)) throw new InvalidOperationException("Cannot transfer the volume root.");
+        var dstRoot = VolRoot(dstVol);
+        var destBase = Resolve(dstRoot, string.IsNullOrEmpty(dstDir) ? name : dstDir.Replace('\\', '/').TrimEnd('/') + "/" + name);
+        bool isDir = Directory.Exists(src);
+        if (!isDir && !File.Exists(src)) throw new FileNotFoundException();
+
+        if (isDir && (destBase + Path.DirectorySeparatorChar).StartsWith(src + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw new InvalidOperationException("Cannot move a folder into itself.");
+
+        var dest = UniquePath(destBase);
+        if (move)
+        {
+            try { if (isDir) Directory.Move(src, dest); else File.Move(src, dest); }
+            catch (IOException) // cross-device or similar -> copy then delete
+            {
+                if (isDir) { CopyDir(src, dest); Directory.Delete(src, true); }
+                else { File.Copy(src, dest, false); File.Delete(src); }
+            }
+        }
+        else
+        {
+            if (isDir) CopyDir(src, dest);
+            else { Directory.CreateDirectory(Path.GetDirectoryName(dest)!); File.Copy(src, dest, false); }
+        }
+    }
+
+    private static void CopyDir(string src, string dest)
+    {
+        Directory.CreateDirectory(dest);
+        foreach (var d in Directory.GetDirectories(src)) CopyDir(d, Path.Combine(dest, Path.GetFileName(d)));
+        foreach (var f in Directory.GetFiles(src)) File.Copy(f, Path.Combine(dest, Path.GetFileName(f)), true);
+    }
+
+    private static string UniquePath(string dest)
+    {
+        if (!File.Exists(dest) && !Directory.Exists(dest)) return dest;
+        var dir = Path.GetDirectoryName(dest)!;
+        var name = Path.GetFileNameWithoutExtension(dest);
+        var ext = Path.GetExtension(dest);
+        for (int i = 2; ; i++)
+        {
+            var cand = Path.Combine(dir, $"{name} ({i}){ext}");
+            if (!File.Exists(cand) && !Directory.Exists(cand)) return cand;
+        }
+    }
+
     // ---- Whole-volume export / import (tar.gz) ----
 
     public async Task ExportAsync(string volume, Stream output, CancellationToken ct)

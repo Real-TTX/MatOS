@@ -8,6 +8,7 @@ public static class FilesApi
     public record PathBody(string Path);
     public record WriteBody(string Path, string Content);
     public record RenameBody(string Path, string NewName);
+    public record TransferBody(string SrcVolume, string SrcPath, string DstVolume, string DstDir);
 
     public static void MapFilesApi(this IEndpointRouteBuilder api)
     {
@@ -33,6 +34,12 @@ public static class FilesApi
 
         g.MapPost("/{volume}/rename", (string volume, RenameBody b, VolumeFilesService svc) =>
             Run(() => { svc.Rename(volume, b.Path, b.NewName); return Results.Ok(new { ok = true }); }));
+
+        g.MapPost("/copy", (TransferBody b, VolumeFilesService svc) =>
+            Run(() => { svc.Copy(b.SrcVolume, b.SrcPath, b.DstVolume, b.DstDir); return Results.Ok(new { ok = true }); }));
+
+        g.MapPost("/move", (TransferBody b, VolumeFilesService svc) =>
+            Run(() => { svc.Move(b.SrcVolume, b.SrcPath, b.DstVolume, b.DstDir); return Results.Ok(new { ok = true }); }));
 
         g.MapPost("/{volume}/upload", async (string volume, HttpContext http, VolumeFilesService svc) =>
         {
