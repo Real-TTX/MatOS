@@ -41,6 +41,7 @@ body {
 .pill.on { background: #dcfce7; color: #166534; }
 .pill.off { background: #fee2e2; color: #991b1b; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
+.fx-muted { color: var(--mat-text-muted); }
 
 /* logs / terminal view */
 .logbox { background: #0b0f1a; color: #d7def0; border-radius: 10px; padding: 0.8rem 0.9rem; height: 320px; overflow: auto;

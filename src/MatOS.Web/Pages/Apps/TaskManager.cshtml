@@ -2,130 +2,251 @@
 @model MatOS.Web.Pages.Apps.TaskManagerModel
 @{
     ViewData["Title"] = "Task Manager";
-    ViewData["Description"] = "Containers on this Docker host — matOS-managed and foreign.";
+    ViewData["Description"] = "Live view of containers, stacks, images and volumes on this Docker host.";
     Layout = "_WindowLayout";
 }
 
-<div class="win-toolbar">
-    <input id="tm-filter" class="ui-input" type="search" placeholder="Filter containers…" />
-    <label class="check" style="color:var(--mat-text-muted)"><input type="checkbox" id="tm-all" checked /> Show stopped</label>
-    <span class="spacer"></span>
-    <span id="tm-status" class="mono" style="color:var(--mat-text-muted)"></span>
-    <button id="tm-refresh" class="ui-btn">Refresh</button>
-</div>
+<div id="tm" data-focus="@(Model.Focus ?? "")">
+    <div class="tm-tiles" id="tm-tiles"></div>
 
-<div id="tm-error" class="card" style="display:none;border-color:#fecaca;background:#fff5f5;color:#b91c1c"></div>
-
-<div class="card" style="padding:0;overflow:hidden">
-    <table class="mat-table" style="width:100%;border-collapse:collapse">
-        <thead>
-            <tr>
-                <th style="text-align:left;padding:0.6rem 0.9rem">State</th>
-                <th style="text-align:left;padding:0.6rem 0.9rem">Name</th>
-                <th style="text-align:left;padding:0.6rem 0.9rem">Image</th>
-                <th style="text-align:left;padding:0.6rem 0.9rem">Ports</th>
-                <th style="text-align:right;padding:0.6rem 0.9rem">Actions</th>
-            </tr>
-        </thead>
-        <tbody id="tm-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
-    </table>
-</div>
-
-<div id="tm-logs" class="card" style="margin-top:1rem;display:none">
-    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
-        <strong id="tm-logs-title">Logs</strong>
-        <span id="tm-stats" class="mono" style="color:var(--mat-text-muted)"></span>
-        <span class="spacer" style="flex:1"></span>
-        <button id="tm-logs-close" class="ui-btn">Close</button>
+    <div class="win-toolbar">
+        <div class="tabbar" id="tm-tabs">
+            <button class="tab active" data-tab="containers">Containers</button>
+            <button class="tab" data-tab="stacks">Stacks</button>
+            <button class="tab" data-tab="images">Images</button>
+            <button class="tab" data-tab="volumes">Volumes</button>
+        </div>
+        <span class="spacer"></span>
+        <input id="tm-filter" class="ui-input" type="search" placeholder="Filter…" />
+        <button id="tm-refresh" class="ui-btn">Refresh</button>
     </div>
-    <div id="tm-logbox" class="logbox"></div>
+
+    <div id="tm-error" class="card" style="display:none;border-color:#fecaca;background:#fff5f5;color:#b91c1c;margin-bottom:0.8rem"></div>
+    <div class="card" style="padding:0;overflow:hidden"><div id="tm-pane"></div></div>
+
+    <div id="tm-logs" class="card" style="margin-top:1rem;display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
+            <strong id="tm-logs-title">Logs</strong>
+            <span id="tm-logs-stat" class="mono fx-muted" style="color:var(--mat-text-muted)"></span>
+            <span class="spacer" style="flex:1"></span>
+            <button id="tm-logs-close" class="ui-btn">Close</button>
+        </div>
+        <div id="tm-logbox" class="logbox"></div>
+    </div>
 </div>
+
+@section Head {
+<style>
+.tm-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.6rem; margin-bottom:1rem; }
+.tm-tile { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; padding:0.7rem 0.9rem; }
+.tm-tile .k { color:var(--mat-text-muted); font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+.tm-tile .v { font-size:1.3rem; font-weight:800; font-variant-numeric:tabular-nums; }
+.tabbar { display:flex; gap:0.15rem; }
+.tab { border:none; background:transparent; padding:0.45rem 0.8rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
+.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+table.tmt { width:100%; border-collapse:collapse; }
+table.tmt th, table.tmt td { padding:0.5rem 0.85rem; text-align:left; white-space:nowrap; }
+table.tmt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); cursor:pointer; user-select:none; }
+table.tmt thead th.num, table.tmt td.num { text-align:right; }
+table.tmt tbody tr { border-bottom:1px solid var(--mat-border); }
+table.tmt tbody tr:hover { background:#f6f8fc; }
+.bar { position:relative; height:6px; border-radius:999px; background:#e6e8ef; overflow:hidden; min-width:60px; }
+.bar > span { position:absolute; inset:0 auto 0 0; background:var(--mat-accent); }
+.tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
+.tm-acts .ui-btn { padding:0.28rem 0.5rem; font-size:0.78rem; }
+</style>
+}
 
 @section Scripts {
 <script>
-(function () {
-  const rows = document.getElementById("tm-rows");
-  const filter = document.getElementById("tm-filter");
-  const showAll = document.getElementById("tm-all");
-  const statusEl = document.getElementById("tm-status");
-  const errEl = document.getElementById("tm-error");
-  const focusId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
-  let data = [];
-  let logSrc = null, statSrc = null;
+(function(){
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const fmtB=b=>{ if(b==null||b<0)return "—"; const u=["B","KB","MB","GB","TB"];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  const openWin=(url,title,key)=>window.parent.postMessage({type:"matos:open",url,title,key},location.origin);
 
-  function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
-  function portsText(c){ if(!c.ports||!c.ports.length) return "—";
-    return c.ports.map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}`:`${p.privatePort}`).join(", "); }
+  let tab="containers", filter="", sort={key:"name",dir:1};
+  let data={containers:[],stacks:[],images:[],volumes:[]};
+  const stats=new Map(); const streams=[];
+  const focusId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
 
-  function draw(){
-    const q=(filter.value||"").toLowerCase();
-    const list=data.filter(c=>(showAll.checked||c.running) && (!q||(c.name+c.image).toLowerCase().includes(q)));
-    if(!list.length){ rows.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No containers.</td></tr>`; return; }
-    rows.innerHTML="";
-    for(const c of list){
-      const tr=document.createElement("tr");
-      tr.style.borderTop="1px solid var(--mat-border)";
-      const pill=c.running?`<span class="pill on">running</span>`:`<span class="pill off">${esc(c.state||"stopped")}</span>`;
-      const web=c.hasWebUi?`<button class="ui-btn" data-open="${esc(c.appUrl)}">Open</button>`:"";
-      tr.innerHTML=`
-        <td style="padding:0.55rem 0.9rem">${pill}</td>
-        <td style="padding:0.55rem 0.9rem"><strong>${esc(c.name)}</strong><div class="mono" style="color:var(--mat-text-muted);font-size:0.75rem">${esc(c.shortId)}</div></td>
-        <td style="padding:0.55rem 0.9rem" class="mono">${esc(c.image)}</td>
-        <td style="padding:0.55rem 0.9rem" class="mono">${esc(portsText(c))}</td>
-        <td style="padding:0.55rem 0.9rem;text-align:right;white-space:nowrap">
-          ${web}
-          ${c.running?`<button class="ui-btn" data-act="stop" data-id="${c.id}">Stop</button>
-                       <button class="ui-btn" data-act="restart" data-id="${c.id}">Restart</button>`
+  document.querySelectorAll("#tm-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll("#tm-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+    tab=t.dataset.tab; sort={key:"name",dir:1}; render();
+  }));
+  document.getElementById("tm-filter").addEventListener("input",e=>{ filter=e.target.value.toLowerCase(); render(); });
+  document.getElementById("tm-refresh").addEventListener("click",loadAll);
+
+  function stackNameOf(c){ return (c.name||""); } // display fallback
+  function projectOf(c){ return c._project||""; }
+
+  async function loadAll(){
+    try{
+      const [cs,ss,is,vs]=await Promise.all([
+        fetch("/api/v1/docker/containers").then(r=>r.json()),
+        fetch("/api/v1/docker/stacks").then(r=>r.json()),
+        fetch("/api/v1/docker/images").then(r=>r.json()),
+        fetch("/api/v1/docker/volumes").then(r=>r.json())
+      ]);
+      data.containers=cs.containers||[]; data.stacks=ss.stacks||[]; data.images=is.images||[]; data.volumes=vs.volumes||[];
+      // annotate containers with their stack/project name
+      const proj={}; for(const s of data.stacks) for(const c of (s.containers||[])) proj[c.id]=s.name;
+      for(const c of data.containers) c._project=proj[c.id]||"";
+      const err=cs.lastError||ss.lastError; const e=document.getElementById("tm-error");
+      if(err){ e.style.display=""; e.textContent="Docker: "+err; } else e.style.display="none";
+      tiles(); render();
+      if(focusId){ const c=data.containers.find(x=>x.id===focusId||x.shortId===focusId); if(c) openLogs(c.id,c.name); }
+    }catch(_){ const e=document.getElementById("tm-error"); e.style.display=""; e.textContent="Docker is not reachable."; }
+  }
+
+  function tiles(){
+    const running=data.containers.filter(c=>c.running).length;
+    const imgSize=data.images.reduce((a,i)=>a+(i.sizeBytes||0),0);
+    const volSize=data.volumes.reduce((a,v)=>a+(v.sizeBytes>0?v.sizeBytes:0),0);
+    document.getElementById("tm-tiles").innerHTML=`
+      <div class="tm-tile"><div class="k">Containers</div><div class="v">${running}<span style="font-size:0.9rem;color:var(--mat-text-muted)"> / ${data.containers.length}</span></div></div>
+      <div class="tm-tile"><div class="k">Stacks</div><div class="v">${data.stacks.length}</div></div>
+      <div class="tm-tile"><div class="k">Images</div><div class="v">${data.images.length} <span style="font-size:0.8rem;color:var(--mat-text-muted)">${fmtB(imgSize)}</span></div></div>
+      <div class="tm-tile"><div class="k">Volumes</div><div class="v">${data.volumes.length} <span style="font-size:0.8rem;color:var(--mat-text-muted)">${fmtB(volSize)}</span></div></div>`;
+  }
+
+  function sortHeader(label,key,num){ const arrow=sort.key===key?(sort.dir>0?" ▲":" ▼"):""; return `<th class="${num?'num':''}" data-sort="${key}">${label}${arrow}</th>`; }
+  function applySort(rows,accessors){
+    const a=accessors[sort.key]; if(!a) return rows;
+    return rows.slice().sort((x,y)=>{ const vx=a(x),vy=a(y); if(vx<vy)return -1*sort.dir; if(vx>vy)return 1*sort.dir; return 0; });
+  }
+  function wireSort(){ document.querySelectorAll("#tm-pane th[data-sort]").forEach(th=>th.addEventListener("click",()=>{
+    const k=th.dataset.sort; sort = sort.key===k?{key:k,dir:-sort.dir}:{key:k,dir:1}; render(); })); }
+
+  function render(){
+    closeStreams();
+    const pane=document.getElementById("tm-pane");
+    if(tab==="containers") pane.innerHTML=renderContainers();
+    else if(tab==="stacks") pane.innerHTML=renderStacks();
+    else if(tab==="images") pane.innerHTML=renderImages();
+    else pane.innerHTML=renderVolumes();
+    wireSort(); wireActions();
+    if(tab==="containers") openStats();
+  }
+
+  // ---- Containers ----
+  function renderContainers(){
+    let rows=data.containers.filter(c=>!filter||(c.name+c.image+c._project).toLowerCase().includes(filter));
+    rows=applySort(rows,{ name:c=>c.name.toLowerCase(), image:c=>c.image.toLowerCase(), stack:c=>(c._project||"").toLowerCase(),
+      state:c=>c.running?0:1, cpu:c=>(stats.get(c.id)?.cpu||0), mem:c=>(stats.get(c.id)?.mem||0) });
+    const body=rows.map(c=>{
+      const st=stats.get(c.id)||{};
+      const ports=(c.ports||[]).map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}`:`${p.privatePort}`).join(", ")||"—";
+      return `<tr>
+        <td>${c.running?'<span class="pill on">running</span>':'<span class="pill off">'+esc(c.state)+'</span>'}</td>
+        <td><strong>${esc(c.name)}</strong></td>
+        <td class="fx-muted">${esc(c._project||"—")}</td>
+        <td class="mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${esc(c.image)}</td>
+        <td class="num" data-cpu="${c.id}">${c.running?(st.cpu!=null?st.cpu.toFixed(1)+"%":"…"):"—"}</td>
+        <td class="num" data-mem="${c.id}">${c.running?(st.mem!=null?fmtB(st.mem):"…"):"—"}</td>
+        <td class="mono">${esc(ports)}</td>
+        <td><div class="tm-acts">
+          ${c.hasWebUi&&c.appUrl?`<button class="ui-btn" data-open="${escA(c.appUrl)}">Open</button>`:""}
+          <button class="ui-btn" data-set="${c.id}" data-name="${escA(c.name)}">Settings</button>
+          <button class="ui-btn" data-logs="${c.id}" data-name="${escA(c.name)}">Logs</button>
+          ${c.running?`<button class="ui-btn" data-act="stop" data-id="${c.id}">Stop</button>`
                      :`<button class="ui-btn primary" data-act="start" data-id="${c.id}">Start</button>`}
-          <button class="ui-btn" data-logs="${c.id}" data-name="${esc(c.name)}">Logs</button>
-        </td>`;
-      rows.appendChild(tr);
+        </div></td></tr>`;
+    }).join("");
+    return `<table class="tmt"><thead><tr>${sortHeader("State","state")}${sortHeader("Name","name")}${sortHeader("Stack","stack")}
+      ${sortHeader("Image","image")}${sortHeader("CPU","cpu",true)}${sortHeader("Mem","mem",true)}<th>Ports</th><th></th></tr></thead>
+      <tbody>${body||emptyRow(8)}</tbody></table>`;
+  }
+
+  // ---- Stacks ----
+  function renderStacks(){
+    let rows=data.stacks.filter(s=>!filter||s.name.toLowerCase().includes(filter));
+    rows=applySort(rows,{ name:s=>s.name.toLowerCase(), state:s=>s.anyRunning?0:1, size:s=>s.total });
+    const body=rows.map(s=>`<tr>
+      <td>${s.anyRunning?`<span class="pill on">${s.running}/${s.total}</span>`:`<span class="pill off">stopped</span>`}</td>
+      <td><strong>${esc(s.name)}</strong>${s.standalone?' <span class="fx-muted" style="font-size:0.75rem">(standalone)</span>':''}</td>
+      <td class="num">${s.total}</td>
+      <td>${s.matosManaged?'<span class="pill on">matOS</span>':'<span class="fx-muted">—</span>'}</td>
+      <td><div class="tm-acts">
+        <button class="ui-btn" data-set-stack="${escA(s.name)}">Settings</button>
+        ${s.anyRunning?`<button class="ui-btn" data-sa="stop" data-name="${escA(s.name)}">Stop all</button><button class="ui-btn" data-sa="restart" data-name="${escA(s.name)}">Restart</button>`
+                      :`<button class="ui-btn primary" data-sa="start" data-name="${escA(s.name)}">Start all</button>`}
+      </div></td></tr>`).join("");
+    return `<table class="tmt"><thead><tr>${sortHeader("State","state")}${sortHeader("Stack","name")}${sortHeader("Containers","size",true)}<th>Managed</th><th></th></tr></thead>
+      <tbody>${body||emptyRow(5)}</tbody></table>`;
+  }
+
+  // ---- Images ----
+  function renderImages(){
+    let rows=data.images.filter(i=>!filter||(i.repository+i.tag).toLowerCase().includes(filter));
+    rows=applySort(rows,{ repository:i=>i.repository.toLowerCase(), tag:i=>i.tag.toLowerCase(), size:i=>i.sizeBytes, created:i=>i.createdUtc });
+    const body=rows.map(i=>`<tr>
+      <td class="mono">${esc(i.repository)}</td><td class="mono">${esc(i.tag)}</td>
+      <td class="mono fx-muted">${esc(i.shortId)}</td>
+      <td class="num">${fmtB(i.sizeBytes)}</td>
+      <td class="fx-muted">${(i.createdUtc||"").replace("T"," ").replace(/\..*/,"")}</td></tr>`).join("");
+    return `<table class="tmt"><thead><tr>${sortHeader("Repository","repository")}${sortHeader("Tag","tag")}<th>Image ID</th>${sortHeader("Size","size",true)}${sortHeader("Created","created")}</tr></thead>
+      <tbody>${body||emptyRow(5)}</tbody></table>`;
+  }
+
+  // ---- Volumes ----
+  function renderVolumes(){
+    let rows=data.volumes.filter(v=>!filter||v.name.toLowerCase().includes(filter));
+    rows=applySort(rows,{ name:v=>v.name.toLowerCase(), size:v=>(v.sizeBytes>0?v.sizeBytes:0) });
+    const body=rows.map(v=>`<tr>
+      <td class="mono">${esc(v.name)}</td>
+      <td class="num">${fmtB(v.sizeBytes)}</td>
+      <td>${v.inUse?'<span class="pill on">in use</span>':'<span class="fx-muted">unused</span>'}</td>
+      <td class="fx-muted mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${(v.usedBy||[]).map(esc).join(", ")||"—"}</td>
+      <td><div class="tm-acts"><button class="ui-btn" data-files="${escA(v.name)}">Browse files</button></div></td></tr>`).join("");
+    return `<table class="tmt"><thead><tr>${sortHeader("Volume","name")}${sortHeader("Size","size",true)}<th>Status</th><th>Used by</th><th></th></tr></thead>
+      <tbody>${body||emptyRow(5)}</tbody></table>`;
+  }
+
+  function emptyRow(cols){ return `<tr><td colspan="${cols}" style="padding:1rem;color:var(--mat-text-muted)">Nothing here.</td></tr>`; }
+
+  function wireActions(){
+    const q=s=>document.querySelectorAll("#tm-pane "+s);
+    q("[data-act]").forEach(b=>b.addEventListener("click",()=>cAction(b.dataset.id,b.dataset.act)));
+    q("[data-sa]").forEach(b=>b.addEventListener("click",()=>sAction(b.dataset.name,b.dataset.sa)));
+    q("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
+    q("[data-set]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/container/"+encodeURIComponent(b.dataset.set),"Container · "+b.dataset.name,"container:"+b.dataset.set)));
+    q("[data-set-stack]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/stack/"+encodeURIComponent(b.dataset.setStack),"Stack · "+b.dataset.setStack,"set:"+b.dataset.setStack)));
+    q("[data-files]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/files?volume="+encodeURIComponent(b.dataset.files),"Files","files")));
+    q("[data-logs]").forEach(b=>b.addEventListener("click",()=>openLogs(b.dataset.logs,b.dataset.name)));
+  }
+  async function cAction(id,a){ try{ await fetch(`/api/v1/docker/containers/${id}/${a}`,{method:"POST"});}catch(_){ } setTimeout(loadAll,700); }
+  async function sAction(name,a){ try{ await fetch(`/api/v1/docker/stacks/${encodeURIComponent(name)}/${a}`,{method:"POST"});}catch(_){ } setTimeout(loadAll,700); }
+
+  // ---- live stats (containers tab only) ----
+  function openStats(){
+    const running=data.containers.filter(c=>c.running).slice(0,50);
+    for(const c of running){
+      const src=new EventSource(`/api/v1/docker/containers/${c.id}/stats/stream`);
+      src.addEventListener("stat",e=>{ try{ const s=JSON.parse(e.data); stats.set(c.id,{cpu:s.cpuPercent,mem:s.memoryBytes});
+        const cc=document.querySelector(`#tm-pane [data-cpu="${c.id}"]`); const mc=document.querySelector(`#tm-pane [data-mem="${c.id}"]`);
+        if(cc)cc.textContent=s.cpuPercent.toFixed(1)+"%"; if(mc)mc.textContent=fmtB(s.memoryBytes); }catch(_){}} );
+      src.onerror=()=>{}; streams.push(src);
     }
   }
+  function closeStreams(){ while(streams.length){ try{streams.pop().close();}catch(_){}} }
 
-  async function load(){
-    try{
-      const r=await fetch("/api/v1/docker/containers",{headers:{Accept:"application/json"}});
-      const j=await r.json();
-      data=j.containers||[];
-      statusEl.textContent=`${data.length} container(s)`;
-      if(j.lastError){ errEl.style.display=""; errEl.textContent="Docker: "+j.lastError; } else { errEl.style.display="none"; }
-      draw();
-      if(focusId){ const c=data.find(x=>x.id===focusId||x.shortId===focusId); if(c){ openLogs(c.id,c.name); } focusId=null; }
-    }catch(e){ errEl.style.display=""; errEl.textContent="Docker is not reachable."; }
-  }
-
-  async function act(id,action){
-    try{ await fetch(`/api/v1/docker/containers/${id}/${action}`,{method:"POST"}); }catch(_){}
-    setTimeout(load,600);
-  }
-
+  // ---- logs drawer ----
+  let logSrc=null,statSrc=null;
   function openLogs(id,name){
     document.getElementById("tm-logs").style.display="";
     document.getElementById("tm-logs-title").textContent="Logs · "+name;
     const box=document.getElementById("tm-logbox"); box.textContent="";
-    const stats=document.getElementById("tm-stats"); stats.textContent="";
-    if(logSrc) logSrc.close(); if(statSrc) statSrc.close();
+    const st=document.getElementById("tm-logs-stat"); st.textContent="";
+    if(logSrc)logSrc.close(); if(statSrc)statSrc.close();
     logSrc=new EventSource(`/api/v1/docker/containers/${id}/logs/stream?tail=200`);
     logSrc.addEventListener("log",e=>{ box.textContent+=e.data+"\n"; box.scrollTop=box.scrollHeight; });
-    logSrc.onerror=()=>{};
     statSrc=new EventSource(`/api/v1/docker/containers/${id}/stats/stream`);
-    statSrc.addEventListener("stat",e=>{ try{const s=JSON.parse(e.data);
-      stats.textContent=`CPU ${s.cpuPercent}%  ·  MEM ${(s.memoryBytes/1048576).toFixed(0)} MB (${s.memoryPercent}%)`;}catch(_){}} );
-    statSrc.onerror=()=>{};
+    statSrc.addEventListener("stat",e=>{ try{const s=JSON.parse(e.data); st.textContent=`CPU ${s.cpuPercent}% · MEM ${fmtB(s.memoryBytes)} (${s.memoryPercent}%)`;}catch(_){}} );
   }
-  function closeLogs(){ if(logSrc)logSrc.close(); if(statSrc)statSrc.close(); document.getElementById("tm-logs").style.display="none"; }
+  document.getElementById("tm-logs-close").addEventListener("click",()=>{ if(logSrc)logSrc.close(); if(statSrc)statSrc.close(); document.getElementById("tm-logs").style.display="none"; });
 
-  rows.addEventListener("click",e=>{
-    const a=e.target.closest("[data-act]"); if(a){ act(a.dataset.id,a.dataset.act); return; }
-    const l=e.target.closest("[data-logs]"); if(l){ openLogs(l.dataset.logs,l.dataset.name); return; }
-    const o=e.target.closest("[data-open]"); if(o){ window.open(o.dataset.open,"_blank","noopener"); return; }
-  });
-  document.getElementById("tm-logs-close").addEventListener("click",closeLogs);
-  document.getElementById("tm-refresh").addEventListener("click",load);
-  filter.addEventListener("input",draw);
-  showAll.addEventListener("change",draw);
-  load(); setInterval(load,10000);
+  loadAll(); setInterval(loadAll,10000);
 })();
 </script>
 }
