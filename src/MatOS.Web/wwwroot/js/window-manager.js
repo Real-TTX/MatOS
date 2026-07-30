@@ -8,7 +8,7 @@
   const wins = new Map(); // key/id -> state
 
   const layer = () => document.getElementById("mat-windows");
-  const dock = () => document.getElementById("mat-dock-tasks");
+  const dock = () => document.getElementById("mat-tasks");
 
   function bringToFront(w) {
     w.el.style.zIndex = String(++z);
@@ -176,15 +176,13 @@
   function syncDock() {
     const d = dock();
     if (!d) return;
-    const nav = document.getElementById("mat-dock");
-    if (nav) nav.style.display = wins.size ? "flex" : "none";
     d.innerHTML = "";
     for (const w of wins.values()) {
       const b = document.createElement("button");
-      b.className = "mat-dock-task" + (w.el.classList.contains("focused") && !w.minimized ? " active" : "");
+      b.className = "mat-task" + (w.el.classList.contains("focused") && !w.minimized ? " active" : "");
       b.title = w.opts.title || "";
-      b.innerHTML = (w.opts.icon ? `<img src="${w.opts.icon}" alt=""/>` : `<span>${(w.opts.title || "?").slice(0,1)}</span>`) +
-                    `<span class="mat-dock-label">${escapeHtml(w.opts.title || "")}</span>`;
+      b.innerHTML = (w.opts.icon ? `<img src="${w.opts.icon}" alt=""/>` : `<span class="mat-task-ico">${(w.opts.title || "?").slice(0,1)}</span>`) +
+                    `<span class="mat-task-label">${escapeHtml(w.opts.title || "")}</span>`;
       b.addEventListener("click", () => {
         if (w.minimized) { restore(w); bringToFront(w); }
         else if (w.el.classList.contains("focused")) { minimize(w); }

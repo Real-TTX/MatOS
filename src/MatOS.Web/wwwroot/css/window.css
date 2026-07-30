@@ -17,8 +17,8 @@
 }
 .mat-window.focused { border-color: var(--border-strong); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65); }
 .mat-window.maximized {
-  left: 8px !important; top: 52px !important;
-  width: calc(100vw - 16px) !important; height: calc(100vh - 130px) !important;
+  left: 6px !important; top: 6px !important;
+  width: calc(100vw - 12px) !important; height: calc(100vh - 64px) !important;
   border-radius: 12px;
 }
 .mat-window.minimized { display: none; }
@@ -69,27 +69,6 @@
 .mat-resize-se { bottom: -4px; right: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
 .mat-resize-sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
 
-/* ---- Dock (open windows) ---- */
-#mat-dock {
-  position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
-  z-index: 30; display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.4rem; border-radius: 16px;
-  background: rgba(17, 21, 34, 0.6); border: 1px solid var(--border);
-  backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  box-shadow: var(--shadow); max-width: calc(100vw - 24px); overflow-x: auto;
-}
-#mat-dock:empty { display: none; }
-.mat-dock-task {
-  display: flex; align-items: center; gap: 0.45rem; max-width: 210px;
-  padding: 0.35rem 0.6rem; border-radius: 11px; border: 1px solid transparent;
-  background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; font-size: 0.82rem;
-}
-.mat-dock-task:hover { background: var(--surface-3); }
-.mat-dock-task.active { border-color: var(--accent); background: rgba(139, 92, 246, 0.2); }
-.mat-dock-task img, .mat-dock-task span:first-child { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
-.mat-dock-task .mat-dock-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
 @media (max-width: 640px) {
-  .mat-window.maximized { top: 48px !important; height: calc(100vh - 120px) !important; }
-  .mat-dock-task .mat-dock-label { display: none; }
+  .mat-window.maximized { height: calc(100vh - 64px) !important; }
 }

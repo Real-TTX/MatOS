@@ -15,7 +15,7 @@
 }
 
 <div class="mat-grid-section-title">System</div>
-<div class="mat-grid">
+<div class="mat-grid" id="mat-system-apps">
     @foreach (var app in Model.VisibleApps)
     {
         <button class="mat-app" data-key="@app.Key" data-title="@app.Title" data-url="@app.Url" data-w="1040" data-h="680">

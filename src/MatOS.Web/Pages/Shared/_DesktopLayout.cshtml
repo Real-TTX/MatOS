@@ -27,41 +27,70 @@
 <body>
     <div id="mat-wallpaper" class="wp-@wallpaper"></div>
 
-    <header id="mat-topbar">
-        <div class="mat-topbar-brand">
-            <img src="~/favicon.svg" alt="" />
-            <span>mat<b>OS</b></span>
-        </div>
-        <input id="mat-search" type="search" placeholder="Search apps…" aria-label="Search apps" autocomplete="off" />
-        <div class="mat-topbar-spacer"></div>
-        <div class="mat-clock" id="mat-clock"></div>
-        <div class="mat-user">
-            <button class="mat-user-btn" id="mat-user-btn" aria-haspopup="true">
-                <span class="mat-avatar">@initial</span>
-                <span>@name</span>
-            </button>
-            <div class="mat-user-menu" id="mat-user-menu" role="menu">
-                <div class="who">
-                    <div class="name">@name</div>
-                    <div class="role">@role</div>
-                </div>
-                <button class="mat-menu-item" role="menuitem"
-                        data-open-url="/apps/settings" data-open-title="Settings" data-open-key="settings">Settings</button>
-                <button class="mat-menu-item" role="menuitem"
-                        data-open-url="/apps/task-manager" data-open-title="Task Manager" data-open-key="task-manager">Task Manager</button>
-                <form method="post" action="/logout">
-                    <button class="mat-menu-item" type="submit" role="menuitem">Sign out</button>
-                </form>
-            </div>
-        </div>
-    </header>
-
     <main id="mat-desktop">
         @RenderBody()
     </main>
 
     <div id="mat-windows"></div>
-    <nav id="mat-dock"><div id="mat-dock-tasks" style="display:contents"></div></nav>
+
+    <!-- Start menu (opens from the Start button) -->
+    <div id="mat-startmenu" hidden>
+        <div class="sm-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="mat-start-search" type="search" placeholder="Search apps…" autocomplete="off" aria-label="Search apps" />
+        </div>
+        <div class="sm-body">
+            <div class="sm-section-title">System</div>
+            <div class="sm-list" id="sm-system"></div>
+            <div class="sm-section-title" id="sm-container-title">Containers</div>
+            <div class="sm-list" id="sm-containers"></div>
+            <div class="sm-empty" id="sm-empty" hidden>No matching apps.</div>
+        </div>
+        <div class="sm-footer">
+            <div class="sm-user"><span class="mat-avatar">@initial</span>
+                <div><div class="nm">@name</div><div class="rl">@role</div></div>
+            </div>
+            <div class="sm-foot-actions">
+                <button class="sm-foot-btn" data-open-url="/apps/settings" data-open-title="Settings" data-open-key="settings" title="Settings" aria-label="Settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 6.6 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 13.4H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 6.6L4.5 6.5a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9z"/></svg>
+                </button>
+                <form method="post" action="/logout">
+                    <button class="sm-foot-btn" type="submit" title="Sign out" aria-label="Sign out">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Taskbar -->
+    <footer id="mat-taskbar">
+        <button id="mat-start-btn" title="Start" aria-label="Start menu" aria-haspopup="true">
+            <img src="~/favicon.svg" alt="Start" />
+        </button>
+        <div id="mat-tasks"></div>
+        <div id="mat-tray">
+            <div class="mat-clock" id="mat-clock"></div>
+            <div class="mat-user">
+                <button class="mat-user-btn" id="mat-user-btn" aria-haspopup="true" title="@name">
+                    <span class="mat-avatar">@initial</span>
+                </button>
+                <div class="mat-user-menu" id="mat-user-menu" role="menu">
+                    <div class="who">
+                        <div class="name">@name</div>
+                        <div class="role">@role</div>
+                    </div>
+                    <button class="mat-menu-item" role="menuitem"
+                            data-open-url="/apps/settings" data-open-title="Settings" data-open-key="settings">Settings</button>
+                    <button class="mat-menu-item" role="menuitem"
+                            data-open-url="/apps/task-manager" data-open-title="Task Manager" data-open-key="task-manager">Task Manager</button>
+                    <form method="post" action="/logout">
+                        <button class="mat-menu-item" type="submit" role="menuitem">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </footer>
 
     <script src="~/js/window-manager.js" asp-append-version="true"></script>
     <script src="~/js/desktop.js" asp-append-version="true"></script>
