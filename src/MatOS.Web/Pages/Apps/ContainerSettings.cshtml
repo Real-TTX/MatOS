@@ -1,0 +1,138 @@
+@page "/apps/container/{id}"
+@model MatOS.Web.Pages.Apps.ContainerSettingsModel
+@{
+    ViewData["Title"] = "Container";
+    Layout = "_WindowLayout";
+}
+
+<div id="cs" data-id="@Model.Id">
+    <div class="cs-head">
+        <div class="cs-title">
+            <span class="cs-icon">📦</span>
+            <div>
+                <h1 id="cs-name" style="margin:0;font-size:1.15rem">Loading…</h1>
+                <div class="mono" id="cs-sub" style="color:var(--mat-text-muted);font-size:0.8rem"></div>
+            </div>
+            <span id="cs-state" class="pill" style="margin-left:0.4rem"></span>
+        </div>
+        <div class="cs-actions" id="cs-actions"></div>
+    </div>
+
+    <div class="tabbar" id="cs-tabs">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="volumes">Volumes</button>
+        <button class="tab" data-tab="env">Environment</button>
+        <button class="tab" data-tab="logs">Logs</button>
+    </div>
+
+    <div class="tabpane active" data-pane="overview"><div class="card" id="cs-overview"></div></div>
+    <div class="tabpane" data-pane="volumes"><div class="card" style="padding:0;overflow:hidden" id="cs-volumes"></div></div>
+    <div class="tabpane" data-pane="env"><div class="card mono" id="cs-env" style="max-height:360px;overflow:auto;font-size:0.82rem"></div></div>
+    <div class="tabpane" data-pane="logs"><div class="logbox" id="cs-logs"></div></div>
+</div>
+
+@section Head {
+<style>
+.cs-head { display:flex; align-items:flex-start; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; }
+.cs-title { display:flex; align-items:center; gap:0.6rem; flex:1 1 auto; }
+.cs-icon { font-size:1.6rem; }
+.cs-actions { display:flex; gap:0.4rem; flex-wrap:wrap; }
+.tabbar { display:flex; gap:0.2rem; border-bottom:1px solid var(--mat-border); margin-bottom:1rem; }
+.tab { border:none; background:transparent; padding:0.55rem 0.9rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
+.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+.tabpane { display:none; } .tabpane.active { display:block; }
+.kv { display:grid; grid-template-columns:170px 1fr; gap:0.4rem 1rem; }
+.kv dt { color:var(--mat-text-muted); font-size:0.85rem; }
+.kv dd { margin:0; }
+table.vt { width:100%; border-collapse:collapse; } table.vt th, table.vt td { text-align:left; padding:0.55rem 0.9rem; }
+table.vt tbody tr { border-top:1px solid var(--mat-border); }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const root=document.getElementById("cs"); const id=root.dataset.id;
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const fmtBytes=b=>{ if(b==null||b<0)return "—"; const u=["B","KB","MB","GB","TB"]; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++;} return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  let logSrc=null;
+
+  document.querySelectorAll("#cs-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll("#cs-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+    document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("active",p.dataset.pane===t.dataset.tab));
+    if(t.dataset.tab==="logs") startLogs();
+  }));
+
+  async function action(a){
+    if(a==="remove" && !confirm("Remove this container? This cannot be undone.")) return;
+    const url = a==="remove" ? `/api/v1/docker/containers/${id}/remove` : `/api/v1/docker/containers/${id}/${a}`;
+    try{ await fetch(url,{method:"POST"}); }catch(_){}
+    if(a==="remove"){ document.getElementById("cs-name").textContent="(removed)"; return; }
+    setTimeout(load,600);
+  }
+
+  function renderActions(running){
+    const el=document.getElementById("cs-actions");
+    el.innerHTML =
+      (running? `<button class="ui-btn" data-a="stop">Stop</button><button class="ui-btn" data-a="restart">Restart</button>`
+              : `<button class="ui-btn primary" data-a="start">Start</button>`) +
+      `<button class="ui-btn danger" data-a="remove">Remove</button>`;
+    el.querySelectorAll("[data-a]").forEach(b=>b.addEventListener("click",()=>action(b.dataset.a)));
+  }
+
+  async function load(){
+    let d; try{ const r=await fetch(`/api/v1/docker/containers/${id}/inspect`); if(!r.ok)throw 0; d=await r.json(); }
+    catch(_){ document.getElementById("cs-name").textContent="Container not found"; return; }
+    const c=d.info;
+    document.getElementById("cs-name").textContent=c.name;
+    document.getElementById("cs-sub").textContent=c.image+"  ·  "+c.shortId;
+    const st=document.getElementById("cs-state"); st.textContent=c.state||"?"; st.className="pill "+(c.running?"on":"off");
+    document.title="Container · "+c.name;
+    renderActions(c.running);
+
+    // overview
+    const ports=(c.ports||[]).map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}/${p.type}`:`${p.privatePort}/${p.type}`).join(", ")||"—";
+    document.getElementById("cs-overview").innerHTML=`<dl class="kv">
+      <dt>Image</dt><dd class="mono">${esc(c.image)}</dd>
+      <dt>Container ID</dt><dd class="mono">${esc(c.shortId)}</dd>
+      <dt>State</dt><dd>${esc(c.status||c.state)}</dd>
+      <dt>Created</dt><dd>${esc((c.createdUtc||"").replace("T"," ").replace(/\..*/,""))}</dd>
+      <dt>Restart policy</dt><dd>${esc(d.restartPolicy)}</dd>
+      <dt>Stack (compose)</dt><dd>${d.composeProject?esc(d.composeProject)+(d.composeService?" · "+esc(d.composeService):""):"—"}</dd>
+      <dt>Networks</dt><dd class="mono">${(d.networks||[]).map(esc).join(", ")||"—"}</dd>
+      <dt>Ports</dt><dd class="mono">${esc(ports)}</dd>
+      <dt>Web URL</dt><dd>${c.appUrl?`<a href="${esc(c.appUrl)}" target="_blank" rel="noopener">${esc(c.appUrl)}</a>`:"—"}</dd>
+      <dt>Managed by matOS</dt><dd>${c.matosManaged?"Yes":"No"}</dd>
+    </dl>`;
+
+    // volumes / mounts
+    const vt=document.getElementById("cs-volumes");
+    const rows=(d.mounts||[]).map(m=>{
+      const isVol = m.type==="volume" && m.name;
+      const files = isVol ? `<button class="ui-btn" data-vol="${esc(m.name)}">Browse files</button>` : "";
+      return `<tr><td>${esc(m.type)}</td><td class="mono">${esc(m.name||m.source)}</td><td class="mono">${esc(m.destination)}</td>
+        <td>${m.readWrite?"rw":"ro"}</td><td style="text-align:right">${files}</td></tr>`;
+    }).join("");
+    vt.innerHTML=`<table class="vt"><thead><tr><th>Type</th><th>Name / Source</th><th>Mounted at</th><th>Mode</th><th></th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No mounts.</td></tr>`}</tbody></table>`;
+    vt.querySelectorAll("[data-vol]").forEach(b=>b.addEventListener("click",()=>{
+      // open the Files app at this volume (available once the File Explorer ships)
+      window.parent.postMessage({type:"matos:open",url:"/apps/files?volume="+encodeURIComponent(b.dataset.vol),title:"Files",key:"files"},location.origin);
+    }));
+
+    // env
+    document.getElementById("cs-env").innerHTML=(d.env||[]).map(e=>esc(e)).join("<br>")||'<span style="color:var(--mat-text-muted)">No environment variables.</span>';
+  }
+
+  function startLogs(){
+    if(logSrc) return;
+    const box=document.getElementById("cs-logs"); box.textContent="";
+    logSrc=new EventSource(`/api/v1/docker/containers/${id}/logs/stream?tail=200`);
+    logSrc.addEventListener("log",e=>{ box.textContent+=e.data+"\n"; box.scrollTop=box.scrollHeight; });
+    logSrc.onerror=()=>{};
+  }
+
+  load(); setInterval(load,5000);
+})();
+</script>
+}

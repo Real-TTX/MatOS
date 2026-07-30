@@ -41,6 +41,11 @@ html, body { overflow: hidden; height: 100%; }
 .mat-web-badge { position: absolute; bottom: 5px; right: 5px; width: 16px; height: 16px; border-radius: 5px;
   background: rgba(0,0,0,0.45); display: grid; place-items: center; }
 .mat-web-badge svg { width: 11px; height: 11px; }
+.mat-count-badge { position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.6); color: #fff;
+  font-size: 0.6rem; font-weight: 800; padding: 1px 5px; border-radius: 999px; line-height: 1.4; }
+.sm-ico .mat-count-badge { top: 3px; left: 3px; font-size: 0.5rem; padding: 0 4px; }
+.sm-ico .mat-web-badge { width: 13px; height: 13px; bottom: 3px; right: 3px; }
+.sm-ico .mat-web-badge svg { width: 9px; height: 9px; }
 .mat-empty-hint { color: rgba(255,255,255,0.7); text-align: center; padding: 1rem; font-size: 0.9rem; }
 
 /* ---- Free-placement desktop icon field ---- */
