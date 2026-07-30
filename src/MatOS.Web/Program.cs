@@ -22,6 +22,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<JsonConfigService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<DockerService>();
+builder.Services.AddSingleton<DesktopLayoutService>();
 builder.Services.AddScoped<MatOS.Web.Controls.Common.ControlIdGenerator>();
 builder.Services.AddHostedService<SessionCleanupService>();
 
@@ -80,5 +81,6 @@ app.MapGet("/health", () => Results.Ok(new
 // ---- API (all require an authenticated session via the fallback policy) ----
 var api = app.MapGroup("/api/v1");
 api.MapDockerApi();
+api.MapDesktopApi();
 
 app.Run();

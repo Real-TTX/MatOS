@@ -43,6 +43,26 @@ html, body { overflow: hidden; height: 100%; }
 .mat-web-badge svg { width: 11px; height: 11px; }
 .mat-empty-hint { color: rgba(255,255,255,0.7); text-align: center; padding: 1rem; font-size: 0.9rem; }
 
+/* ---- Free-placement desktop icon field ---- */
+#mat-desktop-icons { position: relative; width: 100%; min-height: 100%; }
+#mat-desktop-icons .mat-app { position: absolute; width: 88px; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+#mat-desktop-icons .mat-app.dragging { cursor: grabbing; z-index: 20; opacity: 0.92; }
+#mat-desktop-icons .mat-app:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 12px; }
+
+/* Right-click context menu (desktop + icons) */
+#mat-ctx {
+  position: fixed; z-index: 60; min-width: 190px; padding: 0.35rem;
+  background: rgba(17,21,34,0.96); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); backdrop-filter: blur(20px);
+}
+#mat-ctx[hidden] { display: none; }
+.mat-ctx-item { display: flex; width: 100%; align-items: center; gap: 0.55rem; padding: 0.5rem 0.65rem;
+  border: none; background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; font: inherit; text-align: left; font-size: 0.88rem; }
+.mat-ctx-item:hover { background: var(--surface-3); }
+.mat-ctx-item.danger { color: #ffb3c0; }
+.mat-ctx-item.danger:hover { background: rgba(244,80,107,0.22); }
+.mat-ctx-sep { height: 1px; background: var(--border); margin: 0.3rem 0.2rem; }
+
 /* ---- Taskbar ---- */
 #mat-taskbar {
   position: fixed; left: 0; right: 0; bottom: 0; height: 52px; z-index: 40;

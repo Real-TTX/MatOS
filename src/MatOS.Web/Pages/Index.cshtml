@@ -14,8 +14,9 @@
     };
 }
 
-<div class="mat-grid-section-title">System</div>
-<div class="mat-grid" id="mat-system-apps">
+@* Hidden template: source of truth for system apps (role-filtered). The desktop
+   free-icon field and the Start menu are built from this by desktop.js. *@
+<div id="mat-system-apps" hidden>
     @foreach (var app in Model.VisibleApps)
     {
         <button class="mat-app" data-key="@app.Key" data-title="@app.Title" data-url="@app.Url" data-w="1040" data-h="680">
@@ -25,7 +26,5 @@
     }
 </div>
 
-<section id="mat-container-section" style="display:none">
-    <div class="mat-grid-section-title">Containers</div>
-    <div class="mat-grid" id="mat-container-apps"></div>
-</section>
+@* Free-placement desktop icon field (drag to arrange; positions persist per user). *@
+<div id="mat-desktop-icons"></div>
