@@ -2,64 +2,128 @@
 @model MatOS.Web.Pages.Apps.SettingsModel
 @{
     ViewData["Title"] = "Settings";
-    ViewData["Description"] = "Personalise your desktop and configure the app proxy domain.";
     Layout = "_WindowLayout";
 }
 
-@if (Model.Saved)
-{
-    <div class="card" style="margin-bottom:1rem;border-color:#bbf7d0;background:#f0fdf4;color:#166534">Settings saved.</div>
+<div class="mset">
+    <aside class="mset-side">
+        <div class="mset-title">Settings</div>
+        <button class="mset-nav active" data-p="appearance"><span class="i">🎨</span> Appearance</button>
+        <button class="mset-nav" data-p="general"><span class="i">⚙️</span> General</button>
+        <button class="mset-nav" data-p="docker"><span class="i">🐳</span> Docker</button>
+        <button class="mset-nav" data-p="about"><span class="i">ℹ️</span> About</button>
+    </aside>
+
+    <section class="mset-main">
+        <form method="post">
+            <div class="mset-panel active" data-panel="appearance">
+                <h2>Appearance</h2>
+                <div class="mset-group pad">
+                    <div class="mset-grouphead">Wallpaper</div>
+                    <div class="wp-picker" style="padding:0.9rem 1rem 1rem">
+                        @foreach (var w in Model.AllWallpapers)
+                        {
+                            <label class="wp-tile @(Model.Wallpaper == w.Key ? "selected" : "")" data-key="@w.Key">
+                                <input type="radio" name="Wallpaper" value="@w.Key" @(Model.Wallpaper == w.Key ? "checked" : "") hidden />
+                                <span class="swatch wp-@w.Key"></span>
+                                <span class="nm">@w.Name</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="mset-panel" data-panel="general">
+                <h2>General</h2>
+                <div class="mset-group">
+                    <div class="mset-row">
+                        <div class="mset-label">Instance name</div>
+                        <input class="ui-input" name="InstanceName" value="@Model.InstanceName" />
+                    </div>
+                    <div class="mset-row">
+                        <div class="mset-label">App base domain<small>Installed apps get a subdomain here (proxied by Caddy/Matcad). <span class="mono">apps.localhost</span> works locally.</small></div>
+                        <input class="ui-input" name="BaseDomain" value="@Model.BaseDomain" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="mset-panel" data-panel="docker">
+                <h2>Docker</h2>
+                <div class="mset-group">
+                    <div class="mset-row"><div class="mset-label">Engine endpoint</div><div class="mono fx-muted">@Model.DockerEndpoint</div></div>
+                    <div class="mset-row"><div class="mset-label">Shared network</div><div class="mono fx-muted">@Model.Network</div></div>
+                    <div class="mset-row"><div class="mset-label">Volumes path</div><div class="mono fx-muted">@Model.VolumesPath</div></div>
+                    <div class="mset-row"><div class="mset-label">Inventory</div><div id="mset-inv" class="fx-muted">…</div></div>
+                </div>
+            </div>
+
+            <div class="mset-panel" data-panel="about">
+                <h2>About</h2>
+                <div class="mset-group pad">
+                    <div class="mset-about">
+                        <img src="~/img/logo.svg" alt="matOS" />
+                        <div>
+                            <div class="mset-word">mat<span>OS</span></div>
+                            <div class="fx-muted" style="margin:0.15rem 0 0.5rem">@Model.Version · @Model.Channel</div>
+                            <p class="fx-muted" style="margin:0;max-width:420px">A self-hosted, browser-based operating system for Docker — an iOS/umbrelOS-style desktop where every container is an app.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mset-foot">
+                <button type="submit" class="ui-btn primary">Save changes</button>
+                <span id="mset-saved" class="pill on" style="@(Model.Saved ? "" : "display:none")">Saved ✓</span>
+            </div>
+        </form>
+    </section>
+</div>
+
+@section Head {
+<style>
+.mset { position:absolute; inset:0; display:flex; }
+.mset-side { width:220px; flex:0 0 auto; border-right:1px solid var(--mat-border); padding:1rem 0.6rem; background:rgba(0,0,0,0.18); overflow:auto; }
+.mset-title { font-weight:800; font-size:1.15rem; padding:0.2rem 0.6rem 0.9rem; }
+.mset-nav { display:flex; align-items:center; gap:0.6rem; width:100%; padding:0.5rem 0.6rem; margin-bottom:0.15rem; border:none; background:transparent; color:var(--mat-text); border-radius:8px; cursor:pointer; font:inherit; font-size:0.9rem; text-align:left; }
+.mset-nav:hover { background:var(--mat-surface-2); }
+.mset-nav.active { background:var(--mat-accent); color:#fff; }
+.mset-nav .i { font-size:1.05rem; }
+.mset-main { flex:1 1 auto; overflow:auto; padding:1.4rem 1.6rem 2.5rem; }
+.mset-panel { display:none; } .mset-panel.active { display:block; }
+.mset-panel h2 { margin:0 0 1rem; font-size:1.35rem; font-weight:800; letter-spacing:-0.02em; }
+.mset-group { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; overflow:hidden; margin-bottom:1rem; }
+.mset-grouphead { padding:0.7rem 1rem 0.2rem; font-size:0.72rem; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:700; }
+.mset-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.75rem 1rem; border-top:1px solid var(--mat-border); }
+.mset-group > .mset-row:first-child { border-top:0; }
+.mset-label { font-weight:600; font-size:0.92rem; } .mset-label small { display:block; color:var(--mat-text-muted); font-weight:400; font-size:0.78rem; margin-top:0.15rem; max-width:360px; }
+.mset-row .ui-input { max-width:280px; width:280px; }
+.mset-foot { display:flex; align-items:center; gap:0.9rem; margin-top:0.4rem; }
+.mset-about { display:flex; align-items:center; gap:1.1rem; padding:1.1rem; }
+.mset-about img { width:76px; height:76px; border-radius:18px; }
+.mset-word { font-size:1.5rem; font-weight:800; letter-spacing:-0.02em; }
+.mset-word span { background:linear-gradient(135deg,#7c6bff,#8b5cf6,#c026d3); -webkit-background-clip:text; background-clip:text; color:transparent; }
+</style>
 }
-
-<form method="post">
-    <div class="card" style="margin-bottom:1rem">
-        <h2 style="margin:0 0 0.75rem;font-size:1rem">Wallpaper</h2>
-        <div class="wp-picker" id="wp-picker">
-            @foreach (var w in Model.AllWallpapers)
-            {
-                <label class="wp-tile @(Model.Wallpaper == w.Key ? "selected" : "")" data-key="@w.Key">
-                    <input type="radio" name="Wallpaper" value="@w.Key" @(Model.Wallpaper == w.Key ? "checked" : "") hidden />
-                    <span class="swatch wp-@w.Key"></span>
-                    <span class="nm">@w.Name</span>
-                </label>
-            }
-        </div>
-    </div>
-
-    <div class="card" style="margin-bottom:1rem">
-        <h2 style="margin:0 0 0.75rem;font-size:1rem">General</h2>
-        <div class="field" style="max-width:360px;margin-bottom:0.9rem">
-            <span class="field-label" style="color:var(--mat-text-muted)">Instance name</span>
-            <input class="ui-input" name="InstanceName" value="@Model.InstanceName" />
-        </div>
-        <div class="field" style="max-width:360px">
-            <span class="field-label" style="color:var(--mat-text-muted)">App base domain</span>
-            <input class="ui-input" name="BaseDomain" value="@Model.BaseDomain" />
-            <small style="color:var(--mat-text-muted)">
-                Installed apps get a subdomain here (e.g. <span class="mono">nextcloud-2.@Model.BaseDomain</span>),
-                proxied by Caddy/Matcad. <span class="mono">apps.localhost</span> works locally with no DNS setup.
-            </small>
-        </div>
-    </div>
-
-    <div style="display:flex;gap:0.6rem">
-        <button type="submit" class="ui-btn primary">Save changes</button>
-    </div>
-</form>
 
 @section Scripts {
 <script>
-(function () {
-  const picker = document.getElementById("wp-picker");
-  function preview(key){ try { window.parent.postMessage({ type:"matos:wallpaper", wallpaper:key }, location.origin); } catch(_){} }
-  picker.addEventListener("click", e => {
-    const tile = e.target.closest(".wp-tile"); if(!tile) return;
-    picker.querySelectorAll(".wp-tile").forEach(t => t.classList.toggle("selected", t===tile));
-    preview(tile.dataset.key);
-  });
-  // keep the desktop in sync with the persisted wallpaper whenever settings loads
-  const cur = picker.querySelector(".wp-tile.selected");
-  if (cur) preview(cur.dataset.key);
+(function(){
+  document.querySelectorAll(".mset-nav").forEach(n=>n.addEventListener("click",()=>{
+    document.querySelectorAll(".mset-nav").forEach(x=>x.classList.toggle("active",x===n));
+    document.querySelectorAll(".mset-panel").forEach(p=>p.classList.toggle("active",p.dataset.panel===n.dataset.p));
+  }));
+  // wallpaper live preview to the desktop
+  const picker=document.querySelector(".wp-picker");
+  function preview(k){ try{ window.parent.postMessage({type:"matos:wallpaper",wallpaper:k},location.origin); }catch(_){} }
+  if(picker){ picker.addEventListener("click",e=>{ const t=e.target.closest(".wp-tile"); if(!t)return;
+    picker.querySelectorAll(".wp-tile").forEach(x=>x.classList.toggle("selected",x===t)); preview(t.dataset.key); });
+    const cur=picker.querySelector(".wp-tile.selected"); if(cur) preview(cur.dataset.key); }
+  // docker inventory counts
+  (async function(){ try{
+    const [c,i,v]=await Promise.all([fetch("/api/v1/docker/containers").then(r=>r.json()),fetch("/api/v1/docker/images").then(r=>r.json()),fetch("/api/v1/docker/volumes").then(r=>r.json())]);
+    const run=(c.containers||[]).filter(x=>x.running).length;
+    document.getElementById("mset-inv").textContent=`${run}/${(c.containers||[]).length} containers running · ${(i.images||[]).length} images · ${(v.volumes||[]).length} volumes`;
+  }catch(_){ document.getElementById("mset-inv").textContent="Docker not reachable."; } })();
 })();
 </script>
 }

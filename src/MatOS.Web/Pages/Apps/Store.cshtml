@@ -67,13 +67,13 @@
 .store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:0.9rem; }
 .app-card { display:flex; flex-direction:column; gap:0.5rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1rem; }
 .app-card .top { display:flex; align-items:center; gap:0.7rem; }
-.app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; overflow:hidden; background:linear-gradient(135deg,#eef2ff,#f5f3ff); border:1px solid var(--mat-border); flex:0 0 auto; }
+.app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
 .app-ico img { width:100%; height:100%; object-fit:cover; }
 .app-card h3 { margin:0; font-size:1rem; } .app-card .tag { color:var(--mat-text-muted); font-size:0.8rem; }
 .app-card p { margin:0; color:var(--mat-text-muted); font-size:0.86rem; flex:1 1 auto; }
 .app-card .foot { display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; }
 .app-card .mono { font-size:0.72rem; color:var(--mat-text-muted); }
-.chip { font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:999px; background:#eef2ff; color:#4338ca; }
+.chip { font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:999px; background:rgba(139,92,246,0.22); color:#c7b3ff; }
 .inst { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.9rem; border:1px solid var(--mat-border); border-radius:12px; margin-bottom:0.6rem; background:var(--mat-surface); }
 .inst .g { flex:1 1 auto; min-width:0; } .inst .nm { font-weight:700; } .inst .sub { color:var(--mat-text-muted); font-size:0.78rem; }
 .fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
@@ -94,7 +94,7 @@
   const iconHtml=ic=> isImg(ic) ? `<img src="${escA(ic)}" alt="">` : `<span>${esc(ic||"📦")}</span>`;
   const catEl=document.getElementById("store-catalog"), instEl=document.getElementById("store-installed"), addEl=document.getElementById("store-add"), msg=document.getElementById("store-msg");
   let catalog=[];
-  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"#bbf7d0":"#fecaca"; msg.style.background=ok?"#f0fdf4":"#fff5f5"; msg.style.color=ok?"#166534":"#b91c1c"; msg.textContent=t; setTimeout(()=>msg.style.display="none",4500); }
+  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",4500); }
 
   document.querySelectorAll("#store-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll("#store-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));

@@ -8,7 +8,7 @@
 
 @if (!ViewData.ModelState.IsValid && ViewData.ModelState[string.Empty]?.Errors.Count > 0)
 {
-    <div class="card" style="margin-bottom:1rem;border-color:#fecaca;background:#fff5f5;color:#b91c1c">
+    <div class="card" style="margin-bottom:1rem;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0">
         @ViewData.ModelState[string.Empty]!.Errors[0].ErrorMessage
     </div>
 }
