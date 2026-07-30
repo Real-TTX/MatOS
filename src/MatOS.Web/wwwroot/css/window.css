@@ -51,10 +51,18 @@
 .mat-win-btn:hover { background: var(--surface-3); color: var(--text); }
 .mat-close:hover { background: rgba(244, 80, 107, 0.25); color: #fff; }
 
-.mat-win-body { position: relative; flex: 1 1 auto; background: #0e1220; }
+.mat-win-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: #0e1220; }
+.mat-frame-area { position: relative; flex: 1 1 auto; min-height: 0; }
 .mat-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
 .mat-frame-shield { position: absolute; inset: 0; z-index: 5; background: transparent; }
 .mat-win-loading { position: absolute; inset: 0; display: grid; place-items: center; background: #0e1220; z-index: 2; }
+.mat-appbar { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+  background: rgba(255,255,255,0.05); border-bottom: 1px solid var(--border); }
+.mat-appbar-url { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: 0.78rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.mat-appbar-open { flex: 0 0 auto; padding: 0.3rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.mat-appbar-open:hover { background: var(--surface-3); }
 .mat-spinner {
   width: 34px; height: 34px; border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.15); border-top-color: var(--accent);

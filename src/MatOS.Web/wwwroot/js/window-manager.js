@@ -30,6 +30,10 @@
     const pos = nextPosition();
     const width = Math.min(opts.width || 960, window.innerWidth - 48);
     const height = Math.min(opts.height || 620, window.innerHeight - 96);
+    // External web apps (a container's own origin) may block iframe embedding
+    // (X-Frame-Options / CSP frame-ancestors) -> give them an address bar with
+    // a reliable "open in new tab". Internal matOS pages ("/apps/...") embed fine.
+    const isExternal = !!opts.url && (/^https?:\/\//i.test(opts.url) || opts.url.startsWith("//"));
 
     const el = document.createElement("section");
     el.className = "mat-window";
@@ -51,17 +55,23 @@
         ${iconMarkup}
         <span class="mat-title" title="${escapeAttr(opts.title || "")}">${escapeHtml(opts.title || "")}</span>
         <div class="mat-win-actions">
-          ${opts.url ? `<button class="mat-win-btn mat-open-ext" title="Open in new tab" aria-label="Open in new tab">&#8599;</button>` : ""}
+          ${isExternal ? `<button class="mat-win-btn mat-open-ext" title="Open in new tab" aria-label="Open in new tab">&#8599;</button>` : ""}
           <button class="mat-win-btn mat-min" title="Minimize" aria-label="Minimize">&#8211;</button>
           <button class="mat-win-btn mat-max" title="Maximize" aria-label="Maximize">&#9723;</button>
           <button class="mat-win-btn mat-close" title="Close" aria-label="Close">&#10005;</button>
         </div>
       </header>
       <div class="mat-win-body">
-        <div class="mat-win-loading"><span class="mat-spinner"></span></div>
-        <iframe class="mat-frame" src="${escapeAttr(opts.url || "about:blank")}"
-                referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write"></iframe>
-        <div class="mat-frame-shield" hidden></div>
+        ${isExternal ? `<div class="mat-appbar">
+          <span class="mat-appbar-url" title="${escapeAttr(opts.url)}">${escapeHtml(opts.url)}</span>
+          <button class="mat-appbar-open" title="Open in new tab">Open in new tab &#8599;</button>
+        </div>` : ""}
+        <div class="mat-frame-area">
+          <div class="mat-win-loading"><span class="mat-spinner"></span></div>
+          <iframe class="mat-frame" src="${escapeAttr(opts.url || "about:blank")}"
+                  referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write"></iframe>
+          <div class="mat-frame-shield" hidden></div>
+        </div>
       </div>
       ${resizeHandles()}
     `;
@@ -81,8 +91,8 @@
     el.querySelector(".mat-close").addEventListener("click", () => close(w));
     el.querySelector(".mat-min").addEventListener("click", () => minimize(w));
     el.querySelector(".mat-max").addEventListener("click", () => toggleMax(w));
-    const ext = el.querySelector(".mat-open-ext");
-    if (ext) ext.addEventListener("click", () => window.open(opts.url, "_blank", "noopener"));
+    el.querySelectorAll(".mat-open-ext, .mat-appbar-open").forEach(b =>
+      b.addEventListener("click", () => window.open(opts.url, "_blank", "noopener")));
 
     el.addEventListener("pointerdown", () => bringToFront(w), true);
     makeDraggable(w);
