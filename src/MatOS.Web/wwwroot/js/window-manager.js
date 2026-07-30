@@ -40,13 +40,15 @@
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-label", opts.title || "Window");
 
-    const iconHtml = opts.icon
-      ? `<img class="mat-win-icon" src="${opts.icon}" alt="" />`
-      : `<span class="mat-win-icon mat-win-icon-fallback">${(opts.title || "?").slice(0, 1).toUpperCase()}</span>`;
+    const iconMarkup = opts.iconHtml
+      ? `<span class="mat-win-icon mat-win-icon-svg">${opts.iconHtml}</span>`
+      : opts.icon
+        ? `<img class="mat-win-icon" src="${opts.icon}" alt="" />`
+        : `<span class="mat-win-icon mat-win-icon-fallback">${(opts.title || "?").slice(0, 1).toUpperCase()}</span>`;
 
     el.innerHTML = `
       <header class="mat-titlebar">
-        ${iconHtml}
+        ${iconMarkup}
         <span class="mat-title" title="${escapeAttr(opts.title || "")}">${escapeHtml(opts.title || "")}</span>
         <div class="mat-win-actions">
           ${opts.url ? `<button class="mat-win-btn mat-open-ext" title="Open in new tab" aria-label="Open in new tab">&#8599;</button>` : ""}
@@ -181,7 +183,9 @@
       const b = document.createElement("button");
       b.className = "mat-task" + (w.el.classList.contains("focused") && !w.minimized ? " active" : "");
       b.title = w.opts.title || "";
-      b.innerHTML = (w.opts.icon ? `<img src="${w.opts.icon}" alt=""/>` : `<span class="mat-task-ico">${(w.opts.title || "?").slice(0,1)}</span>`) +
+      b.innerHTML = (w.opts.iconHtml ? `<span class="mat-task-ico mat-task-ico-svg">${w.opts.iconHtml}</span>`
+                    : w.opts.icon ? `<img src="${w.opts.icon}" alt=""/>`
+                    : `<span class="mat-task-ico">${(w.opts.title || "?").slice(0,1)}</span>`) +
                     `<span class="mat-task-label">${escapeHtml(w.opts.title || "")}</span>`;
       b.addEventListener("click", () => {
         if (w.minimized) { restore(w); bringToFront(w); }

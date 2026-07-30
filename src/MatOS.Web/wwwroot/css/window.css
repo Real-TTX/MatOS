@@ -36,6 +36,10 @@
   display: grid; place-items: center; background: var(--accent-grad);
   color: #fff; font-size: 0.7rem; font-weight: 800;
 }
+.mat-win-icon-svg { display: grid; place-items: center; }
+.mat-win-icon-svg svg { width: 18px; height: 18px; }
+.mat-task-ico-svg { display: grid; place-items: center; }
+.mat-task-ico-svg svg { width: 16px; height: 16px; }
 .mat-title { flex: 1 1 auto; font-size: 0.86rem; font-weight: 600; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mat-win-actions { display: flex; gap: 0.15rem; }

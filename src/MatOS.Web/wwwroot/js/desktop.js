@@ -28,7 +28,13 @@
   }
 
   // ---- launch helpers ----
-  function open(opts) { window.MatWM.open(opts); }
+  function iconForKey(key) {
+    if (!key) return null;
+    if (key.startsWith("stack:") || key.startsWith("container:") || key.startsWith("set:")) return CUBE;
+    const s = systemApps().find(a => a.key === key);
+    return s ? s.iconHtml : null;
+  }
+  function open(opts) { if (!opts.iconHtml && opts.key) opts.iconHtml = iconForKey(opts.key); window.MatWM.open(opts); }
   function launchEl(el) {
     open({ key: el.dataset.key || el.dataset.url, title: el.dataset.title || "App", icon: el.dataset.icon || null,
       url: el.dataset.url, width: parseInt(el.dataset.w || "1024", 10), height: parseInt(el.dataset.h || "680", 10) });
