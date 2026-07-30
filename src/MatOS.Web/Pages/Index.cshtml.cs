@@ -10,6 +10,7 @@ public class IndexModel : PageModel
     private static readonly SystemApp[] Apps =
     {
         new("task-manager", "Task Manager", "/apps/task-manager", "tasks", false),
+        new("files", "Files", "/apps/files", "files", true),
         new("store", "Store", "/apps/store", "store", false),
         new("users", "Users", "/apps/users", "users", true),
         new("settings", "Settings", "/apps/settings", "settings", false),

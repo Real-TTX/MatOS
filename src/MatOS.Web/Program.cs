@@ -23,6 +23,7 @@ builder.Services.AddSingleton<JsonConfigService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<DesktopLayoutService>();
+builder.Services.AddSingleton<MatOS.Web.Docker.VolumeFilesService>();
 builder.Services.AddScoped<MatOS.Web.Controls.Common.ControlIdGenerator>();
 builder.Services.AddHostedService<SessionCleanupService>();
 
@@ -52,6 +53,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AllowAnonymousToPage("/Logout");
     o.Conventions.AllowAnonymousToPage("/Error");
     o.Conventions.AuthorizeFolder("/Apps/Users", "Admin");
+    o.Conventions.AuthorizePage("/Apps/Files", "Admin");
 });
 builder.Services.Configure<RouteOptions>(o => o.LowercaseUrls = true);
 builder.Services.AddProblemDetails();
@@ -82,5 +84,6 @@ app.MapGet("/health", () => Results.Ok(new
 var api = app.MapGroup("/api/v1");
 api.MapDockerApi();
 api.MapDesktopApi();
+api.MapFilesApi();
 
 app.Run();

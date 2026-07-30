@@ -1,0 +1,221 @@
+@page "/apps/files"
+@model MatOS.Web.Pages.Apps.FilesModel
+@{
+    ViewData["Title"] = "Files";
+    Layout = "_WindowLayout";
+}
+
+<div class="fx" data-volume="@(Model.Volume ?? "")" data-path="@(Model.Path ?? "")">
+    <aside class="fx-side">
+        <div class="fx-side-head">Volumes</div>
+        <div class="fx-tree" id="fx-tree"><div class="fx-muted" style="padding:0.6rem">Loading…</div></div>
+    </aside>
+    <section class="fx-main">
+        <div class="fx-toolbar">
+            <nav class="fx-crumb" id="fx-crumb"></nav>
+            <span style="flex:1"></span>
+            <div class="fx-tools" id="fx-tools" hidden>
+                <button class="ui-btn" id="fx-newfolder">New folder</button>
+                <button class="ui-btn" id="fx-upload">Upload</button>
+                <button class="ui-btn" id="fx-export" title="Download whole volume as .tar.gz">Export</button>
+                <button class="ui-btn" id="fx-import" title="Import a .tar.gz into this volume">Import</button>
+            </div>
+        </div>
+        <div class="fx-list" id="fx-list"><div class="fx-muted" style="padding:1.2rem">Select a volume to browse its files.</div></div>
+    </section>
+
+    <div class="fx-editor" id="fx-editor" hidden>
+        <div class="fx-editor-head">
+            <strong id="fx-editor-name" class="mono"></strong>
+            <span id="fx-editor-info" class="fx-muted" style="font-size:0.8rem"></span>
+            <span style="flex:1"></span>
+            <button class="ui-btn primary" id="fx-save">Save</button>
+            <button class="ui-btn" id="fx-close">Close</button>
+        </div>
+        <textarea id="fx-text" spellcheck="false"></textarea>
+    </div>
+
+    <input type="file" id="fx-file" hidden />
+    <input type="file" id="fx-archive" accept=".gz,.tgz,.tar,application/gzip" hidden />
+    <iframe id="fx-dl" style="display:none"></iframe>
+</div>
+
+@section Head {
+<style>
+.fx { position:absolute; inset:0; display:flex; }
+.fx-side { width:230px; flex:0 0 auto; border-right:1px solid var(--mat-border); overflow:auto; background:#fbfcfe; }
+.fx-side-head { padding:0.7rem 0.9rem; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--mat-text-muted); }
+.fx-tree { padding:0 0.3rem 1rem; }
+.fx-node { }
+.fx-row { display:flex; align-items:center; gap:0.25rem; padding:0.3rem 0.4rem; border-radius:7px; cursor:pointer; font-size:0.86rem; white-space:nowrap; }
+.fx-row:hover { background:#eef1f6; }
+.fx-row.sel { background:var(--mat-accent); color:#fff; }
+.fx-caret { width:16px; text-align:center; color:var(--mat-text-muted); font-size:0.7rem; flex:0 0 auto; }
+.fx-row.sel .fx-caret { color:#fff; }
+.fx-children { margin-left:0.9rem; display:none; } .fx-node.open > .fx-children { display:block; }
+.fx-main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; }
+.fx-toolbar { display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); flex-wrap:wrap; }
+.fx-crumb { display:flex; align-items:center; gap:0.25rem; font-size:0.9rem; flex-wrap:wrap; }
+.fx-crumb a { cursor:pointer; color:var(--mat-accent); } .fx-crumb span.sep { color:var(--mat-text-muted); }
+.fx-tools { display:flex; gap:0.4rem; }
+.fx-list { flex:1 1 auto; overflow:auto; }
+table.fx-tbl { width:100%; border-collapse:collapse; }
+table.fx-tbl td, table.fx-tbl th { padding:0.5rem 0.9rem; text-align:left; }
+table.fx-tbl thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); position:sticky; top:0; background:var(--mat-surface); }
+table.fx-tbl tbody tr { border-bottom:1px solid var(--mat-border); }
+table.fx-tbl tbody tr:hover { background:#f6f8fc; }
+.fx-name { display:flex; align-items:center; gap:0.5rem; cursor:pointer; }
+.fx-name .i { width:18px; text-align:center; }
+.fx-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
+.fx-acts .ui-btn { padding:0.3rem 0.55rem; font-size:0.8rem; }
+.fx-muted { color:var(--mat-text-muted); }
+.fx-editor { position:absolute; inset:0; background:var(--mat-bg); display:flex; flex-direction:column; z-index:5; }
+.fx-editor-head { display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); }
+#fx-text { flex:1 1 auto; border:none; outline:none; resize:none; padding:1rem; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85rem; line-height:1.5; background:#0b0f1a; color:#d7def0; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const root=document.querySelector(".fx");
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const fmtBytes=b=>{ if(b==null||b<0)return ""; const u=["B","KB","MB","GB","TB"];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  const join=(a,b)=>a?(a+"/"+b):b;
+  const api=(v,op,q)=>`/api/v1/files/${encodeURIComponent(v)}/${op}`+(q?`?${q}`:"");
+  const dl=document.getElementById("fx-dl");
+  let cur={volume:null,path:""};
+
+  async function jget(url){ const r=await fetch(url); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
+  async function jpost(url,body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
+
+  // ---- tree ----
+  const treeEl=document.getElementById("fx-tree");
+  function makeNode(volume,path,name,isVol){
+    const node=document.createElement("div"); node.className="fx-node";
+    const row=document.createElement("div"); row.className="fx-row"; row.dataset.volume=volume; row.dataset.path=path;
+    row.innerHTML=`<span class="fx-caret">▸</span><span class="i">${isVol?"🗄️":"📁"}</span><span class="fx-lbl">${esc(name)}</span>`;
+    const kids=document.createElement("div"); kids.className="fx-children";
+    node.appendChild(row); node.appendChild(kids);
+    let loaded=false;
+    row.querySelector(".fx-caret").addEventListener("click",async(e)=>{
+      e.stopPropagation();
+      if(node.classList.contains("open")){ node.classList.remove("open"); return; }
+      node.classList.add("open");
+      if(!loaded){ loaded=true; try{ const d=await jget(api(volume,"list",`path=${encodeURIComponent(path)}`));
+        for(const en of d.entries.filter(x=>x.isDir)) kids.appendChild(makeNode(volume, join(path,en.name), en.name,false));
+        if(!d.entries.some(x=>x.isDir)) kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.6rem;font-size:0.8rem">No subfolders</div>`;
+      }catch(err){ kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.6rem">${esc(err.message)}</div>`; } }
+    });
+    row.addEventListener("click",()=>openFolder(volume,path));
+    return node;
+  }
+  async function loadVolumes(){
+    try{ const d=await jget("/api/v1/docker/volumes");
+      treeEl.innerHTML="";
+      for(const v of d.volumes) treeEl.appendChild(makeNode(v.name,"",v.name+"  ("+fmtBytes(v.sizeBytes)+")",true));
+      if(!d.volumes.length) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No volumes.</div>`;
+    }catch(e){ treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">${esc(e.message)}</div>`; }
+  }
+
+  function highlightTree(){
+    treeEl.querySelectorAll(".fx-row").forEach(r=>r.classList.toggle("sel", r.dataset.volume===cur.volume && r.dataset.path===cur.path));
+  }
+
+  // ---- main list ----
+  function crumb(){
+    const el=document.getElementById("fx-crumb"); el.innerHTML="";
+    if(!cur.volume){ el.innerHTML=`<span class="fx-muted">No volume selected</span>`; return; }
+    const mk=(label,vol,path)=>{ const a=document.createElement("a"); a.textContent=label; a.addEventListener("click",()=>openFolder(vol,path)); return a; };
+    el.appendChild(mk("🗄️ "+cur.volume, cur.volume, ""));
+    let acc=""; for(const part of cur.path.split("/").filter(Boolean)){ acc=join(acc,part);
+      const s=document.createElement("span"); s.className="sep"; s.textContent="›"; el.appendChild(s); el.appendChild(mk(part,cur.volume,acc)); }
+  }
+  async function openFolder(volume,path){
+    cur={volume,path:path||""};
+    document.getElementById("fx-editor").hidden=true;
+    document.getElementById("fx-tools").hidden=false;
+    crumb(); highlightTree();
+    const list=document.getElementById("fx-list"); list.innerHTML=`<div class="fx-muted" style="padding:1rem">Loading…</div>`;
+    let d; try{ d=await jget(api(volume,"list",`path=${encodeURIComponent(cur.path)}`)); }
+    catch(e){ list.innerHTML=`<div class="fx-muted" style="padding:1rem">${esc(e.message)}</div>`; return; }
+    const rows=d.entries.map(en=>{
+      const p=join(cur.path,en.name);
+      const acts = en.isDir
+        ? `<button class="ui-btn" data-open-dir="${escA(p)}">Open</button>`
+        : `<button class="ui-btn" data-open-file="${escA(p)}">Open</button><button class="ui-btn" data-dl="${escA(p)}">Download</button>`;
+      return `<tr>
+        <td><span class="fx-name" data-${en.isDir?"open-dir":"open-file"}="${escA(p)}"><span class="i">${en.isDir?"📁":"📄"}</span>${esc(en.name)}</span></td>
+        <td class="fx-muted">${en.isDir?"":fmtBytes(en.size)}</td>
+        <td class="fx-muted">${(en.modifiedUtc||"").replace("T"," ").replace(/\..*/,"")}</td>
+        <td><div class="fx-acts">${acts}
+          <button class="ui-btn" data-rename="${escA(p)}" data-name="${escA(en.name)}">Rename</button>
+          <button class="ui-btn danger" data-del="${escA(p)}">Delete</button></div></td></tr>`;
+    }).join("");
+    list.innerHTML=`<table class="fx-tbl"><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="4" class="fx-muted" style="padding:1rem">Empty folder.</td></tr>`}</tbody></table>`;
+
+    list.querySelectorAll("[data-open-dir]").forEach(x=>x.addEventListener("click",()=>openFolder(cur.volume,x.dataset.openDir)));
+    list.querySelectorAll("[data-open-file]").forEach(x=>x.addEventListener("click",()=>openFile(x.dataset.openFile)));
+    list.querySelectorAll("[data-dl]").forEach(x=>x.addEventListener("click",()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(x.dataset.dl)}`); }));
+    list.querySelectorAll("[data-rename]").forEach(x=>x.addEventListener("click",()=>doRename(x.dataset.rename,x.dataset.name)));
+    list.querySelectorAll("[data-del]").forEach(x=>x.addEventListener("click",()=>doDelete(x.dataset.del)));
+  }
+
+  // ---- file ops ----
+  let editing=null;
+  async function openFile(path){
+    let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ alert(e.message); return; }
+    if(d.binary){ if(confirm("This looks like a binary file. Download instead?")) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
+    editing=path;
+    document.getElementById("fx-editor-name").textContent=path;
+    document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated — first 2 MB) ":"")+fmtBytes(d.size);
+    document.getElementById("fx-text").value=d.text||"";
+    document.getElementById("fx-editor").hidden=false;
+  }
+  document.getElementById("fx-close").addEventListener("click",()=>{ document.getElementById("fx-editor").hidden=true; editing=null; });
+  document.getElementById("fx-save").addEventListener("click",async()=>{
+    if(editing==null)return;
+    try{ await jpost(api(cur.volume,"write"),{path:editing,content:document.getElementById("fx-text").value});
+      document.getElementById("fx-editor-info").textContent="Saved ✓"; setTimeout(()=>openFolder(cur.volume,cur.path),300);
+    }catch(e){ alert("Save failed: "+e.message); }
+  });
+  async function doRename(path,name){
+    const nn=prompt("Rename to:",name); if(!nn||nn===name)return;
+    try{ await jpost(api(cur.volume,"rename"),{path,newName:nn}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); }
+  }
+  async function doDelete(path){
+    if(!confirm("Delete '"+path+"'? This cannot be undone."))return;
+    try{ await jpost(api(cur.volume,"delete"),{path}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); }
+  }
+
+  // ---- toolbar ----
+  document.getElementById("fx-newfolder").addEventListener("click",async()=>{
+    if(!cur.volume)return; const n=prompt("New folder name:"); if(!n)return;
+    try{ await jpost(api(cur.volume,"mkdir"),{path:join(cur.path,n)}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); }
+  });
+  const fileInput=document.getElementById("fx-file");
+  document.getElementById("fx-upload").addEventListener("click",()=>{ if(cur.volume) fileInput.click(); });
+  fileInput.addEventListener("change",async()=>{
+    if(!fileInput.files.length)return; const fd=new FormData(); fd.append("path",cur.path); fd.append("file",fileInput.files[0]);
+    try{ const r=await fetch(api(cur.volume,"upload"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); openFolder(cur.volume,cur.path); }
+    catch(e){ alert("Upload failed: "+e.message); } finally{ fileInput.value=""; }
+  });
+  document.getElementById("fx-export").addEventListener("click",()=>{ if(cur.volume) dl.src=api(cur.volume,"export"); });
+  const archiveInput=document.getElementById("fx-archive");
+  document.getElementById("fx-import").addEventListener("click",()=>{ if(cur.volume && confirm("Import a .tar.gz into '"+cur.volume+"'? Existing files with the same names will be overwritten.")) archiveInput.click(); });
+  archiveInput.addEventListener("change",async()=>{
+    if(!archiveInput.files.length)return; const fd=new FormData(); fd.append("file",archiveInput.files[0]);
+    try{ const r=await fetch(api(cur.volume,"import"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); alert("Import complete."); openFolder(cur.volume,cur.path); }
+    catch(e){ alert("Import failed: "+e.message); } finally{ archiveInput.value=""; }
+  });
+
+  // ---- init ----
+  (async function(){
+    await loadVolumes();
+    if(root.dataset.volume) openFolder(root.dataset.volume, root.dataset.path||"");
+  })();
+})();
+</script>
+}
