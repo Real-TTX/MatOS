@@ -8,7 +8,10 @@
 <div class="fx" data-volume="@(Model.Volume ?? "")" data-path="@(Model.Path ?? "")">
     <aside class="fx-side">
         <div class="fx-side-head">
-            <span>Explorer</span>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+                <span>Explorer</span>
+                <button class="fx-ico-btn" id="fx-newvol-btn" title="New volume" style="width:26px;height:26px;font-size:1rem;line-height:1">＋</button>
+            </div>
             <div class="fx-seg" id="fx-treemode">
                 <button data-mode="volume" class="active">Volumes</button>
                 <button data-mode="stack">Stacks</button>
@@ -54,6 +57,36 @@
             <button class="ui-btn" id="fx-close">Close</button>
         </div>
         <textarea id="fx-text" spellcheck="false"></textarea>
+    </div>
+
+    <div class="fx-viewer" id="fx-viewer" hidden>
+        <div class="fx-editor-head">
+            <strong id="fx-viewer-name" class="mono"></strong><span style="flex:1"></span>
+            <button class="ui-btn" id="fx-viewer-dl">Download</button>
+            <button class="ui-btn" id="fx-viewer-close">Close</button>
+        </div>
+        <div class="fx-viewer-body" id="fx-viewer-body"></div>
+    </div>
+
+    <div class="fx-dialog" id="fx-newvol" hidden>
+        <div class="fx-dialog-card">
+            <h3 style="margin:0 0 0.9rem">New volume</h3>
+            <label class="fl"><span>Name</span><input class="ui-input" id="nv-name" placeholder="my-volume" /></label>
+            <label class="fl"><span>Type</span>
+                <select class="ui-select" id="nv-kind"><option value="local">Local</option><option value="smb">SMB / CIFS (network share)</option></select>
+            </label>
+            <div id="nv-smb" style="display:none">
+                <div class="grid2">
+                    <label class="fl"><span>Server</span><input class="ui-input" id="nv-server" placeholder="192.168.1.10" /></label>
+                    <label class="fl"><span>Share</span><input class="ui-input" id="nv-share" placeholder="media" /></label>
+                    <label class="fl"><span>Username</span><input class="ui-input" id="nv-user" placeholder="(blank = guest)" /></label>
+                    <label class="fl"><span>Password</span><input class="ui-input" id="nv-pass" type="password" /></label>
+                </div>
+                <label class="fl"><span>Extra options <span class="fx-muted">(comma-separated cifs opts)</span></span><input class="ui-input mono" id="nv-opts" placeholder="uid=1000,gid=1000" /></label>
+                <div class="fx-muted" style="font-size:0.78rem">Browsing an SMB volume's contents requires a container to mount it; creation/management works either way.</div>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="nv-create">Create</button><button class="ui-btn" id="nv-cancel">Cancel</button></div>
+        </div>
     </div>
 
     <input type="file" id="fx-file" hidden />
@@ -122,6 +155,17 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
 .fx-ctx-item { display:block; width:100%; text-align:left; padding:0.45rem 0.6rem; border:none; background:transparent; border-radius:7px; cursor:pointer; font:inherit; font-size:0.85rem; color:var(--mat-text); }
 .fx-ctx-item:hover { background:rgba(255,255,255,0.06); } .fx-ctx-item.danger { color:#ffb3c0; } .fx-ctx-item:disabled { opacity:0.4; }
 .fx-ctx-sep { height:1px; background:var(--mat-border); margin:0.25rem 0.2rem; }
+.fx-viewer { position:absolute; inset:0; background:var(--mat-bg); display:flex; flex-direction:column; z-index:6; }
+.fx-viewer[hidden]{ display:none; }
+.fx-viewer-body { flex:1 1 auto; overflow:auto; display:grid; place-items:center; padding:1rem; background:#0b0f1a; }
+.fx-viewer-body img { max-width:100%; max-height:100%; object-fit:contain; }
+.fx-viewer-body iframe { width:100%; height:100%; border:0; background:#fff; border-radius:6px; }
+.fx-viewer-body video, .fx-viewer-body audio { max-width:100%; max-height:100%; }
+.fx-dialog { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:10; }
+.fx-dialog[hidden]{ display:none; }
+.fx-dialog-card { width:min(430px,92%); background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1.2rem; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+.fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.7rem; } .fl > span { font-size:0.82rem; color:var(--mat-text-muted); font-weight:600; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 0.7rem; }
 </style>
 }
 
@@ -169,6 +213,7 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
       }catch(err){ kids.innerHTML=`<div class="fx-muted" style="padding:0.2rem 0.5rem">${esc(err.message)}</div>`; } }
     });
     row.addEventListener("click",()=>openFolder(volume,path));
+    if(isVol) row.addEventListener("contextmenu",e=>{ e.preventDefault(); removeVolume(volume); });
     return node;
   }
   async function buildTree(){
@@ -281,15 +326,51 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     else if((e.ctrlKey||e.metaKey)&&e.key==="v"&&clip)paste();
     else if(e.key==="Backspace"&&cur.volume){ openFolder(cur.volume,parent(cur.path)); } });
 
+  // ---- viewer (images / pdf / media) ----
+  const viewerKind=path=>{ const e=(path.split(".").pop()||"").toLowerCase();
+    if(["png","jpg","jpeg","gif","webp","svg","bmp","ico"].includes(e))return "image";
+    if(e==="pdf")return "pdf"; if(["mp4","webm"].includes(e))return "video"; if(["mp3","wav","ogg"].includes(e))return "audio"; return null; };
+  function showViewer(path,kind){ const url=api(cur.volume,"view",`path=${encodeURIComponent(path)}`); const body=document.getElementById("fx-viewer-body");
+    body.innerHTML = kind==="image"?`<img src="${escA(url)}" alt="">` : kind==="pdf"?`<iframe src="${escA(url)}"></iframe>` : kind==="video"?`<video src="${escA(url)}" controls autoplay></video>` : `<audio src="${escA(url)}" controls autoplay></audio>`;
+    document.getElementById("fx-viewer-name").textContent=path;
+    document.getElementById("fx-viewer-dl").onclick=()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); };
+    document.getElementById("fx-viewer").hidden=false; }
+  document.getElementById("fx-viewer-close").addEventListener("click",()=>{ document.getElementById("fx-viewer").hidden=true; document.getElementById("fx-viewer-body").innerHTML=""; });
+
   // ---- editor ----
   let editing=null;
-  async function openFile(path){ let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ alert(e.message); return; }
+  async function openFile(path){ const vk=viewerKind(path); if(vk){ showViewer(path,vk); return; }
+    let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ alert(e.message); return; }
     if(d.binary){ if(confirm("Binary file. Download instead?")) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
     editing=path; document.getElementById("fx-editor-name").textContent=path; document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated) ":"")+fmtBytes(d.size);
     document.getElementById("fx-text").value=d.text||""; document.getElementById("fx-editor").hidden=false; }
   document.getElementById("fx-close").addEventListener("click",()=>{ document.getElementById("fx-editor").hidden=true; editing=null; });
   document.getElementById("fx-save").addEventListener("click",async()=>{ if(editing==null)return; try{ await jpost(api(cur.volume,"write"),{path:editing,content:document.getElementById("fx-text").value});
     document.getElementById("fx-editor-info").textContent="Saved ✓"; }catch(e){ alert("Save failed: "+e.message); } });
+
+  // ---- volume management (create local / SMB, remove) ----
+  const nv=document.getElementById("fx-newvol");
+  document.getElementById("fx-newvol-btn").addEventListener("click",()=>{ nv.hidden=false; });
+  document.getElementById("nv-cancel").addEventListener("click",()=>{ nv.hidden=true; });
+  document.getElementById("nv-kind").addEventListener("change",e=>{ document.getElementById("nv-smb").style.display=e.target.value==="smb"?"":"none"; });
+  document.getElementById("nv-create").addEventListener("click",async()=>{
+    const body={ name:document.getElementById("nv-name").value.trim(), kind:document.getElementById("nv-kind").value,
+      server:document.getElementById("nv-server").value.trim(), share:document.getElementById("nv-share").value.trim(),
+      username:document.getElementById("nv-user").value.trim(), password:document.getElementById("nv-pass").value, options:document.getElementById("nv-opts").value.trim() };
+    if(!body.name){ alert("Name is required."); return; }
+    try{ const r=await fetch("/api/v1/files/volumes/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
+      nv.hidden=true; document.getElementById("nv-name").value=""; treeData=null; buildTree();
+    }catch(e){ alert("Create failed: "+e.message); }
+  });
+  async function removeVolume(name){
+    if(!confirm(`Remove volume "${name}"? Docker refuses if it is in use.`))return;
+    try{ const r=await fetch("/api/v1/files/volumes/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||r.status); }
+      treeData=null; buildTree();
+      if(cur.volume===name){ cur={volume:null,path:""}; document.getElementById("fx-list").innerHTML=`<div class="fx-muted" style="padding:1.2rem">Select a volume.</div>`; document.getElementById("fx-ribbon").hidden=true; document.getElementById("fx-crumb").innerHTML=""; }
+    }catch(e){ alert("Remove failed: "+e.message); }
+  }
 
   // empty-area context menu (bound once)
   document.getElementById("fx-list").addEventListener("contextmenu",e=>{ if(cur.volume && !e.target.closest("[data-name]")){ e.preventDefault(); sel=null; markSel(); updateOps(); showCtx(e.clientX,e.clientY,false); } });

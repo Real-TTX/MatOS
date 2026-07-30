@@ -86,6 +86,36 @@ public class VolumeFilesService
         return (full, Path.GetFileName(full));
     }
 
+    /// <summary>Resolves a file for inline viewing (image/pdf/etc.) with a guessed content type.</summary>
+    public (string Path, string ContentType) ViewFile(string volume, string rel)
+    {
+        var full = Resolve(VolRoot(volume), rel);
+        if (!File.Exists(full)) throw new FileNotFoundException();
+        return (full, GuessContentType(full));
+    }
+
+    public static string GuessContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        ".svg" => "image/svg+xml",
+        ".bmp" => "image/bmp",
+        ".ico" => "image/x-icon",
+        ".pdf" => "application/pdf",
+        ".txt" or ".log" or ".md" or ".csv" => "text/plain; charset=utf-8",
+        ".json" => "application/json",
+        ".xml" => "application/xml",
+        ".html" or ".htm" => "text/html; charset=utf-8",
+        ".css" => "text/css",
+        ".mp4" => "video/mp4",
+        ".webm" => "video/webm",
+        ".mp3" => "audio/mpeg",
+        ".wav" => "audio/wav",
+        _ => "application/octet-stream"
+    };
+
     public async Task SaveUpload(string volume, string? rel, string fileName, Stream content, CancellationToken ct)
     {
         if (fileName.Contains('/') || fileName.Contains('\\') || fileName.Contains("..")) throw new ArgumentException("Invalid file name.");

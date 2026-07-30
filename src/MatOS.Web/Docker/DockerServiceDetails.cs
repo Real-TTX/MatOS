@@ -45,6 +45,17 @@ public partial class DockerService
         try { await client.Volumes.RemoveAsync(name, force: true, ct); } catch { /* best effort */ }
     }
 
+    public async Task CreateVolumeAsync(string name, string driver, IDictionary<string, string>? driverOpts, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        await client.Volumes.CreateAsync(new VolumesCreateParameters
+        {
+            Name = name,
+            Driver = string.IsNullOrWhiteSpace(driver) ? "local" : driver,
+            DriverOpts = driverOpts != null ? new Dictionary<string, string>(driverOpts) : null
+        }, ct);
+    }
+
     // ---- Stacks (a stack = a compose project = the app) ----
 
     public async Task<IReadOnlyList<StackInfo>> ListStacksAsync(CancellationToken ct = default)
