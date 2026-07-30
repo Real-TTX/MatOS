@@ -24,6 +24,7 @@ builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<DesktopLayoutService>();
 builder.Services.AddSingleton<MatOS.Web.Docker.VolumeFilesService>();
+builder.Services.AddSingleton<MatOS.Web.Engine.InstallService>();
 builder.Services.AddScoped<MatOS.Web.Controls.Common.ControlIdGenerator>();
 builder.Services.AddHostedService<SessionCleanupService>();
 
@@ -85,5 +86,6 @@ var api = app.MapGroup("/api/v1");
 api.MapDockerApi();
 api.MapDesktopApi();
 api.MapFilesApi();
+api.MapStoreApi();
 
 app.Run();

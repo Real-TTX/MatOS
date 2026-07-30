@@ -1,19 +1,102 @@
 @page "/apps/store"
 @model MatOS.Web.Pages.Apps.StoreModel
 @{
-    ViewData["Title"] = "Store";
-    ViewData["Description"] = "Install apps from the matOS catalog.";
+    ViewData["Title"] = "App Store";
+    ViewData["Description"] = "Install apps as containers. The same app can be installed multiple times.";
     Layout = "_WindowLayout";
 }
 
-<div class="card" style="text-align:center;padding:2.5rem 1.5rem">
-    <div style="font-size:2.2rem;margin-bottom:0.5rem">🛍️</div>
-    <h2 style="margin:0 0 0.4rem">App Store — coming soon</h2>
-    <p style="color:var(--mat-text-muted);max-width:560px;margin:0 auto 1.25rem">
-        The Store will install apps from a Git-hosted catalog of Compose templates. matOS resolves
-        each template's <span class="mono">$PORT-*</span> and <span class="mono">$VAR</span> placeholders,
-        assigns a port from its pool and a Caddy subdomain, and lets you install the same app
-        <strong>multiple times</strong>. Update monitoring compares installed images against the catalog.
-    </p>
-    <p class="mono" style="color:var(--mat-text-muted);font-size:0.8rem">Planned for the next milestone (M2).</p>
+<div id="store">
+    <div class="tabbar" id="store-tabs" style="margin-bottom:1rem">
+        <button class="tab active" data-tab="catalog">Discover</button>
+        <button class="tab" data-tab="installed">Installed <span id="store-count" class="fx-muted"></span></button>
+    </div>
+    <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
+    <div id="store-catalog" class="store-grid"></div>
+    <div id="store-installed" style="display:none"></div>
 </div>
+
+@section Head {
+<style>
+.tabbar { display:flex; gap:0.15rem; border-bottom:1px solid var(--mat-border); }
+.tab { border:none; background:transparent; padding:0.5rem 0.85rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
+.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+.store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:0.9rem; }
+.app-card { display:flex; flex-direction:column; gap:0.5rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1rem; }
+.app-card .top { display:flex; align-items:center; gap:0.7rem; }
+.app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; background:linear-gradient(135deg,#eef2ff,#f5f3ff); border:1px solid var(--mat-border); }
+.app-card h3 { margin:0; font-size:1rem; } .app-card .tag { color:var(--mat-text-muted); font-size:0.8rem; }
+.app-card p { margin:0; color:var(--mat-text-muted); font-size:0.86rem; flex:1 1 auto; }
+.app-card .foot { display:flex; align-items:center; gap:0.5rem; }
+.app-card .mono { font-size:0.72rem; color:var(--mat-text-muted); }
+.inst { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.9rem; border:1px solid var(--mat-border); border-radius:12px; margin-bottom:0.6rem; background:var(--mat-surface); }
+.inst .g { flex:1 1 auto; min-width:0; } .inst .nm { font-weight:700; } .inst .sub { color:var(--mat-text-muted); font-size:0.78rem; }
+.spin { width:14px; height:14px; border-radius:50%; border:2px solid rgba(0,0,0,.15); border-top-color:var(--mat-accent); display:inline-block; animation:sp .7s linear infinite; }
+@@keyframes sp { to { transform:rotate(360deg); } }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const catEl=document.getElementById("store-catalog"), instEl=document.getElementById("store-installed"), msg=document.getElementById("store-msg");
+  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"#bbf7d0":"#fecaca"; msg.style.background=ok?"#f0fdf4":"#fff5f5"; msg.style.color=ok?"#166534":"#b91c1c"; msg.textContent=t; setTimeout(()=>msg.style.display="none",4000); }
+
+  document.querySelectorAll("#store-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll("#store-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+    const inst=t.dataset.tab==="installed";
+    catEl.style.display=inst?"none":""; instEl.style.display=inst?"":"none"; if(inst) loadInstalls();
+  }));
+
+  async function loadCatalog(){
+    let d; try{ d=await (await fetch("/api/v1/store/catalog")).json(); }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
+    catEl.innerHTML=d.apps.map(a=>`<div class="app-card">
+      <div class="top"><div class="app-ico">${esc(a.icon)}</div><div><h3>${esc(a.name)}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
+      <p>${esc(a.description)}</p>
+      <div class="foot"><button class="ui-btn primary" data-install="${escA(a.id)}">Install</button>
+        <span class="spacer" style="flex:1"></span><span class="mono">${esc(a.image)}</span></div>
+    </div>`).join("");
+    catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>install(b)));
+  }
+
+  async function install(btn){
+    const id=btn.dataset.install, orig=btn.innerHTML;
+    btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Installing…`;
+    try{
+      const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.title||r.status); }
+      const j=await r.json();
+      flash(`Installed ${id} → ${j.name} (port ${j.hostPort}).`,true);
+    }catch(e){ flash("Install failed: "+e.message,false); }
+    finally{ btn.disabled=false; btn.innerHTML=orig; }
+  }
+
+  async function loadInstalls(){
+    let d; try{ d=await (await fetch("/api/v1/store/installs")).json(); }catch(_){ instEl.innerHTML="Failed to load."; return; }
+    document.getElementById("store-count").textContent=d.installs.length?`(${d.installs.length})`:"";
+    if(!d.installs.length){ instEl.innerHTML=`<div class="fx-muted" style="padding:1rem">No apps installed yet. Install one from Discover — you can install the same app multiple times.</div>`; return; }
+    instEl.innerHTML=d.installs.map(i=>`<div class="inst">
+      <div class="g"><div class="nm">${esc(i.title)} <span class="fx-muted" style="font-weight:400">· ${esc(i.name)}</span></div>
+        <div class="sub">${i.running?'<span class="pill on">running</span>':'<span class="pill off">'+esc(i.state)+'</span>'} · ${esc(i.image)}</div></div>
+      ${i.appUrl?`<button class="ui-btn" data-open="${escA(i.appUrl)}">Open</button>`:""}
+      <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.name)}">Uninstall</button></div>`).join("");
+    instEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
+    instEl.querySelectorAll("[data-uninstall]").forEach(b=>b.addEventListener("click",()=>uninstall(b.dataset.uninstall,b.dataset.name)));
+  }
+
+  async function uninstall(id,name){
+    if(!confirm(`Uninstall ${name}? This removes the container.`))return;
+    const rmVol=confirm("Also delete its data volume? (OK = delete data, Cancel = keep data)");
+    try{
+      const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||r.status); }
+      flash("Uninstalled "+name+".",true); loadInstalls();
+    }catch(e){ flash("Uninstall failed: "+e.message,false); }
+  }
+
+  loadCatalog();
+})();
+</script>
+}

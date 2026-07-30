@@ -1,3 +1,4 @@
+using Docker.DotNet;
 using Docker.DotNet.Models;
 
 namespace MatOS.Web.Docker;
@@ -5,6 +6,45 @@ namespace MatOS.Web.Docker;
 /// <summary>Stacks (compose grouping), container inspect, volumes and images.</summary>
 public partial class DockerService
 {
+    // ---- Provisioning (used by the App Store install engine) ----
+
+    public async Task EnsureNetworkAsync(string name, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        var nets = await client.Networks.ListNetworksAsync(new NetworksListParameters(), ct);
+        if (!nets.Any(n => string.Equals(n.Name, name, StringComparison.Ordinal)))
+            await client.Networks.CreateNetworkAsync(new NetworksCreateParameters { Name = name }, ct);
+    }
+
+    /// <summary>Pulls an image; failures are non-fatal (the image may already exist locally).</summary>
+    public async Task PullImageBestEffortAsync(string image, CancellationToken ct = default)
+    {
+        try
+        {
+            using var client = CreateClient();
+            string repo = image, tag = "latest";
+            var idx = image.LastIndexOf(':');
+            if (idx > 0 && !image[idx..].Contains('/')) { repo = image[..idx]; tag = image[(idx + 1)..]; }
+            await client.Images.CreateImageAsync(new ImagesCreateParameters { FromImage = repo, Tag = tag },
+                null, new Progress<JSONMessage>(_ => { }), ct);
+        }
+        catch (Exception ex) { _log.LogInformation("Pull of {Image} skipped/failed: {Msg}", image, ex.Message); }
+    }
+
+    public async Task<string> CreateAndStartAsync(CreateContainerParameters p, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        var r = await client.Containers.CreateContainerAsync(p, ct);
+        await client.Containers.StartContainerAsync(r.ID, new ContainerStartParameters(), ct);
+        return r.ID;
+    }
+
+    public async Task RemoveVolumeAsync(string name, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        try { await client.Volumes.RemoveAsync(name, force: true, ct); } catch { /* best effort */ }
+    }
+
     // ---- Stacks (a stack = a compose project = the app) ----
 
     public async Task<IReadOnlyList<StackInfo>> ListStacksAsync(CancellationToken ct = default)
