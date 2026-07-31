@@ -196,6 +196,7 @@
       const b = document.createElement("button");
       b.className = "mat-task" + (w.el.classList.contains("focused") && !w.minimized ? " active" : "");
       b.title = w.opts.title || "";
+      b.dataset.winKey = w.key;
       b.innerHTML = (w.opts.iconHtml ? `<span class="mat-task-ico mat-task-ico-svg">${w.opts.iconHtml}</span>`
                     : w.opts.icon ? `<img src="${w.opts.icon}" alt=""/>`
                     : `<span class="mat-task-ico">${(w.opts.title || "?").slice(0,1)}</span>`) +
@@ -219,5 +220,16 @@
 
   function closeKey(key) { const w = wins.get(key); if (w) close(w); }
 
-  window.MatWM = { open, close, closeKey };
+  // Reset an app: reload its iframe (works for internal and external/cross-origin apps).
+  function reset(key) {
+    const w = wins.get(key); if (!w) return;
+    const frame = w.el.querySelector(".mat-frame"); if (!frame) return;
+    const loading = w.el.querySelector(".mat-win-loading"); if (loading) loading.style.display = "";
+    const src = frame.src;
+    frame.src = "about:blank";
+    setTimeout(() => { frame.src = src; }, 30);
+    restore(w); bringToFront(w);
+  }
+
+  window.MatWM = { open, close, closeKey, reset };
 })();

@@ -209,10 +209,12 @@
   const startMenu = document.getElementById("mat-startmenu");
   const startSearch = document.getElementById("mat-start-search");
   const smSystem = document.getElementById("sm-system");
-  const smApps = document.getElementById("sm-containers");
-  const smAppsTitle = document.getElementById("sm-container-title");
+  const smSystemTitle = document.getElementById("sm-system-title");
+  const smApps = document.getElementById("sm-apps");
+  const smAppsTitle = document.getElementById("sm-apps-title");
+  const smContainers = document.getElementById("sm-containers");
+  const smContainersTitle = document.getElementById("sm-containers-title");
   const smEmpty = document.getElementById("sm-empty");
-  if (smAppsTitle) smAppsTitle.textContent = "Apps";
 
   function smItem(a, iconClass, inner, pinned) {
     return `<button class="sm-item" data-key="${escAttr(a.key)}" data-title="${escAttr(a.title)}" data-url="${escAttr(a.url)}" data-w="${a.w}" data-h="${a.h}">
@@ -224,10 +226,16 @@
     const match = t => !q || (t || "").toLowerCase().includes(q);
     const sys = systemApps().filter(a => match(a.title));
     smSystem.innerHTML = sys.map(a => smItem(a, "sys", a.iconHtml)).join("");
-    const apps = stackData.filter(s => match(stackTitle(s))).map(s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) }));
+    if (smSystemTitle) smSystemTitle.style.display = sys.length ? "" : "none";
+    // matOS-managed store apps vs plain Docker containers/stacks
+    const toItem = s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) });
+    const apps = stackData.filter(s => stackApp(s) && match(stackTitle(s))).map(toItem);
+    const cons = stackData.filter(s => !stackApp(s) && match(stackTitle(s))).map(toItem);
     smApps.innerHTML = apps.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
-    smAppsTitle.style.display = apps.length ? "" : "none";
-    smEmpty.hidden = (sys.length + apps.length) > 0;
+    smContainers.innerHTML = cons.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
+    if (smAppsTitle) smAppsTitle.style.display = apps.length ? "" : "none";
+    if (smContainersTitle) smContainersTitle.style.display = cons.length ? "" : "none";
+    smEmpty.hidden = (sys.length + apps.length + cons.length) > 0;
   }
   function openStart() { if (!startMenu) return; startMenu.hidden = false; startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
   function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); }
@@ -289,6 +297,19 @@
     document.addEventListener("scroll", hideCtx, true);
     window.addEventListener("resize", hideCtx); window.addEventListener("blur", hideCtx);
   }
+
+  // ---- taskbar (open windows) context menu ----
+  const dock = document.getElementById("mat-tasks");
+  if (dock) dock.addEventListener("contextmenu", (e) => {
+    const t = e.target.closest(".mat-task"); if (!t || !t.dataset.winKey) return;
+    e.preventDefault();
+    const key = t.dataset.winKey;
+    showCtx(e.clientX, e.clientY, [
+      { label: "Reset app", action: () => window.MatWM.reset(key) },
+      { sep: true },
+      { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) },
+    ]);
+  });
 
   // ---- init ----
   async function init() {
