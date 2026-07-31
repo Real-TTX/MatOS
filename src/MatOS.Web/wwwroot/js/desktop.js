@@ -476,12 +476,46 @@
         const html = iconForKey(k) || CUBE;
         const btn = document.createElement("button"); btn.className = "mat-folder-item"; btn.dataset.key = k;
         btn.innerHTML = `<span class="mat-folder-item-ico">${html}</span><span class="mat-folder-item-lbl">${esc(labelForKey(k))}</span>`;
-        btn.addEventListener("click", () => { launchByKey(k); closeIt(); });
+        btn.addEventListener("click", (e) => { if (btn.dataset.suppressClick) { delete btn.dataset.suppressClick; return; } launchByKey(k); closeIt(); });
         btn.addEventListener("contextmenu", (e) => { e.preventDefault();
           showCtx(e.clientX, e.clientY, [{ label: "Remove from folder", danger:true, action: () => removeFromFolder(f.id, k).then(() => renderGrid()) }]); });
+        // Drag an item out of the folder onto the desktop
+        btn.addEventListener("pointerdown", (e) => {
+          if (e.pointerType === "mouse" && e.button !== 0) return;
+          const startX = e.clientX, startY = e.clientY; let ghost = null, dragged = false;
+          const onMove = (ev) => {
+            const dx = ev.clientX - startX, dy = ev.clientY - startY;
+            if (!dragged && Math.hypot(dx, dy) > 8) {
+              dragged = true;
+              ghost = btn.cloneNode(true); ghost.classList.add("sm-ghost");
+              ghost.style.position = "fixed"; ghost.style.pointerEvents = "none"; ghost.style.zIndex = "80"; ghost.style.opacity = "0.9";
+              ghost.style.width = "76px"; ghost.style.height = "auto";
+              document.body.appendChild(ghost);
+            }
+            if (dragged) { ghost.style.left = (ev.clientX - 38) + "px"; ghost.style.top = (ev.clientY - 30) + "px"; }
+          };
+          const onUp = async (ev) => {
+            window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
+            if (!dragged) return;
+            if (ghost) ghost.remove();
+            btn.dataset.suppressClick = "1";
+            // Drop outside the overlay panel? -> remove from folder + place at drop position on the desktop
+            const overPanel = panel.contains(document.elementFromPoint(ev.clientX, ev.clientY));
+            if (overPanel) return;
+            const rect = layer.getBoundingClientRect();
+            const pos = snapXY(ev.clientX - rect.left - 34, ev.clientY - rect.top - 34);
+            layout[k] = pos;
+            await removeFromFolder(f.id, k);
+            if (!pins.has(k)) await pin(k); else reconcileDesktop();
+            saveIcon(k, pos.x, pos.y);
+            const iconEl = iconEls.get(k); if (iconEl) { iconEl.style.left = pos.x + "px"; iconEl.style.top = pos.y + "px"; }
+            closeIt();
+          };
+          window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true });
+        });
         grid.appendChild(btn);
       }
-      if (!f.keys.length) grid.innerHTML = `<div class="mat-folder-empty">Empty folder — right-click an app icon → Move to folder…</div>`;
+      if (!f.keys.length) grid.innerHTML = `<div class="mat-folder-empty">Empty folder — drag an icon here, or right-click an app on the desktop → Move to folder.</div>`;
     }
     renderGrid();
 
