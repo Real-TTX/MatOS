@@ -195,7 +195,7 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     if(["mp3","wav","ogg","mp4","mkv","mov","webm"].includes(e))return "🎵"; if(["pdf"].includes(e))return "📕"; if(["db","sqlite"].includes(e))return "🗃️"; return "📄"; }
 
   async function jget(url){ const r=await fetch(url); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
-  async function jpost(url,body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
+  async function jpost(url,body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status);} return r.json(); }
 
   // ---- tree ----
   const treeEl=document.getElementById("fx-tree");
@@ -270,11 +270,25 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     list.querySelectorAll("[data-name]").forEach(row=>{
       row.addEventListener("click",()=>select(row));
       row.addEventListener("dblclick",()=>{ const n=row.dataset.name, isDir=row.dataset.dir==="true"; if(isDir) openFolder(cur.volume,join(cur.path,n)); else openFile(join(cur.path,n)); });
-      row.addEventListener("contextmenu",e=>{ e.preventDefault(); select(row); showCtx(e.clientX,e.clientY,true); });
+      row.addEventListener("contextmenu",async e=>{ e.preventDefault(); select(row);
+        let handlers=[];
+        if(sel && !sel.isDir){ const parts=sel.name.split("."); const ext=parts.length>1?"."+parts.pop().toLowerCase():"";
+          if(ext){ try{ const d=await jget(`/api/v1/store/handlers?ext=${encodeURIComponent(ext)}`); handlers=d.apps||[]; }catch(_){} } }
+        showCtx(e.clientX,e.clientY,true,handlers); });
     });
   }
   function select(row){ sel={name:row.dataset.name,isDir:row.dataset.dir==="true",path:join(cur.path,row.dataset.name)}; markSel(); updateOps(); }
   function markSel(){ document.querySelectorAll("#fx-list [data-name]").forEach(r=>r.classList.toggle("sel", sel && r.dataset.name===sel.name)); }
+
+  // ---- open a file with a handler app (spawns an ephemeral container bound to the file) ----
+  async function openWith(appId){
+    if(!sel || sel.isDir) return;
+    const name=sel.name, path=sel.path;
+    try{
+      const r=await jpost("/api/v1/store/open-with",{appId,volume:cur.volume,path});
+      window.parent.postMessage({type:"matos:open", url:r.url, key:"open:"+r.id, title:r.title||("Open — "+name), width:1120, height:760, ephemeralId:r.id}, location.origin);
+    }catch(e){ alert("Open with failed: "+e.message); }
+  }
 
   // ---- view toggle ----
   document.querySelectorAll("#fx-view button").forEach(b=>{ b.classList.toggle("active",b.dataset.view===view);
@@ -305,10 +319,14 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   // ---- context menu ----
   const ctx=document.createElement("div"); ctx.id="fx-ctx"; ctx.hidden=true; document.body.appendChild(ctx);
   function hideCtx(){ ctx.hidden=true; }
-  function showCtx(x,y,onItem){
+  function showCtx(x,y,onItem,handlers){
+    const openWithItems = (handlers && handlers.length)
+      ? [{sep:true}, ...handlers.map(h=>({label:`Open with ${h.name}`, icon:h.icon, fn:()=>openWith(h.id)}))]
+      : [];
     const items = onItem ? [
       {label:"Open",fn:()=>{ if(sel.isDir)openFolder(cur.volume,sel.path); else openFile(sel.path); }},
       {label:"Download",fn:()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(sel.path)}`); },hide:sel.isDir},
+      ...openWithItems,
       {sep:true},{label:"Copy",fn:()=>{ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }},
       {label:"Cut",fn:()=>{ clip={op:"cut",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }},
       {label:"Rename",fn:doRename},{sep:true},{label:"Delete",fn:doDelete,danger:true}

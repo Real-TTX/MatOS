@@ -111,6 +111,7 @@
   function close(w) {
     w.el.remove();
     wins.delete(w.key);
+    if (typeof w.opts.onClose === "function") { try { w.opts.onClose(); } catch (_) {} }
     syncDock();
   }
 

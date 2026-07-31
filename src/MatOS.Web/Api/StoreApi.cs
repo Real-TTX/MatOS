@@ -13,6 +13,8 @@ public static class StoreApi
     public record AddSourceBody(string Name, string Url);
     public record SourceIdBody(string Id);
     public record ToggleSourceBody(string Id, bool Enabled);
+    public record OpenWithBody(string AppId, string Volume, string Path);
+    public record CloseBody(string Id);
 
     public static void MapStoreApi(this IEndpointRouteBuilder api)
     {
@@ -27,13 +29,15 @@ public static class StoreApi
                 volumes = a.Volumes,
                 env = a.Env,
                 actions = a.Actions.Select(x => new { x.Label, x.Url }),
-                variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required })
+                variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required }),
+                handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>()
             })
         }));
 
         g.MapGet("/installs", async (DockerService docker, HttpRequest req, CancellationToken ct) =>
         {
-            var mine = (await docker.ListContainersAsync(true, ct)).Where(c => c.MatosManaged).ToList();
+            var mine = (await docker.ListContainersAsync(true, ct))
+                .Where(c => c.MatosManaged && c.Labels.GetValueOrDefault("matos.ephemeral", "") != "true").ToList();
             var groups = mine.GroupBy(c => (App: c.Labels.GetValueOrDefault(MatosLabels.App, ""), Inst: c.Labels.GetValueOrDefault(MatosLabels.Instance, "")));
             return Results.Ok(new
             {
@@ -131,6 +135,32 @@ public static class StoreApi
             }
             return Results.Ok(new { sources = await src.SyncAllAsync(ct) });
         }).RequireAuthorization("Admin");
+
+        // ---- File handlers ("open with") ----
+        g.MapGet("/handlers", (string? ext, StoreService store) =>
+        {
+            var e = NormExt(ext ?? "");
+            var apps = store.AllApps()
+                .Where(a => a.Handlers != null && a.Handlers.Any(h => h.Extensions.Any(x => NormExt(x) == e)))
+                .Select(a => new { a.Id, a.Name, a.Icon });
+            return Results.Ok(new { ext = e, apps });
+        });
+
+        g.MapPost("/open-with", async (OpenWithBody b, InstallService svc, HttpRequest req, CancellationToken ct) =>
+        {
+            var r = await svc.OpenWithAsync(b.AppId, b.Volume, b.Path, ct);
+            if (!r.Ok) return Results.Problem(r.Error);
+            return Results.Ok(new { url = $"{req.Scheme}://{req.Host.Host}:{r.HostPort}", id = r.ContainerId, title = r.Title });
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/close-ephemeral", async (CloseBody b, InstallService svc, CancellationToken ct) =>
+            Results.Ok(new { ok = await svc.CloseEphemeralAsync(b.Id, ct) })).RequireAuthorization("Admin");
+    }
+
+    private static string NormExt(string e)
+    {
+        e = (e ?? "").Trim().ToLowerInvariant();
+        return e.Length == 0 || e[0] == '.' ? e : "." + e;
     }
 
     private static string? ResolveUrl(ContainerInfo c, HttpRequest req)

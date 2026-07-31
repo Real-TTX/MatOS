@@ -42,7 +42,19 @@ public class InstallService
         if (app == null) return Task.FromResult(new InstallResult(false, null, 0, "Unknown app."));
         return string.Equals(app.Kind, "compose", StringComparison.OrdinalIgnoreCase)
             ? InstallComposeAsync(app, vars ?? new Dictionary<string, string>(), ct)
-            : InstallImageAsync(app, ct);
+            : InstallImageAsync(app, vars ?? new Dictionary<string, string>(), ct);
+    }
+
+    // setup-wizard variables -> env (used or default); lets image apps use the wizard too
+    private static Dictionary<string, string> BuildEnv(AppDef app, IDictionary<string, string> vars)
+    {
+        var env = new Dictionary<string, string>(app.Env);
+        foreach (var v in app.Variables)
+        {
+            var val = vars.TryGetValue(v.Key, out var provided) && !string.IsNullOrEmpty(provided) ? provided : v.Default;
+            if (!string.IsNullOrEmpty(val)) env[v.Key] = val;
+        }
+        return env;
     }
 
     private int NextInstance(string appId)
@@ -67,7 +79,7 @@ public class InstallService
     }
 
     // ---- Single image ----
-    private async Task<InstallResult> InstallImageAsync(AppDef app, CancellationToken ct)
+    private async Task<InstallResult> InstallImageAsync(AppDef app, IDictionary<string, string> vars, CancellationToken ct)
     {
         var instance = NextInstance(app.Id);
         await _config.SaveAsync("store", _config.Get<InstallStore>("store"));
@@ -85,7 +97,7 @@ public class InstallService
             var p = new CreateContainerParameters
             {
                 Image = app.Image, Name = name,
-                Env = app.Env.Select(kv => $"{kv.Key}={kv.Value}").ToList(),
+                Env = BuildEnv(app, vars).Select(kv => $"{kv.Key}={kv.Value}").ToList(),
                 Labels = ManagedLabels(app, instance, ui: true),
                 ExposedPorts = new Dictionary<string, EmptyStruct> { [$"{app.UiPort}/tcp"] = default },
                 HostConfig = new HostConfig
@@ -259,7 +271,112 @@ public class InstallService
         await RunCompose(dir, new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, null, ct);
     }
 
+    // ---- "Open with" (file handlers): launch an on-demand container bound to a file ----
+    public record OpenResult(bool Ok, string? ContainerId, int HostPort, string? Error, string? Title);
+
+    /// <summary>Launch an ephemeral container that opens <paramref name="relPath"/> (inside
+    /// <paramref name="volume"/>) with the handler app <paramref name="appId"/>. The file's volume is
+    /// mounted at the handler's MountPath and the app is pointed at the file (env or command arg).</summary>
+    public async Task<OpenResult> OpenWithAsync(string appId, string volume, string relPath, CancellationToken ct = default)
+    {
+        var app = _store.Find(appId);
+        if (app == null) return new(false, null, 0, "Unknown app.", null);
+        if (app.Handlers == null || app.Handlers.Length == 0) return new(false, null, 0, $"{app.Name} has no file handlers.", null);
+        if (string.IsNullOrWhiteSpace(app.Image)) return new(false, null, 0, "Only single-image apps can open files.", null);
+
+        var ext = NormExt(Path.GetExtension(relPath));
+        var handler = app.Handlers.FirstOrDefault(h => h.Extensions.Any(e => NormExt(e) == ext));
+        if (handler == null) return new(false, null, 0, $"{app.Name} does not handle {ext} files.", null);
+
+        var relPosix = relPath.Replace('\\', '/').TrimStart('/');
+        var fileName = Path.GetFileName(relPosix);
+        var mount = handler.MountPath.TrimEnd('/'); if (mount.Length == 0) mount = "/data";
+
+        var instance = NextInstance($"open-{app.Id}");
+        await _config.SaveAsync("store", _config.Get<InstallStore>("store"));
+        var port = await NextFreePortAsync(ct);
+        var name = $"matos-open-{Slug(app.Id)}-{instance}";
+        var title = $"{app.Name} — {fileName}";
+        try
+        {
+            await _docker.EnsureNetworkAsync(_network, ct);
+            await _docker.PullImageBestEffortAsync(app.Image, ct);
+
+            var env = new Dictionary<string, string>(app.Env);
+            if (string.Equals(handler.Mechanism, "env", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(handler.EnvKey))
+                env[handler.EnvKey] = relPosix;
+
+            IList<string>? cmd = null;
+            if (string.Equals(handler.Mechanism, "arg", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(handler.ArgTemplate))
+                cmd = TokenizeArgs(handler.ArgTemplate.Replace("{file}", $"{mount}/{relPosix}").Replace("{port}", app.UiPort.ToString()));
+
+            var p = new CreateContainerParameters
+            {
+                Image = app.Image, Name = name, Cmd = cmd,
+                Env = env.Select(kv => $"{kv.Key}={kv.Value}").ToList(),
+                Labels = new Dictionary<string, string>
+                {
+                    ["matos.managed"] = "true",
+                    ["matos.app"] = app.Id,
+                    ["matos.instance"] = instance.ToString(),
+                    ["matos.title"] = title,
+                    ["matos.ephemeral"] = "true",
+                    ["matos.openVolume"] = volume,
+                    ["matos.openFile"] = relPosix,
+                    ["matcad.enable"] = "false",
+                    ["matcad.port"] = app.UiPort.ToString(),
+                },
+                ExposedPorts = new Dictionary<string, EmptyStruct> { [$"{app.UiPort}/tcp"] = default },
+                HostConfig = new HostConfig
+                {
+                    PortBindings = new Dictionary<string, IList<PortBinding>> { [$"{app.UiPort}/tcp"] = new List<PortBinding> { new() { HostPort = port.ToString() } } },
+                    Mounts = new List<Mount> { new() { Type = "volume", Source = volume, Target = mount, ReadOnly = handler.ReadOnly } },
+                    RestartPolicy = new RestartPolicy { Name = RestartPolicyKind.No },
+                    NetworkMode = _network
+                }
+            };
+            var id = await _docker.CreateAndStartAsync(p, ct);
+            _log.LogInformation("Opened {File} in {App} as ephemeral {Name}", relPosix, app.Id, name);
+            return new(true, id, port, null, title);
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "OpenWith {App} failed", app.Id); return new(false, null, port, ex.Message, null); }
+    }
+
+    /// <summary>Remove an ephemeral "open with" container (only ones we marked ephemeral).</summary>
+    public async Task<bool> CloseEphemeralAsync(string id, CancellationToken ct = default)
+    {
+        try
+        {
+            var d = await _docker.InspectDetailAsync(id, ct);
+            if (d == null || d.Info.Labels.GetValueOrDefault("matos.ephemeral") != "true") return false;
+            await _docker.RemoveContainerAsync(id, force: true, ct);
+            return true;
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "CloseEphemeral {Id} failed", id); return false; }
+    }
+
     // ---- helpers ----
+    private static string NormExt(string e)
+    {
+        e = (e ?? "").Trim().ToLowerInvariant();
+        if (e.Length == 0) return e;
+        return e[0] == '.' ? e : "." + e;
+    }
+
+    private static List<string> TokenizeArgs(string s)
+    {
+        var list = new List<string>(); var sb = new StringBuilder(); char quote = '\0';
+        foreach (var ch in s)
+        {
+            if (quote != '\0') { if (ch == quote) quote = '\0'; else sb.Append(ch); }
+            else if (ch is '"' or '\'') quote = ch;
+            else if (char.IsWhiteSpace(ch)) { if (sb.Length > 0) { list.Add(sb.ToString()); sb.Clear(); } }
+            else sb.Append(ch);
+        }
+        if (sb.Length > 0) list.Add(sb.ToString());
+        return list;
+    }
+
     private static async Task<(int Code, string Out, string Err)> RunCompose(string dir, string[] args, IDictionary<string, string>? env, CancellationToken ct)
     {
         var psi = new ProcessStartInfo { FileName = "docker-compose", WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

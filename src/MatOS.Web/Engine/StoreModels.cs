@@ -13,6 +13,21 @@ public class AppVariable
     public bool Required { get; set; }
 }
 
+/// <summary>Declares that an app can open a file of certain extensions ("open with"). matOS
+/// launches an on-demand container with the file's volume mounted at <see cref="MountPath"/> and
+/// points the app at the file — either via an env var (<see cref="EnvKey"/>, value = the file's
+/// path relative to MountPath) or by overriding the command (<see cref="ArgTemplate"/>, with the
+/// <c>{file}</c> placeholder = the absolute in-container path).</summary>
+public class AppHandler
+{
+    public List<string> Extensions { get; set; } = new();   // e.g. [".db", ".sqlite", ".sqlite3"]
+    public string MountPath { get; set; } = "/data";         // where the file's volume is mounted
+    public string Mechanism { get; set; } = "env";           // "env" | "arg"
+    public string EnvKey { get; set; } = "";                 // mechanism=env
+    public string ArgTemplate { get; set; } = "";            // mechanism=arg (supports {file})
+    public bool ReadOnly { get; set; }
+}
+
 /// <summary>Unified app definition — built-in, custom single-image, or a Compose stack.
 /// Kind is "image" or "compose". Icon may be an emoji, an image URL, or a data: URI.
 /// Source is the name of the remote catalog it came from ("" = built-in or local custom).</summary>
@@ -21,7 +36,7 @@ public record AppDef(
     string Image, int UiPort, string Icon, string[] Volumes,
     Dictionary<string, string> Env, AppAction[] Actions,
     string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn,
-    string Source = "");
+    string Source = "", AppHandler[]? Handlers = null);
 
 // ---- Custom (user-defined) apps: mutable shapes persisted as customapps.json ----
 
@@ -48,6 +63,7 @@ public class CustomApp
     public Dictionary<string, string> Env { get; set; } = new();
     public List<AppActionDef> Actions { get; set; } = new();
     public List<AppVariable> Variables { get; set; } = new();
+    public List<AppHandler> Handlers { get; set; } = new(); // file types this app can "open with"
     public string Source { get; set; } = "";              // remote catalog name ("" = local)
 }
 

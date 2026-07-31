@@ -304,7 +304,11 @@
     if (e.origin !== location.origin) return;
     const m = e.data; if (!m) return;
     if (m.type === "matos:wallpaper" && m.wallpaper) { const wp = document.getElementById("mat-wallpaper"); if (wp) wp.className = "wp-" + m.wallpaper; }
-    if (m.type === "matos:open" && m.url) { open({ key: m.key || m.url, title: m.title || "App", url: m.url, width: m.width || 1024, height: m.height || 680 }); }
+    if (m.type === "matos:open" && m.url) {
+      const opts = { key: m.key || m.url, title: m.title || "App", url: m.url, width: m.width || 1024, height: m.height || 680 };
+      if (m.ephemeralId) opts.onClose = () => { try { fetch("/api/v1/store/close-ephemeral", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.ephemeralId }) }); } catch (_) {} };
+      open(opts);
+    }
     if (m.type === "matos:refresh") { load(); }
   });
 })();

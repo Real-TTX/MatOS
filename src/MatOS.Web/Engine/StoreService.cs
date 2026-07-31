@@ -94,6 +94,16 @@ public class StoreService
                     Default = Str(Get(m!, "default")),
                     Required = string.Equals(Str(Get(m!, "required")), "true", StringComparison.OrdinalIgnoreCase)
                 }).ToList();
+            if ((app.Handlers == null || app.Handlers.Count == 0) && AsList(Get(x, "handlers")) is { } handlers)
+                app.Handlers = handlers.Select(AsMap).Where(m => m != null).Select(m => new AppHandler
+                {
+                    Extensions = AsList(Get(m!, "extensions"))?.Select(Str).Where(s => s.Length > 0).ToList() ?? new(),
+                    MountPath = Str(Get(m!, "mountPath")) is { Length: > 0 } mp ? mp : "/data",
+                    Mechanism = Str(Get(m!, "mechanism")) is { Length: > 0 } me ? me : "env",
+                    EnvKey = Str(Get(m!, "envKey")),
+                    ArgTemplate = Str(Get(m!, "argTemplate")),
+                    ReadOnly = string.Equals(Str(Get(m!, "readOnly")), "true", StringComparison.OrdinalIgnoreCase)
+                }).ToList();
         }
         catch { /* best effort */ }
     }
@@ -101,7 +111,7 @@ public class StoreService
     private static AppDef ToDef(CustomApp c) => new(
         c.Id, c.Name, c.Tagline, c.Description, c.Category, c.Image, c.UiPort, c.Icon,
         c.Volumes.ToArray(), c.Env, c.Actions.Select(a => new AppAction(a.Label, a.Url)).ToArray(),
-        c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source);
+        c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source, c.Handlers.ToArray());
 
     private string UniqueId(string baseId)
     {
