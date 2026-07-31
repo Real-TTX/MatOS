@@ -373,6 +373,9 @@ public class InstallService
                 }
             };
             var id = await _docker.CreateAndStartAsync(p, ct);
+            // The container is "started" but the web server inside isn't listening yet — wait for it
+            // so the window's iframe doesn't load into a connection-refused blank page.
+            await WaitForReadyAsync(name, app.UiPort, TimeSpan.FromSeconds(15), ct);
             _log.LogInformation("Opened {File} in {App} as ephemeral {Name}", relPosix, app.Id, name);
             return new(true, id, port, null, title);
         }
@@ -390,6 +393,28 @@ public class InstallService
             return true;
         }
         catch (Exception ex) { _log.LogWarning(ex, "CloseEphemeral {Id} failed", id); return false; }
+    }
+
+    /// <summary>Poll a just-started container's web port (by container name on the shared network)
+    /// until it accepts connections, so we only hand the browser a URL that will actually load.</summary>
+    private async Task WaitForReadyAsync(string host, int port, TimeSpan timeout, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var tcp = new System.Net.Sockets.TcpClient();
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(1000);
+                await tcp.ConnectAsync(host, port, cts.Token);
+                if (tcp.Connected) return;
+            }
+            catch { /* not ready yet */ }
+            await Task.Delay(250, ct);
+        }
+        _log.LogWarning("Ephemeral {Host}:{Port} not ready within {S}s", host, port, timeout.TotalSeconds);
     }
 
     // ---- helpers ----

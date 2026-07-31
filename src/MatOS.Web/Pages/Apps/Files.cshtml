@@ -284,10 +284,12 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   async function openWith(appId){
     if(!sel || sel.isDir) return;
     const name=sel.name, path=sel.path;
+    document.body.style.cursor="progress";
     try{
       const r=await jpost("/api/v1/store/open-with",{appId,volume:cur.volume,path});
       window.parent.postMessage({type:"matos:open", url:r.url, key:"open:"+r.id, title:r.title||("Open — "+name), width:1120, height:760, ephemeralId:r.id}, location.origin);
     }catch(e){ alert("Open with failed: "+e.message); }
+    finally{ document.body.style.cursor=""; }
   }
 
   // ---- view toggle ----
