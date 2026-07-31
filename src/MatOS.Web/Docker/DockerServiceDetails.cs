@@ -64,7 +64,12 @@ public partial class DockerService
         var labels = r.Config?.Labels != null ? new Dictionary<string, string>(r.Config.Labels) : new Dictionary<string, string>();
         foreach (var kv in labelChanges) { if (kv.Value == null) labels.Remove(kv.Key); else labels[kv.Key] = kv.Value; }
 
+        // Rebuild every mount from the inspected container's Mounts (covers both named
+        // volumes and binds). Deduplicate by target — do NOT also pass HostConfig.Binds,
+        // or the same path appears twice ("Duplicate mount point").
         var mounts = (r.Mounts ?? new List<MountPoint>())
+            .GroupBy(m => m.Destination)
+            .Select(g => g.First())
             .Select(m => new Mount
             {
                 Type = m.Type ?? "bind",
@@ -89,8 +94,8 @@ public partial class DockerService
                 PortBindings = r.HostConfig?.PortBindings,
                 Mounts = mounts,
                 RestartPolicy = r.HostConfig?.RestartPolicy,
-                NetworkMode = r.HostConfig?.NetworkMode,
-                Binds = r.HostConfig?.Binds
+                NetworkMode = r.HostConfig?.NetworkMode
+                // NB: no Binds here — `mounts` already carries them; setting both duplicates the mount.
             }
         };
 
