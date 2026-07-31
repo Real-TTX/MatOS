@@ -51,6 +51,7 @@
   // ---- stacks (a stack = the app) + app definitions ----
   let stackData = [];
   let appDefs = {}; // id -> app definition (icon, name, actions)
+  let pins = new Set(); // stack keys pinned to the desktop (container apps only shown when pinned)
   const stackKey = s => "stack:" + s.name;
   const primaryWeb = s => (s.containers || []).find(c => c.hasWebUi && c.running && c.appUrl);
 
@@ -71,8 +72,10 @@
   }
 
   function stackSettingsUrl(s) {
-    return (s.standalone && s.containers[0]) ? "/apps/container/" + encodeURIComponent(s.containers[0].id)
-                                             : "/apps/stack/" + encodeURIComponent(s.name);
+    const first = (s.containers || [])[0];
+    if (stackApp(s) && first) return "/apps/app/" + encodeURIComponent(first.id); // matOS app -> App settings
+    return (s.standalone && first) ? "/apps/container/" + encodeURIComponent(first.id)
+                                   : "/apps/stack/" + encodeURIComponent(s.name);
   }
   function stackOpenUrl(s) { const w = primaryWeb(s); return w ? w.appUrl : stackSettingsUrl(s); }
   function stackInner(s) {
@@ -167,9 +170,10 @@
 
   function reconcileStacks() {
     if (dragging) return;
-    const wanted = new Map(stackData.map(s => [stackKey(s), s]));
+    const wanted = new Map(stackData.filter(s => pins.has(stackKey(s))).map(s => [stackKey(s), s]));
     for (const [key, el] of iconEls) { if (systemKeys.has(key)) continue; if (!wanted.has(key)) { el.remove(); iconEls.delete(key); } }
     for (const s of stackData) {
+      if (!pins.has(stackKey(s))) continue;
       const key = stackKey(s); let el = iconEls.get(key);
       if (!el) { el = makeIcon(key, stackTitle(s), stackOpenUrl(s), "1024", "680", "", stackInner(s)); el.dataset.stackName = s.name; }
       else {
@@ -183,6 +187,8 @@
     try { await fetch("/api/v1/desktop/reset", { method: "POST" }); } catch (_) {}
     layout = {}; defaultIndex = 0; for (const [key, el] of iconEls) applyPos(el, key);
   }
+  async function pin(key) { pins.add(key); reconcileStacks(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
+  async function unpin(key) { pins.delete(key); reconcileStacks(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
 
   async function load() {
     try {
@@ -208,9 +214,9 @@
   const smEmpty = document.getElementById("sm-empty");
   if (smAppsTitle) smAppsTitle.textContent = "Apps";
 
-  function smItem(a, iconClass, inner) {
+  function smItem(a, iconClass, inner, pinned) {
     return `<button class="sm-item" data-key="${escAttr(a.key)}" data-title="${escAttr(a.title)}" data-url="${escAttr(a.url)}" data-w="${a.w}" data-h="${a.h}">
-      <span class="sm-ico ${iconClass}">${inner}</span><span class="sm-label">${esc(a.title)}</span></button>`;
+      <span class="sm-ico ${iconClass}">${inner}${pinned ? '<span class="sm-pin" title="On desktop">✓</span>' : ''}</span><span class="sm-label">${esc(a.title)}</span></button>`;
   }
   function renderStartMenu(filter) {
     if (!startMenu) return;
@@ -219,7 +225,7 @@
     const sys = systemApps().filter(a => match(a.title));
     smSystem.innerHTML = sys.map(a => smItem(a, "sys", a.iconHtml)).join("");
     const apps = stackData.filter(s => match(stackTitle(s))).map(s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) }));
-    smApps.innerHTML = apps.map(a => smItem(a, "", a.inner)).join("");
+    smApps.innerHTML = apps.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
     smAppsTitle.style.display = apps.length ? "" : "none";
     smEmpty.hidden = (sys.length + apps.length) > 0;
   }
@@ -232,6 +238,14 @@
     startSearch.addEventListener("input", () => renderStartMenu(startSearch.value));
     startSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) { e.preventDefault(); f.click(); } } });
     startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it) { e.preventDefault(); launchEl(it); closeStart(); } });
+    startMenu.addEventListener("contextmenu", (e) => {
+      const it = e.target.closest(".sm-item"); if (!it) return;
+      const key = it.dataset.key; if (!key || !key.startsWith("stack:")) return; // only container apps are pinnable
+      e.preventDefault();
+      showCtx(e.clientX, e.clientY, [pins.has(key)
+        ? { label: "Remove from desktop", action: () => unpin(key) }
+        : { label: "Add to desktop", action: () => pin(key) }]);
+    });
   }
 
   // ---- Right-click context menu ----
@@ -263,12 +277,12 @@
           if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }); items.push({ label: "Restart", action: () => stackAction(s.name, "restart") }); }
           if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
         }
-        items.push({ sep: true }, { label: "Auto-arrange icons", action: autoArrange });
+        items.push({ sep: true }, { label: "Remove from desktop", action: () => unpin(iconEl.dataset.key) }, { label: "Auto-arrange icons", action: autoArrange });
         showCtx(e.clientX, e.clientY, items);
       } else if (iconEl) {
         showCtx(e.clientX, e.clientY, [{ label: "Open", action: () => launchEl(iconEl) }, { sep: true }, { label: "Auto-arrange icons", action: autoArrange }]);
       } else {
-        showCtx(e.clientX, e.clientY, [{ label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }]);
+        showCtx(e.clientX, e.clientY, [{ label: "Add apps…", action: openStart }, { sep: true }, { label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }]);
       }
     });
     document.addEventListener("click", () => hideCtx());
@@ -278,7 +292,7 @@
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); } }
     catch (_) { layout = {}; }
     await loadDefs();
     buildSystem(); await load(); setInterval(load, 15000);
@@ -291,5 +305,6 @@
     const m = e.data; if (!m) return;
     if (m.type === "matos:wallpaper" && m.wallpaper) { const wp = document.getElementById("mat-wallpaper"); if (wp) wp.className = "wp-" + m.wallpaper; }
     if (m.type === "matos:open" && m.url) { open({ key: m.key || m.url, title: m.title || "App", url: m.url, width: m.width || 1024, height: m.height || 680 }); }
+    if (m.type === "matos:refresh") { load(); }
   });
 })();

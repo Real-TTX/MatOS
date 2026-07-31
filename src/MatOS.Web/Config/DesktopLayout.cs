@@ -13,3 +13,10 @@ public class DesktopLayoutStore
 {
     public Dictionary<string, Dictionary<string, IconPos>> Users { get; set; } = new();
 }
+
+/// <summary>Which app icons each user has pinned to the desktop (keyed by user id -> icon keys).
+/// Container/stack apps are only shown on the desktop when pinned.</summary>
+public class DesktopPinsStore
+{
+    public Dictionary<string, List<string>> Users { get; set; } = new();
+}

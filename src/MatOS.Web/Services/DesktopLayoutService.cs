@@ -39,4 +39,28 @@ public class DesktopLayoutService
         lock (_gate) Store.Users.Remove(userId);
         await _config.SaveAsync("desktop-layout", Store);
     }
+
+    // ---- Desktop pins (which apps are shown on the desktop) ----
+    private DesktopPinsStore PinStore => _config.Get<DesktopPinsStore>("desktop-pins");
+
+    public List<string> GetPins(string userId)
+    {
+        lock (_gate) return PinStore.Users.TryGetValue(userId, out var l) ? new List<string>(l) : new List<string>();
+    }
+
+    public async Task AddPin(string userId, string key)
+    {
+        lock (_gate)
+        {
+            if (!PinStore.Users.TryGetValue(userId, out var l)) { l = new List<string>(); PinStore.Users[userId] = l; }
+            if (!l.Contains(key)) l.Add(key);
+        }
+        await _config.SaveAsync("desktop-pins", PinStore);
+    }
+
+    public async Task RemovePin(string userId, string key)
+    {
+        lock (_gate) { if (PinStore.Users.TryGetValue(userId, out var l)) l.Remove(key); }
+        await _config.SaveAsync("desktop-pins", PinStore);
+    }
 }
