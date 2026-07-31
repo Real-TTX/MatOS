@@ -17,10 +17,15 @@
 }
 .mat-window.focused { border-color: var(--border-strong); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65); }
 .mat-window.maximized {
-  left: 6px !important; top: 6px !important;
-  width: calc(100vw - 12px) !important; height: calc(100vh - 64px) !important;
-  border-radius: 12px;
+  left: 0 !important; top: 0 !important;
+  width: 100vw !important; height: calc(100vh - 52px) !important;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  background: #0e1220;  /* opaque — no wallpaper bleeding through the chrome */
+  backdrop-filter: none; -webkit-backdrop-filter: none;
 }
+.mat-window.maximized .mat-resize { display: none; }  /* no resizing when maximized */
 .mat-window.minimized { display: none; }
 
 .mat-titlebar {
@@ -88,5 +93,5 @@
 .mat-resize-sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
 
 @media (max-width: 640px) {
-  .mat-window.maximized { height: calc(100vh - 64px) !important; }
+  .mat-window.maximized { height: calc(100vh - 52px) !important; }
 }
