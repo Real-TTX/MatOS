@@ -3,10 +3,10 @@ using MatOS.Web.Engine;
 
 namespace MatOS.Web.Api;
 
-/// <summary>App Store: catalog (built-in + custom apps), install/uninstall, and custom-app authoring.</summary>
+/// <summary>App Store: catalog (built-in + custom, image or compose), install/uninstall, authoring.</summary>
 public static class StoreApi
 {
-    public record InstallBody(string AppId);
+    public record InstallBody(string AppId, Dictionary<string, string>? Variables);
     public record UninstallBody(string Id, bool RemoveVolume);
     public record DeleteAppBody(string Id);
 
@@ -19,30 +19,43 @@ public static class StoreApi
             apps = store.AllApps().Select(a => new
             {
                 a.Id, a.Name, a.Tagline, a.Description, a.Category, a.Icon, a.Image, a.UiPort, a.BuiltIn,
+                a.Kind, a.Compose, a.UiService,
                 volumes = a.Volumes,
                 env = a.Env,
-                actions = a.Actions.Select(x => new { x.Label, x.Url })
+                actions = a.Actions.Select(x => new { x.Label, x.Url }),
+                variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required })
             })
         }));
 
         g.MapGet("/installs", async (DockerService docker, HttpRequest req, CancellationToken ct) =>
         {
             var mine = (await docker.ListContainersAsync(true, ct)).Where(c => c.MatosManaged).ToList();
+            var groups = mine.GroupBy(c => (App: c.Labels.GetValueOrDefault(MatosLabels.App, ""), Inst: c.Labels.GetValueOrDefault(MatosLabels.Instance, "")));
             return Results.Ok(new
             {
-                installs = mine.Select(c => new
+                installs = groups.Select(grp =>
                 {
-                    c.Id, c.ShortId, c.Name, c.Image, c.State, running = c.IsRunning,
-                    app = c.Labels.TryGetValue(MatosLabels.App, out var a) ? a : "",
-                    title = c.Labels.TryGetValue(MatosLabels.Title, out var t) ? t : c.Name,
-                    appUrl = ResolveUrl(c, req)
+                    var first = grp.OrderBy(c => c.Name).First();
+                    var proj = grp.Select(c => c.Labels.GetValueOrDefault(ComposeLabels.Project, "")).FirstOrDefault(x => !string.IsNullOrEmpty(x)) ?? "";
+                    var webc = grp.FirstOrDefault(c => ResolveUrl(c, req) != null);
+                    return new
+                    {
+                        id = first.Id,
+                        name = first.Name,
+                        app = grp.Key.App,
+                        title = first.Labels.GetValueOrDefault(MatosLabels.Title, first.Name),
+                        running = grp.Any(c => c.IsRunning),
+                        count = grp.Count(),
+                        compose = !string.IsNullOrEmpty(proj),
+                        appUrl = webc != null ? ResolveUrl(webc, req) : null
+                    };
                 })
             });
         });
 
         g.MapPost("/install", async (InstallBody b, InstallService svc, CancellationToken ct) =>
         {
-            var r = await svc.InstallAsync(b.AppId, ct);
+            var r = await svc.InstallAsync(b.AppId, b.Variables, ct);
             return r.Ok ? Results.Ok(new { r.Name, r.HostPort }) : Results.Problem(r.Error);
         }).RequireAuthorization("Admin");
 
@@ -52,12 +65,21 @@ public static class StoreApi
             return r.Ok ? Results.Ok(new { ok = true }) : Results.Problem(r.Error);
         }).RequireAuthorization("Admin");
 
-        // ---- Custom app authoring ----
         g.MapPost("/apps", async (CustomApp app, StoreService store) =>
         {
-            if (string.IsNullOrWhiteSpace(app.Name)) return Results.BadRequest(new { error = "A display name is required." });
-            if (string.IsNullOrWhiteSpace(app.Image)) return Results.BadRequest(new { error = "A Docker image is required." });
+            if (string.IsNullOrWhiteSpace(app.Name) && !string.Equals(app.Kind, "compose", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error = "A display name is required." });
+            if (string.Equals(app.Kind, "compose", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(app.Compose)) return Results.BadRequest(new { error = "A compose file is required." });
+                if (store.ParseServices(app.Compose).Count == 0) return Results.BadRequest(new { error = "The compose file has no services (or is invalid YAML)." });
+            }
+            else if (string.IsNullOrWhiteSpace(app.Image))
+                return Results.BadRequest(new { error = "A Docker image is required." });
+
             var id = await store.Upsert(app);
+            if (string.IsNullOrWhiteSpace(store.Find(id)?.Name))
+                return Results.BadRequest(new { error = "A display name is required (set it in the form or x-matos: name)." });
             return Results.Ok(new { id });
         }).RequireAuthorization("Admin");
 

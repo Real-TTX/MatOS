@@ -2,7 +2,7 @@
 @model MatOS.Web.Pages.Apps.StoreModel
 @{
     ViewData["Title"] = "App Store";
-    ViewData["Description"] = "Install apps as containers. Add your own with a custom icon, name and right-click actions.";
+    ViewData["Description"] = "Install apps as containers or Compose stacks. Add your own with an icon, actions and a setup wizard.";
     Layout = "_WindowLayout";
 }
 
@@ -18,20 +18,45 @@
     <div id="store-installed" style="display:none"></div>
 
     <div id="store-add" style="display:none">
-        <div class="card" style="max-width:640px">
-            <h2 style="margin:0 0 0.9rem;font-size:1rem" id="add-title">Add a custom app</h2>
+        <div class="card" style="max-width:720px">
+            <h2 style="margin:0 0 0.9rem;font-size:1rem" id="add-title">Add an app</h2>
             <input type="hidden" id="a-id" />
+            <label class="fl"><span>Type</span>
+                <select id="a-kind" class="ui-select"><option value="image">Single image</option><option value="compose">Compose stack (YAML)</option></select>
+            </label>
             <div class="grid2">
-                <label class="fl"><span>Display name *</span><input id="a-name" class="ui-input" placeholder="My App" /></label>
-                <label class="fl"><span>Docker image *</span><input id="a-image" class="ui-input mono" placeholder="nginx:alpine" /></label>
-                <label class="fl"><span>UI port</span><input id="a-port" class="ui-input" type="number" value="80" /></label>
+                <label class="fl"><span>Display name @Html.Raw("<span class='fx-muted'>(or x-matos: name)</span>")</span><input id="a-name" class="ui-input" placeholder="My App" /></label>
                 <label class="fl"><span>Category</span><input id="a-cat" class="ui-input" placeholder="Custom" /></label>
             </div>
+
+            <div id="a-image-fields">
+                <div class="grid2">
+                    <label class="fl"><span>Docker image *</span><input id="a-image" class="ui-input mono" placeholder="nginx:alpine" /></label>
+                    <label class="fl"><span>UI port</span><input id="a-port" class="ui-input" type="number" value="80" /></label>
+                </div>
+                <div class="grid2">
+                    <label class="fl"><span>Volumes <span class="fx-muted">(one path/line)</span></span><textarea id="a-vols" class="ui-input mono" rows="2" placeholder="/data"></textarea></label>
+                    <label class="fl"><span>Environment <span class="fx-muted">(KEY=value/line)</span></span><textarea id="a-env" class="ui-input mono" rows="2" placeholder="TZ=Europe/Berlin"></textarea></label>
+                </div>
+            </div>
+
+            <div id="a-compose-fields" style="display:none">
+                <label class="fl"><span>docker-compose.yml *</span><textarea id="a-compose" class="ui-input mono" rows="10" placeholder="x-matos:&#10;  name: MyApp&#10;  ui: { service: web, port: 8080 }&#10;services:&#10;  web:&#10;    image: nginx:alpine"></textarea></label>
+                <div class="grid2">
+                    <label class="fl"><span>UI service <span class="fx-muted">(blank = first)</span></span><input id="a-uisvc" class="ui-input mono" placeholder="web" /></label>
+                    <label class="fl"><span>UI port</span><input id="a-cport" class="ui-input" type="number" value="80" /></label>
+                </div>
+                <div class="fl">
+                    <span>Setup variables <span class="fx-muted">(asked on install → env for ${KEY}; or declare in x-matos: variables)</span></span>
+                    <div id="a-vars"></div>
+                    <button type="button" class="ui-btn" id="a-add-var" style="align-self:flex-start;margin-top:0.4rem">+ Add variable</button>
+                </div>
+            </div>
+
             <label class="fl"><span>Tagline</span><input id="a-tag" class="ui-input" placeholder="Short one-liner" /></label>
             <label class="fl"><span>Description</span><textarea id="a-desc" class="ui-input" rows="2"></textarea></label>
-
             <div class="fl">
-                <span>Icon <span class="fx-muted">(emoji, image URL, or upload)</span></span>
+                <span>Icon <span class="fx-muted">(emoji, image URL, or upload → base64)</span></span>
                 <div style="display:flex;align-items:center;gap:0.6rem">
                     <span class="app-ico" id="a-icon-prev" style="width:44px;height:44px">📦</span>
                     <input id="a-icon" class="ui-input" placeholder="📦  or  https://…/icon.png" style="flex:1" />
@@ -39,24 +64,24 @@
                     <input type="file" id="a-icon-file" accept="image/*" hidden />
                 </div>
             </div>
-
-            <div class="grid2">
-                <label class="fl"><span>Volumes <span class="fx-muted">(one container path per line)</span></span><textarea id="a-vols" class="ui-input mono" rows="2" placeholder="/data"></textarea></label>
-                <label class="fl"><span>Environment <span class="fx-muted">(KEY=value per line)</span></span><textarea id="a-env" class="ui-input mono" rows="2" placeholder="TZ=Europe/Berlin"></textarea></label>
-            </div>
-
             <div class="fl">
-                <span>Right-click actions <span class="fx-muted">(label + URL — absolute, or path relative to the app)</span></span>
+                <span>Right-click actions <span class="fx-muted">(label + URL — e.g. Administration → /admin)</span></span>
                 <div id="a-actions"></div>
                 <button type="button" class="ui-btn" id="a-add-action" style="align-self:flex-start;margin-top:0.4rem">+ Add action</button>
             </div>
-
             <div style="display:flex;gap:0.6rem;margin-top:1rem">
                 <button class="ui-btn primary" id="a-save">Save app</button>
                 <button class="ui-btn" id="a-cancel">Reset</button>
             </div>
         </div>
     </div>
+
+    <div class="dlg" id="wiz" hidden><div class="dlg-card">
+        <h3 id="wiz-title" style="margin:0 0 0.3rem">Set up</h3>
+        <p class="fx-muted" id="wiz-sub" style="margin:0 0 1rem;font-size:0.85rem"></p>
+        <div id="wiz-fields"></div>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="wiz-go">Install</button><button class="ui-btn" id="wiz-cancel">Cancel</button></div>
+    </div></div>
 </div>
 
 @section Head {
@@ -74,14 +99,17 @@
 .app-card .foot { display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; }
 .app-card .mono { font-size:0.72rem; color:var(--mat-text-muted); }
 .chip { font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:999px; background:rgba(139,92,246,0.22); color:#c7b3ff; }
+.chip.compose { background:rgba(34,184,255,0.2); color:#9fe8ff; }
 .inst { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.9rem; border:1px solid var(--mat-border); border-radius:12px; margin-bottom:0.6rem; background:var(--mat-surface); }
 .inst .g { flex:1 1 auto; min-width:0; } .inst .nm { font-weight:700; } .inst .sub { color:var(--mat-text-muted); font-size:0.78rem; }
 .fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 0.8rem; }
-.act-row { display:flex; gap:0.4rem; margin-bottom:0.4rem; } .act-row input { flex:1; } .act-row .lbl { max-width:150px; }
-.spin { width:14px; height:14px; border-radius:50%; border:2px solid rgba(0,0,0,.15); border-top-color:var(--mat-accent); display:inline-block; animation:sp .7s linear infinite; }
+.act-row, .var-row { display:flex; gap:0.4rem; margin-bottom:0.4rem; align-items:center; } .act-row input, .var-row input { flex:1; } .act-row .lbl, .var-row .k { max-width:140px; } .var-row .t { max-width:110px; flex:0 0 auto; } .var-row .req { display:flex; align-items:center; gap:0.25rem; font-size:0.75rem; color:var(--mat-text-muted); white-space:nowrap; }
+.dlg { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:20; } .dlg[hidden]{ display:none; }
+.dlg-card { width:min(440px,92%); background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1.2rem; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+.spin { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.2); border-top-color:var(--mat-accent); display:inline-block; animation:sp .7s linear infinite; }
 @@keyframes sp { to { transform:rotate(360deg); } }
-@@media (max-width:560px){ .grid2 { grid-template-columns:1fr; } }
+@@media (max-width:600px){ .grid2 { grid-template-columns:1fr; } }
 </style>
 }
 
@@ -92,92 +120,109 @@
   const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
   const isImg=s=>/^(https?:|data:)/i.test(s||"");
   const iconHtml=ic=> isImg(ic) ? `<img src="${escA(ic)}" alt="">` : `<span>${esc(ic||"📦")}</span>`;
-  const catEl=document.getElementById("store-catalog"), instEl=document.getElementById("store-installed"), addEl=document.getElementById("store-add"), msg=document.getElementById("store-msg");
+  const $=id=>document.getElementById(id);
+  const catEl=$("store-catalog"), instEl=$("store-installed"), addEl=$("store-add"), msg=$("store-msg");
   let catalog=[];
-  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",4500); }
+  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",5000); }
 
   document.querySelectorAll("#store-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll("#store-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
-    const tab=t.dataset.tab;
-    catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none";
-    if(tab==="installed") loadInstalls(); if(tab==="add" && !document.getElementById("a-id").value) resetForm();
+    const tab=t.dataset.tab; catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none";
+    if(tab==="installed") loadInstalls(); if(tab==="add" && !$("a-id").value) resetForm();
   }));
 
   async function loadCatalog(){
     try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
     catEl.innerHTML=catalog.map(a=>`<div class="app-card">
-      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${a.builtIn?'':'<span class="chip">custom</span>'}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
+      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${a.builtIn?'':'<span class="chip">custom</span>'}${a.kind==='compose'?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
       <p>${esc(a.description)}</p>
       <div class="foot"><button class="ui-btn primary" data-install="${escA(a.id)}">Install</button>
         ${a.builtIn?'':`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`}
-        <span class="spacer" style="flex:1"></span><span class="mono">${esc(a.image)}</span></div>
+        <span class="spacer" style="flex:1"></span><span class="mono">${esc(a.kind==='compose'?(a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'):a.image)}</span></div>
     </div>`).join("");
-    catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>install(b)));
+    catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>startInstall(b)));
     catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
   }
 
-  async function install(btn){
-    const id=btn.dataset.install, orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Installing…`;
-    try{ const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id})});
+  function startInstall(btn){ const a=catalog.find(x=>x.id===btn.dataset.install); if(a && a.variables && a.variables.length) openWizard(a,btn); else doInstall(a.id,{},btn); }
+  async function doInstall(id,vars,btn){
+    const orig=btn?btn.innerHTML:""; if(btn){ btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Installing…`; }
+    try{ const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:vars})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.title||r.status); }
-      const j=await r.json(); flash(`Installed ${id} → ${j.name} (port ${j.hostPort}).`,true);
-    }catch(e){ flash("Install failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; }
+      const j=await r.json(); flash(`Installed ${id} → ${j.name}${j.hostPort?` (port ${j.hostPort})`:''}.`,true);
+    }catch(e){ flash("Install failed: "+e.message,false); } finally{ if(btn){ btn.disabled=false; btn.innerHTML=orig; } }
   }
+
+  // ---- setup wizard ----
+  const wiz=$("wiz"); let wizApp=null, wizBtn=null;
+  function openWizard(a,btn){ wizApp=a; wizBtn=btn; $("wiz-title").textContent="Set up "+a.name; $("wiz-sub").textContent="These values are passed to the app on install.";
+    $("wiz-fields").innerHTML=a.variables.map(v=>`<label class="fl"><span>${esc(v.label||v.key)}${v.required?' *':''}</span>
+      <input class="ui-input" data-key="${escA(v.key)}" type="${v.type==='password'?'password':(v.type==='number'?'number':'text')}" value="${escA(v.default||'')}" placeholder="${escA(v.key)}"></label>`).join(""); wiz.hidden=false; }
+  $("wiz-cancel").addEventListener("click",()=>{ wiz.hidden=true; });
+  $("wiz-go").addEventListener("click",()=>{ const vars={}; let ok=true;
+    $("wiz-fields").querySelectorAll("[data-key]").forEach(inp=>{ const v=wizApp.variables.find(x=>x.key===inp.dataset.key); vars[inp.dataset.key]=inp.value; if(v&&v.required&&!inp.value.trim()){ ok=false; inp.style.borderColor="#f4506b"; } });
+    if(!ok){ return; } wiz.hidden=false; wiz.hidden=true; doInstall(wizApp.id,vars,wizBtn); });
 
   async function loadInstalls(){
     let d; try{ d=await (await fetch("/api/v1/store/installs")).json(); }catch(_){ instEl.innerHTML="Failed to load."; return; }
-    document.getElementById("store-count").textContent=d.installs.length?`(${d.installs.length})`:"";
+    $("store-count").textContent=d.installs.length?`(${d.installs.length})`:"";
     if(!d.installs.length){ instEl.innerHTML=`<div class="fx-muted" style="padding:1rem">No apps installed yet.</div>`; return; }
     instEl.innerHTML=d.installs.map(i=>{ const def=catalog.find(a=>a.id===i.app);
       return `<div class="inst"><div class="app-ico" style="width:36px;height:36px;font-size:1.1rem">${iconHtml(def?def.icon:"📦")}</div>
-      <div class="g"><div class="nm">${esc(i.title)} <span class="fx-muted" style="font-weight:400">· ${esc(i.name)}</span></div>
-        <div class="sub">${i.running?'<span class="pill on">running</span>':'<span class="pill off">'+esc(i.state)+'</span>'} · ${esc(i.image)}</div></div>
+      <div class="g"><div class="nm">${esc(i.title)} ${i.compose?'<span class="chip compose">stack · '+i.count+'</span>':''}</div>
+        <div class="sub">${i.running?'<span class="pill on">running</span>':'<span class="pill off">stopped</span>'} · ${esc(i.name)}</div></div>
       ${i.appUrl?`<button class="ui-btn" data-open="${escA(i.appUrl)}">Open</button>`:""}
-      <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.name)}">Uninstall</button></div>`; }).join("");
+      <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.title)}">Uninstall</button></div>`; }).join("");
     instEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
     instEl.querySelectorAll("[data-uninstall]").forEach(b=>b.addEventListener("click",()=>uninstall(b.dataset.uninstall,b.dataset.name)));
   }
-  async function uninstall(id,name){
-    if(!confirm(`Uninstall ${name}? This removes the container.`))return;
-    const rmVol=confirm("Also delete its data volume? (OK = delete data, Cancel = keep data)");
+  async function uninstall(id,name){ if(!confirm(`Uninstall ${name}?`))return; const rmVol=confirm("Also delete its data volumes? (OK = delete, Cancel = keep)");
     try{ const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||r.status); } flash("Uninstalled "+name+".",true); loadInstalls();
-    }catch(e){ flash("Uninstall failed: "+e.message,false); }
-  }
+    }catch(e){ flash("Uninstall failed: "+e.message,false); } }
 
-  // ---- custom app form ----
-  const $=id=>document.getElementById(id);
+  // ---- add/edit form ----
+  $("a-kind").addEventListener("change",()=>{ const c=$("a-kind").value==="compose"; $("a-compose-fields").style.display=c?"":"none"; $("a-image-fields").style.display=c?"none":""; });
   const iconPrev=$("a-icon-prev"), iconInput=$("a-icon");
   iconInput.addEventListener("input",()=>iconPrev.innerHTML=iconHtml(iconInput.value));
   $("a-icon-upload").addEventListener("click",()=>$("a-icon-file").click());
-  $("a-icon-file").addEventListener("change",()=>{ const f=$("a-icon-file").files[0]; if(!f)return;
-    if(f.size>256*1024){ flash("Icon too large (max 256 KB).",false); return; }
+  $("a-icon-file").addEventListener("change",()=>{ const f=$("a-icon-file").files[0]; if(!f)return; if(f.size>256*1024){ flash("Icon too large (max 256 KB).",false); return; }
     const r=new FileReader(); r.onload=()=>{ iconInput.value=r.result; iconPrev.innerHTML=iconHtml(r.result); }; r.readAsDataURL(f); });
 
-  function actionRow(label,url){ const d=document.createElement("div"); d.className="act-row";
-    d.innerHTML=`<input class="ui-input lbl" placeholder="Label" value="${escA(label||"")}"><input class="ui-input" placeholder="/path or https://…" value="${escA(url||"")}"><button type="button" class="ui-btn danger">✕</button>`;
+  function actionRow(l,u){ const d=document.createElement("div"); d.className="act-row";
+    d.innerHTML=`<input class="ui-input lbl" placeholder="Label" value="${escA(l||"")}"><input class="ui-input" placeholder="/path or https://…" value="${escA(u||"")}"><button type="button" class="ui-btn danger">✕</button>`;
     d.querySelector("button").addEventListener("click",()=>d.remove()); return d; }
   $("a-add-action").addEventListener("click",()=>$("a-actions").appendChild(actionRow("","")));
+  function varRow(v){ v=v||{}; const d=document.createElement("div"); d.className="var-row";
+    d.innerHTML=`<input class="ui-input k" placeholder="KEY" value="${escA(v.key||"")}"><input class="ui-input" placeholder="Label" value="${escA(v.label||"")}">
+      <select class="ui-select t"><option value="text">text</option><option value="password">password</option><option value="number">number</option></select>
+      <input class="ui-input" placeholder="default" value="${escA(v.default||"")}"><label class="req"><input type="checkbox" ${v.required?"checked":""}>req</label><button type="button" class="ui-btn danger">✕</button>`;
+    d.querySelector("select").value=v.type||"text"; d.querySelector("button").addEventListener("click",()=>d.remove()); return d; }
+  $("a-add-var").addEventListener("click",()=>$("a-vars").appendChild(varRow()));
 
-  function resetForm(){ $("add-title").textContent="Add a custom app"; ["a-id","a-name","a-image","a-tag","a-desc","a-cat","a-vols","a-env"].forEach(i=>$(i).value="");
-    $("a-port").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; }
-  function editApp(id){ const a=catalog.find(x=>x.id===id); if(!a)return;
-    document.querySelector('#store-tabs .tab[data-tab="add"]').click();
-    $("add-title").textContent="Edit "+a.name; $("a-id").value=a.id; $("a-name").value=a.name; $("a-image").value=a.image; $("a-port").value=a.uiPort;
-    $("a-cat").value=a.category; $("a-tag").value=a.tagline; $("a-desc").value=a.description; iconInput.value=a.icon; iconPrev.innerHTML=iconHtml(a.icon);
-    $("a-vols").value=(a.volumes||[]).join("\n"); $("a-env").value=Object.entries(a.env||{}).map(([k,v])=>k+"="+v).join("\n");
-    $("a-actions").innerHTML=""; (a.actions||[]).forEach(ac=>$("a-actions").appendChild(actionRow(ac.label,ac.url))); }
+  function resetForm(){ $("add-title").textContent="Add an app"; ["a-id","a-name","a-image","a-tag","a-desc","a-cat","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value="");
+    $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-vars").innerHTML=""; $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); }
+  function editApp(id){ const a=catalog.find(x=>x.id===id); if(!a)return; document.querySelector('#store-tabs .tab[data-tab="add"]').click();
+    $("add-title").textContent="Edit "+a.name; $("a-id").value=a.id; $("a-name").value=a.name; $("a-cat").value=a.category; $("a-tag").value=a.tagline; $("a-desc").value=a.description; iconInput.value=a.icon; iconPrev.innerHTML=iconHtml(a.icon);
+    $("a-kind").value=a.kind||"image"; $("a-kind").dispatchEvent(new Event("change"));
+    $("a-image").value=a.image||""; $("a-port").value=a.uiPort||80; $("a-vols").value=(a.volumes||[]).join("\n"); $("a-env").value=Object.entries(a.env||{}).map(([k,v])=>k+"="+v).join("\n");
+    $("a-compose").value=a.compose||""; $("a-uisvc").value=a.uiService||""; $("a-cport").value=a.uiPort||80;
+    $("a-actions").innerHTML=""; (a.actions||[]).forEach(ac=>$("a-actions").appendChild(actionRow(ac.label,ac.url)));
+    $("a-vars").innerHTML=""; (a.variables||[]).forEach(v=>$("a-vars").appendChild(varRow(v))); }
   $("a-cancel").addEventListener("click",resetForm);
 
   $("a-save").addEventListener("click",async()=>{
-    const vols=$("a-vols").value.split("\n").map(s=>s.trim()).filter(Boolean);
-    const env={}; $("a-env").value.split("\n").map(s=>s.trim()).filter(Boolean).forEach(l=>{ const i=l.indexOf("="); if(i>0) env[l.slice(0,i)]=l.slice(i+1); });
+    const kind=$("a-kind").value;
     const actions=[...$("a-actions").querySelectorAll(".act-row")].map(r=>({label:r.children[0].value.trim(),url:r.children[1].value.trim()})).filter(a=>a.label&&a.url);
-    const app={ id:$("a-id").value||"", name:$("a-name").value.trim(), image:$("a-image").value.trim(), uiPort:parseInt($("a-port").value||"80",10),
-      category:$("a-cat").value.trim()||"Custom", tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(), icon:iconInput.value.trim()||"📦",
-      volumes:vols, env, actions };
-    if(!app.name||!app.image){ flash("Display name and Docker image are required.",false); return; }
+    const variables=[...$("a-vars").querySelectorAll(".var-row")].map(r=>({key:r.children[0].value.trim(),label:r.children[1].value.trim(),type:r.children[2].value,default:r.children[3].value,required:r.children[4].querySelector("input").checked})).filter(v=>v.key);
+    const env={}; $("a-env").value.split("\n").map(s=>s.trim()).filter(Boolean).forEach(l=>{ const i=l.indexOf("="); if(i>0) env[l.slice(0,i)]=l.slice(i+1); });
+    const app={ id:$("a-id").value||"", kind, name:$("a-name").value.trim(), category:$("a-cat").value.trim()||"Custom", tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(),
+      icon:iconInput.value.trim()||"📦", actions,
+      image:$("a-image").value.trim(), uiPort:parseInt((kind==="compose"?$("a-cport"):$("a-port")).value||"80",10), volumes:$("a-vols").value.split("\n").map(s=>s.trim()).filter(Boolean), env,
+      compose:$("a-compose").value, uiService:$("a-uisvc").value.trim(), variables };
+    if(kind!=="compose" && (!app.name||!app.image)){ flash("Display name and Docker image are required.",false); return; }
+    if(kind==="compose" && !app.compose.trim()){ flash("A compose file is required.",false); return; }
     try{ const r=await fetch("/api/v1/store/apps",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(app)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
       flash("Saved.",true); resetForm(); await loadCatalog(); document.querySelector('#store-tabs .tab[data-tab="catalog"]').click();
