@@ -169,11 +169,24 @@
       if (moved) {
         el.classList.remove("dragging");
         document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
-        // Detect drop target — icon-on-icon (or icon-on-folder) creates/adds to a folder.
+        // Detect drop target — decide by which side is a folder.
         const drop = dropTargetAt(e.clientX, e.clientY, el);
         if (drop) {
-          if (drop.dataset.folderId) { moveKeyToFolder(key, drop.dataset.folderId); }
-          else { mergeIntoFolder(key, drop.dataset.key); }
+          const srcFolderId = el.dataset.folderId, dstFolderId = drop.dataset.folderId;
+          const srcKey = key, dstKey = drop.dataset.key;
+          if (srcFolderId && dstFolderId) {
+            // Folder onto folder: move all children into the target, delete the source.
+            mergeFolders(srcFolderId, dstFolderId);
+          } else if (srcFolderId && !dstFolderId) {
+            // Folder dragged onto an app: put the app into the folder (interpret as "add to folder").
+            moveKeyToFolder(dstKey, srcFolderId);
+          } else if (!srcFolderId && dstFolderId) {
+            // App dragged onto a folder: add the app to the folder.
+            moveKeyToFolder(srcKey, dstFolderId);
+          } else {
+            // App onto app: create a new folder containing both.
+            mergeIntoFolder(srcKey, dstKey);
+          }
           setTimeout(() => { dragging = false; }, 60);
           return;
         }
@@ -511,9 +524,10 @@
     const a = t.closest(".mat-app"); if (!a || a === sourceEl) return null;
     return a;
   }
-  // Merge two app icons into a new folder (iOS-style).
+  // Merge two app icons into a new folder (iOS-style). Both args must be plain app keys.
   async function mergeIntoFolder(dragKey, targetKey){
     if (!dragKey || !targetKey || dragKey === targetKey) return;
+    if (dragKey.startsWith("folder:") || targetKey.startsWith("folder:")) return; // safety net
     const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: labelForKey(targetKey) }) })).json();
     folders.push(r.folder); const fid = r.folder.id;
     // Add both keys — target first (so it appears first in the preview).
@@ -521,6 +535,20 @@
       await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key: k }) });
       const f = folders.find(x => x.id === fid); if (f && !f.keys.includes(k)) f.keys.push(k);
     }
+    reconcileDesktop();
+  }
+
+  // Fold one folder into another: move all children, delete the source folder.
+  async function mergeFolders(srcId, dstId){
+    if (!srcId || !dstId || srcId === dstId) return;
+    const src = folders.find(f => f.id === srcId); const dst = folders.find(f => f.id === dstId);
+    if (!src || !dst) return;
+    for (const k of [...src.keys]) {
+      await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: dstId, key: k }) });
+      if (!dst.keys.includes(k)) dst.keys.push(k);
+    }
+    await fetch("/api/v1/desktop/folders/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: srcId }) });
+    folders = folders.filter(f => f.id !== srcId);
     reconcileDesktop();
   }
 

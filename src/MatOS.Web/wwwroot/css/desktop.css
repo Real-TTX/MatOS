@@ -249,6 +249,9 @@ html, body { overflow: hidden; height: 100%; }
   outline-offset: 3px;
   transform: scale(1.06);
   transition: transform 0.1s ease;
+  box-shadow: 0 0 0 4px rgba(139,92,246,0.35), 0 8px 22px rgba(0,0,0,0.35);
 }
+/* Folder drop-target: also pop the preview mini-tiles to make it obvious */
+.mat-app.drop-target .mat-folder-preview { background: rgba(139,92,246,0.25); border-radius: 12px; }
 /* Ghost element while dragging from the Start menu */
 .sm-ghost { background: rgba(17,21,34,0.9); border: 1px solid var(--border); border-radius: 12px; padding: 0.35rem 0.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
