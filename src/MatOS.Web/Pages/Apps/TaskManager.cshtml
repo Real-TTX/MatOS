@@ -53,14 +53,27 @@ table.tmt tbody tr { border-bottom:1px solid var(--mat-border); }
 table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
 .bar { position:relative; height:6px; border-radius:999px; background:rgba(255,255,255,0.12); overflow:hidden; min-width:60px; }
 .bar > span { position:absolute; inset:0 auto 0 0; background:var(--mat-accent); }
-.perf-wrap { display:grid; grid-template-columns:1fr; gap:1rem; padding:1rem; }
-@@media (min-width:720px){ .perf-wrap { grid-template-columns:1fr 1fr; } }
-.perf-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; padding:0.9rem 1rem; }
-.perf-head { display:flex; align-items:baseline; justify-content:space-between; }
-.perf-head span:first-child { font-weight:700; }
-.perf-val { font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; }
-.perf-sub { color:var(--mat-text-muted); font-size:0.76rem; margin-bottom:0.5rem; }
-.perf-chart .pchart { width:100%; height:140px; display:block; }
+/* Windows-style Performance tab: left sidebar of resources, right big graph + details */
+.perf { display:grid; grid-template-columns:240px 1fr; min-height:420px; }
+.perf-side { border-right:1px solid var(--mat-border); overflow-y:auto; padding:0.4rem 0; background:rgba(255,255,255,0.02); }
+.perf-item { display:grid; grid-template-columns:1fr auto; grid-template-rows:auto auto; column-gap:0.5rem; padding:0.55rem 0.9rem; cursor:pointer; border-left:3px solid transparent; }
+.perf-item:hover { background:rgba(255,255,255,0.05); }
+.perf-item.selected { background:rgba(139,92,246,0.14); border-left-color:var(--mat-accent); }
+.perf-item .lbl { font-size:0.82rem; font-weight:700; }
+.perf-item .val { font-size:0.82rem; color:var(--mat-text-muted); font-variant-numeric:tabular-nums; text-align:right; }
+.perf-item .spark { grid-column:1/-1; height:20px; margin-top:0.25rem; }
+.perf-item.head .lbl { color:var(--mat-text-muted); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; }
+.perf-item.head { cursor:default; padding-top:0.9rem; padding-bottom:0.2rem; }
+.perf-item.head:hover { background:transparent; }
+.perf-main { padding:1rem 1.2rem; display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+.perf-h1 { font-size:1.05rem; font-weight:700; }
+.perf-h2 { color:var(--mat-text-muted); font-size:0.78rem; margin-bottom:0.4rem; }
+.perf-big { position:relative; height:220px; background:rgba(255,255,255,0.03); border:1px solid var(--mat-border); border-radius:8px; overflow:hidden; }
+.perf-big .pchart { width:100%; height:100%; display:block; }
+.perf-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.6rem; margin-top:0.6rem; }
+.perf-stat { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:10px; padding:0.6rem 0.8rem; }
+.perf-stat .k { font-size:0.7rem; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.05em; }
+.perf-stat .v { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; }
 .tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
 .tm-acts .ui-btn { padding:0.28rem 0.5rem; font-size:0.78rem; }
 </style>
@@ -77,8 +90,12 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   let tab="containers", filter="", sort={key:"name",dir:1};
   let data={containers:[],stacks:[],images:[],volumes:[]};
   const stats=new Map(); const statStreams=new Map();
-  const cpuHist=[], memHist=[]; const HISTORY=60;
+  // Per-resource history. "cpu" and "mem" are aggregates; "c:<id>" per container.
+  const HISTORY=60; const hist=new Map(); hist.set("cpu",[]); hist.set("mem",[]);
+  let perfSel="cpu";  // which resource is selected in the perf sidebar
   const focusId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
+
+  function pushHist(key, v){ let h=hist.get(key); if(!h){ h=[]; hist.set(key,h);} h.push(v); if(h.length>HISTORY) h.shift(); }
 
   document.querySelectorAll("#tm-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll("#tm-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
@@ -230,44 +247,91 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   // ---- live stats: one stream per running container, kept in sync with the data ----
   function syncStats(){
     const running=new Set(data.containers.filter(c=>c.running).slice(0,60).map(c=>c.id));
-    for(const [id,src] of statStreams){ if(!running.has(id)){ try{src.close();}catch(_){} statStreams.delete(id); stats.delete(id); } }
+    for(const [id,src] of statStreams){ if(!running.has(id)){ try{src.close();}catch(_){} statStreams.delete(id); stats.delete(id); hist.delete("c:"+id); } }
     for(const id of running){ if(statStreams.has(id))continue;
       const src=new EventSource(`/api/v1/docker/containers/${id}/stats/stream`);
-      src.addEventListener("stat",e=>{ try{ const s=JSON.parse(e.data); stats.set(id,{cpu:s.cpuPercent,mem:s.memoryBytes});
+      src.addEventListener("stat",e=>{ try{ const s=JSON.parse(e.data);
+        const cpu=+s.cpuPercent||0, mem=+s.memoryBytes||0, lim=+s.memoryLimitBytes||0;
+        stats.set(id,{cpu,mem,lim});
+        pushHist("c:"+id, cpu);
         const cc=document.querySelector(`#tm-pane [data-cpu="${id}"]`); const mc=document.querySelector(`#tm-pane [data-mem="${id}"]`);
-        if(cc)cc.textContent=s.cpuPercent.toFixed(1)+"%"; if(mc)mc.textContent=fmtB(s.memoryBytes); }catch(_){}} );
+        if(cc)cc.textContent=cpu.toFixed(1)+"%"; if(mc)mc.textContent=fmtB(mem);
+      }catch(_){}} );
       src.onerror=()=>{}; statStreams.set(id,src);
     }
   }
 
-  // ---- Performance tab (live CPU / memory graphs) ----
+  // ---- Performance tab: Windows-style sidebar + detail view ----
+  function perfItems(){
+    const running=data.containers.filter(c=>c.running);
+    const items=[{id:"cpu",label:"CPU",kind:"overview",color:"#8b5cf6",unit:"%"},
+                 {id:"mem",label:"Memory",kind:"overview",color:"#22b8ff",unit:"B"}];
+    for(const c of running) items.push({id:"c:"+c.id,label:c.name,kind:"container",cid:c.id,color:"#34d399",unit:"%"});
+    return items;
+  }
+  function currentValue(it){
+    if(it.id==="cpu"){ let s=0; for(const [,v] of stats) s+=v.cpu||0; return s; }
+    if(it.id==="mem"){ let s=0; for(const [,v] of stats) s+=v.mem||0; return s; }
+    const st=stats.get(it.cid); return st?st.cpu||0:0;
+  }
+  function fmtVal(it,v){ return it.unit==="B"?fmtB(v):(v||0).toFixed(1)+"%"; }
   function renderPerformance(){
-    return `<div class="perf-wrap">
-      <div class="perf-card"><div class="perf-head"><span>CPU</span><span class="perf-val" id="perf-cpu">—</span></div>
-        <div class="perf-sub" id="perf-cpu-peak"></div><div class="perf-chart" id="perf-cpu-chart"></div></div>
-      <div class="perf-card"><div class="perf-head"><span>Memory</span><span class="perf-val" id="perf-mem">—</span></div>
-        <div class="perf-sub" id="perf-mem-peak"></div><div class="perf-chart" id="perf-mem-chart"></div></div>
-    </div>`;
+    const its=perfItems();
+    // Auto-select first item if the previously selected one is gone
+    if(!its.find(x=>x.id===perfSel)) perfSel=its[0]?.id||"cpu";
+    const side=its.map(it=>{
+      const cur=currentValue(it); const h=hist.get(it.id)||[]; const max=it.unit==="B"?Math.max(1,...h,cur):Math.max(100,...h,cur);
+      const group = (its[0]===it || (its[its.indexOf(it)-1]?.kind!==it.kind))
+        ? `<div class="perf-item head"><span class="lbl">${it.kind==="overview"?"Overview":"Containers"}</span></div>` : "";
+      return group+`<div class="perf-item ${it.id===perfSel?'selected':''}" data-perf="${escA(it.id)}">
+        <span class="lbl" style="overflow:hidden;text-overflow:ellipsis">${esc(it.label)}</span>
+        <span class="val">${fmtVal(it,cur)}</span>
+        <span class="spark" data-spark="${escA(it.id)}"></span></div>`;
+    }).join("");
+    return `<div class="perf">
+      <div class="perf-side" id="perf-side">${side}</div>
+      <div class="perf-main" id="perf-main"></div></div>`;
   }
   function areaChart(el,d,o){
-    const W=600,H=140,n=d.length,max=o.max||1;
-    if(n<2){ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pchart"></svg>`; return; }
-    const step=W/(n-1), pts=d.map((v,i)=>[i*step,H-Math.min(1,(v||0)/max)*H]);
-    const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
-    const area="M0 "+H+" "+pts.map(p=>"L"+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ")+" L"+W+" "+H+" Z";
+    const W=600,H=200,n=d.length,max=o.max||1;
+    const pad=[["M0",H],...(n?d.map((v,i)=>{const x=n>1?i*(W/(n-1)):W/2; const y=H-Math.min(1,(v||0)/max)*H; return ["L"+x.toFixed(1),y.toFixed(1)];}):[]),["L"+W,H]];
+    const line=n>1 ? d.map((v,i)=>{const x=i*(W/(n-1)); const y=H-Math.min(1,(v||0)/max)*H; return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);}).join(" ") : "";
+    const area=pad.map(p=>p.join(" ")).join(" ")+" Z";
     el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pchart">
       <defs><linearGradient id="${o.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.color}" stop-opacity="0.35"/><stop offset="1" stop-color="${o.color}" stop-opacity="0"/></linearGradient></defs>
-      <line x1="0" y1="70" x2="${W}" y2="70" stroke="rgba(255,255,255,0.07)"/>
-      <path d="${area}" fill="url(#${o.id})"/><path d="${line}" fill="none" stroke="${o.color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+      ${[0.25,0.5,0.75].map(f=>`<line x1="0" y1="${H*f}" x2="${W}" y2="${H*f}" stroke="rgba(255,255,255,0.06)"/>`).join("")}
+      <path d="${area}" fill="url(#${o.id})"/>${line?`<path d="${line}" fill="none" stroke="${o.color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`:""}</svg>`;
+  }
+  function miniSpark(el,d,color){
+    const W=200,H=20,n=d.length; if(!n){ el.innerHTML=""; return; }
+    const max=Math.max(1,...d);
+    const line=d.map((v,i)=>{const x=n>1?i*(W/(n-1)):W/2; const y=H-Math.min(1,(v||0)/max)*(H-2)-1; return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);}).join(" ");
+    el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%"><path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
   }
   function drawPerf(){
-    const cpuNow=cpuHist.length?cpuHist[cpuHist.length-1]:0, memNow=memHist.length?memHist[memHist.length-1]:0;
-    const cpuPeak=cpuHist.length?Math.max(...cpuHist):0, memPeak=memHist.length?Math.max(...memHist):0;
-    const set=(id,v)=>{ const el=document.getElementById(id); if(el)el.textContent=v; };
-    set("perf-cpu",cpuNow.toFixed(1)+"%"); set("perf-mem",fmtB(memNow));
-    set("perf-cpu-peak","peak "+cpuPeak.toFixed(1)+"%  ·  last "+(HISTORY*2)+"s"); set("perf-mem-peak","peak "+fmtB(memPeak));
-    const cc=document.getElementById("perf-cpu-chart"); if(cc)areaChart(cc,cpuHist,{max:Math.max(100,cpuPeak),color:"#8b5cf6",id:"gcpu"});
-    const mc=document.getElementById("perf-mem-chart"); if(mc)areaChart(mc,memHist,{max:Math.max(1,memPeak),color:"#22b8ff",id:"gmem"});
+    const its=perfItems();
+    // update sparklines in the sidebar
+    for(const it of its){ const el=document.querySelector(`#perf-side [data-spark="${CSS.escape(it.id)}"]`); if(el) miniSpark(el, hist.get(it.id)||[], it.color); }
+    // update per-item live values in the sidebar
+    for(const it of its){ const row=document.querySelector(`#perf-side [data-perf="${CSS.escape(it.id)}"] .val`); if(row) row.textContent=fmtVal(it,currentValue(it)); }
+    // main pane for selected
+    const sel=its.find(x=>x.id===perfSel)||its[0]; if(!sel){ document.getElementById("perf-main").innerHTML=""; return; }
+    const h=hist.get(sel.id)||[]; const cur=currentValue(sel); const peak=h.length?Math.max(...h):cur; const avg=h.length?h.reduce((a,b)=>a+b,0)/h.length:cur;
+    const max = sel.unit==="B" ? Math.max(1, peak, cur) : Math.max(100, peak, cur);
+    const containersRunning=data.containers.filter(c=>c.running).length;
+    const details = sel.kind==="overview"
+      ? [ ["Current", fmtVal(sel,cur)], ["Peak", fmtVal(sel,peak)], ["Average", fmtVal(sel,avg)], ["Containers", containersRunning+" running"] ]
+      : (()=>{ const st=stats.get(sel.cid)||{}; const c=data.containers.find(x=>x.id===sel.cid);
+              const mem=st.mem||0, lim=st.lim||0;
+              return [ ["CPU", (st.cpu||0).toFixed(1)+"%"], ["Memory", fmtB(mem)+(lim?` / ${fmtB(lim)}`:"")], ["Peak CPU", peak.toFixed(1)+"%"], ["Image", c?c.image:"—"] ]; })();
+    document.getElementById("perf-main").innerHTML = `
+      <div class="perf-h1">${esc(sel.label)}</div>
+      <div class="perf-h2">${sel.kind==="overview"?"Aggregate across all running containers":"Container"} · last ${HISTORY} samples · 2s each</div>
+      <div class="perf-big" id="perf-big"></div>
+      <div class="perf-grid">${details.map(([k,v])=>`<div class="perf-stat"><div class="k">${esc(k)}</div><div class="v">${esc(String(v))}</div></div>`).join("")}</div>`;
+    const big=document.getElementById("perf-big"); if(big) areaChart(big,h,{max,color:sel.color,id:"gbig"});
+    // wire clicks
+    document.querySelectorAll("#perf-side [data-perf]").forEach(el=>el.addEventListener("click",()=>{ perfSel=el.dataset.perf; drawPerf(); document.querySelectorAll("#perf-side [data-perf]").forEach(x=>x.classList.toggle("selected",x.dataset.perf===perfSel)); }));
   }
 
   // ---- logs drawer ----
@@ -286,7 +350,7 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   document.getElementById("tm-logs-close").addEventListener("click",()=>{ if(logSrc)logSrc.close(); if(statSrc)statSrc.close(); document.getElementById("tm-logs").style.display="none"; });
 
   setInterval(()=>{ let tc=0,tm=0; for(const c of data.containers){ if(c.running){ const s=stats.get(c.id); if(s){ tc+=s.cpu||0; tm+=s.mem||0; } } }
-    cpuHist.push(tc); memHist.push(tm); if(cpuHist.length>HISTORY){ cpuHist.shift(); memHist.shift(); }
+    pushHist("cpu",tc); pushHist("mem",tm);
     if(tab==="performance") drawPerf(); }, 2000);
   loadAll(); setInterval(loadAll,10000);
 })();

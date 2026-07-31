@@ -151,10 +151,11 @@ public static class DockerApi
         g.MapGet("/containers/{id}/stats/stream", async (string id, DockerService docker, HttpContext http) =>
         {
             PrepareSse(http);
+            var opts = new JsonSerializerOptions(JsonSerializerDefaults.Web);
             try
             {
                 await foreach (var s in docker.FollowStatsAsync(id, http.RequestAborted))
-                    await WriteSse(http, "stat", JsonSerializer.Serialize(s));
+                    await WriteSse(http, "stat", JsonSerializer.Serialize(s, opts));
             }
             catch (OperationCanceledException) { /* client disconnected */ }
         });
