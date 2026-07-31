@@ -65,6 +65,7 @@
   let pins = new Set(); // app keys pinned to the desktop (nothing shows by default; user pins from Start menu)
   let folders = [];   // [{id,name,keys:[...]}]
   let widgets = [];   // [{id,type,x,y,w,h,config}]
+  const pendingInstalls = new Map(); // installId -> { appId, name, icon }
   const stackKey = s => "stack:" + s.name;
   const primaryWeb = s => (s.containers || []).find(c => c.hasWebUi && c.running && c.appUrl);
   function folderContainingKey(key){ for (const f of folders) if (f.keys.includes(key)) return f; return null; }
@@ -246,6 +247,15 @@
       else { el.dataset.title = f.name; const ico = el.querySelector(".mat-app-icon"); if (ico) ico.innerHTML = folderInner(f); const lbl = el.querySelector(".mat-app-label"); if (lbl) lbl.textContent = f.name; }
       el.dataset.folderId = f.id;
     }
+    // pending install placeholders (iOS-style icon with a progress ring)
+    for (const [instId, p] of pendingInstalls) {
+      const key = "pending:" + instId; wantedKeys.add(key);
+      let el = iconEls.get(key);
+      const inner = `${appIconHtml(p.icon) || CUBE}<span class="mat-app-progress" aria-label="Installing"></span>`;
+      if (!el) el = makeIcon(key, p.name || p.appId, "", "0", "0", "installing", inner);
+      else { el.dataset.title = p.name || p.appId; const lbl = el.querySelector(".mat-app-label"); if (lbl) lbl.textContent = p.name || p.appId; }
+      el.classList.add("installing");
+    }
 
     // Remove any icon that's no longer wanted
     for (const [key, el] of iconEls) if (!wantedKeys.has(key)) { el.remove(); iconEls.delete(key); }
@@ -279,9 +289,21 @@
     const needed = new Set();
     for (const s of stackData) for (const c of (s.containers || [])) if (c.matosApp) needed.add(c.matosApp);
     if ([...needed].some(id => !(id in appDefs))) await loadDefs();
+    // Resolve pending install placeholders once the real stack shows up:
+    // remove the placeholder, pin the real key at the placeholder's position.
+    for (const [instId, p] of [...pendingInstalls]) {
+      const stack = stackData.find(s => (s.containers || []).some(c => c.matosApp === p.appId));
+      if (!stack) continue;
+      const pendingKey = "pending:" + instId, realKey = "stack:" + stack.name;
+      if (layout[pendingKey]) { layout[realKey] = layout[pendingKey]; delete layout[pendingKey]; saveIcon(realKey, layout[realKey].x, layout[realKey].y); }
+      pendingInstalls.delete(instId);
+      if (!pins.has(realKey)) { pins.add(realKey); try { fetch("/api/v1/desktop/pin", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ key: realKey }) }); } catch(_){} }
+    }
     reconcileDesktop();
     renderStartMenu(startSearch ? startSearch.value : "");
   }
+  // Poll a few times right after an install so the placeholder resolves quickly.
+  function burstReload(){ [200, 700, 1500, 3000, 6000].forEach(t => setTimeout(load, t)); }
   async function stackAction(name, action) { try { await fetch(`/api/v1/docker/stacks/${encodeURIComponent(name)}/${action}`, { method: "POST" }); } catch (_) {} setTimeout(load, 700); }
 
   // ---- Start menu ----
@@ -534,10 +556,32 @@
     const a = systemApps().find(x => x.key === k); return a ? a.title : k;
   }
   async function createFolderAt(x, y){
-    const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: "New Folder" }) })).json();
-    folders.push(r.folder); const key = "folder:" + r.folder.id;
-    if (x != null && y != null) { layout[key] = { x, y }; saveIcon(key, x, y); }
+    // Optimistic: draw the folder immediately with a temporary id, then reconcile with the server id.
+    const tempId = "tmp" + Math.random().toString(36).slice(2, 8);
+    const optimistic = { id: tempId, name: "New Folder", keys: [] };
+    folders.push(optimistic);
+    const tempKey = "folder:" + tempId;
+    if (x != null && y != null) {
+      const rect = layer.getBoundingClientRect();
+      const pos = snapXY(x - rect.left - 34, y - rect.top - 34);
+      layout[tempKey] = pos;
+    }
     reconcileDesktop();
+    try {
+      const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: "New Folder" }) })).json();
+      // Swap the temp folder for the real one; carry over the position.
+      const idx = folders.findIndex(f => f.id === tempId);
+      if (idx >= 0) folders.splice(idx, 1, r.folder);
+      const realKey = "folder:" + r.folder.id;
+      if (layout[tempKey]) { layout[realKey] = layout[tempKey]; delete layout[tempKey]; saveIcon(realKey, layout[realKey].x, layout[realKey].y); }
+      // Rename any live icon key without a full teardown
+      const el = iconEls.get(tempKey); if (el) { iconEls.delete(tempKey); iconEls.set(realKey, el); el.dataset.folderId = r.folder.id; el.dataset.key = realKey; }
+    } catch (_) {
+      // Roll back: remove the optimistic folder
+      folders = folders.filter(f => f.id !== tempId);
+      delete layout[tempKey];
+      reconcileDesktop();
+    }
   }
   async function moveKeyToFolder(key, folderId){
     // If no folder id, create a new one first.
@@ -717,7 +761,21 @@
       open(opts);
     }
     if (m.type === "matos:close" && m.key) { window.MatWM.closeKey(m.key); }
-    if (m.type === "matos:refresh") { load(); broadcast({ type: "matos:reload" }); }
+    if (m.type === "matos:refresh") { burstReload(); broadcast({ type: "matos:reload" }); }
+    // The install wizard fires this the moment the user clicks Install: show a
+    // placeholder icon on the desktop immediately, iOS-style.
+    if (m.type === "matos:installing" && m.appId) {
+      pendingInstalls.set(m.installId, { appId: m.appId, name: m.name || m.appId, icon: m.icon || "" });
+      // A rough placement near the top-left free area, so the user sees it right away.
+      const key = "pending:" + m.installId;
+      layout[key] = slotToXY(defaultIndex++);
+      reconcileDesktop();
+    }
+    if (m.type === "matos:install-failed" && m.installId) {
+      pendingInstalls.delete(m.installId);
+      const key = "pending:" + m.installId; delete layout[key];
+      reconcileDesktop();
+    }
   });
 
   // relay a message to every open app window (so e.g. the Store refreshes after an install)

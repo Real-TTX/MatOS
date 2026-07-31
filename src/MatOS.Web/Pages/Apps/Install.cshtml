@@ -148,8 +148,12 @@
     return { phases, done:(ok,err)=>{ clearInterval(progTimer); for(let i=0;i<phases.length;i++) mark(i, ok?"ok":(i<=shown?(i===shown?"err":"ok"):"")); if(!ok){ mark(shown,"err"); } } };
   }
 
+  let currentInstallId=null;
   async function doInstall(){
     const prog=startProgress();
+    // Tell the desktop to show an iOS-style placeholder icon while we install (not for openers).
+    currentInstallId = "i" + Math.random().toString(36).slice(2,10);
+    if(!opener){ try{ window.parent.postMessage({type:"matos:installing", installId: currentInstallId, appId: id, name: app.name, icon: app.icon}, location.origin); }catch(_){} }
     try{
       let r;
       if(opener){ r=await fetch("/api/v1/store/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); }
@@ -157,7 +161,9 @@
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||e.title||("HTTP "+r.status)); }
       result = await r.json().catch(()=>({}));
       prog.done(true); refresh(); next(); // -> done
-    }catch(e){ prog.done(false); installError=true; $("wz-error").hidden=false; $("wz-error").textContent=(opener?"Install failed: ":"Install failed: ")+e.message; setButtons(); }
+    }catch(e){ prog.done(false); installError=true; $("wz-error").hidden=false; $("wz-error").textContent=(opener?"Install failed: ":"Install failed: ")+e.message; setButtons();
+      if(!opener){ try{ window.parent.postMessage({type:"matos:install-failed", installId: currentInstallId}, location.origin); }catch(_){} }
+    }
   }
 
   function renderDone(){

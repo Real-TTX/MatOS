@@ -255,3 +255,16 @@ html, body { overflow: hidden; height: 100%; }
 .mat-app.drop-target .mat-folder-preview { background: rgba(139,92,246,0.25); border-radius: 12px; }
 /* Ghost element while dragging from the Start menu */
 .sm-ghost { background: rgba(17,21,34,0.9); border: 1px solid var(--border); border-radius: 12px; padding: 0.35rem 0.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+
+/* Installing placeholder: iOS-style dimmed icon with a sweeping progress ring */
+.mat-app.installing .mat-app-icon { position: relative; }
+.mat-app.installing .mat-app-icon > *:not(.mat-app-progress) { opacity: 0.45; filter: grayscale(0.4); }
+.mat-app.installing .mat-app-label { opacity: 0.6; }
+.mat-app-progress {
+  position: absolute; inset: 4px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.14);
+  border-top-color: var(--accent);
+  animation: mat-inst-spin 0.9s linear infinite;
+  pointer-events: none;
+}
+@keyframes mat-inst-spin { to { transform: rotate(360deg); } }
