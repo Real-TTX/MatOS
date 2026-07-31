@@ -18,3 +18,10 @@ appdata/
 # OS junk
 Thumbs.db
 .DS_Store
+
+# ad-hoc scratch files created by test scripts (should live in scratchpad, not the repo)
+/l.html
+/lay*.json
+/routes*.json
+/set.html
+/t.txt

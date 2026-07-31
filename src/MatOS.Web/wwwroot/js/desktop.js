@@ -155,13 +155,28 @@
       if (!active) return;
       const dx = e.clientX - sx, dy = e.clientY - sy;
       if (!moved && Math.hypot(dx, dy) > 5) { moved = true; dragging = true; el.classList.add("dragging"); }
-      if (moved) { el.style.left = (ox + dx) + "px"; el.style.top = (oy + dy) + "px"; }
+      if (moved) {
+        el.style.left = (ox + dx) + "px"; el.style.top = (oy + dy) + "px";
+        // Highlight any icon we'd merge into on drop.
+        const t = dropTargetAt(e.clientX, e.clientY, el);
+        document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
+        if (t) t.classList.add("drop-target");
+      }
     });
     const end = (e) => {
       if (!active) return; active = false;
       try { el.releasePointerCapture(e.pointerId); } catch (_) {}
       if (moved) {
         el.classList.remove("dragging");
+        document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
+        // Detect drop target — icon-on-icon (or icon-on-folder) creates/adds to a folder.
+        const drop = dropTargetAt(e.clientX, e.clientY, el);
+        if (drop) {
+          if (drop.dataset.folderId) { moveKeyToFolder(key, drop.dataset.folderId); }
+          else { mergeIntoFolder(key, drop.dataset.key); }
+          setTimeout(() => { dragging = false; }, 60);
+          return;
+        }
         const s = snapXY(parseFloat(el.style.left), parseFloat(el.style.top));
         el.style.left = s.x + "px"; el.style.top = s.y + "px";
         layout[key] = s; saveIcon(key, s.x, s.y);
@@ -297,7 +312,42 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeStart(); hideCtx(); } });
     startSearch.addEventListener("input", () => renderStartMenu(startSearch.value));
     startSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) { e.preventDefault(); f.click(); } } });
-    startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it) { e.preventDefault(); launchEl(it); closeStart(); } });
+    startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); } if (it) delete it.dataset.suppressClick; });
+    // Drag a start-menu item onto the desktop to pin it there (with a chosen position).
+    startMenu.addEventListener("pointerdown", (e) => {
+      const it = e.target.closest(".sm-item"); if (!it) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const startX = e.clientX, startY = e.clientY; let ghost = null, dragged = false;
+      const onMove = (ev) => {
+        const dx = ev.clientX - startX, dy = ev.clientY - startY;
+        if (!dragged && Math.hypot(dx, dy) > 8) {
+          dragged = true;
+          ghost = it.cloneNode(true); ghost.classList.add("sm-ghost");
+          ghost.style.position = "fixed"; ghost.style.pointerEvents = "none"; ghost.style.zIndex = "80"; ghost.style.opacity = "0.9";
+          document.body.appendChild(ghost);
+        }
+        if (dragged) { ghost.style.left = (ev.clientX - 30) + "px"; ghost.style.top = (ev.clientY - 30) + "px"; }
+      };
+      const onUp = async (ev) => {
+        window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
+        if (!dragged || !ghost) return;
+        ghost.remove();
+        it.dataset.suppressClick = "1";  // prevent the click from launching after a drag
+        // If the pointer landed on the desktop layer (not the start menu), pin + place there.
+        const overStart = startMenu.contains(document.elementFromPoint(ev.clientX, ev.clientY));
+        if (!overStart) {
+          const key = it.dataset.key;
+          const rect = layer.getBoundingClientRect();
+          const s = snapXY(ev.clientX - rect.left - 34, ev.clientY - rect.top - 34);
+          layout[key] = s;
+          if (!pins.has(key)) await pin(key);
+          saveIcon(key, s.x, s.y);
+          const el = iconEls.get(key); if (el) { el.style.left = s.x + "px"; el.style.top = s.y + "px"; }
+          closeStart();
+        }
+      };
+      window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true });
+    });
     startMenu.addEventListener("contextmenu", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
       const key = it.dataset.key; if (!key) return;
@@ -452,6 +502,28 @@
     const target = folders.find(f => f.id === fid); if (target && !target.keys.includes(key)) target.keys.push(key);
     reconcileDesktop();
   }
+  // Find a droppable icon (app or folder) under the pointer, excluding the drag source.
+  function dropTargetAt(x, y, sourceEl){
+    const before = sourceEl.style.pointerEvents; sourceEl.style.pointerEvents = "none";
+    const t = document.elementFromPoint(x, y);
+    sourceEl.style.pointerEvents = before;
+    if (!t) return null;
+    const a = t.closest(".mat-app"); if (!a || a === sourceEl) return null;
+    return a;
+  }
+  // Merge two app icons into a new folder (iOS-style).
+  async function mergeIntoFolder(dragKey, targetKey){
+    if (!dragKey || !targetKey || dragKey === targetKey) return;
+    const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: labelForKey(targetKey) }) })).json();
+    folders.push(r.folder); const fid = r.folder.id;
+    // Add both keys — target first (so it appears first in the preview).
+    for (const k of [targetKey, dragKey]) {
+      await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key: k }) });
+      const f = folders.find(x => x.id === fid); if (f && !f.keys.includes(k)) f.keys.push(k);
+    }
+    reconcileDesktop();
+  }
+
   async function removeFromFolder(fid, key){
     await fetch("/api/v1/desktop/folders/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key }) });
     const f = folders.find(x => x.id === fid); if (f) f.keys = f.keys.filter(k => k !== key);

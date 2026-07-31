@@ -242,3 +242,13 @@ html, body { overflow: hidden; height: 100%; }
 .wg-lbl { font-size: 0.82rem; color: var(--muted); margin-top: 0.4rem; }
 .wg-sub { font-size: 0.82rem; color: var(--muted); margin-top: 0.25rem; }
 .wg-hint { font-size: 0.7rem; color: var(--muted); opacity: 0.7; margin-top: 0.4rem; }
+
+/* Drop-target highlight while dragging an icon over another */
+.mat-app.drop-target .mat-app-icon {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  transform: scale(1.06);
+  transition: transform 0.1s ease;
+}
+/* Ghost element while dragging from the Start menu */
+.sm-ghost { background: rgba(17,21,34,0.9); border: 1px solid var(--border); border-radius: 12px; padding: 0.35rem 0.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
