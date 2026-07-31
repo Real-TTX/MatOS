@@ -1,0 +1,39 @@
+@page "/apps/account"
+@model MatOS.Web.Pages.Apps.AccountModel
+@{
+    ViewData["Title"] = "My Account";
+    ViewData["Description"] = "Your account and password.";
+    Layout = "_WindowLayout";
+    var initial = string.IsNullOrEmpty(Model.UserName) ? "?" : Model.UserName[..1].ToUpperInvariant();
+}
+
+<div class="card" style="max-width:520px;display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+    <span style="width:56px;height:56px;border-radius:999px;background:var(--mat-accent);display:grid;place-items:center;color:#fff;font-weight:800;font-size:1.4rem">@initial</span>
+    <div>
+        <div style="font-size:1.15rem;font-weight:800">@Model.UserName</div>
+        <div class="fx-muted">@Model.Role</div>
+    </div>
+</div>
+
+@if (Model.Saved)
+{
+    <div class="card" style="max-width:520px;margin-bottom:1rem;border-color:rgba(52,211,153,0.4);background:rgba(52,211,153,0.14);color:#7ff0c4">Password changed.</div>
+}
+@if (Model.Error is not null)
+{
+    <div class="card" style="max-width:520px;margin-bottom:1rem;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0">@Model.Error</div>
+}
+
+<div class="card" style="max-width:520px">
+    <h2 style="margin:0 0 0.9rem;font-size:1rem">Change password</h2>
+    <form method="post">
+        <div class="fl"><span>Current password</span><input class="ui-input" name="CurrentPassword" type="password" autocomplete="current-password" required /></div>
+        <div class="fl"><span>New password</span><input class="ui-input" name="NewPassword" type="password" autocomplete="new-password" required /></div>
+        <div class="fl"><span>Confirm new password</span><input class="ui-input" name="ConfirmPassword" type="password" autocomplete="new-password" required /></div>
+        <button type="submit" class="ui-btn primary" style="margin-top:0.4rem">Update password</button>
+    </form>
+</div>
+
+@section Head {
+<style>.fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); } .fl .ui-input { max-width:320px; }</style>
+}

@@ -47,7 +47,8 @@
             <div class="sm-empty" id="sm-empty" hidden>No matching apps.</div>
         </div>
         <div class="sm-footer">
-            <div class="sm-user"><span class="mat-avatar">@initial</span>
+            <div class="sm-user" data-open-url="/apps/account" data-open-title="My Account" data-open-key="account" style="cursor:pointer" title="My account">
+                <span class="mat-avatar">@initial</span>
                 <div><div class="nm">@name</div><div class="rl">@role</div></div>
             </div>
             <div class="sm-foot-actions">
@@ -80,6 +81,8 @@
                         <div class="name">@name</div>
                         <div class="role">@role</div>
                     </div>
+                    <button class="mat-menu-item" role="menuitem"
+                            data-open-url="/apps/account" data-open-title="My Account" data-open-key="account">My account</button>
                     <button class="mat-menu-item" role="menuitem"
                             data-open-url="/apps/settings" data-open-title="Settings" data-open-key="settings">Settings</button>
                     <button class="mat-menu-item" role="menuitem"

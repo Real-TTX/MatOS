@@ -95,6 +95,26 @@ public class AuthService
         await SaveSessions();
     }
 
+    /// <summary>Lets a signed-in user change their own password (verifies the current one).
+    /// Returns null on success, or an error message.</summary>
+    public async Task<string?> ChangeOwnPassword(long userId, string current, string newPw)
+    {
+        User? u;
+        lock (_gate) u = GetUser(userId);
+        if (u == null) return "User not found.";
+        if (!BCrypt.Net.BCrypt.Verify(current ?? "", u.PasswordHash)) return "Current password is incorrect.";
+        if ((newPw ?? "").Length < 6) return "New password must be at least 6 characters.";
+        lock (_gate)
+        {
+            u.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPw);
+            u.UpdateDate = DateTime.UtcNow;
+            u.UpdateUserId = userId;
+        }
+        SessionCache.Clear();
+        await SaveUsers();
+        return null;
+    }
+
     /// <summary>Returns the user if credentials are valid, otherwise null.</summary>
     public User? ValidateCredentials(string username, string password)
     {

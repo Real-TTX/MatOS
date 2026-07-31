@@ -45,6 +45,53 @@ public partial class DockerService
         try { await client.Volumes.RemoveAsync(name, force: true, ct); } catch { /* best effort */ }
     }
 
+    /// <summary>Recreates a container preserving its config but applying label changes
+    /// (value null = remove the label). Used to publish/unpublish an app (matcad.* labels
+    /// can't be changed on a live container).</summary>
+    public async Task RecreateWithLabelsAsync(string id, IDictionary<string, string?> labelChanges, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        var r = await client.Containers.InspectContainerAsync(id, ct);
+        var name = (r.Name ?? "").TrimStart('/');
+        var labels = r.Config?.Labels != null ? new Dictionary<string, string>(r.Config.Labels) : new Dictionary<string, string>();
+        foreach (var kv in labelChanges) { if (kv.Value == null) labels.Remove(kv.Key); else labels[kv.Key] = kv.Value; }
+
+        var mounts = (r.Mounts ?? new List<MountPoint>())
+            .Select(m => new Mount
+            {
+                Type = m.Type ?? "bind",
+                Source = string.Equals(m.Type, "volume", StringComparison.OrdinalIgnoreCase) ? m.Name : m.Source,
+                Target = m.Destination,
+                ReadOnly = !m.RW
+            }).ToList();
+
+        var p = new CreateContainerParameters
+        {
+            Image = r.Config?.Image,
+            Name = name,
+            Env = r.Config?.Env?.ToList(),
+            Cmd = r.Config?.Cmd?.ToList(),
+            Entrypoint = r.Config?.Entrypoint?.ToList(),
+            WorkingDir = r.Config?.WorkingDir,
+            User = r.Config?.User,
+            Labels = labels,
+            ExposedPorts = r.Config?.ExposedPorts != null ? new Dictionary<string, EmptyStruct>(r.Config.ExposedPorts) : null,
+            HostConfig = new HostConfig
+            {
+                PortBindings = r.HostConfig?.PortBindings,
+                Mounts = mounts,
+                RestartPolicy = r.HostConfig?.RestartPolicy,
+                NetworkMode = r.HostConfig?.NetworkMode,
+                Binds = r.HostConfig?.Binds
+            }
+        };
+
+        try { await client.Containers.StopContainerAsync(id, new ContainerStopParameters { WaitBeforeKillSeconds = 8 }, ct); } catch { }
+        await client.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = true }, ct);
+        var created = await client.Containers.CreateContainerAsync(p, ct);
+        await client.Containers.StartContainerAsync(created.ID, new ContainerStartParameters(), ct);
+    }
+
     public async Task CreateVolumeAsync(string name, string driver, IDictionary<string, string>? driverOpts, CancellationToken ct = default)
     {
         using var client = CreateClient();
