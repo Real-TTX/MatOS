@@ -20,7 +20,7 @@ public static class StoreApi
     {
         var g = api.MapGroup("/store");
 
-        g.MapGet("/catalog", (StoreService store) => Results.Ok(new
+        g.MapGet("/catalog", (StoreService store, InstallService svc) => Results.Ok(new
         {
             apps = store.AllApps().Select(a => new
             {
@@ -30,7 +30,8 @@ public static class StoreApi
                 env = a.Env,
                 actions = a.Actions.Select(x => new { x.Label, x.Url }),
                 variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required }),
-                handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>()
+                handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>(),
+                registered = a.Handlers is { Length: > 0 } && svc.IsRegistered(a.Id)
             })
         }));
 
@@ -136,15 +137,24 @@ public static class StoreApi
             return Results.Ok(new { sources = await src.SyncAllAsync(ct) });
         }).RequireAuthorization("Admin");
 
-        // ---- File handlers ("open with") ----
-        g.MapGet("/handlers", (string? ext, StoreService store) =>
+        // ---- File handlers ("open with") — only apps the user has installed/registered ----
+        g.MapGet("/handlers", (string? ext, StoreService store, InstallService svc) =>
         {
             var e = NormExt(ext ?? "");
             var apps = store.AllApps()
-                .Where(a => a.Handlers != null && a.Handlers.Any(h => h.Extensions.Any(x => NormExt(x) == e)))
+                .Where(a => a.Handlers != null && a.Handlers.Any(h => h.Extensions.Any(x => NormExt(x) == e)) && svc.IsRegistered(a.Id))
                 .Select(a => new { a.Id, a.Name, a.Icon });
             return Results.Ok(new { ext = e, apps });
         });
+
+        g.MapPost("/register", async (DeleteAppBody b, InstallService svc, CancellationToken ct) =>
+        {
+            var r = await svc.InstallAsync(b.Id, null, ct);   // handler apps -> RegisterAsync
+            return r.Ok ? Results.Ok(new { ok = true }) : Results.Problem(r.Error);
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/unregister", async (DeleteAppBody b, InstallService svc, CancellationToken ct) =>
+            Results.Ok(new { ok = await svc.UnregisterAsync(b.Id, ct) })).RequireAuthorization("Admin");
 
         g.MapPost("/open-with", async (OpenWithBody b, InstallService svc, HttpRequest req, CancellationToken ct) =>
         {

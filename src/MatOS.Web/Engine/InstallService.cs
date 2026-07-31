@@ -12,6 +12,7 @@ public class InstallStore
 {
     public int NextPort { get; set; } = 20000;
     public Dictionary<string, int> Counters { get; set; } = new();
+    public List<string> Registered { get; set; } = new();   // handler/opener app ids registered for "Open with"
 }
 
 public record InstallResult(bool Ok, string? Name, int HostPort, string? Error);
@@ -40,9 +41,45 @@ public class InstallService
     {
         var app = _store.Find(appId);
         if (app == null) return Task.FromResult(new InstallResult(false, null, 0, "Unknown app."));
+        // Handler/opener apps don't run a persistent container — installing them registers the
+        // app so it appears in the File Explorer's "Open with" for its file types.
+        if (app.Handlers is { Length: > 0 }) return RegisterAsync(app, ct);
         return string.Equals(app.Kind, "compose", StringComparison.OrdinalIgnoreCase)
             ? InstallComposeAsync(app, vars ?? new Dictionary<string, string>(), ct)
             : InstallImageAsync(app, vars ?? new Dictionary<string, string>(), ct);
+    }
+
+    // ---- Handler/opener registration (so "Open with" lists the app) ----
+    public IReadOnlyList<string> RegisteredApps()
+    {
+        lock (_gate) return _config.Get<InstallStore>("store").Registered.ToList();
+    }
+
+    public bool IsRegistered(string appId)
+    {
+        lock (_gate) return _config.Get<InstallStore>("store").Registered.Contains(appId);
+    }
+
+    private async Task<InstallResult> RegisterAsync(AppDef app, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var s = _config.Get<InstallStore>("store");
+            if (!s.Registered.Contains(app.Id)) s.Registered.Add(app.Id);
+        }
+        await _config.SaveAsync("store", _config.Get<InstallStore>("store"));
+        // Pre-pull so the first "Open with" is fast; failure is non-fatal (pulled on first open).
+        try { await _docker.PullImageBestEffortAsync(app.Image, ct); } catch (Exception ex) { _log.LogWarning(ex, "Register pre-pull of {App} failed", app.Id); }
+        _log.LogInformation("Registered handler app {App}", app.Id);
+        return new(true, app.Id, 0, null);
+    }
+
+    public async Task<bool> UnregisterAsync(string appId, CancellationToken ct = default)
+    {
+        bool removed;
+        lock (_gate) { var s = _config.Get<InstallStore>("store"); removed = s.Registered.Remove(appId); }
+        if (removed) await _config.SaveAsync("store", _config.Get<InstallStore>("store"));
+        return removed;
     }
 
     // setup-wizard variables -> env (used or default); lets image apps use the wizard too

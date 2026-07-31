@@ -217,5 +217,7 @@
   function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
   function escapeAttr(s) { return String(s).replace(/"/g, "&quot;"); }
 
-  window.MatWM = { open, close };
+  function closeKey(key) { const w = wins.get(key); if (w) close(w); }
+
+  window.MatWM = { open, close, closeKey };
 })();

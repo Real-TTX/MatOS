@@ -90,12 +90,6 @@
         </div>
     </div>
 
-    <div class="dlg" id="wiz" hidden><div class="dlg-card">
-        <h3 id="wiz-title" style="margin:0 0 0.3rem">Set up</h3>
-        <p class="fx-muted" id="wiz-sub" style="margin:0 0 1rem;font-size:0.85rem"></p>
-        <div id="wiz-fields"></div>
-        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="wiz-go">Install</button><button class="ui-btn" id="wiz-cancel">Cancel</button></div>
-    </div></div>
 </div>
 
 @section Head {
@@ -163,37 +157,29 @@
     try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
     catEl.innerHTML=catalog.map(a=>{ const local=!a.builtIn && !a.source; const opener=a.handles && a.handles.length;
       const badge=a.source?`<span class="chip src" title="From source: ${escA(a.source)}">${esc(a.source)}</span>`:(a.builtIn?'':'<span class="chip">custom</span>');
-      const foot = opener
-        ? `<span class="chip open">opens ${esc(a.handles.join(" "))}</span><span class="spacer" style="flex:1"></span><span class="mono">right-click a file → Open with</span>`
-        : `<button class="ui-btn primary" data-install="${escA(a.id)}">Install</button>${local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:''}<span class="spacer" style="flex:1"></span><span class="mono">${esc(a.kind==='compose'?(a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'):a.image)}</span>`;
+      const installBtn = (opener && a.registered)
+        ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
+        : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
+      const editDel = local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:'';
+      const meta = opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:`<span class="mono">${esc(a.kind==='compose'?(a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'):a.image)}</span>`;
       return `<div class="app-card">
       <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${badge}${a.kind==='compose'?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
       <p>${esc(a.description)}</p>
-      <div class="foot">${foot}</div>
+      <div class="foot">${installBtn}${editDel}<span class="spacer" style="flex:1"></span>${meta}</div>
     </div>`; }).join("");
-    catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>startInstall(b)));
+    catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>openInstall(b.dataset.install,b.dataset.name)));
+    catEl.querySelectorAll("[data-unreg]").forEach(b=>b.addEventListener("click",()=>unregister(b.dataset.unreg,b.dataset.name)));
     catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
   }
 
-  function startInstall(btn){ const a=catalog.find(x=>x.id===btn.dataset.install); if(a && a.variables && a.variables.length) openWizard(a,btn); else doInstall(a.id,{},btn); }
-  async function doInstall(id,vars,btn){
-    const orig=btn?btn.innerHTML:""; if(btn){ btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Installing…`; }
-    try{ const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:vars})});
-      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.title||r.status); }
-      const j=await r.json(); flash(`Installed ${id} → ${j.name}${j.hostPort?` (port ${j.hostPort})`:''}.`,true);
-    }catch(e){ flash("Install failed: "+e.message,false); } finally{ if(btn){ btn.disabled=false; btn.innerHTML=orig; } }
-  }
+  // Install always opens the dedicated install wizard window (params → review → install → done).
+  function openInstall(id,name){ try{ window.parent.postMessage({type:"matos:open", url:"/apps/install/"+encodeURIComponent(id), key:"install:"+id, title:"Install "+(name||id), width:680, height:620}, location.origin); }catch(_){ location.href="/apps/install/"+encodeURIComponent(id); } }
+  async function unregister(id,name){ if(!confirm(`Uninstall "${name}"? It will no longer appear in "Open with".`))return;
+    try{ const r=await fetch("/api/v1/store/unregister",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); if(!r.ok)throw new Error(r.status); flash("Uninstalled "+name+".",true); loadCatalog(); }catch(e){ flash("Uninstall failed: "+e.message,false); } }
 
-  // ---- setup wizard ----
-  const wiz=$("wiz"); let wizApp=null, wizBtn=null;
-  function openWizard(a,btn){ wizApp=a; wizBtn=btn; $("wiz-title").textContent="Set up "+a.name; $("wiz-sub").textContent="These values are passed to the app on install.";
-    $("wiz-fields").innerHTML=a.variables.map(v=>`<label class="fl"><span>${esc(v.label||v.key)}${v.required?' *':''}</span>
-      <input class="ui-input" data-key="${escA(v.key)}" type="${v.type==='password'?'password':(v.type==='number'?'number':'text')}" value="${escA(v.default||'')}" placeholder="${escA(v.key)}"></label>`).join(""); wiz.hidden=false; }
-  $("wiz-cancel").addEventListener("click",()=>{ wiz.hidden=true; });
-  $("wiz-go").addEventListener("click",()=>{ const vars={}; let ok=true;
-    $("wiz-fields").querySelectorAll("[data-key]").forEach(inp=>{ const v=wizApp.variables.find(x=>x.key===inp.dataset.key); vars[inp.dataset.key]=inp.value; if(v&&v.required&&!inp.value.trim()){ ok=false; inp.style.borderColor="#f4506b"; } });
-    if(!ok){ return; } wiz.hidden=false; wiz.hidden=true; doInstall(wizApp.id,vars,wizBtn); });
+  // reload when an install/uninstall happened in another window
+  window.addEventListener("message",e=>{ if(e.origin!==location.origin)return; const m=e.data; if(m && m.type==="matos:reload"){ loadCatalog(); if(instEl.style.display!=="none") loadInstalls(); } });
 
   async function loadInstalls(){
     let d; try{ d=await (await fetch("/api/v1/store/installs")).json(); }catch(_){ instEl.innerHTML="Failed to load."; return; }

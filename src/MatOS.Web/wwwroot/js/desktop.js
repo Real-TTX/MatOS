@@ -309,6 +309,12 @@
       if (m.ephemeralId) opts.onClose = () => { try { fetch("/api/v1/store/close-ephemeral", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.ephemeralId }) }); } catch (_) {} };
       open(opts);
     }
-    if (m.type === "matos:refresh") { load(); }
+    if (m.type === "matos:close" && m.key) { window.MatWM.closeKey(m.key); }
+    if (m.type === "matos:refresh") { load(); broadcast({ type: "matos:reload" }); }
   });
+
+  // relay a message to every open app window (so e.g. the Store refreshes after an install)
+  function broadcast(msg) {
+    document.querySelectorAll("#mat-windows iframe").forEach(f => { try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {} });
+  }
 })();
