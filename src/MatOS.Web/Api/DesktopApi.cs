@@ -8,6 +8,12 @@ public static class DesktopApi
 {
     public record IconMove(string Key, int X, int Y);
     public record KeyBody(string Key);
+    public record NameBody(string Name);
+    public record IdNameBody(string Id, string Name);
+    public record FolderItemBody(string Id, string Key);
+    public record IdBody(string Id);
+    public record AddWidgetBody(string Type, int X, int Y, int W, int H);
+    public record MoveWidgetBody(string Id, int X, int Y);
 
     public static void MapDesktopApi(this IEndpointRouteBuilder api)
     {
@@ -16,7 +22,13 @@ public static class DesktopApi
         g.MapGet("/layout", (DesktopLayoutService svc, HttpContext ctx) =>
         {
             var uid = ctx.User.GetUserId()?.ToString() ?? "0";
-            return Results.Ok(new { positions = svc.GetForUser(uid), pins = svc.GetPins(uid) });
+            return Results.Ok(new
+            {
+                positions = svc.GetForUser(uid),
+                pins = svc.GetPins(uid),
+                folders = svc.GetFolders(uid),
+                widgets = svc.GetWidgets(uid)
+            });
         });
 
         g.MapPost("/pin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>
@@ -47,5 +59,33 @@ public static class DesktopApi
             await svc.ResetUser(uid);
             return Results.Ok(new { ok = true });
         });
+
+        // ---- Folders ----
+        g.MapPost("/folders/create", async (NameBody b, DesktopLayoutService svc, HttpContext ctx) =>
+            Results.Ok(new { folder = await svc.CreateFolder(Uid(ctx), b.Name) }));
+
+        g.MapPost("/folders/rename", async (IdNameBody b, DesktopLayoutService svc, HttpContext ctx) =>
+            Results.Ok(new { ok = await svc.RenameFolder(Uid(ctx), b.Id, b.Name) }));
+
+        g.MapPost("/folders/delete", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.DeleteFolder(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
+
+        g.MapPost("/folders/add", async (FolderItemBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.AddToFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
+
+        g.MapPost("/folders/remove", async (FolderItemBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.RemoveFromFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
+
+        // ---- Widgets ----
+        g.MapPost("/widgets/add", async (AddWidgetBody b, DesktopLayoutService svc, HttpContext ctx) =>
+            Results.Ok(new { widget = await svc.AddWidget(Uid(ctx), b.Type, b.X, b.Y, b.W, b.H) }));
+
+        g.MapPost("/widgets/move", async (MoveWidgetBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.MoveWidget(Uid(ctx), b.Id, b.X, b.Y); return Results.Ok(new { ok = true }); });
+
+        g.MapPost("/widgets/remove", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.RemoveWidget(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
     }
+
+    private static string Uid(HttpContext ctx) => ctx.User.GetUserId()?.ToString() ?? "0";
 }

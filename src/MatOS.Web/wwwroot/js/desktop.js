@@ -37,8 +37,19 @@
   }
   function open(opts) { if (!opts.iconHtml && opts.key) opts.iconHtml = iconForKey(opts.key); window.MatWM.open(opts); }
   function launchEl(el) {
+    if (el.dataset.folderId) { openFolderOverlay(el); return; }
     open({ key: el.dataset.key || el.dataset.url, title: el.dataset.title || "App", icon: el.dataset.icon || null,
       url: el.dataset.url, width: parseInt(el.dataset.w || "1024", 10), height: parseInt(el.dataset.h || "680", 10) });
+  }
+  // Launch an app by its key (from inside the folder overlay etc.)
+  function launchByKey(key) {
+    if (key.startsWith("stack:")) {
+      const s = stackData.find(x => x.name === key.slice(6)); if (!s) return;
+      open({ key, title: stackTitle(s), url: stackOpenUrl(s), width: 1024, height: 680 });
+    } else {
+      const a = systemApps().find(x => x.key === key); if (!a) return;
+      open({ key: a.key, title: a.title, url: a.url, width: parseInt(a.w||"1024",10), height: parseInt(a.h||"680",10), iconHtml: a.iconHtml });
+    }
   }
   document.addEventListener("click", (e) => {
     const opener = e.target.closest("[data-open-url]");
@@ -51,9 +62,12 @@
   // ---- stacks (a stack = the app) + app definitions ----
   let stackData = [];
   let appDefs = {}; // id -> app definition (icon, name, actions)
-  let pins = new Set(); // stack keys pinned to the desktop (container apps only shown when pinned)
+  let pins = new Set(); // app keys pinned to the desktop (nothing shows by default; user pins from Start menu)
+  let folders = [];   // [{id,name,keys:[...]}]
+  let widgets = [];   // [{id,type,x,y,w,h,config}]
   const stackKey = s => "stack:" + s.name;
   const primaryWeb = s => (s.containers || []).find(c => c.hasWebUi && c.running && c.appUrl);
+  function folderContainingKey(key){ for (const f of folders) if (f.keys.includes(key)) return f; return null; }
 
   async function loadDefs() {
     try { const d = await (await fetch("/api/v1/store/catalog")).json(); const m = {}; for (const a of d.apps) m[a.id] = a; appDefs = m; } catch (_) {}
@@ -166,15 +180,29 @@
     applyPos(el, key); enableDrag(el, key);
     return el;
   }
-  function buildSystem() { for (const a of systemApps()) { systemKeys.add(a.key); makeIcon(a.key, a.title, a.url, a.w, a.h, "sys", a.iconHtml); } }
+  // Track which keys are system apps (for context-menu behaviour) — but they only render on
+  // the desktop when the user has pinned them, exactly like store apps.
+  function buildSystem() { for (const a of systemApps()) systemKeys.add(a.key); }
 
-  function reconcileStacks() {
+  // Rebuild the full desktop: pinned system apps + pinned stacks (that aren't in a folder)
+  // + folder icons + widgets. Called whenever pins/folders/widgets/stacks change.
+  function reconcileDesktop() {
     if (dragging) return;
-    const wanted = new Map(stackData.filter(s => pins.has(stackKey(s))).map(s => [stackKey(s), s]));
-    for (const [key, el] of iconEls) { if (systemKeys.has(key)) continue; if (!wanted.has(key)) { el.remove(); iconEls.delete(key); } }
+    const inFolder = new Set(); for (const f of folders) for (const k of f.keys) inFolder.add(k);
+    const wantedKeys = new Set();
+
+    // pinned system apps
+    for (const a of systemApps()) if (pins.has(a.key) && !inFolder.has(a.key)) {
+      wantedKeys.add(a.key);
+      let el = iconEls.get(a.key);
+      if (!el) el = makeIcon(a.key, a.title, a.url, a.w, a.h, "sys", a.iconHtml);
+    }
+    // pinned stack apps
     for (const s of stackData) {
-      if (!pins.has(stackKey(s))) continue;
-      const key = stackKey(s); let el = iconEls.get(key);
+      const key = stackKey(s);
+      if (!pins.has(key) || inFolder.has(key)) continue;
+      wantedKeys.add(key);
+      let el = iconEls.get(key);
       if (!el) { el = makeIcon(key, stackTitle(s), stackOpenUrl(s), "1024", "680", "", stackInner(s)); el.dataset.stackName = s.name; }
       else {
         el.dataset.title = stackTitle(s); el.dataset.url = stackOpenUrl(s);
@@ -182,13 +210,37 @@
         const lbl = el.querySelector(".mat-app-label"); if (lbl) lbl.textContent = stackTitle(s);
       }
     }
+    // folders
+    for (const f of folders) {
+      const key = "folder:" + f.id; wantedKeys.add(key);
+      let el = iconEls.get(key);
+      if (!el) el = makeIcon(key, f.name, "", "0", "0", "folder", folderInner(f));
+      else { el.dataset.title = f.name; const ico = el.querySelector(".mat-app-icon"); if (ico) ico.innerHTML = folderInner(f); const lbl = el.querySelector(".mat-app-label"); if (lbl) lbl.textContent = f.name; }
+      el.dataset.folderId = f.id;
+    }
+
+    // Remove any icon that's no longer wanted
+    for (const [key, el] of iconEls) if (!wantedKeys.has(key)) { el.remove(); iconEls.delete(key); }
+
+    reconcileWidgets();
+  }
+  // Compat alias for older callers
+  const reconcileStacks = reconcileDesktop;
+
+  // 2×2 preview of the folder's first 4 apps
+  function folderInner(f){
+    const previews = f.keys.slice(0, 4).map(k => {
+      const html = iconForKey(k) || CUBE;
+      return `<span class="mat-folder-mini">${html}</span>`;
+    }).join("");
+    return `<div class="mat-folder-preview">${previews}</div>`;
   }
   async function autoArrange() {
     try { await fetch("/api/v1/desktop/reset", { method: "POST" }); } catch (_) {}
     layout = {}; defaultIndex = 0; for (const [key, el] of iconEls) applyPos(el, key);
   }
-  async function pin(key) { pins.add(key); reconcileStacks(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
-  async function unpin(key) { pins.delete(key); reconcileStacks(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
+  async function pin(key) { pins.add(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
+  async function unpin(key) { pins.delete(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
 
   async function load() {
     try {
@@ -199,7 +251,7 @@
     const needed = new Set();
     for (const s of stackData) for (const c of (s.containers || [])) if (c.matosApp) needed.add(c.matosApp);
     if ([...needed].some(id => !(id in appDefs))) await loadDefs();
-    reconcileStacks();
+    reconcileDesktop();
     renderStartMenu(startSearch ? startSearch.value : "");
   }
   async function stackAction(name, action) { try { await fetch(`/api/v1/docker/stacks/${encodeURIComponent(name)}/${action}`, { method: "POST" }); } catch (_) {} setTimeout(load, 700); }
@@ -225,7 +277,7 @@
     const q = (filter || "").trim().toLowerCase();
     const match = t => !q || (t || "").toLowerCase().includes(q);
     const sys = systemApps().filter(a => match(a.title));
-    smSystem.innerHTML = sys.map(a => smItem(a, "sys", a.iconHtml)).join("");
+    smSystem.innerHTML = sys.map(a => smItem(a, "sys", a.iconHtml, pins.has(a.key))).join("");
     if (smSystemTitle) smSystemTitle.style.display = sys.length ? "" : "none";
     // matOS-managed store apps vs plain Docker containers/stacks
     const toItem = s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) });
@@ -248,7 +300,7 @@
     startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it) { e.preventDefault(); launchEl(it); closeStart(); } });
     startMenu.addEventListener("contextmenu", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
-      const key = it.dataset.key; if (!key || !key.startsWith("stack:")) return; // only container apps are pinnable
+      const key = it.dataset.key; if (!key) return;
       e.preventDefault();
       showCtx(e.clientX, e.clientY, [pins.has(key)
         ? { label: "Remove from desktop", action: () => unpin(key) }
@@ -274,7 +326,19 @@
     layer.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       const iconEl = e.target.closest(".mat-app");
-      if (iconEl && !systemKeys.has(iconEl.dataset.key)) {
+      // Folder icon
+      if (iconEl && iconEl.dataset.folderId) {
+        const fid = iconEl.dataset.folderId;
+        showCtx(e.clientX, e.clientY, [
+          { label: "Open", action: () => openFolderOverlay(iconEl) },
+          { label: "Rename", action: () => openFolderOverlay(iconEl) },
+          { sep: true },
+          { label: "Delete folder", danger: true, action: () => { if (confirm("Delete this folder? Its apps go back to the desktop.")) deleteFolder(fid); } },
+        ]);
+        return;
+      }
+      if (iconEl) {
+        const key = iconEl.dataset.key;
         const s = stackData.find(x => x.name === iconEl.dataset.stackName);
         const items = [{ label: "Open", action: () => launchEl(iconEl) }];
         if (s) {
@@ -285,12 +349,19 @@
           if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }); items.push({ label: "Restart", action: () => stackAction(s.name, "restart") }); }
           if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
         }
-        items.push({ sep: true }, { label: "Remove from desktop", action: () => unpin(iconEl.dataset.key) }, { label: "Auto-arrange icons", action: autoArrange });
+        // Move to folder (any icon — system or store)
+        items.push({ sep: true });
+        items.push({ label: "New folder from this app", action: () => moveKeyToFolder(key, null) });
+        for (const f of folders) if (!f.keys.includes(key)) items.push({ label: 'Move to "' + f.name + '"', action: () => moveKeyToFolder(key, f.id) });
+        items.push({ sep: true }, { label: "Remove from desktop", action: () => unpin(key) }, { label: "Auto-arrange icons", action: autoArrange });
         showCtx(e.clientX, e.clientY, items);
-      } else if (iconEl) {
-        showCtx(e.clientX, e.clientY, [{ label: "Open", action: () => launchEl(iconEl) }, { sep: true }, { label: "Auto-arrange icons", action: autoArrange }]);
       } else {
-        showCtx(e.clientX, e.clientY, [{ label: "Add apps…", action: openStart }, { sep: true }, { label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }]);
+        showCtx(e.clientX, e.clientY, [
+          { label: "Add apps…", action: openStart },
+          { label: "New folder", action: () => createFolderAt(e.clientX, e.clientY) },
+          { label: "Add widget…", action: () => showAddWidgetMenu(e.clientX, e.clientY) },
+          { sep: true }, { label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }
+        ]);
       }
     });
     document.addEventListener("click", () => hideCtx());
@@ -301,19 +372,200 @@
   // ---- taskbar (open windows) context menu ----
   const dock = document.getElementById("mat-tasks");
   if (dock) dock.addEventListener("contextmenu", (e) => {
-    const t = e.target.closest(".mat-task"); if (!t || !t.dataset.winKey) return;
     e.preventDefault();
-    const key = t.dataset.winKey;
-    showCtx(e.clientX, e.clientY, [
-      { label: "Reset app", action: () => window.MatWM.reset(key) },
-      { sep: true },
-      { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) },
-    ]);
+    const t = e.target.closest(".mat-task");
+    if (t && t.dataset.winKey) {
+      const key = t.dataset.winKey;
+      showCtx(e.clientX, e.clientY, [
+        { label: "Reset app", action: () => window.MatWM.reset(key) },
+        { sep: true },
+        { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) },
+      ]);
+    } else {
+      // Right-click on the empty part of the taskbar
+      const sys = systemApps();
+      const tm = sys.find(a => a.key === "task-manager" || a.title === "Task Manager");
+      const st = sys.find(a => a.key === "settings" || a.title === "Settings");
+      const items = [];
+      if (tm) items.push({ label: "Task Manager", action: () => open({ key: tm.key, title: tm.title, url: tm.url, iconHtml: tm.iconHtml, width: parseInt(tm.w||"1024",10), height: parseInt(tm.h||"680",10) }) });
+      if (st) items.push({ label: "Settings", action: () => open({ key: st.key, title: st.title, url: st.url, iconHtml: st.iconHtml, width: parseInt(st.w||"1024",10), height: parseInt(st.h||"680",10) }) });
+      if (items.length) showCtx(e.clientX, e.clientY, items);
+    }
   });
+
+  // ---- Folders: iOS-style overlay with scale-up animation ----
+  function openFolderOverlay(iconEl){
+    const fid = iconEl.dataset.folderId; const f = folders.find(x => x.id === fid); if (!f) return;
+    const r = iconEl.getBoundingClientRect();
+    const backdrop = document.createElement("div"); backdrop.className = "mat-folder-backdrop";
+    const panel = document.createElement("div"); panel.className = "mat-folder-panel";
+    panel.style.setProperty("--ox", (r.left + r.width/2) + "px");
+    panel.style.setProperty("--oy", (r.top + r.height/2) + "px");
+    panel.innerHTML = `<div class="mat-folder-head"><span class="mat-folder-name" contenteditable spellcheck="false">${esc(f.name)}</span>
+        <button class="mat-folder-close" title="Close">&#10005;</button></div>
+      <div class="mat-folder-grid"></div>`;
+    backdrop.appendChild(panel); document.body.appendChild(backdrop);
+    requestAnimationFrame(() => backdrop.classList.add("open"));
+
+    function renderGrid(){
+      const grid = panel.querySelector(".mat-folder-grid"); grid.innerHTML = "";
+      for (const k of f.keys) {
+        const html = iconForKey(k) || CUBE;
+        const btn = document.createElement("button"); btn.className = "mat-folder-item"; btn.dataset.key = k;
+        btn.innerHTML = `<span class="mat-folder-item-ico">${html}</span><span class="mat-folder-item-lbl">${esc(labelForKey(k))}</span>`;
+        btn.addEventListener("click", () => { launchByKey(k); closeIt(); });
+        btn.addEventListener("contextmenu", (e) => { e.preventDefault();
+          showCtx(e.clientX, e.clientY, [{ label: "Remove from folder", danger:true, action: () => removeFromFolder(f.id, k).then(() => renderGrid()) }]); });
+        grid.appendChild(btn);
+      }
+      if (!f.keys.length) grid.innerHTML = `<div class="mat-folder-empty">Empty folder — right-click an app icon → Move to folder…</div>`;
+    }
+    renderGrid();
+
+    const nameEl = panel.querySelector(".mat-folder-name");
+    nameEl.addEventListener("blur", async () => { const n = nameEl.textContent.trim(); if (n && n !== f.name) { f.name = n; iconEl.querySelector(".mat-app-label").textContent = n;
+      try { await fetch("/api/v1/desktop/folders/rename", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: f.id, name: n }) }); } catch(_){} } });
+    nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); nameEl.blur(); } });
+
+    function closeIt(){ backdrop.classList.remove("open"); backdrop.classList.add("closing"); setTimeout(() => backdrop.remove(), 220); }
+    panel.querySelector(".mat-folder-close").addEventListener("click", closeIt);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeIt(); });
+    document.addEventListener("keydown", function onKey(e){ if (e.key === "Escape") { closeIt(); document.removeEventListener("keydown", onKey); } });
+  }
+  function labelForKey(k){
+    if (k.startsWith("stack:")) { const s = stackData.find(x => x.name === k.slice(6)); return s ? stackTitle(s) : k.slice(6); }
+    const a = systemApps().find(x => x.key === k); return a ? a.title : k;
+  }
+  async function createFolderAt(x, y){
+    const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: "New Folder" }) })).json();
+    folders.push(r.folder); const key = "folder:" + r.folder.id;
+    if (x != null && y != null) { layout[key] = { x, y }; saveIcon(key, x, y); }
+    reconcileDesktop();
+  }
+  async function moveKeyToFolder(key, folderId){
+    // If no folder id, create a new one first.
+    let fid = folderId;
+    if (!fid) { const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: "New Folder" }) })).json(); folders.push(r.folder); fid = r.folder.id; }
+    await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key }) });
+    // Update local state
+    for (const f of folders) f.keys = f.keys.filter(k => k !== key);
+    const target = folders.find(f => f.id === fid); if (target && !target.keys.includes(key)) target.keys.push(key);
+    reconcileDesktop();
+  }
+  async function removeFromFolder(fid, key){
+    await fetch("/api/v1/desktop/folders/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key }) });
+    const f = folders.find(x => x.id === fid); if (f) f.keys = f.keys.filter(k => k !== key);
+    reconcileDesktop();
+  }
+  async function deleteFolder(fid){
+    await fetch("/api/v1/desktop/folders/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid }) });
+    folders = folders.filter(f => f.id !== fid); reconcileDesktop();
+  }
+
+  // ---- Widgets ----
+  const WIDGET_TYPES = {
+    clock:      { title: "Clock",         w: 3, h: 2 },
+    cpu:        { title: "CPU",           w: 3, h: 2 },
+    memory:     { title: "Memory",        w: 3, h: 2 },
+    containers: { title: "Containers",    w: 2, h: 2 },
+  };
+  const widgetEls = new Map();
+  function reconcileWidgets(){
+    const wanted = new Set(widgets.map(w => w.id));
+    for (const [id, el] of widgetEls) if (!wanted.has(id)) { el.remove(); widgetEls.delete(id); }
+    for (const w of widgets) {
+      let el = widgetEls.get(w.id);
+      if (!el) { el = buildWidget(w); widgetEls.set(w.id, el); layer.appendChild(el); }
+      const size = WIDGET_TYPES[w.type] || { w: 2, h: 2 };
+      el.style.width  = (size.w * CELL_W) + "px";
+      el.style.height = (size.h * CELL_H - 8) + "px";
+      el.style.left = (w.x || MARGIN) + "px"; el.style.top = (w.y || MARGIN) + "px";
+    }
+    widgetTick();
+  }
+  function buildWidget(w){
+    const el = document.createElement("div"); el.className = "mat-widget mat-widget-" + w.type; el.dataset.id = w.id;
+    el.innerHTML = `<div class="mat-widget-body" data-body></div>`;
+    enableWidgetDrag(el, w);
+    el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      showCtx(e.clientX, e.clientY, [
+        { label: "Remove widget", danger: true, action: async () => {
+          await fetch("/api/v1/desktop/widgets/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id }) });
+          widgets = widgets.filter(x => x.id !== w.id); reconcileDesktop();
+        } }
+      ]);
+    });
+    return el;
+  }
+  function enableWidgetDrag(el, w){
+    let sx, sy, ox, oy, moved = false, active = false;
+    el.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      // Don't grab drags from interactive descendants
+      if (e.target.closest("button, a, input, [contenteditable]")) return;
+      active = true; moved = false; sx = e.clientX; sy = e.clientY;
+      ox = parseFloat(el.style.left)||0; oy = parseFloat(el.style.top)||0;
+      try { el.setPointerCapture(e.pointerId); } catch(_){}
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!active) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!moved && Math.hypot(dx,dy) > 5) { moved = true; dragging = true; el.classList.add("dragging"); }
+      if (moved) { el.style.left = (ox + dx) + "px"; el.style.top = (oy + dy) + "px"; }
+    });
+    const end = (e) => { if (!active) return; active = false;
+      try { el.releasePointerCapture(e.pointerId); } catch(_){}
+      if (moved) { el.classList.remove("dragging");
+        const nx = Math.max(0, parseFloat(el.style.left)), ny = Math.max(0, parseFloat(el.style.top));
+        w.x = nx; w.y = ny;
+        fetch("/api/v1/desktop/widgets/move", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id, x: nx, y: ny }) });
+        setTimeout(() => { dragging = false; }, 60);
+      }
+    };
+    el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+  }
+  // Live widget content
+  function widgetTick(){
+    for (const w of widgets) {
+      const el = widgetEls.get(w.id); if (!el) continue;
+      const body = el.querySelector("[data-body]"); if (!body) continue;
+      if (w.type === "clock") {
+        const d = new Date();
+        body.innerHTML = `<div class="wg-clock">${d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>
+          <div class="wg-sub">${d.toLocaleDateString([], { weekday:"long", day:"2-digit", month:"long" })}</div>`;
+      } else if (w.type === "containers") {
+        const running = stackData.reduce((n,s)=>n+(s.running||0),0);
+        const total = stackData.reduce((n,s)=>n+(s.total||0),0);
+        body.innerHTML = `<div class="wg-num">${running}<span class="wg-sub"> / ${total}</span></div><div class="wg-lbl">Containers running</div>`;
+      } else if (w.type === "cpu" || w.type === "memory") {
+        // Fetch a lightweight snapshot: use /docker/containers list + rely on the widget's own periodic tick.
+        // We approximate with a bar for "load"; live SSE per widget would be overkill.
+        const runningCount = stackData.reduce((n,s)=>n+(s.running||0),0);
+        body.innerHTML = `<div class="wg-num">${w.type === "cpu" ? "CPU" : "MEM"}</div>
+          <div class="wg-sub">${runningCount} running containers</div>
+          <div class="wg-hint">Open Task Manager → Performance for live graphs</div>`;
+      }
+    }
+  }
+  setInterval(widgetTick, 30000);
+  setInterval(() => { const cw = widgetEls; for (const [id, el] of cw) { const w = widgets.find(x => x.id === id); if (w && w.type === "clock") widgetTick(); break; } }, 15000);
+  async function addWidget(type){
+    const spec = WIDGET_TYPES[type] || { w:2, h:2 };
+    // Place it near the top-right corner of the layer, but never off-screen
+    const lw = (layer && layer.clientWidth) || window.innerWidth;
+    const x = Math.max(MARGIN, lw - spec.w*CELL_W - MARGIN);
+    const y = MARGIN;
+    const r = await (await fetch("/api/v1/desktop/widgets/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ type, x, y, w: spec.w, h: spec.h }) })).json();
+    widgets.push(r.widget); reconcileDesktop();
+  }
+  function showAddWidgetMenu(x, y){
+    showCtx(x, y, Object.entries(WIDGET_TYPES).map(([k, v]) => ({ label: v.title, action: () => addWidget(k) })));
+  }
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; } }
     catch (_) { layout = {}; }
     await loadDefs();
     buildSystem(); await load(); setInterval(load, 15000);
