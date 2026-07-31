@@ -47,7 +47,9 @@ public static class StoreCatalog
             "A painless self-hosted Git service with issues, PRs and a package registry. Uses the built-in SQLite database, so it stays a single container. First visit runs a short install wizard — just create the admin account.",
             "Development", "gitea/gitea:1.27", 3000, "🍵",
             new[] { "/data" },
-            new Dictionary<string, string> { ["USER_UID"] = "1000", ["USER_GID"] = "1000", ["GITEA__database__DB_TYPE"] = "sqlite3" },
+            // DISABLE_FRAME_OPTIONS=true lets Gitea's UI load inside a matOS window (Gitea sends
+            // X-Frame-Options: SAMEORIGIN by default, which blocks embedding under a different host).
+            new Dictionary<string, string> { ["USER_UID"] = "1000", ["USER_GID"] = "1000", ["GITEA__database__DB_TYPE"] = "sqlite3", ["GITEA__server__DISABLE_FRAME_OPTIONS"] = "true" },
             new[] { new AppAction("Site administration", "/-/admin"), new AppAction("Explore repositories", "/explore/repos") },
             new[]
             {
