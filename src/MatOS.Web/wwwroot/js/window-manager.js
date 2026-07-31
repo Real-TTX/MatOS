@@ -55,14 +55,14 @@
         ${iconMarkup}
         <span class="mat-title" title="${escapeAttr(opts.title || "")}">${escapeHtml(opts.title || "")}</span>
         <div class="mat-win-actions">
-          ${isExternal ? `<button class="mat-win-btn mat-open-ext" title="Open in new tab" aria-label="Open in new tab">&#8599;</button>` : ""}
+          ${isExternal ? `<button class="mat-win-btn mat-addr-toggle" title="Show address bar" aria-label="Toggle address bar">&#128279;</button><button class="mat-win-btn mat-open-ext" title="Open in new tab" aria-label="Open in new tab">&#8599;</button>` : ""}
           <button class="mat-win-btn mat-min" title="Minimize" aria-label="Minimize">&#8211;</button>
           <button class="mat-win-btn mat-max" title="Maximize" aria-label="Maximize">&#9723;</button>
           <button class="mat-win-btn mat-close" title="Close" aria-label="Close">&#10005;</button>
         </div>
       </header>
       <div class="mat-win-body">
-        ${isExternal ? `<div class="mat-appbar">
+        ${isExternal ? `<div class="mat-appbar" hidden>
           <span class="mat-appbar-url" title="${escapeAttr(opts.url)}">${escapeHtml(opts.url)}</span>
           <button class="mat-appbar-open" title="Open in new tab">Open in new tab &#8599;</button>
         </div>` : ""}
@@ -93,6 +93,8 @@
     el.querySelector(".mat-max").addEventListener("click", () => toggleMax(w));
     el.querySelectorAll(".mat-open-ext, .mat-appbar-open").forEach(b =>
       b.addEventListener("click", () => window.open(opts.url, "_blank", "noopener")));
+    const addrToggle = el.querySelector(".mat-addr-toggle"), appbar = el.querySelector(".mat-appbar");
+    if (addrToggle && appbar) addrToggle.addEventListener("click", () => { appbar.hidden = !appbar.hidden; addrToggle.classList.toggle("on", !appbar.hidden); });
 
     el.addEventListener("pointerdown", () => bringToFront(w), true);
     makeDraggable(w);

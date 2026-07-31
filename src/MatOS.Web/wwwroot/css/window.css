@@ -62,6 +62,8 @@
 .mat-win-loading { position: absolute; inset: 0; display: grid; place-items: center; background: #0e1220; z-index: 2; }
 .mat-appbar { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem 0.35rem 0.75rem;
   background: rgba(255,255,255,0.05); border-bottom: 1px solid var(--border); }
+.mat-appbar[hidden] { display: none; }
+.mat-addr-toggle.on { background: var(--surface-3); color: var(--text); }
 .mat-appbar-url { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--muted); font-size: 0.78rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .mat-appbar-open { flex: 0 0 auto; padding: 0.3rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);

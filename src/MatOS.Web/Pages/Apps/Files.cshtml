@@ -19,6 +19,7 @@
         </div>
         <div class="fx-tree" id="fx-tree"><div class="fx-muted" style="padding:0.6rem">Loading…</div></div>
     </aside>
+    <div class="fx-split" id="fx-split" title="Drag to resize"></div>
 
     <section class="fx-main">
         <div class="fx-bar">
@@ -98,6 +99,8 @@
 <style>
 .fx { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; background:var(--mat-bg); }
 .fx-side { width:250px; flex:0 0 auto; border-right:1px solid var(--mat-border); overflow:auto; background:rgba(255,255,255,0.02); }
+.fx-split { width:6px; flex:0 0 auto; cursor:col-resize; background:transparent; touch-action:none; }
+.fx-split:hover, .fx-split.drag { background:var(--mat-accent); }
 .fx-side-head { display:flex; flex-direction:column; gap:0.5rem; padding:0.7rem 0.8rem; border-bottom:1px solid var(--mat-border); }
 .fx-side-head > span { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--mat-text-muted); }
 .fx-seg { display:inline-flex; background:rgba(255,255,255,0.06); border-radius:8px; padding:2px; }
@@ -374,6 +377,16 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
 
   // empty-area context menu (bound once)
   document.getElementById("fx-list").addEventListener("contextmenu",e=>{ if(cur.volume && !e.target.closest("[data-name]")){ e.preventDefault(); sel=null; markSel(); updateOps(); showCtx(e.clientX,e.clientY,false); } });
+
+  // ---- resizable sidebar ----
+  (function(){ const side=document.querySelector(".fx-side"), split=document.getElementById("fx-split"), wrap=document.querySelector(".fx");
+    const saved=parseInt(localStorage.getItem("fx-side-w")||"0",10); if(saved) side.style.width=saved+"px";
+    let active=false;
+    split.addEventListener("pointerdown",e=>{ active=true; split.classList.add("drag"); try{split.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); });
+    split.addEventListener("pointermove",e=>{ if(!active)return; const r=wrap.getBoundingClientRect(); let w=e.clientX-r.left; w=Math.max(160,Math.min(w,r.width-280)); side.style.width=w+"px"; });
+    const end=e=>{ if(active){ active=false; split.classList.remove("drag"); try{split.releasePointerCapture(e.pointerId);}catch(_){} localStorage.setItem("fx-side-w",parseInt(side.style.width)||250); } };
+    split.addEventListener("pointerup",end); split.addEventListener("pointercancel",end);
+  })();
 
   // ---- init ----
   buildTree(); if(root.dataset.volume) openFolder(root.dataset.volume,root.dataset.path||"");
