@@ -69,6 +69,37 @@ public static class DockerApi
             return Guard(() => docker.StackActionAsync(name, action, ct));
         });
 
+        g.MapGet("/routes", async (DockerService docker, MatOS.Web.Services.JsonConfigService config, CancellationToken ct) =>
+        {
+            var all = await docker.ListContainersAsync(true, ct);
+            var baseDomain = config.Get<MatOS.Web.Config.SystemConfig>("system").BaseDomain;
+            var routes = all
+                .Where(c => c.MatosManaged || c.Labels.GetValueOrDefault("matcad.enable", "") == "true" || c.Labels.ContainsKey("matcad.host"))
+                .Select(c =>
+                {
+                    var enabled = c.Labels.GetValueOrDefault("matcad.enable", "") == "true";
+                    var host = c.Labels.GetValueOrDefault("matcad.host", "");
+                    var port = c.Labels.GetValueOrDefault("matcad.port", "");
+                    return new
+                    {
+                        id = c.Id,
+                        name = c.Name,
+                        title = c.Labels.GetValueOrDefault(MatOS.Web.Docker.MatosLabels.Title, c.Name),
+                        app = c.Labels.GetValueOrDefault(MatOS.Web.Docker.MatosLabels.App, ""),
+                        instance = c.Labels.GetValueOrDefault(MatOS.Web.Docker.MatosLabels.Instance, ""),
+                        matosManaged = c.MatosManaged,
+                        running = c.IsRunning,
+                        enabled,
+                        published = enabled && !string.IsNullOrEmpty(host),
+                        host,
+                        port,
+                        upstream = string.IsNullOrEmpty(port) ? "" : $"http://{c.Name}:{port}"
+                    };
+                })
+                .OrderByDescending(r => r.published).ThenBy(r => r.title);
+            return Results.Ok(new { baseDomain, routes });
+        });
+
         g.MapGet("/volumes", async (DockerService docker, CancellationToken ct) =>
         {
             var vols = await docker.ListVolumesAsync(true, ct);

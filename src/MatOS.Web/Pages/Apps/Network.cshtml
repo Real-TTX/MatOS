@@ -1,0 +1,80 @@
+@page "/apps/network"
+@model MatOS.Web.Pages.Apps.NetworkModel
+@{
+    ViewData["Title"] = "Network";
+    ViewData["Description"] = "Reverse-proxy routes. Publish an app to make it reachable from outside matOS.";
+    Layout = "_WindowLayout";
+}
+
+<div class="card" id="nw-info" style="margin-bottom:1rem">
+    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+        <strong>Base domain</strong> <span class="mono" id="nw-base">…</span>
+        <span class="fx-muted" style="font-size:0.82rem">— published apps get <span class="mono">&lt;app&gt;.&lt;base domain&gt;</span> (change it in Settings).</span>
+    </div>
+    <div class="fx-muted" style="font-size:0.8rem;margin-top:0.4rem">Publishing sets the app's Matcad labels and recreates it; it becomes reachable externally once Matcad's Docker discovery is enabled.</div>
+</div>
+
+<div id="nw-error" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
+
+<div class="card" style="padding:0;overflow:hidden">
+    <table class="nwt">
+        <thead><tr><th>App</th><th>Status</th><th>Exposure</th><th>Hostname / upstream</th><th></th></tr></thead>
+        <tbody id="nw-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+    </table>
+</div>
+
+@section Head {
+<style>
+table.nwt { width:100%; border-collapse:collapse; }
+table.nwt th, table.nwt td { padding:0.55rem 0.9rem; text-align:left; vertical-align:middle; }
+table.nwt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); }
+table.nwt tbody tr { border-top:1px solid var(--mat-border); }
+.nw-pub { display:flex; gap:0.4rem; align-items:center; justify-content:flex-end; }
+.nw-pub input { width:220px; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const rowsEl=document.getElementById("nw-rows"), errEl=document.getElementById("nw-error");
+  let baseDomain="apps.localhost";
+
+  async function load(){
+    let d; try{ d=await (await fetch("/api/v1/docker/routes")).json(); }catch(_){ rowsEl.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Docker not reachable.</td></tr>`; return; }
+    baseDomain=d.baseDomain||"apps.localhost"; document.getElementById("nw-base").textContent=baseDomain;
+    const rs=d.routes||[];
+    if(!rs.length){ rowsEl.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No matOS apps or proxy routes yet.</td></tr>`; return; }
+    rowsEl.innerHTML=rs.map(r=>{
+      const exposure = r.published ? '<span class="pill on">published</span>' : (r.matosManaged?'<span class="pill off">internal</span>':'<span class="fx-muted">—</span>');
+      const suggested = r.host || (r.app? `${r.app}${r.instance?'-'+r.instance:''}.${baseDomain}` : `${r.name}.${baseDomain}`);
+      const hostCell = r.published ? `<a href="//${escA(r.host)}" target="_blank" rel="noopener" class="mono">${esc(r.host)}</a><div class="fx-muted mono" style="font-size:0.72rem">${esc(r.upstream)}</div>` : `<span class="fx-muted mono">${esc(r.upstream||'—')}</span>`;
+      const ctl = r.matosManaged ? (r.published
+          ? `<div class="nw-pub"><button class="ui-btn danger" data-unpub="${r.id}">Unpublish</button></div>`
+          : `<div class="nw-pub"><input class="ui-input mono" value="${escA(suggested)}" data-host="${r.id}"><button class="ui-btn primary" data-pub="${r.id}">Publish</button></div>`)
+        : '';
+      return `<tr>
+        <td><strong>${esc(r.title)}</strong><div class="mono fx-muted" style="font-size:0.72rem">${esc(r.name)}</div></td>
+        <td>${r.running?'<span class="pill on">running</span>':'<span class="pill off">stopped</span>'}</td>
+        <td>${exposure}</td>
+        <td>${hostCell}</td>
+        <td>${ctl}</td></tr>`;
+    }).join("");
+    rowsEl.querySelectorAll("[data-pub]").forEach(b=>b.addEventListener("click",()=>{ const h=document.querySelector(`[data-host="${b.dataset.pub}"]`); doPublish(b.dataset.pub,true,h?h.value.trim():"",b); }));
+    rowsEl.querySelectorAll("[data-unpub]").forEach(b=>b.addEventListener("click",()=>doPublish(b.dataset.unpub,false,"",b)));
+  }
+
+  async function doPublish(id,enabled,hostname,btn){
+    const orig=btn.innerHTML; btn.disabled=true; btn.textContent=enabled?"Publishing…":"Updating…"; errEl.style.display="none";
+    try{ const r=await fetch("/api/v1/store/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,enabled,hostname})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.title||r.status); }
+      setTimeout(load,2500);
+    }catch(e){ errEl.style.display=""; errEl.textContent="Publish failed: "+e.message; btn.disabled=false; btn.innerHTML=orig; }
+  }
+
+  load(); setInterval(load,10000);
+})();
+</script>
+}

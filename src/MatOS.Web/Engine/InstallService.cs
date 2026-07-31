@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Docker.DotNet.Models;
+using MatOS.Web.Config;
 using MatOS.Web.Docker;
 using MatOS.Web.Services;
 
@@ -101,13 +102,15 @@ public class InstallService
         catch (Exception ex) { _log.LogWarning(ex, "Install (image) of {App} failed", app.Id); return new(false, name, port, ex.Message); }
     }
 
+    // Installs are internal by default (matcad.enable=false); "Publish" turns on the
+    // reverse-proxy route + hostname. matcad.port is kept for when it gets published.
     private Dictionary<string, string> ManagedLabels(AppDef app, int instance, bool ui) => new()
     {
         ["matos.managed"] = "true",
         ["matos.app"] = app.Id,
         ["matos.instance"] = instance.ToString(),
         ["matos.title"] = app.Name,
-        ["matcad.enable"] = ui ? "true" : "false",
+        ["matcad.enable"] = "false",
         ["matcad.port"] = app.UiPort.ToString(),
     };
 
@@ -140,7 +143,7 @@ public class InstallService
             sb.AppendLine($"      matos.title: \"{YamlStr(app.Name)}\"");
             if (s == ui)
             {
-                sb.AppendLine("      matcad.enable: \"true\"");
+                sb.AppendLine("      matcad.enable: \"false\"");
                 sb.AppendLine($"      matcad.port: \"{app.UiPort}\"");
                 sb.AppendLine("    ports:");
                 sb.AppendLine($"      - \"{port}:{app.UiPort}\"");
@@ -186,6 +189,74 @@ public class InstallService
             return new(true, null, 0, null);
         }
         catch (Exception ex) { return new(false, null, 0, ex.Message); }
+    }
+
+    // ---- Publish / unpublish (external reverse-proxy route via Matcad) ----
+    public async Task<InstallResult> PublishAsync(string id, bool enabled, string? hostname, CancellationToken ct = default)
+    {
+        try
+        {
+            var detail = await _docker.InspectDetailAsync(id, ct);
+            if (detail == null) return new(false, null, 0, "Container not found.");
+            var labels = detail.Info.Labels;
+            var appId = labels.GetValueOrDefault(MatosLabels.App, "");
+            var instance = labels.GetValueOrDefault(MatosLabels.Instance, "");
+            var baseDomain = _config.Get<SystemConfig>("system").BaseDomain;
+            var host = !string.IsNullOrWhiteSpace(hostname) ? hostname!.Trim()
+                     : $"{Slug(appId)}{(string.IsNullOrEmpty(instance) ? "" : "-" + instance)}.{baseDomain}";
+
+            if (!string.IsNullOrEmpty(detail.ComposeProject) && detail.ComposeProject.StartsWith("matos-", StringComparison.Ordinal))
+                await PublishComposeAsync(appId, detail.ComposeProject!, enabled, host, ct);
+            else
+                await _docker.RecreateWithLabelsAsync(id, new Dictionary<string, string?>
+                {
+                    ["matcad.enable"] = enabled ? "true" : "false",
+                    ["matcad.host"] = enabled ? host : null
+                }, ct);
+
+            return new(true, enabled ? host : null, 0, null);
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "Publish of {Id} failed", id); return new(false, null, 0, ex.Message); }
+    }
+
+    private async Task PublishComposeAsync(string appId, string project, bool enabled, string host, CancellationToken ct)
+    {
+        var app = _store.Find(appId) ?? throw new InvalidOperationException("App definition not found.");
+        var services = _store.ParseServices(app.Compose);
+        if (services.Count == 0) throw new InvalidOperationException("Compose has no services.");
+        var ui = !string.IsNullOrWhiteSpace(app.UiService) && services.Contains(app.UiService) ? app.UiService : services[0];
+
+        var all = await _docker.ListContainersAsync(true, ct);
+        var uiC = all.FirstOrDefault(c => c.Labels.GetValueOrDefault(ComposeLabels.Project, "") == project
+                                       && c.Labels.GetValueOrDefault(ComposeLabels.Service, "") == ui);
+        var instance = uiC?.Labels.GetValueOrDefault(MatosLabels.Instance, "1") ?? "1";
+        int port = uiC?.Ports.FirstOrDefault(p => p.PublicPort is > 0)?.PublicPort ?? await NextFreePortAsync(ct);
+
+        var dir = Path.Combine(Path.GetTempPath(), "matos", project);
+        Directory.CreateDirectory(dir);
+        await File.WriteAllTextAsync(Path.Combine(dir, "docker-compose.yml"), app.Compose, ct);
+
+        var sb = new StringBuilder(); sb.AppendLine("services:");
+        foreach (var s in services)
+        {
+            sb.AppendLine($"  \"{s}\":");
+            sb.AppendLine("    labels:");
+            sb.AppendLine("      matos.managed: \"true\"");
+            sb.AppendLine($"      matos.app: \"{app.Id}\"");
+            sb.AppendLine($"      matos.instance: \"{instance}\"");
+            sb.AppendLine($"      matos.title: \"{YamlStr(app.Name)}\"");
+            if (s == ui)
+            {
+                sb.AppendLine($"      matcad.enable: \"{(enabled ? "true" : "false")}\"");
+                sb.AppendLine($"      matcad.port: \"{app.UiPort}\"");
+                if (enabled) sb.AppendLine($"      matcad.host: \"{host}\"");
+                sb.AppendLine("    ports:");
+                sb.AppendLine($"      - \"{port}:{app.UiPort}\"");
+            }
+        }
+        await File.WriteAllTextAsync(Path.Combine(dir, "matos-override.yml"), sb.ToString(), ct);
+        if (!File.Exists(Path.Combine(dir, ".env"))) await File.WriteAllTextAsync(Path.Combine(dir, ".env"), "", ct);
+        await RunCompose(dir, new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, null, ct);
     }
 
     // ---- helpers ----

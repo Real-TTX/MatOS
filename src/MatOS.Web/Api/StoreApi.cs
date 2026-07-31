@@ -9,6 +9,7 @@ public static class StoreApi
     public record InstallBody(string AppId, Dictionary<string, string>? Variables);
     public record UninstallBody(string Id, bool RemoveVolume);
     public record DeleteAppBody(string Id);
+    public record PublishBody(string Id, bool Enabled, string? Hostname);
 
     public static void MapStoreApi(this IEndpointRouteBuilder api)
     {
@@ -81,6 +82,12 @@ public static class StoreApi
             if (string.IsNullOrWhiteSpace(store.Find(id)?.Name))
                 return Results.BadRequest(new { error = "A display name is required (set it in the form or x-matos: name)." });
             return Results.Ok(new { id });
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/publish", async (PublishBody b, InstallService svc, CancellationToken ct) =>
+        {
+            var r = await svc.PublishAsync(b.Id, b.Enabled, b.Hostname, ct);
+            return r.Ok ? Results.Ok(new { host = r.Name }) : Results.Problem(r.Error);
         }).RequireAuthorization("Admin");
 
         g.MapPost("/apps/delete", async (DeleteAppBody b, StoreService store) =>

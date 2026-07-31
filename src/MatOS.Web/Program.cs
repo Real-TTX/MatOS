@@ -56,6 +56,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AllowAnonymousToPage("/Error");
     o.Conventions.AuthorizeFolder("/Apps/Users", "Admin");
     o.Conventions.AuthorizePage("/Apps/Files", "Admin");
+    o.Conventions.AuthorizePage("/Apps/Network", "Admin");
 });
 builder.Services.Configure<RouteOptions>(o => o.LowercaseUrls = true);
 builder.Services.AddProblemDetails();
