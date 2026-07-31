@@ -12,6 +12,7 @@
     <div class="win-toolbar">
         <div class="tabbar" id="tm-tabs">
             <button class="tab active" data-tab="containers">Containers</button>
+            <button class="tab" data-tab="performance">Performance</button>
             <button class="tab" data-tab="stacks">Stacks</button>
             <button class="tab" data-tab="images">Images</button>
             <button class="tab" data-tab="volumes">Volumes</button>
@@ -52,6 +53,14 @@ table.tmt tbody tr { border-bottom:1px solid var(--mat-border); }
 table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
 .bar { position:relative; height:6px; border-radius:999px; background:rgba(255,255,255,0.12); overflow:hidden; min-width:60px; }
 .bar > span { position:absolute; inset:0 auto 0 0; background:var(--mat-accent); }
+.perf-wrap { display:grid; grid-template-columns:1fr; gap:1rem; padding:1rem; }
+@@media (min-width:720px){ .perf-wrap { grid-template-columns:1fr 1fr; } }
+.perf-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; padding:0.9rem 1rem; }
+.perf-head { display:flex; align-items:baseline; justify-content:space-between; }
+.perf-head span:first-child { font-weight:700; }
+.perf-val { font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; }
+.perf-sub { color:var(--mat-text-muted); font-size:0.76rem; margin-bottom:0.5rem; }
+.perf-chart .pchart { width:100%; height:140px; display:block; }
 .tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
 .tm-acts .ui-btn { padding:0.28rem 0.5rem; font-size:0.78rem; }
 </style>
@@ -67,7 +76,8 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
 
   let tab="containers", filter="", sort={key:"name",dir:1};
   let data={containers:[],stacks:[],images:[],volumes:[]};
-  const stats=new Map(); const streams=[];
+  const stats=new Map(); const statStreams=new Map();
+  const cpuHist=[], memHist=[]; const HISTORY=60;
   const focusId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
 
   document.querySelectorAll("#tm-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
@@ -94,7 +104,7 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
       for(const c of data.containers) c._project=proj[c.id]||"";
       const err=cs.lastError||ss.lastError; const e=document.getElementById("tm-error");
       if(err){ e.style.display=""; e.textContent="Docker: "+err; } else e.style.display="none";
-      tiles(); render();
+      tiles(); render(); syncStats();
       if(focusId){ const c=data.containers.find(x=>x.id===focusId||x.shortId===focusId); if(c) openLogs(c.id,c.name); }
     }catch(_){ const e=document.getElementById("tm-error"); e.style.display=""; e.textContent="Docker is not reachable."; }
   }
@@ -119,14 +129,13 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
     const k=th.dataset.sort; sort = sort.key===k?{key:k,dir:-sort.dir}:{key:k,dir:1}; render(); })); }
 
   function render(){
-    closeStreams();
     const pane=document.getElementById("tm-pane");
+    if(tab==="performance"){ pane.innerHTML=renderPerformance(); drawPerf(); return; }
     if(tab==="containers") pane.innerHTML=renderContainers();
     else if(tab==="stacks") pane.innerHTML=renderStacks();
     else if(tab==="images") pane.innerHTML=renderImages();
     else pane.innerHTML=renderVolumes();
     wireSort(); wireActions();
-    if(tab==="containers") openStats();
   }
 
   // ---- Containers ----
@@ -218,18 +227,48 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   async function cAction(id,a){ try{ await fetch(`/api/v1/docker/containers/${id}/${a}`,{method:"POST"});}catch(_){ } setTimeout(loadAll,700); }
   async function sAction(name,a){ try{ await fetch(`/api/v1/docker/stacks/${encodeURIComponent(name)}/${a}`,{method:"POST"});}catch(_){ } setTimeout(loadAll,700); }
 
-  // ---- live stats (containers tab only) ----
-  function openStats(){
-    const running=data.containers.filter(c=>c.running).slice(0,50);
-    for(const c of running){
-      const src=new EventSource(`/api/v1/docker/containers/${c.id}/stats/stream`);
-      src.addEventListener("stat",e=>{ try{ const s=JSON.parse(e.data); stats.set(c.id,{cpu:s.cpuPercent,mem:s.memoryBytes});
-        const cc=document.querySelector(`#tm-pane [data-cpu="${c.id}"]`); const mc=document.querySelector(`#tm-pane [data-mem="${c.id}"]`);
+  // ---- live stats: one stream per running container, kept in sync with the data ----
+  function syncStats(){
+    const running=new Set(data.containers.filter(c=>c.running).slice(0,60).map(c=>c.id));
+    for(const [id,src] of statStreams){ if(!running.has(id)){ try{src.close();}catch(_){} statStreams.delete(id); stats.delete(id); } }
+    for(const id of running){ if(statStreams.has(id))continue;
+      const src=new EventSource(`/api/v1/docker/containers/${id}/stats/stream`);
+      src.addEventListener("stat",e=>{ try{ const s=JSON.parse(e.data); stats.set(id,{cpu:s.cpuPercent,mem:s.memoryBytes});
+        const cc=document.querySelector(`#tm-pane [data-cpu="${id}"]`); const mc=document.querySelector(`#tm-pane [data-mem="${id}"]`);
         if(cc)cc.textContent=s.cpuPercent.toFixed(1)+"%"; if(mc)mc.textContent=fmtB(s.memoryBytes); }catch(_){}} );
-      src.onerror=()=>{}; streams.push(src);
+      src.onerror=()=>{}; statStreams.set(id,src);
     }
   }
-  function closeStreams(){ while(streams.length){ try{streams.pop().close();}catch(_){}} }
+
+  // ---- Performance tab (live CPU / memory graphs) ----
+  function renderPerformance(){
+    return `<div class="perf-wrap">
+      <div class="perf-card"><div class="perf-head"><span>CPU</span><span class="perf-val" id="perf-cpu">—</span></div>
+        <div class="perf-sub" id="perf-cpu-peak"></div><div class="perf-chart" id="perf-cpu-chart"></div></div>
+      <div class="perf-card"><div class="perf-head"><span>Memory</span><span class="perf-val" id="perf-mem">—</span></div>
+        <div class="perf-sub" id="perf-mem-peak"></div><div class="perf-chart" id="perf-mem-chart"></div></div>
+    </div>`;
+  }
+  function areaChart(el,d,o){
+    const W=600,H=140,n=d.length,max=o.max||1;
+    if(n<2){ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pchart"></svg>`; return; }
+    const step=W/(n-1), pts=d.map((v,i)=>[i*step,H-Math.min(1,(v||0)/max)*H]);
+    const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+    const area="M0 "+H+" "+pts.map(p=>"L"+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ")+" L"+W+" "+H+" Z";
+    el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pchart">
+      <defs><linearGradient id="${o.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.color}" stop-opacity="0.35"/><stop offset="1" stop-color="${o.color}" stop-opacity="0"/></linearGradient></defs>
+      <line x1="0" y1="70" x2="${W}" y2="70" stroke="rgba(255,255,255,0.07)"/>
+      <path d="${area}" fill="url(#${o.id})"/><path d="${line}" fill="none" stroke="${o.color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  function drawPerf(){
+    const cpuNow=cpuHist.length?cpuHist[cpuHist.length-1]:0, memNow=memHist.length?memHist[memHist.length-1]:0;
+    const cpuPeak=cpuHist.length?Math.max(...cpuHist):0, memPeak=memHist.length?Math.max(...memHist):0;
+    const set=(id,v)=>{ const el=document.getElementById(id); if(el)el.textContent=v; };
+    set("perf-cpu",cpuNow.toFixed(1)+"%"); set("perf-mem",fmtB(memNow));
+    set("perf-cpu-peak","peak "+cpuPeak.toFixed(1)+"%  ·  last "+(HISTORY*2)+"s"); set("perf-mem-peak","peak "+fmtB(memPeak));
+    const cc=document.getElementById("perf-cpu-chart"); if(cc)areaChart(cc,cpuHist,{max:Math.max(100,cpuPeak),color:"#8b5cf6",id:"gcpu"});
+    const mc=document.getElementById("perf-mem-chart"); if(mc)areaChart(mc,memHist,{max:Math.max(1,memPeak),color:"#22b8ff",id:"gmem"});
+  }
 
   // ---- logs drawer ----
   let logSrc=null,statSrc=null;
@@ -246,6 +285,9 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   }
   document.getElementById("tm-logs-close").addEventListener("click",()=>{ if(logSrc)logSrc.close(); if(statSrc)statSrc.close(); document.getElementById("tm-logs").style.display="none"; });
 
+  setInterval(()=>{ let tc=0,tm=0; for(const c of data.containers){ if(c.running){ const s=stats.get(c.id); if(s){ tc+=s.cpu||0; tm+=s.mem||0; } } }
+    cpuHist.push(tc); memHist.push(tm); if(cpuHist.length>HISTORY){ cpuHist.shift(); memHist.shift(); }
+    if(tab==="performance") drawPerf(); }, 2000);
   loadAll(); setInterval(loadAll,10000);
 })();
 </script>
