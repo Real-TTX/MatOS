@@ -14,12 +14,14 @@ public class AppVariable
 }
 
 /// <summary>Unified app definition — built-in, custom single-image, or a Compose stack.
-/// Kind is "image" or "compose". Icon may be an emoji, an image URL, or a data: URI.</summary>
+/// Kind is "image" or "compose". Icon may be an emoji, an image URL, or a data: URI.
+/// Source is the name of the remote catalog it came from ("" = built-in or local custom).</summary>
 public record AppDef(
     string Id, string Name, string Tagline, string Description, string Category,
     string Image, int UiPort, string Icon, string[] Volumes,
     Dictionary<string, string> Env, AppAction[] Actions,
-    string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn);
+    string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn,
+    string Source = "");
 
 // ---- Custom (user-defined) apps: mutable shapes persisted as customapps.json ----
 
@@ -46,6 +48,7 @@ public class CustomApp
     public Dictionary<string, string> Env { get; set; } = new();
     public List<AppActionDef> Actions { get; set; } = new();
     public List<AppVariable> Variables { get; set; } = new();
+    public string Source { get; set; } = "";              // remote catalog name ("" = local)
 }
 
 public class CustomAppStore { public List<CustomApp> Apps { get; set; } = new(); }

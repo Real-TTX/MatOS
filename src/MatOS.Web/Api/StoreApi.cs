@@ -10,6 +10,9 @@ public static class StoreApi
     public record UninstallBody(string Id, bool RemoveVolume);
     public record DeleteAppBody(string Id);
     public record PublishBody(string Id, bool Enabled, string? Hostname);
+    public record AddSourceBody(string Name, string Url);
+    public record SourceIdBody(string Id);
+    public record ToggleSourceBody(string Id, bool Enabled);
 
     public static void MapStoreApi(this IEndpointRouteBuilder api)
     {
@@ -20,7 +23,7 @@ public static class StoreApi
             apps = store.AllApps().Select(a => new
             {
                 a.Id, a.Name, a.Tagline, a.Description, a.Category, a.Icon, a.Image, a.UiPort, a.BuiltIn,
-                a.Kind, a.Compose, a.UiService,
+                a.Kind, a.Compose, a.UiService, a.Source,
                 volumes = a.Volumes,
                 env = a.Env,
                 actions = a.Actions.Select(x => new { x.Label, x.Url }),
@@ -94,6 +97,39 @@ public static class StoreApi
         {
             await store.Delete(b.Id);
             return Results.Ok(new { ok = true });
+        }).RequireAuthorization("Admin");
+
+        // ---- Remote catalog sources ----
+        g.MapGet("/sources", (StoreSourceService src) => Results.Ok(new { sources = src.Sources() }))
+            .RequireAuthorization("Admin");
+
+        g.MapPost("/sources/add", async (AddSourceBody b, StoreSourceService src) =>
+        {
+            if (string.IsNullOrWhiteSpace(b.Url)) return Results.BadRequest(new { error = "A URL is required." });
+            var s = await src.AddSource(b.Name, b.Url);
+            return Results.Ok(new { source = s });
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/sources/delete", async (SourceIdBody b, StoreSourceService src) =>
+        {
+            await src.RemoveSource(b.Id);
+            return Results.Ok(new { ok = true });
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/sources/toggle", async (ToggleSourceBody b, StoreSourceService src) =>
+        {
+            await src.Toggle(b.Id, b.Enabled);
+            return Results.Ok(new { ok = true });
+        }).RequireAuthorization("Admin");
+
+        g.MapPost("/sources/sync", async (SourceIdBody? b, StoreSourceService src, CancellationToken ct) =>
+        {
+            if (b != null && !string.IsNullOrWhiteSpace(b.Id))
+            {
+                var s = await src.SyncAsync(b.Id, ct);
+                return s == null ? Results.NotFound() : Results.Ok(new { source = s });
+            }
+            return Results.Ok(new { sources = await src.SyncAllAsync(ct) });
         }).RequireAuthorization("Admin");
     }
 

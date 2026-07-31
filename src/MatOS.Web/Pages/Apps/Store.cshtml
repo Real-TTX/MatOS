@@ -11,11 +11,25 @@
         <button class="tab active" data-tab="catalog">Discover</button>
         <button class="tab" data-tab="installed">Installed <span id="store-count" class="fx-muted"></span></button>
         <button class="tab" data-tab="add">+ Add app</button>
+        <button class="tab" data-tab="sources">Sources</button>
     </div>
     <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
 
     <div id="store-catalog" class="store-grid"></div>
     <div id="store-installed" style="display:none"></div>
+
+    <div id="store-sources" style="display:none">
+        <div class="card" style="max-width:760px">
+            <h2 style="margin:0 0 0.3rem;font-size:1rem">Remote catalog sources</h2>
+            <p class="fx-muted" style="margin:0 0 1rem;font-size:0.85rem">Add a URL to an <span class="mono">index.json</span> (or a base URL/Git raw folder that contains one). Its apps appear in Discover. Compose files may embed an <span class="mono">x-matos</span> block; icons can be a file next to the compose (e.g. <span class="mono">icon.png</span>).</p>
+            <div class="grid-src">
+                <input id="src-name" class="ui-input" placeholder="Name (optional)" />
+                <input id="src-url" class="ui-input mono" placeholder="https://raw.githubusercontent.com/user/repo/main/" />
+                <button class="ui-btn primary" id="src-add">Add &amp; sync</button>
+            </div>
+            <div id="src-list" style="margin-top:1rem"></div>
+        </div>
+    </div>
 
     <div id="store-add" style="display:none">
         <div class="card" style="max-width:720px">
@@ -100,6 +114,19 @@
 .app-card .mono { font-size:0.72rem; color:var(--mat-text-muted); }
 .chip { font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:999px; background:rgba(139,92,246,0.22); color:#c7b3ff; }
 .chip.compose { background:rgba(34,184,255,0.2); color:#9fe8ff; }
+.chip.src { background:rgba(52,211,153,0.2); color:#7ff0c4; }
+.grid-src { display:grid; grid-template-columns:200px 1fr auto; gap:0.5rem; }
+.src-row { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.9rem; border:1px solid var(--mat-border); border-radius:12px; margin-bottom:0.6rem; background:var(--mat-surface); }
+.src-row.off { opacity:0.55; } .src-row .g { flex:1 1 auto; min-width:0; } .src-row .nm { font-weight:700; }
+.src-row .u { color:var(--mat-text-muted); font-size:0.76rem; word-break:break-all; } .src-row .st { font-size:0.74rem; margin-top:0.15rem; }
+.src-row .st.err { color:#ffb3c0; } .src-row .st.ok { color:var(--mat-text-muted); }
+.switch { position:relative; display:inline-block; width:34px; height:20px; flex:0 0 auto; cursor:pointer; }
+.switch input { opacity:0; width:0; height:0; position:absolute; }
+.switch .sl { position:absolute; inset:0; background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:999px; transition:.15s; }
+.switch .sl:before { content:""; position:absolute; width:14px; height:14px; left:2px; top:2px; background:var(--mat-text-muted); border-radius:50%; transition:.15s; }
+.switch input:checked + .sl { background:rgba(52,211,153,0.4); border-color:transparent; }
+.switch input:checked + .sl:before { transform:translateX(14px); background:#7ff0c4; }
+@@media (max-width:600px){ .grid-src { grid-template-columns:1fr; } }
 .inst { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.9rem; border:1px solid var(--mat-border); border-radius:12px; margin-bottom:0.6rem; background:var(--mat-surface); }
 .inst .g { flex:1 1 auto; min-width:0; } .inst .nm { font-weight:700; } .inst .sub { color:var(--mat-text-muted); font-size:0.78rem; }
 .fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
@@ -121,25 +148,26 @@
   const isImg=s=>/^(https?:|data:)/i.test(s||"");
   const iconHtml=ic=> isImg(ic) ? `<img src="${escA(ic)}" alt="">` : `<span>${esc(ic||"📦")}</span>`;
   const $=id=>document.getElementById(id);
-  const catEl=$("store-catalog"), instEl=$("store-installed"), addEl=$("store-add"), msg=$("store-msg");
+  const catEl=$("store-catalog"), instEl=$("store-installed"), addEl=$("store-add"), srcEl=$("store-sources"), msg=$("store-msg");
   let catalog=[];
   function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",5000); }
 
   document.querySelectorAll("#store-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll("#store-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
-    const tab=t.dataset.tab; catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none";
-    if(tab==="installed") loadInstalls(); if(tab==="add" && !$("a-id").value) resetForm();
+    const tab=t.dataset.tab; catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none"; srcEl.style.display=tab==="sources"?"":"none";
+    if(tab==="installed") loadInstalls(); if(tab==="add" && !$("a-id").value) resetForm(); if(tab==="sources") loadSources();
   }));
 
   async function loadCatalog(){
     try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
-    catEl.innerHTML=catalog.map(a=>`<div class="app-card">
-      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${a.builtIn?'':'<span class="chip">custom</span>'}${a.kind==='compose'?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
+    catEl.innerHTML=catalog.map(a=>{ const local=!a.builtIn && !a.source; const badge=a.source?`<span class="chip src" title="From source: ${escA(a.source)}">${esc(a.source)}</span>`:(a.builtIn?'':'<span class="chip">custom</span>');
+      return `<div class="app-card">
+      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${badge}${a.kind==='compose'?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
       <p>${esc(a.description)}</p>
       <div class="foot"><button class="ui-btn primary" data-install="${escA(a.id)}">Install</button>
-        ${a.builtIn?'':`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`}
+        ${local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:''}
         <span class="spacer" style="flex:1"></span><span class="mono">${esc(a.kind==='compose'?(a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'):a.image)}</span></div>
-    </div>`).join("");
+    </div>`; }).join("");
     catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>startInstall(b)));
     catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
@@ -230,6 +258,43 @@
   });
   async function delApp(id,name){ if(!confirm(`Delete custom app "${name}"? (Installed instances are not affected.)`))return;
     try{ await fetch("/api/v1/store/apps/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); flash("Deleted.",true); loadCatalog(); }catch(e){ flash("Delete failed.",false); } }
+
+  // ---- remote sources ----
+  const srcList=$("src-list");
+  function fmtWhen(s){ if(!s)return"never"; const d=new Date(s); return isNaN(d)?"never":d.toLocaleString(); }
+  async function loadSources(){
+    let d; try{ const r=await fetch("/api/v1/store/sources"); if(r.status===403){ srcList.innerHTML=`<div class="fx-muted">Only administrators can manage sources.</div>`; $("src-add").disabled=true; return; } d=await r.json(); }
+    catch(_){ srcList.innerHTML="Failed to load sources."; return; }
+    if(!d.sources.length){ srcList.innerHTML=`<div class="fx-muted">No sources yet. Add one above — e.g. a GitHub raw URL to a folder with an index.json.</div>`; return; }
+    srcList.innerHTML=d.sources.map(s=>`<div class="src-row ${s.enabled?'':'off'}">
+      <label class="switch" title="Enable/disable"><input type="checkbox" data-toggle="${escA(s.id)}" ${s.enabled?'checked':''}><span class="sl"></span></label>
+      <div class="g"><div class="nm">${esc(s.name)} <span class="fx-muted" style="font-weight:400">· ${s.appCount} app${s.appCount===1?'':'s'}</span></div>
+        <div class="u">${esc(s.url)}</div>
+        <div class="st ${s.lastError?'err':'ok'}">${s.lastError?('⚠ '+esc(s.lastError)):('synced '+fmtWhen(s.lastSync))}</div></div>
+      <button class="ui-btn" data-sync="${escA(s.id)}">Sync</button>
+      <button class="ui-btn danger" data-delsrc="${escA(s.id)}" data-name="${escA(s.name)}">Remove</button></div>`).join("");
+    srcList.querySelectorAll("[data-toggle]").forEach(c=>c.addEventListener("change",()=>toggleSrc(c.dataset.toggle,c.checked)));
+    srcList.querySelectorAll("[data-sync]").forEach(b=>b.addEventListener("click",()=>syncSrc(b.dataset.sync,b)));
+    srcList.querySelectorAll("[data-delsrc]").forEach(b=>b.addEventListener("click",()=>delSrc(b.dataset.delsrc,b.dataset.name)));
+  }
+  $("src-add").addEventListener("click",async()=>{
+    const url=$("src-url").value.trim(); if(!url){ flash("Enter a source URL.",false); return; }
+    const btn=$("src-add"), orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Syncing…`;
+    try{ const r=await fetch("/api/v1/store/sources/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:$("src-name").value.trim(),url})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
+      const j=await r.json(); $("src-name").value=""; $("src-url").value="";
+      flash(j.source.lastError?`Added, but sync failed: ${j.source.lastError}`:`Added "${j.source.name}" — ${j.source.appCount} app(s).`, !j.source.lastError);
+      await loadSources(); await loadCatalog();
+    }catch(e){ flash("Add failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; }
+  });
+  async function syncSrc(id,btn){ const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span>`;
+    try{ const r=await fetch("/api/v1/store/sources/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+      const j=await r.json(); flash(j.source.lastError?`Sync failed: ${j.source.lastError}`:`Synced "${j.source.name}" — ${j.source.appCount} app(s).`, !j.source.lastError);
+      await loadSources(); await loadCatalog();
+    }catch(e){ flash("Sync failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; } }
+  async function toggleSrc(id,enabled){ try{ await fetch("/api/v1/store/sources/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,enabled})}); loadSources(); loadCatalog(); }catch(e){ flash("Failed.",false); } }
+  async function delSrc(id,name){ if(!confirm(`Remove source "${name}"? Its apps disappear from Discover (installed apps are not affected).`))return;
+    try{ await fetch("/api/v1/store/sources/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); flash("Removed.",true); loadSources(); loadCatalog(); }catch(e){ flash("Remove failed.",false); } }
 
   loadCatalog();
 })();

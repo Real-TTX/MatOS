@@ -18,11 +18,24 @@ public class StoreService
     {
         var list = StoreCatalog.BuiltIn.ToList();
         foreach (var c in Store.Apps) list.Add(ToDef(c));
+        foreach (var c in RemoteApps()) list.Add(ToDef(c));
         return list;
     }
 
     public AppDef? Find(string id) => AllApps().FirstOrDefault(a => a.Id == id);
     public List<CustomApp> CustomApps() => Store.Apps.ToList();
+
+    /// <summary>Cached apps from every enabled remote source (see <see cref="StoreSourceService"/>).</summary>
+    private List<CustomApp> RemoteApps()
+    {
+        var s = _config.Get<StoreSourcesStore>("store-sources");
+        var enabled = s.Sources.Where(x => x.Enabled).Select(x => x.Id).ToHashSet();
+        return s.Apps.Where(kv => enabled.Contains(kv.Key)).SelectMany(kv => kv.Value).ToList();
+    }
+
+    /// <summary>Fill unset fields of a compose app from its embedded x-matos block (used when
+    /// importing a compose file from a remote source). Provided fields win, matching the UI.</summary>
+    public void ApplyXMatos(CustomApp app) => MergeXMatos(app);
 
     public async Task<string> Upsert(CustomApp app)
     {
@@ -88,7 +101,7 @@ public class StoreService
     private static AppDef ToDef(CustomApp c) => new(
         c.Id, c.Name, c.Tagline, c.Description, c.Category, c.Image, c.UiPort, c.Icon,
         c.Volumes.ToArray(), c.Env, c.Actions.Select(a => new AppAction(a.Label, a.Url)).ToArray(),
-        c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false);
+        c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source);
 
     private string UniqueId(string baseId)
     {
