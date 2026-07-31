@@ -154,7 +154,7 @@
       if (!dragging) return;
       let nx = ox + (e.clientX - sx), ny = oy + (e.clientY - sy);
       nx = Math.min(Math.max(nx, -w.el.offsetWidth + 120), window.innerWidth - 80);
-      ny = Math.min(Math.max(ny, BAR_H), window.innerHeight - 40);
+      ny = Math.min(Math.max(ny, 0), window.innerHeight - 40);
       w.el.style.left = nx + "px"; w.el.style.top = ny + "px";
     });
     const end = (e) => { if (dragging) { dragging = false; shield(false); try { bar.releasePointerCapture(e.pointerId); } catch (_) {} } };
