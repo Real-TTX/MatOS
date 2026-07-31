@@ -277,8 +277,8 @@
     try { await fetch("/api/v1/desktop/reset", { method: "POST" }); } catch (_) {}
     layout = {}; defaultIndex = 0; for (const [key, el] of iconEls) applyPos(el, key);
   }
-  async function pin(key) { pins.add(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
-  async function unpin(key) { pins.delete(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); try { await fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }); } catch (_) {} }
+  function pin(key)   { pins.add(key);    reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); fetch("/api/v1/desktop/pin",   { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(()=>{}); }
+  function unpin(key) { pins.delete(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(()=>{}); }
 
   async function load() {
     try {
@@ -584,14 +584,33 @@
     }
   }
   async function moveKeyToFolder(key, folderId){
-    // If no folder id, create a new one first.
-    let fid = folderId;
-    if (!fid) { const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: "New Folder" }) })).json(); folders.push(r.folder); fid = r.folder.id; }
-    await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key }) });
-    // Update local state
-    for (const f of folders) f.keys = f.keys.filter(k => k !== key);
-    const target = folders.find(f => f.id === fid); if (target && !target.keys.includes(key)) target.keys.push(key);
+    // Fast path: existing folder → update local state + rerender immediately, then persist.
+    if (folderId) {
+      for (const f of folders) f.keys = f.keys.filter(k => k !== key);
+      const target = folders.find(f => f.id === folderId);
+      if (target && !target.keys.includes(key)) target.keys.push(key);
+      reconcileDesktop();
+      try { await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: folderId, key }) }); } catch(_){}
+      return;
+    }
+    // New folder: paint a temp one at the source icon's position immediately, then swap ids.
+    const src = iconEls.get(key); const pos = src ? { x: parseFloat(src.style.left)||0, y: parseFloat(src.style.top)||0 } : null;
+    const tempId = "tmp" + Math.random().toString(36).slice(2, 8);
+    const optimistic = { id: tempId, name: labelForKey(key), keys: [key] };
+    folders.push(optimistic);
+    const tempKey = "folder:" + tempId;
+    if (pos) { layout[tempKey] = pos; }
     reconcileDesktop();
+    try {
+      const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: optimistic.name }) })).json();
+      const idx = folders.findIndex(f => f.id === tempId); if (idx >= 0) folders.splice(idx, 1, { ...r.folder, keys: [key] });
+      const realKey = "folder:" + r.folder.id;
+      if (layout[tempKey]) { layout[realKey] = layout[tempKey]; delete layout[tempKey]; saveIcon(realKey, layout[realKey].x, layout[realKey].y); }
+      const el = iconEls.get(tempKey); if (el) { iconEls.delete(tempKey); iconEls.set(realKey, el); el.dataset.folderId = r.folder.id; el.dataset.key = realKey; }
+      await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: r.folder.id, key }) });
+    } catch (_) {
+      folders = folders.filter(f => f.id !== tempId); delete layout[tempKey]; reconcileDesktop();
+    }
   }
   // Find a droppable icon (app or folder) under the pointer, excluding the drag source.
   function dropTargetAt(x, y, sourceEl){
@@ -603,41 +622,54 @@
     return a;
   }
   // Merge two app icons into a new folder (iOS-style). Both args must be plain app keys.
+  // Optimistic: paint the folder in place of the target immediately, then persist.
   async function mergeIntoFolder(dragKey, targetKey){
     if (!dragKey || !targetKey || dragKey === targetKey) return;
     if (dragKey.startsWith("folder:") || targetKey.startsWith("folder:")) return; // safety net
-    const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: labelForKey(targetKey) }) })).json();
-    folders.push(r.folder); const fid = r.folder.id;
-    // Add both keys — target first (so it appears first in the preview).
-    for (const k of [targetKey, dragKey]) {
-      await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key: k }) });
-      const f = folders.find(x => x.id === fid); if (f && !f.keys.includes(k)) f.keys.push(k);
-    }
+    const tempId = "tmp" + Math.random().toString(36).slice(2, 8);
+    const optimistic = { id: tempId, name: labelForKey(targetKey), keys: [targetKey, dragKey] };
+    folders.push(optimistic);
+    // Take the target icon's position for the new folder (iOS-style).
+    const tgtEl = iconEls.get(targetKey);
+    const tempKey = "folder:" + tempId;
+    if (tgtEl) layout[tempKey] = { x: parseFloat(tgtEl.style.left)||0, y: parseFloat(tgtEl.style.top)||0 };
     reconcileDesktop();
+    try {
+      const r = await (await fetch("/api/v1/desktop/folders/create", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name: optimistic.name }) })).json();
+      const idx = folders.findIndex(f => f.id === tempId); if (idx >= 0) folders.splice(idx, 1, { ...r.folder, keys: [targetKey, dragKey] });
+      const realKey = "folder:" + r.folder.id;
+      if (layout[tempKey]) { layout[realKey] = layout[tempKey]; delete layout[tempKey]; saveIcon(realKey, layout[realKey].x, layout[realKey].y); }
+      const el = iconEls.get(tempKey); if (el) { iconEls.delete(tempKey); iconEls.set(realKey, el); el.dataset.folderId = r.folder.id; el.dataset.key = realKey; }
+      for (const k of [targetKey, dragKey]) {
+        fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: r.folder.id, key: k }) }).catch(()=>{});
+      }
+    } catch (_) {
+      folders = folders.filter(f => f.id !== tempId); delete layout[tempKey]; reconcileDesktop();
+    }
   }
 
-  // Fold one folder into another: move all children, delete the source folder.
+  // Fold one folder into another: move all children, delete the source folder. Optimistic.
   async function mergeFolders(srcId, dstId){
     if (!srcId || !dstId || srcId === dstId) return;
     const src = folders.find(f => f.id === srcId); const dst = folders.find(f => f.id === dstId);
     if (!src || !dst) return;
-    for (const k of [...src.keys]) {
-      await fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: dstId, key: k }) });
-      if (!dst.keys.includes(k)) dst.keys.push(k);
-    }
-    await fetch("/api/v1/desktop/folders/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: srcId }) });
+    const movedKeys = [...src.keys];
+    for (const k of movedKeys) if (!dst.keys.includes(k)) dst.keys.push(k);
     folders = folders.filter(f => f.id !== srcId);
     reconcileDesktop();
+    // Persist in the background — folders/add moves the key out of the old folder server-side.
+    for (const k of movedKeys) fetch("/api/v1/desktop/folders/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: dstId, key: k }) }).catch(()=>{});
+    fetch("/api/v1/desktop/folders/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: srcId }) }).catch(()=>{});
   }
 
   async function removeFromFolder(fid, key){
-    await fetch("/api/v1/desktop/folders/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key }) });
     const f = folders.find(x => x.id === fid); if (f) f.keys = f.keys.filter(k => k !== key);
     reconcileDesktop();
+    try { await fetch("/api/v1/desktop/folders/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid, key }) }); } catch(_){}
   }
   async function deleteFolder(fid){
-    await fetch("/api/v1/desktop/folders/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid }) });
     folders = folders.filter(f => f.id !== fid); reconcileDesktop();
+    try { await fetch("/api/v1/desktop/folders/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: fid }) }); } catch(_){}
   }
 
   // ---- Widgets ----
