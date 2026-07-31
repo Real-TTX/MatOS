@@ -51,7 +51,10 @@
                 <h2>Docker</h2>
                 <div class="mset-group">
                     <div class="mset-row"><div class="mset-label">Engine endpoint</div><div class="mono fx-muted">@Model.DockerEndpoint</div></div>
-                    <div class="mset-row"><div class="mset-label">Shared network</div><div class="mono fx-muted">@Model.Network</div></div>
+                    <div class="mset-row">
+                        <div class="mset-label">App network<small>Network app containers join so the reverse proxy (Caddy/Matcad) can reach them. Leave blank for the default (<span class="mono">@Model.DefaultNetwork</span>). Set this to your existing Caddy/Matcad's network if you don't use matOS's bundled proxy.</small></div>
+                        <input class="ui-input mono" name="Network" value="@Model.Network" placeholder="@Model.DefaultNetwork" />
+                    </div>
                     <div class="mset-row"><div class="mset-label">Volumes path</div><div class="mono fx-muted">@Model.VolumesPath</div></div>
                     <div class="mset-row"><div class="mset-label">Inventory</div><div id="mset-inv" class="fx-muted">…</div></div>
                 </div>

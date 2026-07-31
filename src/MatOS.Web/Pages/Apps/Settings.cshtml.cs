@@ -19,6 +19,7 @@ public class SettingsModel : PageModel
     [BindProperty] public string Wallpaper { get; set; } = "aurora";
     [BindProperty] public string InstanceName { get; set; } = "matOS";
     [BindProperty] public string BaseDomain { get; set; } = "apps.localhost";
+    [BindProperty] public string Network { get; set; } = "";
 
     public IReadOnlyList<Wallpapers.Wallpaper> AllWallpapers => Wallpapers.All;
     public bool Saved => Request.Query.ContainsKey("saved");
@@ -26,7 +27,7 @@ public class SettingsModel : PageModel
     public string Version => BuildInfo.Version;
     public string Channel => BuildInfo.Channel;
     public string DockerEndpoint => _cfg["MatOS:Docker:Endpoint"] ?? "unix:///var/run/docker.sock";
-    public string Network => _cfg["MatOS:Docker:Network"] ?? "matos";
+    public string DefaultNetwork => _cfg["MatOS:Docker:Network"] ?? "matos";
     public string VolumesPath => _docker.VolumesPath;
 
     public void OnGet()
@@ -36,6 +37,7 @@ public class SettingsModel : PageModel
         Wallpaper = d.Wallpaper;
         InstanceName = s.InstanceName;
         BaseDomain = s.BaseDomain;
+        Network = s.Network;
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -47,6 +49,7 @@ public class SettingsModel : PageModel
         var s = _config.Get<SystemConfig>("system");
         s.InstanceName = string.IsNullOrWhiteSpace(InstanceName) ? "matOS" : InstanceName.Trim();
         s.BaseDomain = string.IsNullOrWhiteSpace(BaseDomain) ? "apps.localhost" : BaseDomain.Trim();
+        s.Network = (Network ?? "").Trim();
         await _config.SaveAsync("system", s);
 
         return RedirectToPage(new { saved = true });

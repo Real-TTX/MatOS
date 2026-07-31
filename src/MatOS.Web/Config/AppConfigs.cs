@@ -15,6 +15,11 @@ public class SystemConfig
     /// <summary>Base domain matOS uses to build per-app subdomains for the Caddy/Matcad proxy,
     /// e.g. apps.localhost (resolves to loopback locally) or a real wildcard domain in production.</summary>
     public string BaseDomain { get; set; } = "apps.localhost";
+
+    /// <summary>Docker network that app containers join so the reverse proxy (Caddy/Matcad) can
+    /// reach them by name. Empty = the built-in default ("matos"). Set this to the network your
+    /// existing Caddy/Matcad runs on if you don't use matOS's bundled proxy.</summary>
+    public string Network { get; set; } = "";
 }
 
 /// <summary>Built-in wallpapers (CSS gradient classes wp-*). Used by the desktop + Settings picker.</summary>

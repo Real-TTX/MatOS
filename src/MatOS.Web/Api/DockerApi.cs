@@ -69,10 +69,20 @@ public static class DockerApi
             return Guard(() => docker.StackActionAsync(name, action, ct));
         });
 
-        g.MapGet("/routes", async (DockerService docker, MatOS.Web.Services.JsonConfigService config, CancellationToken ct) =>
+        g.MapGet("/routes", async (DockerService docker, MatOS.Web.Services.JsonConfigService config, IConfiguration cfg, CancellationToken ct) =>
         {
             var all = await docker.ListContainersAsync(true, ct);
-            var baseDomain = config.Get<MatOS.Web.Config.SystemConfig>("system").BaseDomain;
+            var sys = config.Get<MatOS.Web.Config.SystemConfig>("system");
+            var baseDomain = sys.BaseDomain;
+            var appNetwork = string.IsNullOrWhiteSpace(sys.Network) ? (cfg["MatOS:Docker:Network"] ?? "matos") : sys.Network.Trim();
+
+            // Reverse-proxy diagnostics: is a Caddy/Matcad container running on the app network?
+            static bool IsProxy(ContainerInfo c) => (c.Image ?? "").Contains("caddy", StringComparison.OrdinalIgnoreCase)
+                                                 || (c.Image ?? "").Contains("matcad", StringComparison.OrdinalIgnoreCase);
+            var proxies = all.Where(IsProxy)
+                .Select(c => new { name = c.Name, image = c.Image, running = c.IsRunning, networks = c.Networks }).ToList();
+            var proxyOnNetwork = proxies.Any(p => p.running && p.networks.Contains(appNetwork));
+
             var routes = all
                 .Where(c => c.MatosManaged || c.Labels.GetValueOrDefault("matcad.enable", "") == "true" || c.Labels.ContainsKey("matcad.host"))
                 .Select(c =>
@@ -93,11 +103,12 @@ public static class DockerApi
                         published = enabled && !string.IsNullOrEmpty(host),
                         host,
                         port,
-                        upstream = string.IsNullOrEmpty(port) ? "" : $"http://{c.Name}:{port}"
+                        upstream = string.IsNullOrEmpty(port) ? "" : $"http://{c.Name}:{port}",
+                        onProxyNetwork = c.Networks.Contains(appNetwork)
                     };
                 })
                 .OrderByDescending(r => r.published).ThenBy(r => r.title);
-            return Results.Ok(new { baseDomain, routes });
+            return Results.Ok(new { baseDomain, appNetwork, proxyOnNetwork, proxies, routes });
         });
 
         g.MapGet("/volumes", async (DockerService docker, CancellationToken ct) =>

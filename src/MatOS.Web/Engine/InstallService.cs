@@ -37,6 +37,13 @@ public class InstallService
         _network = cfg["MatOS:Docker:Network"] ?? "matos";
     }
 
+    /// <summary>The Docker network app containers join so the reverse proxy can reach them.
+    /// Configurable in Settings; empty setting falls back to the built-in default.</summary>
+    private string ProxyNetwork
+    {
+        get { var n = _config.Get<SystemConfig>("system").Network; return string.IsNullOrWhiteSpace(n) ? _network : n.Trim(); }
+    }
+
     public Task<InstallResult> InstallAsync(string appId, IDictionary<string, string>? vars, CancellationToken ct = default)
     {
         var app = _store.Find(appId);
@@ -124,7 +131,7 @@ public class InstallService
         var name = $"matos_{app.Id}_{instance}";
         try
         {
-            await _docker.EnsureNetworkAsync(_network, ct);
+            await _docker.EnsureNetworkAsync(ProxyNetwork, ct);
             await _docker.PullImageBestEffortAsync(app.Image, ct);
 
             var mounts = new List<Mount>();
@@ -142,7 +149,7 @@ public class InstallService
                     PortBindings = new Dictionary<string, IList<PortBinding>> { [$"{app.UiPort}/tcp"] = new List<PortBinding> { new() { HostPort = port.ToString() } } },
                     Mounts = mounts,
                     RestartPolicy = new RestartPolicy { Name = RestartPolicyKind.UnlessStopped },
-                    NetworkMode = _network
+                    NetworkMode = ProxyNetwork
                 }
             };
             await _docker.CreateAndStartAsync(p, ct);
@@ -208,7 +215,7 @@ public class InstallService
         foreach (var kv in env) envFile.AppendLine($"{kv.Key}={kv.Value.Replace("\n", " ").Replace("\r", "")}");
         await File.WriteAllTextAsync(Path.Combine(dir, ".env"), envFile.ToString(), ct);
 
-        try { await _docker.EnsureNetworkAsync(_network, ct); } catch { }
+        try { await _docker.EnsureNetworkAsync(ProxyNetwork, ct); } catch { }
 
         var (code, _, err) = await RunCompose(dir,
             new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, env, ct);
@@ -257,11 +264,17 @@ public class InstallService
             if (!string.IsNullOrEmpty(detail.ComposeProject) && detail.ComposeProject.StartsWith("matos-", StringComparison.Ordinal))
                 await PublishComposeAsync(appId, detail.ComposeProject!, enabled, host, ct);
             else
-                await _docker.RecreateWithLabelsAsync(id, new Dictionary<string, string?>
+            {
+                var newId = await _docker.RecreateWithLabelsAsync(id, new Dictionary<string, string?>
                 {
                     ["matcad.enable"] = enabled ? "true" : "false",
                     ["matcad.host"] = enabled ? host : null
                 }, ct);
+                // Make sure the app shares the proxy network so Caddy/Matcad can reach it by name.
+                if (enabled)
+                    try { await _docker.EnsureNetworkAsync(ProxyNetwork, ct); await _docker.ConnectNetworkAsync(newId, ProxyNetwork, ct); }
+                    catch (Exception ex) { _log.LogWarning(ex, "Attaching {Id} to proxy network {Net} failed", newId, ProxyNetwork); }
+            }
 
             return new(true, enabled ? host : null, 0, null);
         }
@@ -336,7 +349,7 @@ public class InstallService
         var title = $"{app.Name} — {fileName}";
         try
         {
-            await _docker.EnsureNetworkAsync(_network, ct);
+            await _docker.EnsureNetworkAsync(ProxyNetwork, ct);
             await _docker.PullImageBestEffortAsync(app.Image, ct);
 
             var env = new Dictionary<string, string>(app.Env);
@@ -369,7 +382,7 @@ public class InstallService
                     PortBindings = new Dictionary<string, IList<PortBinding>> { [$"{app.UiPort}/tcp"] = new List<PortBinding> { new() { HostPort = port.ToString() } } },
                     Mounts = new List<Mount> { new() { Type = "volume", Source = volume, Target = mount, ReadOnly = handler.ReadOnly } },
                     RestartPolicy = new RestartPolicy { Name = RestartPolicyKind.No },
-                    NetworkMode = _network
+                    NetworkMode = ProxyNetwork
                 }
             };
             var id = await _docker.CreateAndStartAsync(p, ct);

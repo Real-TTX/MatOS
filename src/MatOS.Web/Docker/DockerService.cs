@@ -103,7 +103,8 @@ public partial class DockerService
             Ports: ports,
             Labels: labels,
             WebHost: string.IsNullOrWhiteSpace(webHost) ? null : webHost,
-            MatosManaged: managed);
+            MatosManaged: managed,
+            Networks: c.NetworkSettings?.Networks?.Keys.ToList() ?? new List<string>());
     }
 
     // --- Lifecycle ----------------------------------------------------------

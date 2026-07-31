@@ -48,7 +48,15 @@ public partial class DockerService
     /// <summary>Recreates a container preserving its config but applying label changes
     /// (value null = remove the label). Used to publish/unpublish an app (matcad.* labels
     /// can't be changed on a live container).</summary>
-    public async Task RecreateWithLabelsAsync(string id, IDictionary<string, string?> labelChanges, CancellationToken ct = default)
+    /// <summary>Connect a container to a Docker network (no-op if already connected).</summary>
+    public async Task ConnectNetworkAsync(string containerId, string network, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        try { await client.Networks.ConnectNetworkAsync(network, new NetworkConnectParameters { Container = containerId }, ct); }
+        catch (Exception) { /* already connected / network missing — non-fatal */ }
+    }
+
+    public async Task<string> RecreateWithLabelsAsync(string id, IDictionary<string, string?> labelChanges, CancellationToken ct = default)
     {
         using var client = CreateClient();
         var r = await client.Containers.InspectContainerAsync(id, ct);
@@ -90,6 +98,7 @@ public partial class DockerService
         await client.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = true }, ct);
         var created = await client.Containers.CreateContainerAsync(p, ct);
         await client.Containers.StartContainerAsync(created.ID, new ContainerStartParameters(), ct);
+        return created.ID;
     }
 
     public async Task CreateVolumeAsync(string name, string driver, IDictionary<string, string>? driverOpts, CancellationToken ct = default)
@@ -176,7 +185,8 @@ public partial class DockerService
                 r.State?.Status ?? "", r.State?.Status ?? "", r.Created,
                 ports, labels,
                 string.IsNullOrWhiteSpace(webHost) ? null : webHost,
-                labels.TryGetValue(MatosLabels.Managed, out var m) && m == "true");
+                labels.TryGetValue(MatosLabels.Managed, out var m) && m == "true",
+                r.NetworkSettings?.Networks?.Keys.ToList() ?? new List<string>());
 
             var mounts = (r.Mounts ?? new List<MountPoint>())
                 .Select(mt => new MountInfo(mt.Type ?? "", string.IsNullOrEmpty(mt.Name) ? null : mt.Name,

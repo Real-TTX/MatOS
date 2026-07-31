@@ -15,7 +15,8 @@ public record ContainerInfo(
     IReadOnlyList<PortMapping> Ports,
     IReadOnlyDictionary<string, string> Labels,
     string? WebHost,
-    bool MatosManaged)
+    bool MatosManaged,
+    IReadOnlyList<string> Networks)
 {
     public bool IsRunning => string.Equals(State, "running", StringComparison.OrdinalIgnoreCase);
 
