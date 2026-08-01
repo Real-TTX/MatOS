@@ -175,11 +175,13 @@
         if (drop) {
           const srcFolderId = el.dataset.folderId, dstFolderId = drop.dataset.folderId;
           const srcKey = key, dstKey = drop.dataset.key;
+          // Clear the dragging flag BEFORE dispatching so the optimistic reconcileDesktop()
+          // that these helpers call actually runs (it's a no-op while dragging is true).
+          dragging = false;
           if (srcFolderId && dstFolderId) {
-            // Folder onto folder: move all children into the target, delete the source.
             mergeFolders(srcFolderId, dstFolderId);
           } else if (srcFolderId && !dstFolderId) {
-            // Folder dragged onto an app: put the app into the folder (interpret as "add to folder").
+            // Folder dragged onto an app: put the app into the folder.
             moveKeyToFolder(dstKey, srcFolderId);
           } else if (!srcFolderId && dstFolderId) {
             // App dragged onto a folder: add the app to the folder.
@@ -188,7 +190,6 @@
             // App onto app: create a new folder containing both.
             mergeIntoFolder(srcKey, dstKey);
           }
-          setTimeout(() => { dragging = false; }, 60);
           return;
         }
         const s = snapXY(parseFloat(el.style.left), parseFloat(el.style.top));
