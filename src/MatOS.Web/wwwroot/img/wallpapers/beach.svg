@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="skyE" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#87c8f0"/><stop offset="0.55" stop-color="#f8d3a2"/><stop offset="1" stop-color="#f6a279"/></linearGradient>
+    <linearGradient id="seaE" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d9db9"/><stop offset="1" stop-color="#134463"/></linearGradient>
+    <linearGradient id="sandE" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0d5a6"/><stop offset="1" stop-color="#c9a86a"/></linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#skyE)"/>
+  <circle cx="1420" cy="450" r="70" fill="#fff6d0"/>
+  <rect y="620" width="1920" height="230" fill="url(#seaE)"/>
+  <g fill="#fff" opacity="0.6"><path d="M0 700 Q 480 680 960 705 T 1920 700 L 1920 720 L 0 720 Z"/></g>
+  <g fill="#fff" opacity="0.35"><path d="M0 750 Q 480 730 960 755 T 1920 750 L 1920 770 L 0 770 Z"/></g>
+  <path d="M0 850 Q 480 820 960 850 T 1920 830 L 1920 1080 L 0 1080 Z" fill="url(#sandE)"/>
+</svg>

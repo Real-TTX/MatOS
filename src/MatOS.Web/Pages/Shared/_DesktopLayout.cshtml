@@ -5,12 +5,13 @@
     var desktop = Config.Get<DesktopConfig>("desktop");
     var system = Config.Get<SystemConfig>("system");
     var wallpaper = Wallpapers.Normalize(desktop.Wallpaper);
+    var theme = (desktop.Theme ?? "auto").ToLowerInvariant() switch { "light" => "light", "dark" => "dark", _ => "auto" };
     var name = User.Identity?.Name ?? "user";
     var role = User.IsAdmin() ? "Administrator" : "User";
     var initial = string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
 }
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="@theme">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -71,6 +72,10 @@
         <button id="mat-start-btn" title="Start" aria-label="Start menu" aria-haspopup="true">
             <img src="~/favicon.svg" alt="Start" />
         </button>
+        <div id="mat-tb-search" title="Search apps">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="mat-tb-search-input" type="search" placeholder="Search" autocomplete="off" aria-label="Search apps" />
+        </div>
         <div id="mat-tasks"></div>
         <div id="mat-tray">
             <div class="mat-clock" id="mat-clock"></div>
@@ -97,6 +102,17 @@
         </div>
     </footer>
 
+    <script>
+      // Resolve auto->light/dark from the OS preference, and update whenever it changes.
+      (function(){ const html=document.documentElement; const stored=html.getAttribute("data-theme")||"auto";
+        const apply=()=>{ if(html.getAttribute("data-theme-user")==="auto" || (!html.getAttribute("data-theme-user") && stored==="auto")){
+          const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          html.setAttribute("data-theme", dark?"dark":"light"); }};
+        if(stored==="auto"){ html.setAttribute("data-theme-user","auto"); apply();
+          if(window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",apply); }
+        else { html.setAttribute("data-theme-user", stored); }
+      })();
+    </script>
     <script src="~/js/window-manager.js" asp-append-version="true"></script>
     <script src="~/js/desktop.js" asp-append-version="true"></script>
 </body>

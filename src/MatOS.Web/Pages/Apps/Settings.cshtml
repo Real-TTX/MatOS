@@ -19,6 +19,19 @@
             <div class="mset-panel active" data-panel="appearance">
                 <h2>Appearance</h2>
                 <div class="mset-group pad">
+                    <div class="mset-grouphead">Theme</div>
+                    <div class="th-picker" style="padding:0.9rem 1rem 1rem">
+                        @foreach (var t in new[] { ("auto", "System"), ("light", "Light"), ("dark", "Dark") })
+                        {
+                            <label class="th-tile @(Model.Theme == t.Item1 ? "selected" : "")" data-key="@t.Item1">
+                                <input type="radio" name="Theme" value="@t.Item1" @(Model.Theme == t.Item1 ? "checked" : "") hidden />
+                                <span class="th-swatch th-@t.Item1"></span>
+                                <span class="nm">@t.Item2</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div class="mset-group pad">
                     <div class="mset-grouphead">Wallpaper</div>
                     <div class="wp-picker" style="padding:0.9rem 1rem 1rem">
                         @foreach (var w in Model.AllWallpapers)
@@ -105,6 +118,14 @@
 .mset-about img { width:76px; height:76px; border-radius:18px; }
 .mset-word { font-size:1.5rem; font-weight:800; letter-spacing:-0.02em; }
 .mset-word span { background:linear-gradient(135deg,#7c6bff,#8b5cf6,#c026d3); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.wp-picker, .th-picker { display:grid; gap:0.7rem; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
+.th-tile { border:2px solid transparent; border-radius:12px; overflow:hidden; cursor:pointer; background:var(--mat-surface); padding:0; }
+.th-tile .th-swatch { height:64px; display:block; border-bottom:1px solid var(--mat-border); }
+.th-tile .nm { padding:0.45rem 0.6rem; font-size:0.85rem; font-weight:600; text-align:left; color:var(--mat-text); }
+.th-tile.selected { border-color:var(--mat-accent); box-shadow:0 0 0 3px rgba(139,92,246,0.22); }
+.th-swatch.th-auto { background:linear-gradient(90deg,#f4f5fa 0 50%,#0b0f1a 50% 100%); }
+.th-swatch.th-light { background:#f4f5fa; }
+.th-swatch.th-dark { background:#0b0f1a; }
 </style>
 }
 
@@ -121,6 +142,13 @@
   if(picker){ picker.addEventListener("click",e=>{ const t=e.target.closest(".wp-tile"); if(!t)return;
     picker.querySelectorAll(".wp-tile").forEach(x=>x.classList.toggle("selected",x===t)); preview(t.dataset.key); });
     const cur=picker.querySelector(".wp-tile.selected"); if(cur) preview(cur.dataset.key); }
+  // theme live preview
+  const thPicker=document.querySelector(".th-picker");
+  function previewTheme(k){ try{ window.parent.postMessage({type:"matos:theme",theme:k},location.origin); }catch(_){} }
+  if(thPicker){ thPicker.addEventListener("click",e=>{ const t=e.target.closest(".th-tile"); if(!t)return;
+    thPicker.querySelectorAll(".th-tile").forEach(x=>x.classList.toggle("selected",x===t));
+    const inp=t.querySelector("input"); if(inp) inp.checked=true;
+    previewTheme(t.dataset.key); }); }
   // docker inventory counts
   (async function(){ try{
     const [c,i,v]=await Promise.all([fetch("/api/v1/docker/containers").then(r=>r.json()),fetch("/api/v1/docker/images").then(r=>r.json()),fetch("/api/v1/docker/volumes").then(r=>r.json())]);

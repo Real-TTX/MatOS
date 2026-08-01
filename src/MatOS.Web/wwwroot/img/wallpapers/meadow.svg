@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="skyM" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a3d1f0"/><stop offset="1" stop-color="#e6f4ff"/></linearGradient>
+    <linearGradient id="grassM" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7abd57"/><stop offset="1" stop-color="#3e6d2c"/></linearGradient>
+    <linearGradient id="hillM" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6dab4a"/><stop offset="1" stop-color="#325a24"/></linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#skyM)"/>
+  <g fill="#fff" opacity="0.9">
+    <ellipse cx="280" cy="230" rx="150" ry="30"/><ellipse cx="260" cy="215" rx="100" ry="25"/>
+    <ellipse cx="900" cy="180" rx="180" ry="34"/><ellipse cx="920" cy="165" rx="110" ry="26"/>
+    <ellipse cx="1550" cy="250" rx="140" ry="30"/><ellipse cx="1530" cy="235" rx="95" ry="24"/>
+  </g>
+  <path d="M0 620 Q 400 540 800 600 T 1600 570 T 1920 600 L 1920 720 L 0 720 Z" fill="url(#hillM)"/>
+  <path d="M0 700 Q 300 660 640 690 T 1280 680 T 1920 690 L 1920 1080 L 0 1080 Z" fill="url(#grassM)"/>
+  <g fill="#f5f5c8" opacity="0.9"><circle cx="220" cy="840" r="3"/><circle cx="360" cy="900" r="3"/><circle cx="540" cy="820" r="3"/><circle cx="720" cy="880" r="3"/><circle cx="910" cy="820" r="3"/><circle cx="1080" cy="890" r="3"/><circle cx="1260" cy="830" r="3"/><circle cx="1440" cy="900" r="3"/><circle cx="1620" cy="840" r="3"/><circle cx="1780" cy="890" r="3"/></g>
+</svg>

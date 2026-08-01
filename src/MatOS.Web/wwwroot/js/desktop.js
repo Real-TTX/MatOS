@@ -342,6 +342,19 @@
   }
   function openStart() { if (!startMenu) return; startMenu.hidden = false; startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
   function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); }
+  // Taskbar search (Windows-11 style): typing forwards into the start menu's search input.
+  const tbSearch = document.getElementById("mat-tb-search-input");
+  if (tbSearch) {
+    const openWithQuery = q => { openStart(); if (startSearch) { startSearch.value = q; renderStartMenu(q); } };
+    tbSearch.addEventListener("focus", () => { if (startMenu.hidden) openStart(); });
+    tbSearch.addEventListener("input", () => openWithQuery(tbSearch.value));
+    tbSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) f.click(); }
+      if (e.key === "Escape") { tbSearch.value = ""; closeStart(); tbSearch.blur(); }
+      if (e.key === "ArrowDown" && startSearch) { e.preventDefault(); startSearch.focus(); } });
+    // Also react to plain clicks on the pill shape itself
+    document.getElementById("mat-tb-search").addEventListener("click", () => tbSearch.focus());
+  }
+
   if (startBtn) {
     startBtn.addEventListener("click", (e) => { e.stopPropagation(); startMenu.hidden ? openStart() : closeStart(); });
     document.addEventListener("click", (e) => { if (!startMenu.hidden && !startMenu.contains(e.target) && !startBtn.contains(e.target)) closeStart(); });
@@ -836,6 +849,11 @@
     if (e.origin !== location.origin) return;
     const m = e.data; if (!m) return;
     if (m.type === "matos:wallpaper" && m.wallpaper) { const wp = document.getElementById("mat-wallpaper"); if (wp) wp.className = "wp-" + m.wallpaper; }
+    if (m.type === "matos:theme" && m.theme) {
+      const html = document.documentElement; const t = String(m.theme).toLowerCase();
+      if (t === "auto") { html.setAttribute("data-theme-user", "auto"); const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; html.setAttribute("data-theme", dark?"dark":"light"); }
+      else if (t === "light" || t === "dark") { html.setAttribute("data-theme-user", t); html.setAttribute("data-theme", t); }
+    }
     if (m.type === "matos:open" && m.url) {
       const opts = { key: m.key || m.url, title: m.title || "App", url: m.url, width: m.width || 1024, height: m.height || 680 };
       if (m.ephemeralId) opts.onClose = () => { try { fetch("/api/v1/store/close-ephemeral", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.ephemeralId }) }); } catch (_) {} };

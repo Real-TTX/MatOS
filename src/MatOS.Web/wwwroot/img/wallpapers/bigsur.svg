@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="skyB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b7ac4"/><stop offset="0.5" stop-color="#a48bc2"/><stop offset="1" stop-color="#f1a7a2"/></linearGradient>
+    <linearGradient id="waterB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b4a7a"/><stop offset="1" stop-color="#1a2340"/></linearGradient>
+    <linearGradient id="hillB1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d5c8a"/><stop offset="1" stop-color="#2c2244"/></linearGradient>
+    <linearGradient id="hillB2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a3d69"/><stop offset="1" stop-color="#1a1428"/></linearGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.6" r="0.6"><stop offset="0" stop-color="#ffd6b3" stop-opacity="0.35"/><stop offset="1" stop-color="#ffd6b3" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#skyB)"/>
+  <rect width="1920" height="1080" fill="url(#glowB)"/>
+  <path d="M0 660 C 300 620, 700 700, 960 640 S 1600 700, 1920 640 L 1920 720 L 0 720 Z" fill="url(#hillB1)" opacity="0.9"/>
+  <path d="M0 720 L 1920 720 L 1920 1080 L 0 1080 Z" fill="url(#waterB)"/>
+  <path d="M0 900 C 320 860, 640 940, 960 890 S 1600 940, 1920 880 L 1920 1080 L 0 1080 Z" fill="url(#hillB2)"/>
+  <ellipse cx="960" cy="740" rx="600" ry="10" fill="#ffe6c8" opacity="0.25"/>
+</svg>

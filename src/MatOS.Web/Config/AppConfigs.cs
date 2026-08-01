@@ -4,6 +4,8 @@ namespace MatOS.Web.Config;
 public class DesktopConfig
 {
     public string Wallpaper { get; set; } = "aurora";
+    /// <summary>UI theme: "auto" (follow OS via prefers-color-scheme), "dark" or "light".</summary>
+    public string Theme { get; set; } = "auto";
 }
 
 /// <summary>General system settings. Persisted as system.json.</summary>
@@ -36,6 +38,13 @@ public static class Wallpapers
         new Wallpaper("forest", "Forest"),
         new Wallpaper("nebula", "Nebula"),
         new Wallpaper("graphite", "Graphite"),
+        // Photo-style wallpapers: layered SVG scenes bundled locally, no external network.
+        new Wallpaper("mountains", "Mountains"),
+        new Wallpaper("bigsur", "Big Sur"),
+        new Wallpaper("night-city", "Night City"),
+        new Wallpaper("beach", "Beach"),
+        new Wallpaper("meadow", "Meadow"),
+        new Wallpaper("space", "Deep Space"),
     };
 
     public static bool IsValid(string key) => All.Any(w => w.Key == key);

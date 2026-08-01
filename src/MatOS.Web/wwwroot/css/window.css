@@ -15,6 +15,11 @@
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
   transition: box-shadow 0.15s, border-color 0.15s;
 }
+:root[data-theme="light"] .mat-window { background: rgba(255, 255, 255, 0.92); }
+:root[data-theme="light"] .mat-titlebar { background: rgba(0, 0, 0, 0.035); }
+:root[data-theme="light"] .mat-win-body { background: #ffffff; }
+:root[data-theme="light"] .mat-window.maximized { background: #ffffff; }
+:root[data-theme="light"] .mat-win-loading { background: #ffffff; }
 .mat-window.focused { border-color: var(--border-strong); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65); }
 .mat-window.maximized {
   left: 0 !important; top: 0 !important;

@@ -17,6 +17,7 @@ public class SettingsModel : PageModel
     }
 
     [BindProperty] public string Wallpaper { get; set; } = "aurora";
+    [BindProperty] public string Theme { get; set; } = "auto";
     [BindProperty] public string InstanceName { get; set; } = "matOS";
     [BindProperty] public string BaseDomain { get; set; } = "apps.localhost";
     [BindProperty] public string Network { get; set; } = "";
@@ -35,6 +36,7 @@ public class SettingsModel : PageModel
         var d = _config.Get<DesktopConfig>("desktop");
         var s = _config.Get<SystemConfig>("system");
         Wallpaper = d.Wallpaper;
+        Theme = string.IsNullOrWhiteSpace(d.Theme) ? "auto" : d.Theme;
         InstanceName = s.InstanceName;
         BaseDomain = s.BaseDomain;
         Network = s.Network;
@@ -44,6 +46,7 @@ public class SettingsModel : PageModel
     {
         var d = _config.Get<DesktopConfig>("desktop");
         d.Wallpaper = Wallpapers.Normalize(Wallpaper);
+        d.Theme = Theme switch { "dark" => "dark", "light" => "light", _ => "auto" };
         await _config.SaveAsync("desktop", d);
 
         var s = _config.Get<SystemConfig>("system");
