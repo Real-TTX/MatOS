@@ -67,6 +67,20 @@
         </div>
     </div>
 
+    <!-- Notification center (opens from the bell in the tray) -->
+    <div id="mat-notify" hidden>
+        <div class="mat-notify-head">
+            <strong>Notifications</strong>
+            <span style="flex:1"></span>
+            <button class="mat-notify-btn" id="mat-notify-mark-all" title="Mark all as read">✓</button>
+            <button class="mat-notify-btn" id="mat-notify-clear" title="Clear all">🗑</button>
+        </div>
+        <div class="mat-notify-list" id="mat-notify-list"></div>
+    </div>
+
+    <!-- Toast layer for transient notifications -->
+    <div id="mat-toasts"></div>
+
     <!-- Taskbar -->
     <footer id="mat-taskbar">
         <button id="mat-start-btn" title="Start" aria-label="Start menu" aria-haspopup="true">
@@ -78,6 +92,10 @@
         </div>
         <div id="mat-tasks"></div>
         <div id="mat-tray">
+            <button id="mat-bell" title="Notifications" aria-label="Notifications" aria-haspopup="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                <span class="mat-bell-badge" id="mat-bell-badge" hidden>0</span>
+            </button>
             <div class="mat-clock" id="mat-clock"></div>
             <div class="mat-user">
                 <button class="mat-user-btn" id="mat-user-btn" aria-haspopup="true" title="@name">

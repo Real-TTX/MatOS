@@ -341,18 +341,22 @@
     smEmpty.hidden = (sys.length + apps.length + cons.length) > 0;
   }
   function openStart() { if (!startMenu) return; startMenu.hidden = false; startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
-  function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); }
-  // Taskbar search (Windows-11 style): typing forwards into the start menu's search input.
+  function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); startMenu.classList.remove("tb-driven"); }
+  // Taskbar search (Windows-11 style): typing forwards into the start menu. When the taskbar
+  // search is driving the menu, we hide the menu's own search input (one focused input only —
+  // otherwise the user sees two search fields and doesn't know where they're typing).
   const tbSearch = document.getElementById("mat-tb-search-input");
+  const tbSearchWrap = document.getElementById("mat-tb-search");
   if (tbSearch) {
-    const openWithQuery = q => { openStart(); if (startSearch) { startSearch.value = q; renderStartMenu(q); } };
-    tbSearch.addEventListener("focus", () => { if (startMenu.hidden) openStart(); });
+    const setDriven = on => { startMenu.classList.toggle("tb-driven", !!on); };
+    const openWithQuery = q => { if (startMenu.hidden) { startMenu.hidden = false; startBtn.classList.add("active"); } setDriven(true); renderStartMenu(q); };
+    tbSearch.addEventListener("focus", () => { if (startMenu.hidden) { openWithQuery(tbSearch.value || ""); } else setDriven(true); });
     tbSearch.addEventListener("input", () => openWithQuery(tbSearch.value));
-    tbSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) f.click(); }
-      if (e.key === "Escape") { tbSearch.value = ""; closeStart(); tbSearch.blur(); }
-      if (e.key === "ArrowDown" && startSearch) { e.preventDefault(); startSearch.focus(); } });
-    // Also react to plain clicks on the pill shape itself
-    document.getElementById("mat-tb-search").addEventListener("click", () => tbSearch.focus());
+    tbSearch.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) { e.preventDefault(); f.click(); tbSearch.value = ""; } }
+      else if (e.key === "Escape") { tbSearch.value = ""; setDriven(false); closeStart(); tbSearch.blur(); }
+    });
+    if (tbSearchWrap) tbSearchWrap.addEventListener("click", () => tbSearch.focus());
   }
 
   if (startBtn) {
@@ -361,7 +365,7 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeStart(); hideCtx(); } });
     startSearch.addEventListener("input", () => renderStartMenu(startSearch.value));
     startSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) { e.preventDefault(); f.click(); } } });
-    startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); } if (it) delete it.dataset.suppressClick; });
+    startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); if (tbSearch) tbSearch.value = ""; } if (it) delete it.dataset.suppressClick; });
     // Drag a start-menu item onto the desktop to pin it there (with a chosen position).
     startMenu.addEventListener("pointerdown", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
@@ -881,4 +885,83 @@
   function broadcast(msg) {
     document.querySelectorAll("#mat-windows iframe").forEach(f => { try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {} });
   }
+
+  // ---- Notifications ----
+  const bellBtn = document.getElementById("mat-bell");
+  const bellBadge = document.getElementById("mat-bell-badge");
+  const notifyPanel = document.getElementById("mat-notify");
+  const notifyList = document.getElementById("mat-notify-list");
+  const toastLayer = document.getElementById("mat-toasts");
+  let notifyLastId = null;
+
+  function escN(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+  function fmtWhen(iso) { try { return new Date(iso).toLocaleString(); } catch (_) { return ""; } }
+  function iconFor(kind) { return { info: "ℹ", success: "✓", warning: "▲", error: "✕" }[kind] || "ℹ"; }
+
+  function showToast({ id, kind, title, body }) {
+    if (!toastLayer) return;
+    const el = document.createElement("div"); el.className = "mat-toast"; if (id) el.dataset.id = id;
+    el.innerHTML = `<span class="k ${escN(kind)}">${iconFor(kind)}</span>
+      <div><div class="t">${escN(title)}</div>${body ? `<div class="b">${escN(body)}</div>` : ""}</div>
+      <button class="x" title="Dismiss">×</button>`;
+    el.querySelector(".x").addEventListener("click", () => el.remove());
+    toastLayer.appendChild(el);
+    setTimeout(() => el.remove(), 6000);
+  }
+
+  function renderNotifications(items, unread) {
+    if (!notifyList) return;
+    if (!items.length) { notifyList.innerHTML = `<div class="mat-notify-empty">No notifications yet.</div>`; }
+    else notifyList.innerHTML = items.map(n => `<div class="mat-notify-item ${n.read ? "" : "unread"}" data-id="${n.id}">
+      <span class="k ${escN(String(n.kind || "info").toLowerCase())}">${iconFor(String(n.kind || "info").toLowerCase())}</span>
+      <div><div class="t">${escN(n.title)}</div>${n.body ? `<div class="b">${escN(n.body)}</div>` : ""}<div class="w">${escN(fmtWhen(n.createdUtc))}${n.source ? " · " + escN(n.source) : ""}</div></div>
+      <button class="x" title="Dismiss">×</button></div>`).join("");
+    notifyList.querySelectorAll(".x").forEach(b => b.addEventListener("click", async ev => {
+      ev.stopPropagation();
+      const id = b.closest(".mat-notify-item").dataset.id;
+      try { await fetch("/api/v1/notifications/dismiss", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); } catch (_) {}
+      loadNotifications();
+    }));
+    if (unread > 0) { bellBadge.hidden = false; bellBadge.textContent = unread > 99 ? "99+" : String(unread); }
+    else bellBadge.hidden = true;
+  }
+
+  async function loadNotifications() {
+    try {
+      const d = await (await fetch("/api/v1/notifications/list")).json();
+      const items = d.items || [];
+      // Toast the newest one if it's new since we last checked.
+      if (items.length && items[0].id !== notifyLastId) {
+        // Skip toasting on the very first load — only for genuinely new arrivals.
+        if (notifyLastId !== null && !items[0].read) showToast({ id: items[0].id, kind: String(items[0].kind || "info").toLowerCase(), title: items[0].title, body: items[0].body });
+        notifyLastId = items[0].id;
+      } else if (!items.length) notifyLastId = null;
+      renderNotifications(items, d.unread || 0);
+    } catch (_) {}
+  }
+
+  if (bellBtn) {
+    bellBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const opening = notifyPanel.hidden;
+      notifyPanel.hidden = !opening;
+      if (opening) { await loadNotifications();
+        // Auto-mark-all read after opening the panel.
+        try { await fetch("/api/v1/notifications/mark-all-read", { method: "POST" }); } catch (_) {}
+        // Refresh the badge (should be 0 now) without wiping the list.
+        try { const d = await (await fetch("/api/v1/notifications/list")).json(); renderNotifications(d.items || [], d.unread || 0); } catch (_) {}
+      }
+    });
+    document.addEventListener("click", (e) => { if (!notifyPanel.hidden && !notifyPanel.contains(e.target) && e.target !== bellBtn && !bellBtn.contains(e.target)) notifyPanel.hidden = true; });
+    document.getElementById("mat-notify-mark-all").addEventListener("click", async () => { try { await fetch("/api/v1/notifications/mark-all-read", { method: "POST" }); } catch (_) {} loadNotifications(); });
+    document.getElementById("mat-notify-clear").addEventListener("click", async () => { if (!confirm("Clear all notifications?")) return; try { await fetch("/api/v1/notifications/clear", { method: "POST" }); } catch (_) {} loadNotifications(); });
+    loadNotifications(); setInterval(loadNotifications, 15000);
+  }
+
+  // Anyone (any child app window) can post a toast via matos:toast.
+  window.addEventListener("message", (e) => {
+    if (e.origin !== location.origin) return;
+    const m = e.data; if (!m) return;
+    if (m.type === "matos:toast") showToast({ kind: (m.kind || "info").toLowerCase(), title: m.title || "", body: m.body || "" });
+  });
 })();

@@ -1,3 +1,4 @@
+using MatOS.Web.Config;
 using MatOS.Web.Docker;
 using MatOS.Web.Services;
 
@@ -12,6 +13,9 @@ public static class BackupsApi
     public record RestoreBody(string TargetVolume, string FileName, string RestoreInto);
     public record DeleteBody(string TargetVolume, string FileName);
     public record DownloadQuery(string Volume, string File);
+    public record ScheduleBody(string Id, string Name, string SourceVolume, string TargetVolume,
+        string Kind, string Time, int Weekday, int RetentionDays, bool Enabled);
+    public record IdBody(string Id);
 
     public static void MapBackupsApi(this IEndpointRouteBuilder api)
     {
@@ -52,6 +56,35 @@ public static class BackupsApi
         {
             var (p, name) = svc.BackupFilePath(volume, file);
             return Results.File(p, "application/gzip", name);
+        });
+
+        // ---- Scheduled backups ----
+        g.MapGet("/schedules", (JsonConfigService config) =>
+        {
+            var store = config.Get<BackupScheduleStore>("backup-schedules");
+            return Results.Ok(new { schedules = store.Items });
+        });
+
+        g.MapPost("/schedules/save", async (ScheduleBody b, JsonConfigService config) =>
+        {
+            if (string.IsNullOrWhiteSpace(b.SourceVolume)) return Results.BadRequest(new { error = "Source volume is required." });
+            var store = config.Get<BackupScheduleStore>("backup-schedules");
+            var s = store.Items.FirstOrDefault(x => x.Id == b.Id);
+            if (s == null) { s = new BackupSchedule { Id = "s" + Guid.NewGuid().ToString("N")[..8] }; store.Items.Add(s); }
+            s.Name = string.IsNullOrWhiteSpace(b.Name) ? $"Backup {b.SourceVolume}" : b.Name.Trim();
+            s.SourceVolume = b.SourceVolume; s.TargetVolume = string.IsNullOrWhiteSpace(b.TargetVolume) ? "matos-backups" : b.TargetVolume;
+            s.Kind = (b.Kind ?? "daily").ToLowerInvariant(); s.Time = b.Time ?? "03:00";
+            s.Weekday = Math.Clamp(b.Weekday, 0, 6); s.RetentionDays = Math.Clamp(b.RetentionDays, 0, 3650); s.Enabled = b.Enabled;
+            await config.SaveAsync("backup-schedules", store);
+            return Results.Ok(new { schedule = s });
+        });
+
+        g.MapPost("/schedules/delete", async (IdBody b, JsonConfigService config) =>
+        {
+            var store = config.Get<BackupScheduleStore>("backup-schedules");
+            store.Items.RemoveAll(x => x.Id == b.Id);
+            await config.SaveAsync("backup-schedules", store);
+            return Results.Ok(new { ok = true });
         });
     }
 }

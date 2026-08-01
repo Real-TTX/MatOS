@@ -7,18 +7,47 @@
 }
 
 <div id="bk">
-    <div class="win-toolbar" style="gap:0.6rem;flex-wrap:wrap">
+    <div class="tabbar" id="bk-tabs">
+        <button class="tab active" data-tab="backups">Backups</button>
+        <button class="tab" data-tab="schedules">Schedules</button>
+    </div>
+    <div class="win-toolbar" style="gap:0.6rem;flex-wrap:wrap;margin-top:0.4rem">
         <button class="ui-btn primary" id="bk-new">Backup now</button>
+        <button class="ui-btn primary" id="bk-new-sched" style="display:none">New schedule</button>
         <button class="ui-btn" id="bk-refresh">Refresh</button>
         <span class="fx-muted" style="font-size:0.85rem;flex:1">Backups are gzip-compressed tar archives of a volume's contents.</span>
     </div>
     <div id="bk-msg" class="card" style="display:none;margin-bottom:0.8rem"></div>
-    <div class="card" style="padding:0;overflow:hidden">
+    <div class="card" id="bk-pane-backups" style="padding:0;overflow:hidden">
         <table class="bkt">
             <thead><tr><th>Created</th><th>Source volume</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
             <tbody id="bk-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
         </table>
     </div>
+    <div class="card" id="bk-pane-schedules" style="padding:0;overflow:hidden;display:none">
+        <table class="bkt">
+            <thead><tr><th>Name</th><th>Source → Target</th><th>When</th><th>Retention</th><th>Last run</th><th></th></tr></thead>
+            <tbody id="bk-sched-rows"><tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="dlg" id="bk-sched-dlg" hidden><div class="dlg-card">
+        <h3 style="margin:0 0 0.9rem">Backup schedule</h3>
+        <label class="fl"><span>Name</span><input class="ui-input" id="bk-sched-name" placeholder="Nightly matcms" /></label>
+        <label class="fl"><span>Source volume *</span><select class="ui-select" id="bk-sched-src"></select></label>
+        <label class="fl"><span>Target volume</span><select class="ui-select" id="bk-sched-tgt"></select></label>
+        <label class="fl"><span>Repeat</span>
+            <select class="ui-select" id="bk-sched-kind"><option value="hourly">Hourly</option><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
+        </label>
+        <div id="bk-sched-timerow" class="fl"><span>Time (server local)</span><input class="ui-input" id="bk-sched-time" type="time" value="03:00" /></div>
+        <div id="bk-sched-dayrow" class="fl" style="display:none"><span>Day</span>
+            <select class="ui-select" id="bk-sched-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+        </div>
+        <label class="fl"><span>Retention (days, 0 = keep forever)</span><input class="ui-input" id="bk-sched-ret" type="number" min="0" max="3650" value="30" /></label>
+        <label style="display:flex;align-items:center;gap:0.4rem;margin:0 0 0.5rem"><input type="checkbox" id="bk-sched-en" checked /> Enabled</label>
+        <input type="hidden" id="bk-sched-id" />
+        <div style="display:flex;gap:0.5rem;margin-top:0.9rem"><button class="ui-btn primary" id="bk-sched-save">Save schedule</button><button class="ui-btn" id="bk-sched-cancel">Cancel</button></div>
+    </div></div>
 
     <div class="dlg" id="bk-new-dlg" hidden><div class="dlg-card">
         <h3 style="margin:0 0 0.9rem">New backup</h3>
@@ -52,6 +81,10 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
 .wz-note { background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:10px; padding:0.7rem 0.85rem; font-size:0.86rem; }
 .bk-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
 .bk-acts .ui-btn { padding:0.25rem 0.55rem; font-size:0.78rem; }
+.tabbar { display:flex; gap:0.15rem; border-bottom:1px solid var(--mat-border); }
+.tab { border:none; background:transparent; padding:0.5rem 0.85rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
+.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+.sched-off { opacity:0.55; }
 </style>
 }
 
@@ -129,7 +162,68 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     try{ await fetch("/api/v1/backups/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})}); load(); }
     catch(e){ flash("Delete failed.",false); } }
 
-  $("bk-refresh").addEventListener("click",load);
+  // ---- Schedules ----
+  let tab="backups", schedules=[];
+  document.querySelectorAll("#bk-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll("#bk-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+    tab=t.dataset.tab;
+    $("bk-pane-backups").style.display = tab==="backups"?"":"none";
+    $("bk-pane-schedules").style.display = tab==="schedules"?"":"none";
+    $("bk-new").style.display = tab==="backups"?"":"none";
+    $("bk-new-sched").style.display = tab==="schedules"?"":"none";
+    if(tab==="schedules") loadSchedules();
+  }));
+
+  async function loadSchedules(){
+    try{ const d=await (await fetch("/api/v1/backups/schedules")).json(); schedules=d.schedules||[]; }
+    catch(_){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
+    const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    if(!schedules.length){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">No schedules yet — click "New schedule".</td></tr>`; return; }
+    $("bk-sched-rows").innerHTML=schedules.map((s,i)=>`<tr class="${s.enabled?'':'sched-off'}" data-i="${i}">
+      <td><strong>${esc(s.name)}</strong>${s.lastError?'<div class="fx-muted" style="font-size:0.7rem;color:#ffb3c0">⚠ '+esc(s.lastError)+'</div>':''}</td>
+      <td class="mono">${esc(s.sourceVolume)} → ${esc(s.targetVolume)}</td>
+      <td>${s.kind==="hourly"?"Hourly":s.kind==="weekly"?days[s.weekday]+" "+esc(s.time):"Daily at "+esc(s.time)}</td>
+      <td>${s.retentionDays>0?s.retentionDays+" d":"∞"}</td>
+      <td class="fx-muted">${s.lastRunUtc?fmtWhen(s.lastRunUtc):"—"}</td>
+      <td><div class="bk-acts">
+        <button class="ui-btn" data-sedit="${i}">Edit</button>
+        <button class="ui-btn danger" data-sdel="${i}">Delete</button>
+      </div></td></tr>`).join("");
+    $("bk-sched-rows").querySelectorAll("[data-sedit]").forEach(b=>b.addEventListener("click",()=>openSched(schedules[+b.dataset.sedit])));
+    $("bk-sched-rows").querySelectorAll("[data-sdel]").forEach(b=>b.addEventListener("click",()=>delSched(schedules[+b.dataset.sdel])));
+  }
+
+  function openSched(s){
+    populateSelects(); // reuse the same volume dropdowns
+    // then patch the schedule-form ones
+    const srcSel=$("bk-sched-src"), tgtSel=$("bk-sched-tgt");
+    srcSel.innerHTML=$("bk-src").innerHTML; tgtSel.innerHTML=$("bk-tgt").innerHTML;
+    if(s){ $("bk-sched-id").value=s.id; $("bk-sched-name").value=s.name; srcSel.value=s.sourceVolume; tgtSel.value=s.targetVolume; $("bk-sched-kind").value=s.kind; $("bk-sched-time").value=s.time; $("bk-sched-day").value=String(s.weekday); $("bk-sched-ret").value=s.retentionDays; $("bk-sched-en").checked=s.enabled; }
+    else { $("bk-sched-id").value=""; $("bk-sched-name").value=""; $("bk-sched-kind").value="daily"; $("bk-sched-time").value="03:00"; $("bk-sched-day").value="0"; $("bk-sched-ret").value="30"; $("bk-sched-en").checked=true; }
+    kindChanged();
+    $("bk-sched-dlg").hidden=false;
+  }
+  function kindChanged(){ const k=$("bk-sched-kind").value; $("bk-sched-timerow").style.display = k==="hourly"?"none":""; $("bk-sched-dayrow").style.display = k==="weekly"?"":"none"; }
+  $("bk-sched-kind").addEventListener("change",kindChanged);
+  $("bk-new-sched").addEventListener("click",()=>{ if(!state.sourceVolumes.length){ flash("No volumes available.",false); return; } openSched(null); });
+  $("bk-sched-cancel").addEventListener("click",()=>{ $("bk-sched-dlg").hidden=true; });
+  $("bk-sched-save").addEventListener("click",async()=>{
+    const body={ id:$("bk-sched-id").value, name:$("bk-sched-name").value.trim(),
+      sourceVolume:$("bk-sched-src").value, targetVolume:$("bk-sched-tgt").value,
+      kind:$("bk-sched-kind").value, time:$("bk-sched-time").value, weekday:+$("bk-sched-day").value,
+      retentionDays:+$("bk-sched-ret").value, enabled:$("bk-sched-en").checked };
+    if(!body.sourceVolume){ flash("Pick a source volume.",false); return; }
+    if(body.sourceVolume===body.targetVolume){ flash("Source and target must differ.",false); return; }
+    try{ const r=await fetch("/api/v1/backups/schedules/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }
+      $("bk-sched-dlg").hidden=true; flash("Schedule saved.",true); loadSchedules();
+    }catch(e){ flash("Save failed: "+e.message,false); }
+  });
+  async function delSched(s){ if(!confirm(`Delete schedule "${s.name}"?`)) return;
+    try{ await fetch("/api/v1/backups/schedules/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:s.id})}); loadSchedules(); }
+    catch(_){ flash("Delete failed.",false); } }
+
+  $("bk-refresh").addEventListener("click",()=>{ if(tab==="schedules") loadSchedules(); else load(); });
   load();
 })();
 </script>

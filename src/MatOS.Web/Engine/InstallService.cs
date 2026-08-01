@@ -28,14 +28,20 @@ public class InstallService
     private readonly JsonConfigService _config;
     private readonly StoreService _store;
     private readonly ILogger<InstallService> _log;
+    private readonly MatOS.Web.Services.NotificationService _notes;
     private readonly string _network;
     private readonly object _gate = new();
 
-    public InstallService(DockerService docker, JsonConfigService config, StoreService store, IConfiguration cfg, ILogger<InstallService> log)
+    public InstallService(DockerService docker, JsonConfigService config, StoreService store, IConfiguration cfg,
+        ILogger<InstallService> log, MatOS.Web.Services.NotificationService notes)
     {
-        _docker = docker; _config = config; _store = store; _log = log;
+        _docker = docker; _config = config; _store = store; _log = log; _notes = notes;
         _network = cfg["MatOS:Docker:Network"] ?? "matos";
     }
+
+    // Fire-and-forget notification helper so we don't block install responses.
+    private void Notify(MatOS.Web.Services.NotificationKind k, string title, string body)
+        => _ = _notes.AddAsync(k, title, body, "store");
 
     /// <summary>The Docker network app containers join so the reverse proxy can reach them.
     /// Configurable in Settings; empty setting falls back to the built-in default.</summary>
@@ -78,6 +84,7 @@ public class InstallService
         // Pre-pull so the first "Open with" is fast; failure is non-fatal (pulled on first open).
         try { await _docker.PullImageBestEffortAsync(app.Image, ct); } catch (Exception ex) { _log.LogWarning(ex, "Register pre-pull of {App} failed", app.Id); }
         _log.LogInformation("Registered handler app {App}", app.Id);
+        Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} registered", $"Right-click matching files to open them with {app.Name}.");
         return new(true, app.Id, 0, null);
     }
 
@@ -153,9 +160,10 @@ public class InstallService
                 }
             };
             await _docker.CreateAndStartAsync(p, ct);
+            Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed", $"Running on port {port}. Pin it from the Start menu to add it to your desktop.");
             return new(true, name, port, null);
         }
-        catch (Exception ex) { _log.LogWarning(ex, "Install (image) of {App} failed", app.Id); return new(false, name, port, ex.Message); }
+        catch (Exception ex) { _log.LogWarning(ex, "Install (image) of {App} failed", app.Id); Notify(MatOS.Web.Services.NotificationKind.Error, $"Install failed: {app.Name}", ex.Message); return new(false, name, port, ex.Message); }
     }
 
     // Installs are internal by default (matcad.enable=false); "Publish" turns on the
@@ -221,6 +229,7 @@ public class InstallService
             new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, env, ct);
         if (code != 0) return new(false, project, port, "compose up failed: " + Trim(err));
         _log.LogInformation("Installed compose app {App} as project {Project}", app.Id, project);
+        Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed", $"Stack {project} is running on port {port}.");
         return new(true, project, port, null);
     }
 

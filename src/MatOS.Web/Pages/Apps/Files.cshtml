@@ -8,20 +8,10 @@
 <div class="fx" data-volume="@(Model.Volume ?? "")" data-path="@(Model.Path ?? "")">
     <aside class="fx-side">
         <div class="fx-side-head">
-            <div style="display:flex;align-items:center;justify-content:space-between">
-                <span>Explorer</span>
-                <button class="fx-ico-btn" id="fx-newvol-btn" title="New volume" style="width:26px;height:26px;font-size:1rem;line-height:1">＋</button>
-            </div>
-            <div class="fx-seg" id="fx-treemode">
-                <button data-mode="volume" class="active">Volumes</button>
-                <button data-mode="stack">Stacks</button>
-            </div>
+            <span>Explorer</span>
+            <button class="fx-ico-btn" id="fx-newvol-btn" title="New volume" style="width:26px;height:26px;font-size:1rem;line-height:1">＋</button>
         </div>
         <div class="fx-tree" id="fx-tree"><div class="fx-muted" style="padding:0.6rem">Loading…</div></div>
-        <div class="fx-side-foot">
-            <button class="fx-side-link" id="fx-home">🖥️ This PC</button>
-            <button class="fx-side-link" id="fx-open-backups">💾 Backups</button>
-        </div>
     </aside>
     <div class="fx-split" id="fx-split" title="Drag to resize"></div>
 
@@ -127,13 +117,25 @@
 .chip-mini.warn { background:rgba(250,204,21,0.18); color:#fde68a; }
 .fx-split { width:6px; flex:0 0 auto; cursor:col-resize; background:transparent; touch-action:none; }
 .fx-split:hover, .fx-split.drag { background:var(--mat-accent); }
-.fx-side-head { display:flex; flex-direction:column; gap:0.5rem; padding:0.7rem 0.8rem; border-bottom:1px solid var(--mat-border); }
+.fx-side-head { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.65rem 0.8rem; border-bottom:1px solid var(--mat-border); }
 .fx-side-head > span { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--mat-text-muted); }
 .fx-seg { display:inline-flex; background:rgba(255,255,255,0.06); border-radius:8px; padding:2px; }
 .fx-seg button { border:none; background:transparent; padding:0.28rem 0.55rem; font:inherit; font-size:0.8rem; border-radius:6px; cursor:pointer; color:var(--mat-text-muted); }
 .fx-seg button.active { background:var(--mat-surface); color:var(--mat-text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
-.fx-tree { padding:0.3rem; }
+.fx-tree { padding:0.3rem 0.25rem; }
 .fx-node { }
+/* Accordion group (Dashboard / Volumes / Stacks / Backups) */
+.fx-group { margin-bottom:0.15rem; }
+.fx-group-head { display:flex; align-items:center; gap:0.35rem; width:100%; padding:0.4rem 0.5rem; border:none; background:transparent; color:var(--mat-text); font:inherit; font-size:0.88rem; font-weight:600; border-radius:8px; cursor:pointer; text-align:left; }
+.fx-group-head:hover { background:rgba(255,255,255,0.06); }
+.fx-group-head .i { font-size:0.98rem; }
+.fx-group-head .lbl { flex:1 1 auto; }
+.fx-group-head .fx-caret { width:12px; text-align:center; color:var(--mat-text-muted); font-size:0.7rem; transition:transform 0.12s ease; }
+.fx-group-head .fx-caret.leaf { visibility:hidden; }
+.fx-group.open > .fx-group-head .fx-caret:not(.leaf) { transform:rotate(90deg); }
+.fx-group-body { display:none; padding-left:0.6rem; }
+.fx-group.open > .fx-group-body { display:block; }
+.fx-subhead { padding:0.35rem 0.4rem 0.15rem; color:var(--mat-text-muted); font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
 .fx-row { display:flex; align-items:center; gap:0.25rem; padding:0.3rem 0.4rem; border-radius:7px; cursor:pointer; font-size:0.86rem; white-space:nowrap; }
 .fx-row:hover { background:rgba(255,255,255,0.06); }
 .fx-row.sel { background:var(--mat-accent); color:#fff; }
@@ -211,8 +213,10 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   const dl=document.getElementById("fx-dl");
   let cur={volume:null,path:""}, sel=null, clip=null, entries=[];
   let view=localStorage.getItem("fx-view")||"details";
-  let treeMode=localStorage.getItem("fx-tree")||"volume";
   let treeData=null;
+  // Which accordion groups are open (persisted per user).
+  const treeOpen = { volumes:true, stacks:false }; try{ const s=JSON.parse(localStorage.getItem("fx-tree-open")||"{}"); Object.assign(treeOpen,s); }catch(_){}
+  const saveTreeOpen = () => { try{ localStorage.setItem("fx-tree-open", JSON.stringify(treeOpen)); }catch(_){}};
 
   function fileIcon(name,isDir){ if(isDir)return "📁"; const e=(name.split(".").pop()||"").toLowerCase();
     if(["png","jpg","jpeg","gif","svg","webp","ico","bmp"].includes(e))return "🖼️";
@@ -223,12 +227,22 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   async function jget(url){ const r=await fetch(url); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
   async function jpost(url,body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status);} return r.json(); }
 
-  // ---- tree ----
+  // ---- tree (accordion: Dashboard / Volumes / Stacks / Backups) ----
   const treeEl=document.getElementById("fx-tree");
-  document.querySelectorAll("#fx-treemode button").forEach(b=>b.addEventListener("click",()=>{
-    treeMode=b.dataset.mode; localStorage.setItem("fx-tree",treeMode);
-    document.querySelectorAll("#fx-treemode button").forEach(x=>x.classList.toggle("active",x===b)); buildTree();
-  }));
+  function groupNode(id, iconTxt, title, expandable, onClick){
+    const wrap=document.createElement("div"); wrap.className="fx-group"+((expandable && treeOpen[id])?" open":"");
+    const head=document.createElement("button"); head.className="fx-group-head"; head.type="button";
+    head.innerHTML=`${expandable?'<span class="fx-caret">▸</span>':'<span class="fx-caret leaf"></span>'}<span class="i">${iconTxt}</span><span class="lbl">${esc(title)}</span>`;
+    wrap.appendChild(head);
+    const body=document.createElement("div"); body.className="fx-group-body"; wrap.appendChild(body);
+    head.addEventListener("click",e=>{
+      if(!expandable){ if(onClick) onClick(); return; }
+      // If a click target is the caret / whole row: toggle. If the user just wanted to activate, we treat both as toggle.
+      wrap.classList.toggle("open"); treeOpen[id]=wrap.classList.contains("open"); saveTreeOpen();
+      if(onClick) onClick();
+    });
+    return {wrap, body};
+  }
   function volNode(volume,path,name,leaf,isVol){
     const node=document.createElement("div"); node.className="fx-node";
     const row=document.createElement("div"); row.className="fx-row"; row.dataset.volume=volume; row.dataset.path=path;
@@ -250,25 +264,39 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     try{ if(!treeData){ const [v,s]=await Promise.all([jget("/api/v1/docker/volumes"),jget("/api/v1/docker/stacks").catch(()=>({stacks:[]}))]); treeData={volumes:v.volumes||[],stacks:s.stacks||[]}; } }
     catch(e){ treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">${esc(e.message)}</div>`; return; }
     treeEl.innerHTML="";
-    if(treeMode==="volume"){
-      const local=treeData.volumes.filter(v=>!v.options||v.options.type!=="cifs");
-      const smb=treeData.volumes.filter(v=>v.options&&v.options.type==="cifs");
-      if(local.length){ const h=document.createElement("div"); h.className="fx-stackhead"; h.textContent="💾 Local"; treeEl.appendChild(h);
-        for(const v of local) treeEl.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true)); }
-      if(smb.length){ const h=document.createElement("div"); h.className="fx-stackhead"; h.textContent="🌐 Network (SMB)"; treeEl.appendChild(h);
-        for(const v of smb) treeEl.appendChild(volNode(v.name,"",`${v.name}`,false,true)); }
-      if(!treeData.volumes.length) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No volumes.</div>`;
-    } else {
-      let any=false;
-      for(const st of treeData.stacks){
-        const names=new Set((st.containers||[]).map(c=>c.name));
-        const vols=treeData.volumes.filter(v=>(v.usedBy||[]).some(u=>names.has(u)));
-        if(!vols.length) continue; any=true;
-        const head=document.createElement("div"); head.className="fx-stackhead"; head.textContent="🧱 "+st.name; treeEl.appendChild(head);
-        for(const v of vols) treeEl.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true));
-      }
-      if(!any) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No stacks with named volumes.</div>`;
+
+    // 1. Dashboard (This PC) — leaf link
+    const dash = groupNode("dashboard","🖥️","This PC",false,()=>showHome());
+    treeEl.appendChild(dash.wrap);
+
+    // 2. Volumes — expandable, Local + Network(SMB) inside
+    const local=treeData.volumes.filter(v=>!v.options||v.options.type!=="cifs");
+    const smb=treeData.volumes.filter(v=>v.options&&v.options.type==="cifs");
+    const vols = groupNode("volumes","💾",`Volumes (${treeData.volumes.length})`,true);
+    if(local.length){ const h=document.createElement("div"); h.className="fx-subhead"; h.textContent="Local"; vols.body.appendChild(h);
+      for(const v of local) vols.body.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true)); }
+    if(smb.length){ const h=document.createElement("div"); h.className="fx-subhead"; h.textContent="Network (SMB)"; vols.body.appendChild(h);
+      for(const v of smb) vols.body.appendChild(volNode(v.name,"",`${v.name}`,false,true)); }
+    if(!treeData.volumes.length) vols.body.innerHTML=`<div class="fx-muted" style="padding:0.3rem 0.6rem;font-size:0.78rem">No volumes.</div>`;
+    treeEl.appendChild(vols.wrap);
+
+    // 3. Stacks — expandable, one sub-head per stack that has volumes
+    const stacksWithVols = treeData.stacks.map(st => {
+      const names=new Set((st.containers||[]).map(c=>c.name));
+      return { st, vols: treeData.volumes.filter(v=>(v.usedBy||[]).some(u=>names.has(u))) };
+    }).filter(x => x.vols.length);
+    const st = groupNode("stacks","🧱",`Stacks (${stacksWithVols.length})`,true);
+    for (const {st: stack, vols: stVols} of stacksWithVols) {
+      const h=document.createElement("div"); h.className="fx-subhead"; h.textContent=stack.name; st.body.appendChild(h);
+      for(const v of stVols) st.body.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true));
     }
+    if(!stacksWithVols.length) st.body.innerHTML=`<div class="fx-muted" style="padding:0.3rem 0.6rem;font-size:0.78rem">No stacks with volumes.</div>`;
+    treeEl.appendChild(st.wrap);
+
+    // 4. Backups — leaf link (opens the Backups app)
+    const bk = groupNode("backups","💾","Backups",false,()=>{ try{ window.parent.postMessage({type:"matos:open",url:"/apps/backups",title:"Backups",key:"backups",width:1000,height:640},location.origin); }catch(_){ location.href="/apps/backups"; } });
+    treeEl.appendChild(bk.wrap);
+
     highlightTree();
   }
   function highlightTree(){ treeEl.querySelectorAll(".fx-row").forEach(r=>r.classList.toggle("sel", r.dataset.volume===cur.volume && r.dataset.path===cur.path)); }
@@ -316,8 +344,6 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     document.getElementById("fx-home-new").addEventListener("click",()=>{ document.getElementById("fx-newvol").hidden=false; });
     document.getElementById("fx-home-refresh").addEventListener("click",async()=>{ treeData=null; await buildTree(); showHome(); });
   }
-  document.getElementById("fx-home").addEventListener("click",()=>showHome());
-  document.getElementById("fx-open-backups").addEventListener("click",()=>{ try{ window.parent.postMessage({type:"matos:open",url:"/apps/backups",title:"Backups",key:"backups",width:1000,height:640},location.origin); }catch(_){ location.href="/apps/backups"; } });
 
   async function openFolder(volume,path){
     homeEl.classList.remove("active");
