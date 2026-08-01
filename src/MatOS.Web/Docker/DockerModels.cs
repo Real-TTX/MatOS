@@ -65,10 +65,15 @@ public record ContainerDetail(
     string? ComposeProject,
     string? ComposeService);
 
-/// <summary>A Docker named volume.</summary>
-public record VolumeInfo(string Name, string Driver, string Mountpoint, DateTime? CreatedUtc, long SizeBytes, IReadOnlyList<string> UsedBy)
+/// <summary>A Docker named volume. Options carries driver-opts (e.g. cifs mounts have
+/// type=cifs / device=//server/share / o=username=...,vers=3.0,...).</summary>
+public record VolumeInfo(string Name, string Driver, string Mountpoint, DateTime? CreatedUtc, long SizeBytes, IReadOnlyList<string> UsedBy, IReadOnlyDictionary<string, string> Options)
 {
     public bool InUse => UsedBy.Count > 0;
+    /// <summary>True if this named volume is really a CIFS/SMB mount.</summary>
+    public bool IsSmb => Options.TryGetValue("type", out var t) && string.Equals(t, "cifs", StringComparison.OrdinalIgnoreCase);
+    /// <summary>e.g. //server/share, when this is an SMB mount.</summary>
+    public string? SmbDevice => Options.TryGetValue("device", out var d) ? d : null;
 }
 
 /// <summary>A Docker image.</summary>

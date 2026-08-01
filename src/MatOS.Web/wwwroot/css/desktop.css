@@ -243,6 +243,13 @@ html, body { overflow: hidden; height: 100%; }
 .wg-sub { font-size: 0.82rem; color: var(--muted); margin-top: 0.25rem; }
 .wg-hint { font-size: 0.7rem; color: var(--muted); opacity: 0.7; margin-top: 0.4rem; }
 
+/* Resource-monitor widget rows */
+.wg-mon-head { display: flex; align-items: center; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.4rem; }
+.wg-mon-row { display: grid; grid-template-columns: 44px 70px 1fr; align-items: center; gap: 0.5rem; padding: 0.28rem 0; }
+.wg-mon-lbl { font-size: 0.75rem; color: var(--muted); font-weight: 700; letter-spacing: 0.03em; }
+.wg-mon-val { font-size: 0.95rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wg-mon-spark { height: 26px; }
+
 /* Drop-target highlight while dragging an icon over another */
 .mat-app.drop-target .mat-app-icon {
   outline: 2px solid var(--accent);

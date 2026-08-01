@@ -675,11 +675,42 @@
 
   // ---- Widgets ----
   const WIDGET_TYPES = {
-    clock:      { title: "Clock",         w: 3, h: 2 },
-    cpu:        { title: "CPU",           w: 3, h: 2 },
-    memory:     { title: "Memory",        w: 3, h: 2 },
-    containers: { title: "Containers",    w: 2, h: 2 },
+    clock:       { title: "Clock",              w: 3, h: 2 },
+    resources:   { title: "Resource monitor",   w: 4, h: 3 },
+    cpu:         { title: "CPU load",           w: 3, h: 2 },
+    memory:      { title: "Memory load",        w: 3, h: 2 },
+    containers:  { title: "Containers status",  w: 2, h: 2 },
   };
+  // Rolling history for the resource-monitor widget (aggregate across all running containers).
+  const wgCpuHist = [], wgMemHist = []; const WG_HIST = 40;
+  const wgStreams = new Map();  // containerId -> EventSource
+  const wgLatest = new Map();   // containerId -> { cpu, mem, lim }
+  function wgSyncStreams(){
+    const wantResourceWidgets = widgets.some(w => w.type === "resources" || w.type === "cpu" || w.type === "memory");
+    if (!wantResourceWidgets) { for (const [id, s] of wgStreams) { try { s.close(); } catch (_) {} } wgStreams.clear(); wgLatest.clear(); return; }
+    const running = new Set(stackData.flatMap(s => (s.containers||[]).filter(c => c.running).map(c => c.id)));
+    for (const [id, s] of wgStreams) if (!running.has(id)) { try { s.close(); } catch (_) {} wgStreams.delete(id); wgLatest.delete(id); }
+    for (const id of running) {
+      if (wgStreams.has(id)) continue;
+      const src = new EventSource(`/api/v1/docker/containers/${id}/stats/stream`);
+      src.addEventListener("stat", e => { try { const s = JSON.parse(e.data); wgLatest.set(id, { cpu: +s.cpuPercent||0, mem: +s.memoryBytes||0, lim: +s.memoryLimitBytes||0 }); } catch (_) {} });
+      src.onerror = () => {};
+      wgStreams.set(id, src);
+    }
+  }
+  function wgAggregate(){
+    let cpu = 0, mem = 0, memLim = 0;
+    for (const [, v] of wgLatest) { cpu += v.cpu||0; mem += v.mem||0; memLim = Math.max(memLim, v.lim||0); }
+    return { cpu, mem, memLim };
+  }
+  function wgAreaSvg(data, color, max){
+    const W = 100, H = 30, n = data.length; if (n < 2) return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%"></svg>`;
+    const step = W/(n-1); const pts = data.map((v,i)=>[i*step, H - Math.min(1,(v||0)/(max||1))*(H-2) - 1]);
+    const line = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+    const area = "M0 "+H+" "+pts.map(p=>"L"+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ")+" L"+W+" "+H+" Z";
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%">
+      <path d="${area}" fill="${color}" fill-opacity="0.2"/><path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+  }
   const widgetEls = new Map();
   function reconcileWidgets(){
     const wanted = new Set(widgets.map(w => w.id));
@@ -749,16 +780,33 @@
         const running = stackData.reduce((n,s)=>n+(s.running||0),0);
         const total = stackData.reduce((n,s)=>n+(s.total||0),0);
         body.innerHTML = `<div class="wg-num">${running}<span class="wg-sub"> / ${total}</span></div><div class="wg-lbl">Containers running</div>`;
-      } else if (w.type === "cpu" || w.type === "memory") {
-        // Fetch a lightweight snapshot: use /docker/containers list + rely on the widget's own periodic tick.
-        // We approximate with a bar for "load"; live SSE per widget would be overkill.
-        const runningCount = stackData.reduce((n,s)=>n+(s.running||0),0);
-        body.innerHTML = `<div class="wg-num">${w.type === "cpu" ? "CPU" : "MEM"}</div>
-          <div class="wg-sub">${runningCount} running containers</div>
-          <div class="wg-hint">Open Task Manager → Performance for live graphs</div>`;
+      } else if (w.type === "resources") {
+        const a = wgAggregate(); const runningCount = stackData.reduce((n,s)=>n+(s.running||0),0);
+        body.innerHTML = `<div class="wg-mon-head">Resource monitor <span class="wg-sub" style="margin-left:auto">${runningCount} running</span></div>
+          <div class="wg-mon-row"><div class="wg-mon-lbl">CPU</div><div class="wg-mon-val">${a.cpu.toFixed(1)}%</div><div class="wg-mon-spark">${wgAreaSvg(wgCpuHist,"#8b5cf6",Math.max(100,...wgCpuHist))}</div></div>
+          <div class="wg-mon-row"><div class="wg-mon-lbl">MEM</div><div class="wg-mon-val">${fmtB(a.mem)}</div><div class="wg-mon-spark">${wgAreaSvg(wgMemHist,"#22b8ff",Math.max(1,...wgMemHist))}</div></div>`;
+      } else if (w.type === "cpu") {
+        const a = wgAggregate();
+        body.innerHTML = `<div class="wg-num">${a.cpu.toFixed(1)}%</div><div class="wg-lbl">CPU</div>
+          <div style="height:38px;margin-top:0.3rem">${wgAreaSvg(wgCpuHist,"#8b5cf6",Math.max(100,...wgCpuHist))}</div>`;
+      } else if (w.type === "memory") {
+        const a = wgAggregate();
+        body.innerHTML = `<div class="wg-num">${fmtB(a.mem)}</div><div class="wg-lbl">Memory</div>
+          <div style="height:38px;margin-top:0.3rem">${wgAreaSvg(wgMemHist,"#22b8ff",Math.max(1,...wgMemHist))}</div>`;
       }
     }
   }
+  const fmtB = b => { if (b==null||b<0) return "—"; const u=["B","KB","MB","GB","TB"]; let i=0,n=b; while(n>=1024&&i<u.length-1){ n/=1024; i++; } return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  // Sample the aggregated CPU/mem every 2s so widgets show live history.
+  setInterval(() => {
+    if (!widgets.length) return;
+    wgSyncStreams();
+    const a = wgAggregate();
+    wgCpuHist.push(a.cpu); wgMemHist.push(a.mem);
+    if (wgCpuHist.length > WG_HIST) wgCpuHist.shift();
+    if (wgMemHist.length > WG_HIST) wgMemHist.shift();
+    widgetTick();
+  }, 2000);
   setInterval(widgetTick, 30000);
   setInterval(() => { const cw = widgetEls; for (const [id, el] of cw) { const w = widgets.find(x => x.id === id); if (w && w.type === "clock") widgetTick(); break; } }, 15000);
   async function addWidget(type){

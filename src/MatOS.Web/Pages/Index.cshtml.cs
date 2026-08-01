@@ -11,6 +11,7 @@ public class IndexModel : PageModel
     {
         new("task-manager", "Task Manager", "/apps/task-manager", "tasks", false),
         new("files", "Files", "/apps/files", "files", true),
+        new("backups", "Backups", "/apps/backups", "backups", true),
         new("network", "Network", "/apps/network", "network", true),
         new("store", "Store", "/apps/store", "store", false),
         new("users", "Users", "/apps/users", "users", true),

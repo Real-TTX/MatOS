@@ -18,6 +18,10 @@
             </div>
         </div>
         <div class="fx-tree" id="fx-tree"><div class="fx-muted" style="padding:0.6rem">Loading…</div></div>
+        <div class="fx-side-foot">
+            <button class="fx-side-link" id="fx-home">🖥️ This PC</button>
+            <button class="fx-side-link" id="fx-open-backups">💾 Backups</button>
+        </div>
     </aside>
     <div class="fx-split" id="fx-split" title="Drag to resize"></div>
 
@@ -46,7 +50,8 @@
             <button class="fx-rb" id="fx-export" title="Download whole volume">⤓ Export</button>
             <button class="fx-rb" id="fx-import" title="Import a .tar.gz">⤒ Import</button>
         </div>
-        <div class="fx-list" id="fx-list"><div class="fx-muted" style="padding:1.2rem">Select a volume to browse its files.</div></div>
+        <div class="fx-list" id="fx-list"></div>
+        <div class="fx-home" id="fx-home-view"></div>
     </section>
 
     <div class="fx-editor" id="fx-editor" hidden>
@@ -98,7 +103,28 @@
 @section Head {
 <style>
 .fx { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; background:var(--mat-bg); }
-.fx-side { width:250px; flex:0 0 auto; border-right:1px solid var(--mat-border); overflow:auto; background:rgba(255,255,255,0.02); }
+.fx-side { width:250px; flex:0 0 auto; border-right:1px solid var(--mat-border); overflow:auto; background:rgba(255,255,255,0.02); display:flex; flex-direction:column; }
+.fx-side > .fx-tree { flex:1 1 auto; }
+.fx-side-foot { border-top:1px solid var(--mat-border); padding:0.35rem; display:flex; flex-direction:column; gap:0.15rem; }
+.fx-side-link { display:flex; align-items:center; gap:0.5rem; width:100%; text-align:left; padding:0.45rem 0.6rem; border:none; background:transparent; color:var(--mat-text); font:inherit; font-size:0.85rem; border-radius:7px; cursor:pointer; }
+.fx-side-link:hover { background:rgba(255,255,255,0.06); }
+/* This-PC (home) view */
+.fx-home { flex:1 1 auto; overflow-y:auto; padding:1.3rem 1.4rem; display:none; }
+.fx-home.active { display:block; }
+.fx-home h1 { margin:0 0 0.5rem; font-size:1.3rem; font-weight:700; display:flex; align-items:center; gap:0.6rem; }
+.fx-home h2 { margin:1.3rem 0 0.6rem; font-size:0.78rem; color:var(--mat-text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
+.fx-vgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:0.9rem; }
+.fx-vtile { display:flex; align-items:center; gap:0.9rem; padding:0.9rem 1rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; cursor:pointer; text-align:left; color:var(--mat-text); font:inherit; }
+.fx-vtile:hover { background:rgba(255,255,255,0.06); transform:translateY(-1px); transition:transform 0.08s ease, background 0.12s ease; }
+.fx-vtile .ico { width:46px; height:46px; border-radius:10px; display:grid; place-items:center; font-size:1.7rem; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
+.fx-vtile .body { min-width:0; flex:1 1 auto; }
+.fx-vtile .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fx-vtile .sub { color:var(--mat-text-muted); font-size:0.76rem; margin-top:0.15rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fx-vtile .bar { height:4px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:0.35rem; overflow:hidden; }
+.fx-vtile .bar > span { display:block; height:100%; background:var(--mat-accent); }
+.chip-mini { display:inline-block; font-size:0.62rem; font-weight:700; padding:0.02rem 0.35rem; border-radius:999px; background:rgba(52,211,153,0.2); color:#7ff0c4; margin-left:0.3rem; vertical-align:middle; }
+.chip-mini.used { background:rgba(139,92,246,0.22); color:#c7b3ff; }
+.chip-mini.warn { background:rgba(250,204,21,0.18); color:#fde68a; }
 .fx-split { width:6px; flex:0 0 auto; cursor:col-resize; background:transparent; touch-action:none; }
 .fx-split:hover, .fx-split.drag { background:var(--mat-accent); }
 .fx-side-head { display:flex; flex-direction:column; gap:0.5rem; padding:0.7rem 0.8rem; border-bottom:1px solid var(--mat-border); }
@@ -225,7 +251,12 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     catch(e){ treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">${esc(e.message)}</div>`; return; }
     treeEl.innerHTML="";
     if(treeMode==="volume"){
-      for(const v of treeData.volumes) treeEl.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true));
+      const local=treeData.volumes.filter(v=>!v.options||v.options.type!=="cifs");
+      const smb=treeData.volumes.filter(v=>v.options&&v.options.type==="cifs");
+      if(local.length){ const h=document.createElement("div"); h.className="fx-stackhead"; h.textContent="💾 Local"; treeEl.appendChild(h);
+        for(const v of local) treeEl.appendChild(volNode(v.name,"",`${v.name}  (${fmtBytes(v.sizeBytes)})`,false,true)); }
+      if(smb.length){ const h=document.createElement("div"); h.className="fx-stackhead"; h.textContent="🌐 Network (SMB)"; treeEl.appendChild(h);
+        for(const v of smb) treeEl.appendChild(volNode(v.name,"",`${v.name}`,false,true)); }
       if(!treeData.volumes.length) treeEl.innerHTML=`<div class="fx-muted" style="padding:0.6rem">No volumes.</div>`;
     } else {
       let any=false;
@@ -251,7 +282,45 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   }
   document.getElementById("fx-up").addEventListener("click",()=>{ if(cur.volume) openFolder(cur.volume,parent(cur.path)); });
 
+  // ---- Home ("This PC") view ----
+  const homeEl=document.getElementById("fx-home-view");
+  function showHome(){
+    cur={volume:null,path:""}; sel=null;
+    document.getElementById("fx-editor").hidden=true;
+    document.getElementById("fx-viewer").hidden=true;
+    document.getElementById("fx-ribbon").hidden=true;
+    document.getElementById("fx-list").innerHTML="";
+    crumb(); highlightTree(); updateOps();
+    homeEl.classList.add("active");
+    const vols=(treeData&&treeData.volumes)||[];
+    const isSmb = v => v.options && v.options.type === "cifs";
+    const local = vols.filter(v=>!isSmb(v)); const smb = vols.filter(isSmb);
+    const inUse = vols.filter(v=>v.usedBy&&v.usedBy.length>0);
+    const totalSize = vols.reduce((n,v)=>n+(v.sizeBytes>0?v.sizeBytes:0),0);
+    const tile = v => {
+      const smbChip = isSmb(v)?'<span class="chip-mini">SMB</span>':'';
+      const useChip = v.usedBy&&v.usedBy.length?`<span class="chip-mini used">${v.usedBy.length} in use</span>`:'';
+      const sub = isSmb(v) ? esc(v.options.device||"//?") : (v.sizeBytes>=0?fmtBytes(v.sizeBytes):"(size —)");
+      return `<button class="fx-vtile" data-open="${escA(v.name)}"><span class="ico">${isSmb(v)?"🌐":"💾"}</span><div class="body"><div class="nm">${esc(v.name)}${smbChip}${useChip}</div><div class="sub">${sub}</div></div></button>`;
+    };
+    homeEl.innerHTML = `<h1>🖥️ This PC <span class="fx-muted" style="font-size:0.8rem;font-weight:400">${vols.length} volumes · ${fmtBytes(totalSize)} used</span></h1>
+      <div class="fx-muted" style="font-size:0.85rem;margin-bottom:0.4rem">Browse Docker named volumes. Open a volume by clicking it, or use the sidebar for stacks &amp; SMB shares.</div>
+      <div style="display:flex;gap:0.5rem;margin:0.7rem 0 0.3rem">
+        <button class="ui-btn primary" id="fx-home-new">＋ New volume</button>
+        <button class="ui-btn" id="fx-home-refresh">Refresh</button>
+      </div>
+      ${local.length?`<h2>Local volumes</h2><div class="fx-vgrid">${local.map(tile).join("")}</div>`:''}
+      ${smb.length?`<h2>Network locations (SMB)</h2><div class="fx-vgrid">${smb.map(tile).join("")}</div>`:''}
+      ${!local.length&&!smb.length?`<div class="fx-muted" style="padding:1rem">No volumes yet. Click "New volume" to create one.</div>`:''}`;
+    homeEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openFolder(b.dataset.open,"")));
+    document.getElementById("fx-home-new").addEventListener("click",()=>{ document.getElementById("fx-newvol").hidden=false; });
+    document.getElementById("fx-home-refresh").addEventListener("click",async()=>{ treeData=null; await buildTree(); showHome(); });
+  }
+  document.getElementById("fx-home").addEventListener("click",()=>showHome());
+  document.getElementById("fx-open-backups").addEventListener("click",()=>{ try{ window.parent.postMessage({type:"matos:open",url:"/apps/backups",title:"Backups",key:"backups",width:1000,height:640},location.origin); }catch(_){ location.href="/apps/backups"; } });
+
   async function openFolder(volume,path){
+    homeEl.classList.remove("active");
     cur={volume,path:path||""}; sel=null; document.getElementById("fx-editor").hidden=true; document.getElementById("fx-ribbon").hidden=false;
     crumb(); highlightTree(); updateOps();
     const list=document.getElementById("fx-list"); list.innerHTML=`<div class="fx-muted" style="padding:1rem">Loading…</div>`;
@@ -383,15 +452,15 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     if(!body.name){ alert("Name is required."); return; }
     try{ const r=await fetch("/api/v1/files/volumes/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
-      nv.hidden=true; document.getElementById("nv-name").value=""; treeData=null; buildTree();
+      nv.hidden=true; document.getElementById("nv-name").value=""; treeData=null; await buildTree(); if(homeEl.classList.contains("active")) showHome();
     }catch(e){ alert("Create failed: "+e.message); }
   });
   async function removeVolume(name){
     if(!confirm(`Remove volume "${name}"? Docker refuses if it is in use.`))return;
     try{ const r=await fetch("/api/v1/files/volumes/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||r.status); }
-      treeData=null; buildTree();
-      if(cur.volume===name){ cur={volume:null,path:""}; document.getElementById("fx-list").innerHTML=`<div class="fx-muted" style="padding:1.2rem">Select a volume.</div>`; document.getElementById("fx-ribbon").hidden=true; document.getElementById("fx-crumb").innerHTML=""; }
+      treeData=null; await buildTree();
+      if(cur.volume===name){ showHome(); } else if(homeEl.classList.contains("active")) showHome();
     }catch(e){ alert("Remove failed: "+e.message); }
   }
 
@@ -409,7 +478,7 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   })();
 
   // ---- init ----
-  buildTree(); if(root.dataset.volume) openFolder(root.dataset.volume,root.dataset.path||"");
+  (async ()=>{ await buildTree(); if(root.dataset.volume) openFolder(root.dataset.volume,root.dataset.path||""); else showHome(); })();
 })();
 </script>
 }

@@ -24,6 +24,7 @@ builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<DesktopLayoutService>();
 builder.Services.AddSingleton<MatOS.Web.Docker.VolumeFilesService>();
+builder.Services.AddSingleton<MatOS.Web.Services.BackupService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.StoreService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.StoreSourceService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.InstallService>();
@@ -59,6 +60,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizeFolder("/Apps/Users", "Admin");
     o.Conventions.AuthorizePage("/Apps/Files", "Admin");
     o.Conventions.AuthorizePage("/Apps/Network", "Admin");
+    o.Conventions.AuthorizePage("/Apps/Backups", "Admin");
 });
 builder.Services.Configure<RouteOptions>(o => o.LowercaseUrls = true);
 builder.Services.AddProblemDetails();
@@ -91,5 +93,6 @@ api.MapDockerApi();
 api.MapDesktopApi();
 api.MapFilesApi();
 api.MapStoreApi();
+api.MapBackupsApi();
 
 app.Run();

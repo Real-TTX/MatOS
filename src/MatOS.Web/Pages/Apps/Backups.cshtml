@@ -1,0 +1,136 @@
+@page "/apps/backups"
+@model MatOS.Web.Pages.Apps.BackupsModel
+@{
+    ViewData["Title"] = "Backups";
+    ViewData["Description"] = "Snapshot Docker volumes to any other volume — including SMB shares for off-host storage.";
+    Layout = "_WindowLayout";
+}
+
+<div id="bk">
+    <div class="win-toolbar" style="gap:0.6rem;flex-wrap:wrap">
+        <button class="ui-btn primary" id="bk-new">Backup now</button>
+        <button class="ui-btn" id="bk-refresh">Refresh</button>
+        <span class="fx-muted" style="font-size:0.85rem;flex:1">Backups are gzip-compressed tar archives of a volume's contents.</span>
+    </div>
+    <div id="bk-msg" class="card" style="display:none;margin-bottom:0.8rem"></div>
+    <div class="card" style="padding:0;overflow:hidden">
+        <table class="bkt">
+            <thead><tr><th>Created</th><th>Source volume</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
+            <tbody id="bk-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="dlg" id="bk-new-dlg" hidden><div class="dlg-card">
+        <h3 style="margin:0 0 0.9rem">New backup</h3>
+        <label class="fl"><span>Source volume *</span><select class="ui-select" id="bk-src"></select></label>
+        <label class="fl"><span>Target (where the backup file is stored)</span><select class="ui-select" id="bk-tgt"></select>
+            <span class="fx-muted" style="font-size:0.78rem">Pick a network location (SMB) for off-host backups.</span></label>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-go">Start backup</button><button class="ui-btn" id="bk-cancel">Cancel</button></div>
+    </div></div>
+
+    <div class="dlg" id="bk-rst-dlg" hidden><div class="dlg-card">
+        <h3 style="margin:0 0 0.9rem">Restore backup</h3>
+        <div class="wz-note" id="bk-rst-info" style="margin-bottom:0.9rem"></div>
+        <label class="fl"><span>Restore into volume *</span><select class="ui-select" id="bk-rst-tgt"></select>
+            <span class="fx-muted" style="font-size:0.78rem"><strong>Existing files in the target volume are removed first.</strong></span></label>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-rst-go">Restore</button><button class="ui-btn" id="bk-rst-cancel">Cancel</button></div>
+    </div></div>
+</div>
+
+@section Head {
+<style>
+table.bkt { width:100%; border-collapse:collapse; }
+table.bkt th, table.bkt td { padding:0.55rem 0.9rem; text-align:left; white-space:nowrap; vertical-align:middle; }
+table.bkt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); }
+table.bkt tbody tr { border-top:1px solid var(--mat-border); }
+table.bkt th.num, table.bkt td.num { text-align:right; }
+.smb-chip { font-size:0.68rem; font-weight:700; padding:0.05rem 0.4rem; border-radius:999px; background:rgba(52,211,153,0.2); color:#7ff0c4; margin-left:0.3rem; }
+.fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
+.dlg { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:30; }
+.dlg[hidden]{ display:none; }
+.dlg-card { width:min(460px,92%); background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1.2rem; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+.wz-note { background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:10px; padding:0.7rem 0.85rem; font-size:0.86rem; }
+.bk-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
+.bk-acts .ui-btn { padding:0.25rem 0.55rem; font-size:0.78rem; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const fmtB=b=>{ if(b==null||b<0)return "—"; const u=["B","KB","MB","GB","TB"];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  const fmtWhen=s=>{ if(!s)return""; const d=new Date(s); return isNaN(d)?"":d.toLocaleString(); };
+  const $=id=>document.getElementById(id);
+  const msg=$("bk-msg");
+  let state={backups:[],sourceVolumes:[],targetVolumes:[]};
+
+  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",6000); }
+
+  async function load(){
+    try{ state=await (await fetch("/api/v1/backups/list")).json(); }
+    catch(_){ $("bk-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
+    const bs=state.backups||[];
+    if(!bs.length){ $("bk-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No backups yet — click "Backup now" to create your first one.</td></tr>`; return; }
+    $("bk-rows").innerHTML=bs.map((b,i)=>`<tr data-i="${i}">
+      <td>${esc(fmtWhen(b.createdUtc))}</td>
+      <td><strong>${esc(b.sourceVolume)}</strong></td>
+      <td class="mono">${esc(b.targetVolume)}${(state.targetVolumes.find(v=>v.name===b.targetVolume)||{}).isSmb?'<span class="smb-chip">SMB</span>':''}<div class="fx-muted" style="font-size:0.72rem">${esc(b.fileName)}</div></td>
+      <td class="num">${fmtB(b.sizeBytes)}</td>
+      <td><div class="bk-acts">
+        <button class="ui-btn" data-rst="${i}">Restore</button>
+        <button class="ui-btn" data-dl="${i}">Download</button>
+        <button class="ui-btn danger" data-del="${i}">Delete</button>
+      </div></td></tr>`).join("");
+    $("bk-rows").querySelectorAll("[data-rst]").forEach(b=>b.addEventListener("click",()=>openRestore(+b.dataset.rst)));
+    $("bk-rows").querySelectorAll("[data-dl]").forEach(b=>b.addEventListener("click",()=>{ const x=bs[+b.dataset.dl]; window.open(`/api/v1/backups/download?volume=${encodeURIComponent(x.targetVolume)}&file=${encodeURIComponent(x.fileName)}`, "_blank"); }));
+    $("bk-rows").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>del(bs[+b.dataset.del])));
+  }
+
+  // ---- New backup dialog ----
+  function populateSelects(){
+    const srcSel=$("bk-src"); srcSel.innerHTML=state.sourceVolumes.map(v=>`<option value="${escA(v.name)}">${esc(v.name)}${v.isSmb?"  (SMB)":""}${v.size>0?"  ·  "+fmtB(v.size):""}</option>`).join("");
+    const tgtSel=$("bk-tgt"); tgtSel.innerHTML=state.targetVolumes.map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
+  }
+  $("bk-new").addEventListener("click",()=>{ if(!state.sourceVolumes.length){ flash("No volumes available.",false); return; } populateSelects(); $("bk-new-dlg").hidden=false; });
+  $("bk-cancel").addEventListener("click",()=>{ $("bk-new-dlg").hidden=true; });
+  $("bk-go").addEventListener("click",async()=>{
+    const btn=$("bk-go"); const src=$("bk-src").value, tgt=$("bk-tgt").value;
+    if(!src){ flash("Pick a source volume.",false); return; }
+    if(src===tgt){ flash("Source and target must differ.",false); return; }
+    btn.disabled=true; const orig=btn.textContent; btn.textContent="Backing up…";
+    try{ const r=await fetch("/api/v1/backups/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sourceVolume:src,targetVolume:tgt})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
+      const j=await r.json(); flash(`Backup written to ${j.backup.targetVolume}/${j.backup.fileName} (${fmtB(j.backup.sizeBytes)}).`,true);
+      $("bk-new-dlg").hidden=true; load();
+    }catch(e){ flash("Backup failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
+  });
+
+  // ---- Restore dialog ----
+  let rstIdx=-1;
+  function openRestore(i){ rstIdx=i; const b=state.backups[i]; if(!b) return;
+    $("bk-rst-info").innerHTML=`Restoring <strong>${esc(b.fileName)}</strong> from <span class="mono">${esc(b.targetVolume)}</span>. Original source volume: <strong>${esc(b.sourceVolume)}</strong>.`;
+    const sel=$("bk-rst-tgt"); sel.innerHTML=state.sourceVolumes.map(v=>`<option value="${escA(v.name)}" ${v.name===b.sourceVolume?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
+    $("bk-rst-dlg").hidden=false; }
+  $("bk-rst-cancel").addEventListener("click",()=>{ $("bk-rst-dlg").hidden=true; });
+  $("bk-rst-go").addEventListener("click",async()=>{
+    const b=state.backups[rstIdx]; if(!b) return;
+    const into=$("bk-rst-tgt").value;
+    if(!confirm(`Restore backup INTO "${into}"? Existing files in that volume will be removed first.`)) return;
+    const btn=$("bk-rst-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Restoring…";
+    try{ const r=await fetch("/api/v1/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName,restoreInto:into})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
+      flash(`Restored to ${into}.`,true); $("bk-rst-dlg").hidden=true;
+    }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
+  });
+
+  async function del(b){ if(!confirm(`Delete backup "${b.fileName}" from ${b.targetVolume}?`)) return;
+    try{ await fetch("/api/v1/backups/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})}); load(); }
+    catch(e){ flash("Delete failed.",false); } }
+
+  $("bk-refresh").addEventListener("click",load);
+  load();
+})();
+</script>
+}

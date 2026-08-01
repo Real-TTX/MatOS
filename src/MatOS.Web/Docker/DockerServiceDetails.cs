@@ -247,7 +247,10 @@ public partial class DockerService
                 DateTime? created = DateTime.TryParse(v.CreatedAt, out var dt) ? dt.ToUniversalTime() : null;
                 long size = withSize ? VolumeSize(v.Name) : -1;
                 usedBy.TryGetValue(v.Name, out var uses);
-                list.Add(new VolumeInfo(v.Name, v.Driver ?? "", v.Mountpoint ?? "", created, size, uses ?? new List<string>()));
+                var opts = (v.Options ?? new Dictionary<string, string>())
+                    .Where(kv => kv.Key != null)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value ?? "");
+                list.Add(new VolumeInfo(v.Name, v.Driver ?? "", v.Mountpoint ?? "", created, size, uses ?? new List<string>(), opts));
             }
             LastError = null;
             return list.OrderBy(v => v.Name).ToList();
