@@ -55,6 +55,7 @@
         ${iconMarkup}
         <span class="mat-title" title="${escapeAttr(opts.title || "")}">${escapeHtml(opts.title || "")}</span>
         <div class="mat-win-actions">
+          ${!isExternal ? `<button class="mat-win-btn mat-refresh" title="Refresh" aria-label="Refresh">&#8635;</button>` : ""}
           ${isExternal ? `<button class="mat-win-btn mat-addr-toggle" title="Show address bar" aria-label="Toggle address bar">&#128279;</button><button class="mat-win-btn mat-open-ext" title="Open in new tab" aria-label="Open in new tab">&#8599;</button>` : ""}
           <button class="mat-win-btn mat-min" title="Minimize" aria-label="Minimize">&#8211;</button>
           <button class="mat-win-btn mat-max" title="Maximize" aria-label="Maximize">&#9723;</button>
@@ -91,6 +92,8 @@
     el.querySelector(".mat-close").addEventListener("click", () => close(w));
     el.querySelector(".mat-min").addEventListener("click", () => minimize(w));
     el.querySelector(".mat-max").addEventListener("click", () => toggleMax(w));
+    const refreshBtn = el.querySelector(".mat-refresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", () => reset(w.key));
     el.querySelectorAll(".mat-open-ext, .mat-appbar-open").forEach(b =>
       b.addEventListener("click", () => window.open(opts.url, "_blank", "noopener")));
     const addrToggle = el.querySelector(".mat-addr-toggle"), appbar = el.querySelector(".mat-appbar");
@@ -220,6 +223,19 @@
 
   function closeKey(key) { const w = wins.get(key); if (w) close(w); }
 
+  // "Show desktop": if any window is currently visible, minimize them all; otherwise restore.
+  let restoreSnapshot = null;
+  function showDesktop() {
+    const visible = [...wins.values()].filter(w => !w.minimized);
+    if (visible.length) {
+      restoreSnapshot = visible.map(w => w.key);
+      for (const w of visible) minimize(w);
+    } else if (restoreSnapshot) {
+      for (const key of restoreSnapshot) { const w = wins.get(key); if (w) { restore(w); bringToFront(w); } }
+      restoreSnapshot = null;
+    }
+  }
+
   // Reset an app: reload its iframe (works for internal and external/cross-origin apps).
   function reset(key) {
     const w = wins.get(key); if (!w) return;
@@ -231,5 +247,5 @@
     restore(w); bringToFront(w);
   }
 
-  window.MatWM = { open, close, closeKey, reset };
+  window.MatWM = { open, close, closeKey, reset, showDesktop };
 })();

@@ -32,9 +32,12 @@
     </div>
 
     <div class="dlg" id="bk-sched-dlg" hidden><div class="dlg-card">
-        <h3 style="margin:0 0 0.9rem">Backup schedule</h3>
-        <label class="fl"><span>Name</span><input class="ui-input" id="bk-sched-name" placeholder="Nightly matcms" /></label>
-        <label class="fl"><span>Source volume *</span><select class="ui-select" id="bk-sched-src"></select></label>
+        <h3 style="margin:0 0 0.9rem">Backup job</h3>
+        <label class="fl"><span>Name</span><input class="ui-input" id="bk-sched-name" placeholder="Nightly full backup" /></label>
+        <div class="fl">
+            <span>Source volumes <span class="fx-muted">(none selected = ALL volumes)</span></span>
+            <div class="bk-src-picker" id="bk-sched-srcs"></div>
+        </div>
         <label class="fl"><span>Target volume</span><select class="ui-select" id="bk-sched-tgt"></select></label>
         <label class="fl"><span>Repeat</span>
             <select class="ui-select" id="bk-sched-kind"><option value="hourly">Hourly</option><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
@@ -85,6 +88,9 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
 .tab { border:none; background:transparent; padding:0.5rem 0.85rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
 .tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
 .sched-off { opacity:0.55; }
+.bk-src-picker { max-height:180px; overflow-y:auto; border:1px solid var(--mat-border); border-radius:8px; padding:0.4rem 0.5rem; background:var(--mat-surface-2); }
+.bk-src-picker label { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0.15rem; font-size:0.86rem; }
+.bk-src-picker .all { border-bottom:1px solid var(--mat-border); margin-bottom:0.3rem; padding-bottom:0.35rem; font-weight:600; }
 </style>
 }
 
@@ -179,27 +185,52 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     catch(_){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
     const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     if(!schedules.length){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">No schedules yet — click "New schedule".</td></tr>`; return; }
-    $("bk-sched-rows").innerHTML=schedules.map((s,i)=>`<tr class="${s.enabled?'':'sched-off'}" data-i="${i}">
+    $("bk-sched-rows").innerHTML=schedules.map((s,i)=>{
+      const sources = (s.sourceVolumes && s.sourceVolumes.length) ? s.sourceVolumes : (s.sourceVolume?[s.sourceVolume]:[]);
+      const srcStr = sources.length===0 ? "<em>All volumes</em>" : (sources.length<=2 ? sources.map(esc).join(", ") : `${esc(sources[0])} + ${sources.length-1} more`);
+      return `<tr class="${s.enabled?'':'sched-off'}" data-i="${i}">
       <td><strong>${esc(s.name)}</strong>${s.lastError?'<div class="fx-muted" style="font-size:0.7rem;color:#ffb3c0">⚠ '+esc(s.lastError)+'</div>':''}</td>
-      <td class="mono">${esc(s.sourceVolume)} → ${esc(s.targetVolume)}</td>
+      <td class="mono">${srcStr} → ${esc(s.targetVolume)}</td>
       <td>${s.kind==="hourly"?"Hourly":s.kind==="weekly"?days[s.weekday]+" "+esc(s.time):"Daily at "+esc(s.time)}</td>
       <td>${s.retentionDays>0?s.retentionDays+" d":"∞"}</td>
       <td class="fx-muted">${s.lastRunUtc?fmtWhen(s.lastRunUtc):"—"}</td>
       <td><div class="bk-acts">
         <button class="ui-btn" data-sedit="${i}">Edit</button>
         <button class="ui-btn danger" data-sdel="${i}">Delete</button>
-      </div></td></tr>`).join("");
+      </div></td></tr>`;}).join("");
     $("bk-sched-rows").querySelectorAll("[data-sedit]").forEach(b=>b.addEventListener("click",()=>openSched(schedules[+b.dataset.sedit])));
     $("bk-sched-rows").querySelectorAll("[data-sdel]").forEach(b=>b.addEventListener("click",()=>delSched(schedules[+b.dataset.sdel])));
   }
 
   function openSched(s){
-    populateSelects(); // reuse the same volume dropdowns
-    // then patch the schedule-form ones
-    const srcSel=$("bk-sched-src"), tgtSel=$("bk-sched-tgt");
-    srcSel.innerHTML=$("bk-src").innerHTML; tgtSel.innerHTML=$("bk-tgt").innerHTML;
-    if(s){ $("bk-sched-id").value=s.id; $("bk-sched-name").value=s.name; srcSel.value=s.sourceVolume; tgtSel.value=s.targetVolume; $("bk-sched-kind").value=s.kind; $("bk-sched-time").value=s.time; $("bk-sched-day").value=String(s.weekday); $("bk-sched-ret").value=s.retentionDays; $("bk-sched-en").checked=s.enabled; }
-    else { $("bk-sched-id").value=""; $("bk-sched-name").value=""; $("bk-sched-kind").value="daily"; $("bk-sched-time").value="03:00"; $("bk-sched-day").value="0"; $("bk-sched-ret").value="30"; $("bk-sched-en").checked=true; }
+    populateSelects();
+    // Multi-checkbox source picker: first row = "All volumes", rest = per-volume checkboxes.
+    const pick=$("bk-sched-srcs"); pick.innerHTML="";
+    const allRow=document.createElement("label"); allRow.className="all";
+    allRow.innerHTML=`<input type="checkbox" id="bk-sched-src-all"> All volumes <span class="fx-muted">— any future volume gets included too</span>`;
+    pick.appendChild(allRow);
+    for(const v of state.sourceVolumes){
+      const row=document.createElement("label");
+      row.innerHTML=`<input type="checkbox" data-src="${escA(v.name)}"> ${esc(v.name)}${v.isSmb?"  (SMB)":""}${v.size>0?"  · "+fmtB(v.size):""}`;
+      pick.appendChild(row);
+    }
+    const allCb=$("bk-sched-src-all");
+    allCb.addEventListener("change",()=>{ pick.querySelectorAll("[data-src]").forEach(c=>{ c.disabled=allCb.checked; if(allCb.checked) c.checked=false; }); });
+    // Target dropdown
+    const tgtSel=$("bk-sched-tgt"); tgtSel.innerHTML=$("bk-tgt").innerHTML;
+
+    if(s){
+      $("bk-sched-id").value=s.id; $("bk-sched-name").value=s.name; tgtSel.value=s.targetVolume;
+      const list = (s.sourceVolumes && s.sourceVolumes.length) ? s.sourceVolumes : (s.sourceVolume?[s.sourceVolume]:[]);
+      if(!list.length){ allCb.checked=true; allCb.dispatchEvent(new Event("change")); }
+      else { for(const v of list){ const c=pick.querySelector(`[data-src="${CSS.escape(v)}"]`); if(c) c.checked=true; } }
+      $("bk-sched-kind").value=s.kind; $("bk-sched-time").value=s.time; $("bk-sched-day").value=String(s.weekday);
+      $("bk-sched-ret").value=s.retentionDays; $("bk-sched-en").checked=s.enabled;
+    } else {
+      $("bk-sched-id").value=""; $("bk-sched-name").value="";
+      $("bk-sched-kind").value="daily"; $("bk-sched-time").value="03:00"; $("bk-sched-day").value="0";
+      $("bk-sched-ret").value="30"; $("bk-sched-en").checked=true;
+    }
     kindChanged();
     $("bk-sched-dlg").hidden=false;
   }
@@ -208,12 +239,14 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
   $("bk-new-sched").addEventListener("click",()=>{ if(!state.sourceVolumes.length){ flash("No volumes available.",false); return; } openSched(null); });
   $("bk-sched-cancel").addEventListener("click",()=>{ $("bk-sched-dlg").hidden=true; });
   $("bk-sched-save").addEventListener("click",async()=>{
+    const allCb=$("bk-sched-src-all"); const picks=$("bk-sched-srcs");
+    const sourceVolumes = allCb && allCb.checked ? [] : [...picks.querySelectorAll("[data-src]:checked")].map(c=>c.dataset.src);
     const body={ id:$("bk-sched-id").value, name:$("bk-sched-name").value.trim(),
-      sourceVolume:$("bk-sched-src").value, targetVolume:$("bk-sched-tgt").value,
+      sourceVolumes, targetVolume:$("bk-sched-tgt").value,
       kind:$("bk-sched-kind").value, time:$("bk-sched-time").value, weekday:+$("bk-sched-day").value,
       retentionDays:+$("bk-sched-ret").value, enabled:$("bk-sched-en").checked };
-    if(!body.sourceVolume){ flash("Pick a source volume.",false); return; }
-    if(body.sourceVolume===body.targetVolume){ flash("Source and target must differ.",false); return; }
+    if(!(allCb && allCb.checked) && sourceVolumes.length===0){ flash("Pick at least one source volume (or check 'All volumes').",false); return; }
+    if(sourceVolumes.includes(body.targetVolume)){ flash("A source volume can't equal the target.",false); return; }
     try{ const r=await fetch("/api/v1/backups/schedules/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }
       $("bk-sched-dlg").hidden=true; flash("Schedule saved.",true); loadSchedules();

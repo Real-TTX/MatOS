@@ -39,6 +39,11 @@ html, body { overflow: hidden; height: 100%; }
 }
 .mat-app:hover .mat-app-icon { transform: translateY(-3px) scale(1.04); box-shadow: 0 14px 30px rgba(0,0,0,0.5); }
 .mat-app:active .mat-app-icon { transform: scale(0.97); }
+/* Multi-select highlight (rubber-band or ctrl-click) */
+.mat-app.selected .mat-app-icon { outline: 2px solid var(--accent); outline-offset: 3px; box-shadow: 0 0 0 4px rgba(139,92,246,0.28), 0 14px 30px rgba(0,0,0,0.5); }
+.mat-app.selected .mat-app-label { background: rgba(139,92,246,0.28); border-radius: 4px; padding: 0 3px; }
+/* Rubber-band rectangle */
+.mat-band { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent); background: rgba(139,92,246,0.14); border-radius: 3px; }
 .mat-app-icon img { width: 100%; height: 100%; object-fit: cover; }
 .mat-app-icon svg { width: 34px; height: 34px; }
 .mat-app-icon .mat-emoji { font-size: 34px; line-height: 1; }
@@ -109,6 +114,15 @@ html, body { overflow: hidden; height: 100%; }
 /* When the user is typing in the taskbar-search, hide the redundant start-menu search
    input — one focused input is enough (Windows-11 behaviour). */
 #mat-startmenu.tb-driven .sm-search { display: none; }
+
+/* Show-desktop sliver at the far right of the taskbar (Windows-11 style). */
+#mat-show-desktop {
+  width: 6px; height: 52px; margin: 0; margin-left: 4px; padding: 0;
+  border: none; border-left: 1px solid transparent; background: transparent; cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  flex: 0 0 auto;
+}
+#mat-show-desktop:hover { background: rgba(255,255,255,0.08); border-left-color: var(--border-strong); }
 
 /* Notification bell + badge */
 #mat-bell {

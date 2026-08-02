@@ -155,4 +155,23 @@ public class DesktopLayoutService
         lock (_gate) { if (WidgetStore.Users.TryGetValue(userId, out var l)) l.RemoveAll(w => w.Id == id); }
         await _config.SaveAsync("desktop-widgets", WidgetStore);
     }
+
+    // ---- Per-user icon labels (rename) ----
+    private DesktopLabelsStore LabelStore => _config.Get<DesktopLabelsStore>("desktop-labels");
+
+    public Dictionary<string, string> GetLabels(string userId)
+    {
+        lock (_gate) return LabelStore.Users.TryGetValue(userId, out var m)
+            ? new Dictionary<string, string>(m) : new Dictionary<string, string>();
+    }
+
+    public async Task SetLabel(string userId, string key, string label)
+    {
+        lock (_gate)
+        {
+            if (!LabelStore.Users.TryGetValue(userId, out var m)) { m = new Dictionary<string, string>(); LabelStore.Users[userId] = m; }
+            if (string.IsNullOrWhiteSpace(label)) m.Remove(key); else m[key] = label.Trim();
+        }
+        await _config.SaveAsync("desktop-labels", LabelStore);
+    }
 }

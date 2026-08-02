@@ -8,7 +8,12 @@ public class BackupSchedule
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+    /// <summary>Legacy single-source field (kept for on-disk compat with older schedules).
+    /// New schedules use <see cref="SourceVolumes"/> instead; leave empty when doing so.</summary>
     public string SourceVolume { get; set; } = "";
+    /// <summary>Volumes this job backs up. Empty list = ALL volumes (except the target itself and
+    /// any other configured backup targets).</summary>
+    public List<string> SourceVolumes { get; set; } = new();
     public string TargetVolume { get; set; } = "matos-backups";
     /// <summary>"hourly" | "daily" | "weekly"</summary>
     public string Kind { get; set; } = "daily";
@@ -51,43 +56,57 @@ public class BackupSchedulerService : BackgroundService
         var config = scope.ServiceProvider.GetRequiredService<JsonConfigService>();
         var backups = scope.ServiceProvider.GetRequiredService<BackupService>();
         var notes = scope.ServiceProvider.GetRequiredService<NotificationService>();
+        var docker = scope.ServiceProvider.GetRequiredService<MatOS.Web.Docker.DockerService>();
 
         var store = config.Get<BackupScheduleStore>("backup-schedules");
         var now = DateTime.UtcNow;
+        // Every backup target ever configured — we exclude these from "back up all volumes".
+        var targets = store.Items.Select(x => x.TargetVolume).Where(t => !string.IsNullOrWhiteSpace(t)).ToHashSet();
 
         foreach (var s in store.Items.ToList())
         {
             if (!s.Enabled) continue;
             if (!IsDue(s, now)) continue;
 
-            try
+            // Resolve source list: explicit list wins; empty list = ALL volumes minus targets +
+            // matos's own data volume; legacy SourceVolume falls back for old schedules.
+            List<string> sources;
+            if (s.SourceVolumes != null && s.SourceVolumes.Count > 0) sources = s.SourceVolumes.ToList();
+            else if (!string.IsNullOrWhiteSpace(s.SourceVolume)) sources = new() { s.SourceVolume };
+            else
             {
-                var b = await backups.CreateAsync(s.SourceVolume, s.TargetVolume, ct);
-                s.LastRunUtc = now; s.LastError = null;
-                await notes.AddAsync(NotificationKind.Success,
-                    $"Backup finished: {s.Name}",
-                    $"{s.SourceVolume} → {s.TargetVolume} ({FormatSize(b.SizeBytes)}).",
-                    "backups");
-                // Retention prune
-                if (s.RetentionDays > 0) await Prune(backups, s, ct);
+                var all = await docker.ListVolumesAsync(false, ct);
+                sources = all.Select(v => v.Name).Where(n => !targets.Contains(n) && n != "matos_matos-data").ToList();
             }
-            catch (Exception ex)
+
+            var errors = new List<string>(); var totals = 0L; var successes = 0;
+            foreach (var src in sources.Distinct())
             {
-                s.LastRunUtc = now; s.LastError = ex.Message;
-                await notes.AddAsync(NotificationKind.Error,
-                    $"Backup failed: {s.Name}",
-                    ex.Message, "backups");
+                if (string.IsNullOrWhiteSpace(src) || src == s.TargetVolume) continue;
+                try { var b = await backups.CreateAsync(src, s.TargetVolume, ct); totals += b.SizeBytes; successes++; }
+                catch (Exception ex) { errors.Add($"{src}: {ex.Message}"); }
             }
+            s.LastRunUtc = now; s.LastError = errors.Count > 0 ? string.Join("; ", errors.Take(3)) : null;
+            if (errors.Count == 0)
+                await notes.AddAsync(NotificationKind.Success, $"Backup job finished: {s.Name}", $"{successes} volume(s) → {s.TargetVolume} ({FormatSize(totals)}).", "backups");
+            else if (successes > 0)
+                await notes.AddAsync(NotificationKind.Warning, $"Backup job partial: {s.Name}", $"{successes} ok, {errors.Count} failed → {errors[0]}", "backups");
+            else
+                await notes.AddAsync(NotificationKind.Error, $"Backup job failed: {s.Name}", errors[0], "backups");
+
+            if (s.RetentionDays > 0) await Prune(backups, s, ct, sources);
             await config.SaveAsync("backup-schedules", store);
         }
     }
 
-    /// <summary>Delete the schedule's own backup files older than RetentionDays.</summary>
-    private static async Task Prune(BackupService backups, BackupSchedule s, CancellationToken ct)
+    /// <summary>Delete this job's own backup files (from its source volumes → its target) older
+    /// than RetentionDays.</summary>
+    private static async Task Prune(BackupService backups, BackupSchedule s, CancellationToken ct, IReadOnlyList<string> sources)
     {
         var cutoff = DateTime.UtcNow.AddDays(-s.RetentionDays);
         var all = await backups.ListAsync(ct);
-        foreach (var b in all.Where(x => x.SourceVolume == s.SourceVolume && x.TargetVolume == s.TargetVolume && x.CreatedUtc < cutoff))
+        var sourceSet = sources.ToHashSet();
+        foreach (var b in all.Where(x => sourceSet.Contains(x.SourceVolume) && x.TargetVolume == s.TargetVolume && x.CreatedUtc < cutoff))
         {
             try { backups.Delete(b.TargetVolume, b.FileName); } catch { }
         }

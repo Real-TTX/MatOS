@@ -14,6 +14,7 @@ public static class DesktopApi
     public record IdBody(string Id);
     public record AddWidgetBody(string Type, int X, int Y, int W, int H);
     public record MoveWidgetBody(string Id, int X, int Y);
+    public record RenameBody(string Key, string Label);
 
     public static void MapDesktopApi(this IEndpointRouteBuilder api)
     {
@@ -27,8 +28,16 @@ public static class DesktopApi
                 positions = svc.GetForUser(uid),
                 pins = svc.GetPins(uid),
                 folders = svc.GetFolders(uid),
-                widgets = svc.GetWidgets(uid)
+                widgets = svc.GetWidgets(uid),
+                labels = svc.GetLabels(uid),
             });
+        });
+
+        g.MapPost("/rename", async (RenameBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        {
+            if (string.IsNullOrWhiteSpace(b.Key)) return Results.BadRequest();
+            await svc.SetLabel(Uid(ctx), b.Key, b.Label ?? "");
+            return Results.Ok(new { ok = true });
         });
 
         g.MapPost("/pin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>

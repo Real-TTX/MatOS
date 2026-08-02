@@ -65,6 +65,7 @@
   let pins = new Set(); // app keys pinned to the desktop (nothing shows by default; user pins from Start menu)
   let folders = [];   // [{id,name,keys:[...]}]
   let widgets = [];   // [{id,type,x,y,w,h,config}]
+  let labels = {};    // key -> custom display name (per user)
   const pendingInstalls = new Map(); // installId -> { appId, name, icon }
   const stackKey = s => "stack:" + s.name;
   const primaryWeb = s => (s.containers || []).find(c => c.hasWebUi && c.running && c.appUrl);
@@ -81,10 +82,14 @@
   function stackApp(s) { const c = (s.containers || []).find(x => x.matosApp); return c ? c.matosApp : null; }
   function stackDef(s) { const a = stackApp(s); return a ? appDefs[a] : null; }
   function stackTitle(s) {
+    // Per-user custom label wins.
+    const custom = labels["stack:" + s.name]; if (custom) return custom;
     const c = (s.containers || []).find(x => x.matosTitle);
     if (c && c.matosTitle) return c.matosTitle;
     const d = stackDef(s); return d ? d.name : s.name;
   }
+  // Custom label for any key (folder / system / stack); used by systemApps renderer too.
+  function customLabel(key) { return labels[key] || null; }
 
   function stackSettingsUrl(s) {
     const first = (s.containers || [])[0];
@@ -144,59 +149,89 @@
   async function saveIcon(key, x, y) {
     try { await fetch("/api/v1/desktop/icon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, x, y }) }); } catch (_) {}
   }
+  // ---- Selection state (multi-select via rubber-band or ctrl/shift click) ----
+  const selectedKeys = new Set();
+  function isSelected(key) { return selectedKeys.has(key); }
+  function setSelected(key, on) {
+    if (on) selectedKeys.add(key); else selectedKeys.delete(key);
+    const el = iconEls.get(key); if (el) el.classList.toggle("selected", on);
+  }
+  function clearSelection() { for (const k of [...selectedKeys]) setSelected(k, false); }
+  function selectionList() { return [...selectedKeys].map(k => ({ key: k, el: iconEls.get(k) })).filter(x => x.el); }
+
   function enableDrag(el, key) {
-    let sx, sy, ox, oy, moved = false, active = false;
+    let sx, sy, ox, oy, moved = false, active = false, groupStart = null;
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
+      // Ctrl/Shift + click toggles the icon in/out of the selection, no drag/launch.
+      if (e.ctrlKey || e.metaKey || e.shiftKey) { e.stopPropagation(); setSelected(key, !isSelected(key)); return; }
+      // If the clicked icon isn't already in a multi-selection, this starts a fresh single drag.
+      if (!isSelected(key)) clearSelection();
       active = true; moved = false; sx = e.clientX; sy = e.clientY;
       ox = parseFloat(el.style.left) || 0; oy = parseFloat(el.style.top) || 0;
+      // Snapshot every selected icon's origin so we can move the whole group together.
+      groupStart = selectionList().filter(x => x.key !== key).map(x => ({ key: x.key, el: x.el, ox: parseFloat(x.el.style.left) || 0, oy: parseFloat(x.el.style.top) || 0 }));
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
     });
     el.addEventListener("pointermove", (e) => {
       if (!active) return;
       const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (!moved && Math.hypot(dx, dy) > 5) { moved = true; dragging = true; el.classList.add("dragging"); }
+      if (!moved && Math.hypot(dx, dy) > 5) { moved = true; dragging = true; el.classList.add("dragging"); for (const g of groupStart) g.el.classList.add("dragging"); }
       if (moved) {
         el.style.left = (ox + dx) + "px"; el.style.top = (oy + dy) + "px";
-        // Highlight any icon we'd merge into on drop.
-        const t = dropTargetAt(e.clientX, e.clientY, el);
+        for (const g of groupStart) { g.el.style.left = (g.ox + dx) + "px"; g.el.style.top = (g.oy + dy) + "px"; }
+        // Highlight any icon we'd merge into on drop (only when dragging a single icon).
         document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
-        if (t) t.classList.add("drop-target");
+        if (!groupStart.length) {
+          const t = dropTargetAt(e.clientX, e.clientY, el);
+          if (t) t.classList.add("drop-target");
+        }
       }
     });
     const end = (e) => {
       if (!active) return; active = false;
       try { el.releasePointerCapture(e.pointerId); } catch (_) {}
       if (moved) {
-        el.classList.remove("dragging");
+        el.classList.remove("dragging"); for (const g of groupStart) g.el.classList.remove("dragging");
         document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
-        // Detect drop target — decide by which side is a folder.
+        dragging = false;
+        // Group drop into a folder: if any icon of the group lands on a folder, move ALL of them there.
+        if (groupStart.length) {
+          const t = dropTargetAt(e.clientX, e.clientY, el);
+          if (t && t.dataset.folderId) {
+            const fid = t.dataset.folderId;
+            for (const k of [key, ...groupStart.map(g => g.key)]) moveKeyToFolder(k, fid);
+            clearSelection(); return;
+          }
+          // Otherwise: snap every icon in the group to the grid and persist.
+          const items = [{ key, el }, ...groupStart];
+          for (const it of items) {
+            const s = snapXY(parseFloat(it.el.style.left), parseFloat(it.el.style.top));
+            it.el.style.left = s.x + "px"; it.el.style.top = s.y + "px";
+            layout[it.key] = s; saveIcon(it.key, s.x, s.y);
+          }
+          setTimeout(() => { dragging = false; }, 60);
+          return;
+        }
+        // Single-icon drop — same behaviour as before.
         const drop = dropTargetAt(e.clientX, e.clientY, el);
         if (drop) {
           const srcFolderId = el.dataset.folderId, dstFolderId = drop.dataset.folderId;
           const srcKey = key, dstKey = drop.dataset.key;
-          // Clear the dragging flag BEFORE dispatching so the optimistic reconcileDesktop()
-          // that these helpers call actually runs (it's a no-op while dragging is true).
-          dragging = false;
-          if (srcFolderId && dstFolderId) {
-            mergeFolders(srcFolderId, dstFolderId);
-          } else if (srcFolderId && !dstFolderId) {
-            // Folder dragged onto an app: put the app into the folder.
-            moveKeyToFolder(dstKey, srcFolderId);
-          } else if (!srcFolderId && dstFolderId) {
-            // App dragged onto a folder: add the app to the folder.
-            moveKeyToFolder(srcKey, dstFolderId);
-          } else {
-            // App onto app: create a new folder containing both.
-            mergeIntoFolder(srcKey, dstKey);
-          }
+          if (srcFolderId && dstFolderId) mergeFolders(srcFolderId, dstFolderId);
+          else if (srcFolderId && !dstFolderId) moveKeyToFolder(dstKey, srcFolderId);
+          else if (!srcFolderId && dstFolderId) moveKeyToFolder(srcKey, dstFolderId);
+          else mergeIntoFolder(srcKey, dstKey);
           return;
         }
         const s = snapXY(parseFloat(el.style.left), parseFloat(el.style.top));
         el.style.left = s.x + "px"; el.style.top = s.y + "px";
         layout[key] = s; saveIcon(key, s.x, s.y);
         setTimeout(() => { dragging = false; }, 60);
-      } else { launchEl(el); }
+      } else {
+        // Plain click: single-select this icon and launch (Windows behaviour).
+        clearSelection(); launchEl(el);
+      }
     };
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
@@ -224,8 +259,10 @@
     // pinned system apps
     for (const a of systemApps()) if (pins.has(a.key) && !inFolder.has(a.key)) {
       wantedKeys.add(a.key);
+      const title = customLabel(a.key) || a.title;
       let el = iconEls.get(a.key);
-      if (!el) el = makeIcon(a.key, a.title, a.url, a.w, a.h, "sys", a.iconHtml);
+      if (!el) el = makeIcon(a.key, title, a.url, a.w, a.h, "sys", a.iconHtml);
+      else { el.dataset.title = title; const lbl = el.querySelector(".mat-app-label"); if (lbl) lbl.textContent = title; }
     }
     // pinned stack apps
     for (const s of stackData) {
@@ -279,6 +316,18 @@
     layout = {}; defaultIndex = 0; for (const [key, el] of iconEls) applyPos(el, key);
   }
   function pin(key)   { pins.add(key);    reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); fetch("/api/v1/desktop/pin",   { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(()=>{}); }
+  // Rename an icon (per-user custom label). Blank/empty resets to the default.
+  async function renameIcon(key) {
+    // Compute current visible name for the prompt default.
+    let current = "";
+    const el = iconEls.get(key); if (el) current = el.querySelector(".mat-app-label")?.textContent || "";
+    const next = prompt("New name for this icon (leave empty to reset):", current);
+    if (next === null) return;
+    const label = next.trim();
+    if (label) labels[key] = label; else delete labels[key];
+    reconcileDesktop();
+    try { await fetch("/api/v1/desktop/rename", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, label }) }); } catch (_) {}
+  }
   function unpin(key) { pins.delete(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(()=>{}); }
 
   async function load() {
@@ -359,8 +408,28 @@
     if (tbSearchWrap) tbSearchWrap.addEventListener("click", () => tbSearch.focus());
   }
 
+  // Windows-11 style Start-button right-click: quick jump to Task Manager / Settings / Files / Backups.
+  function openQuickMenu(x, y) {
+    const sys = systemApps();
+    const jump = k => { const a = sys.find(a => a.key === k); if (a) open({ key: a.key, title: a.title, url: a.url, iconHtml: a.iconHtml, width: parseInt(a.w||"1024",10), height: parseInt(a.h||"680",10) }); };
+    const items = [];
+    if (sys.find(a => a.key === "task-manager")) items.push({ label: "Task Manager", action: () => jump("task-manager") });
+    if (sys.find(a => a.key === "files")) items.push({ label: "Files", action: () => jump("files") });
+    if (sys.find(a => a.key === "network")) items.push({ label: "Network", action: () => jump("network") });
+    if (sys.find(a => a.key === "backups")) items.push({ label: "Backups", action: () => jump("backups") });
+    items.push({ sep: true });
+    if (sys.find(a => a.key === "settings")) items.push({ label: "Settings", action: () => jump("settings") });
+    items.push({ label: "Show desktop", action: () => window.MatWM && window.MatWM.showDesktop && window.MatWM.showDesktop() });
+    showCtx(x, y, items);
+  }
+
+  // Show-desktop sliver at the far right of the taskbar.
+  const showDesk = document.getElementById("mat-show-desktop");
+  if (showDesk) showDesk.addEventListener("click", () => { if (window.MatWM && window.MatWM.showDesktop) window.MatWM.showDesktop(); });
+
   if (startBtn) {
     startBtn.addEventListener("click", (e) => { e.stopPropagation(); startMenu.hidden ? openStart() : closeStart(); });
+    startBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); closeStart(); openQuickMenu(e.clientX, e.clientY); });
     document.addEventListener("click", (e) => { if (!startMenu.hidden && !startMenu.contains(e.target) && !startBtn.contains(e.target)) closeStart(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeStart(); hideCtx(); } });
     startSearch.addEventListener("input", () => renderStartMenu(startSearch.value));
@@ -456,7 +525,7 @@
         items.push({ sep: true });
         items.push({ label: "New folder from this app", action: () => moveKeyToFolder(key, null) });
         for (const f of folders) if (!f.keys.includes(key)) items.push({ label: 'Move to "' + f.name + '"', action: () => moveKeyToFolder(key, f.id) });
-        items.push({ sep: true }, { label: "Remove from desktop", action: () => unpin(key) }, { label: "Auto-arrange icons", action: autoArrange });
+        items.push({ sep: true }, { label: "Rename", action: () => renameIcon(key) }, { label: "Remove from desktop", action: () => unpin(key) }, { label: "Auto-arrange icons", action: autoArrange });
         showCtx(e.clientX, e.clientY, items);
       } else {
         showCtx(e.clientX, e.clientY, [
@@ -470,6 +539,52 @@
     document.addEventListener("click", () => hideCtx());
     document.addEventListener("scroll", hideCtx, true);
     window.addEventListener("resize", hideCtx); window.addEventListener("blur", hideCtx);
+
+    // ---- Rubber-band multi-select on the empty desktop ----
+    let bandEl = null, bandStart = null;
+    layer.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      // Only when the click misses every icon.
+      if (e.target.closest(".mat-app, .mat-widget")) return;
+      if (!(e.ctrlKey || e.metaKey || e.shiftKey)) clearSelection();
+      const r = layer.getBoundingClientRect();
+      bandStart = { x: e.clientX - r.left, y: e.clientY - r.top, rectLeft: r.left, rectTop: r.top };
+      bandEl = document.createElement("div"); bandEl.className = "mat-band";
+      Object.assign(bandEl.style, { left: bandStart.x + "px", top: bandStart.y + "px", width: "0px", height: "0px" });
+      layer.appendChild(bandEl);
+      try { layer.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    layer.addEventListener("pointermove", (e) => {
+      if (!bandEl || !bandStart) return;
+      const x = e.clientX - bandStart.rectLeft, y = e.clientY - bandStart.rectTop;
+      const left = Math.min(x, bandStart.x), top = Math.min(y, bandStart.y);
+      const w = Math.abs(x - bandStart.x), h = Math.abs(y - bandStart.y);
+      Object.assign(bandEl.style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" });
+      // Test every icon's rect against the band, treating client coords consistently.
+      const bx1 = left + bandStart.rectLeft, by1 = top + bandStart.rectTop, bx2 = bx1 + w, by2 = by1 + h;
+      for (const [key, iconEl] of iconEls) {
+        const r = iconEl.getBoundingClientRect();
+        const hit = r.right >= bx1 && r.left <= bx2 && r.bottom >= by1 && r.top <= by2;
+        setSelected(key, hit || (e.ctrlKey || e.shiftKey ? isSelected(key) : hit));
+      }
+    });
+    const bandEnd = (e) => {
+      if (!bandEl) return;
+      try { layer.releasePointerCapture(e.pointerId); } catch (_) {}
+      bandEl.remove(); bandEl = null; bandStart = null;
+    };
+    layer.addEventListener("pointerup", bandEnd);
+    layer.addEventListener("pointercancel", bandEnd);
+
+    // Escape / Delete: clear selection. Delete unpins each selected app (but not folders).
+    document.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
+      if (e.key === "Escape" && selectedKeys.size) clearSelection();
+      if (e.key === "Delete" && selectedKeys.size) {
+        const ks = [...selectedKeys]; if (!confirm(`Remove ${ks.length} icon${ks.length===1?"":"s"} from the desktop?`)) return;
+        clearSelection(); for (const k of ks) if (!k.startsWith("folder:")) unpin(k);
+      }
+    });
   }
 
   // ---- taskbar (open windows) context menu ----
@@ -841,7 +956,7 @@
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; } }
     catch (_) { layout = {}; }
     await loadDefs();
     buildSystem(); await load(); setInterval(load, 15000);

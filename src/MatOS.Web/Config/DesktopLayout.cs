@@ -21,6 +21,14 @@ public class DesktopPinsStore
     public Dictionary<string, List<string>> Users { get; set; } = new();
 }
 
+/// <summary>Per-user custom labels for desktop icons. Lets each user rename a stack icon
+/// like "matos_matcms_1" to something meaningful ("Blog", "Docs Site"). Keyed by user id →
+/// icon key → display name.</summary>
+public class DesktopLabelsStore
+{
+    public Dictionary<string, Dictionary<string, string>> Users { get; set; } = new();
+}
+
 /// <summary>An iOS/macOS-style folder holding one or more app icons. The folder itself has an
 /// icon key ("folder:{id}") that participates in placement/pinning; the child keys inside are
 /// hidden from the desktop while they're in a folder.</summary>

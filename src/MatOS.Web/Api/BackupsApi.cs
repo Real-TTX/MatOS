@@ -13,7 +13,7 @@ public static class BackupsApi
     public record RestoreBody(string TargetVolume, string FileName, string RestoreInto);
     public record DeleteBody(string TargetVolume, string FileName);
     public record DownloadQuery(string Volume, string File);
-    public record ScheduleBody(string Id, string Name, string SourceVolume, string TargetVolume,
+    public record ScheduleBody(string Id, string Name, List<string>? SourceVolumes, string? SourceVolume, string TargetVolume,
         string Kind, string Time, int Weekday, int RetentionDays, bool Enabled);
     public record IdBody(string Id);
 
@@ -67,12 +67,18 @@ public static class BackupsApi
 
         g.MapPost("/schedules/save", async (ScheduleBody b, JsonConfigService config) =>
         {
-            if (string.IsNullOrWhiteSpace(b.SourceVolume)) return Results.BadRequest(new { error = "Source volume is required." });
             var store = config.Get<BackupScheduleStore>("backup-schedules");
             var s = store.Items.FirstOrDefault(x => x.Id == b.Id);
             if (s == null) { s = new BackupSchedule { Id = "s" + Guid.NewGuid().ToString("N")[..8] }; store.Items.Add(s); }
-            s.Name = string.IsNullOrWhiteSpace(b.Name) ? $"Backup {b.SourceVolume}" : b.Name.Trim();
-            s.SourceVolume = b.SourceVolume; s.TargetVolume = string.IsNullOrWhiteSpace(b.TargetVolume) ? "matos-backups" : b.TargetVolume;
+            // Accept either the new SourceVolumes list, the legacy single SourceVolume, or empty
+            // (empty list = ALL volumes at run time).
+            s.SourceVolumes = (b.SourceVolumes ?? new List<string>()).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToList();
+            s.SourceVolume = ""; // stop using the legacy field for new writes
+            if (s.SourceVolumes.Count == 0 && !string.IsNullOrWhiteSpace(b.SourceVolume)) s.SourceVolumes.Add(b.SourceVolume!);
+            s.Name = string.IsNullOrWhiteSpace(b.Name)
+                ? (s.SourceVolumes.Count == 0 ? "Backup all volumes" : $"Backup {s.SourceVolumes[0]}{(s.SourceVolumes.Count>1?" (+"+(s.SourceVolumes.Count-1)+")":"")}")
+                : b.Name.Trim();
+            s.TargetVolume = string.IsNullOrWhiteSpace(b.TargetVolume) ? "matos-backups" : b.TargetVolume;
             s.Kind = (b.Kind ?? "daily").ToLowerInvariant(); s.Time = b.Time ?? "03:00";
             s.Weekday = Math.Clamp(b.Weekday, 0, 6); s.RetentionDays = Math.Clamp(b.RetentionDays, 0, 3650); s.Enabled = b.Enabled;
             await config.SaveAsync("backup-schedules", store);
