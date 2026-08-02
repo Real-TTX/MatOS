@@ -35,10 +35,15 @@ jobs:
         with:
           context: .
           push: true
+          # Always pull base images so a stale gha cache can't pin us to an old
+          # SDK/runtime layer that no longer matches the NuGet packages we restore.
+          pull: true
+          # The gha cache was breaking rebuilds (stale intermediate layers were
+          # being reused with a fresher restore). Skip it — a fresh 5-second
+          # publish is cheap enough.
+          no-cache: true
           build-args: |
             APP_VERSION=${{ steps.v.outputs.version }}
           tags: |
             ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}
             ${{ steps.v.outputs.image }}:nightly
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

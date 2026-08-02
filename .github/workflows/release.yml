@@ -37,10 +37,12 @@ jobs:
         with:
           context: .
           push: true
+          # See dev.yml — always pull fresh base images and skip the gha cache
+          # to avoid subtle stale-layer restore mismatches.
+          pull: true
+          no-cache: true
           build-args: |
             APP_VERSION=${{ steps.v.outputs.version }}
           tags: |
             ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}
             ${{ steps.v.outputs.image }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
