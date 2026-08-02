@@ -400,7 +400,25 @@
     if (smContainersTitle) smContainersTitle.style.display = cons.length ? "" : "none";
     smEmpty.hidden = (sys.length + apps.length + cons.length) > 0;
   }
-  function openStart() { if (!startMenu) return; startMenu.hidden = false; startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
+  // Position a taskbar popup (start menu / notification panel) relative to its anchor button,
+  // so it stays correctly attached regardless of taskbar position (top/bottom) or icon
+  // alignment (left/center) — a hardcoded corner anchor can't track either of those.
+  function positionNearAnchor(el, anchor) {
+    if (!el || !anchor) return;
+    const ar = anchor.getBoundingClientRect();
+    const isTop = document.body.classList.contains("tb-top");
+    const margin = 8;
+    if (isTop) { el.style.top = (ar.bottom + margin) + "px"; el.style.bottom = "auto"; }
+    else { el.style.bottom = (window.innerHeight - ar.top + margin) + "px"; el.style.top = "auto"; }
+    const w = el.offsetWidth || 400;
+    let left = ar.left + ar.width / 2 - w / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    el.style.left = left + "px";
+    el.style.right = "auto";
+    el.style.transformOrigin = (isTop ? "top" : "bottom") + " center";
+  }
+
+  function openStart() { if (!startMenu) return; startMenu.hidden = false; positionNearAnchor(startMenu, startBtn); startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
   function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); startMenu.classList.remove("tb-driven"); }
   // Taskbar search (Windows-11 style): typing forwards into the start menu. When the taskbar
   // search is driving the menu, we hide the menu's own search input (one focused input only —
@@ -1121,7 +1139,7 @@
       e.stopPropagation();
       const opening = notifyPanel.hidden;
       notifyPanel.hidden = !opening;
-      if (opening) { await loadNotifications();
+      if (opening) { positionNearAnchor(notifyPanel, bellBtn); await loadNotifications();
         // Auto-mark-all read after opening the panel.
         try { await fetch("/api/v1/notifications/mark-all-read", { method: "POST" }); } catch (_) {}
         // Refresh the badge (should be 0 now) without wiping the list.
