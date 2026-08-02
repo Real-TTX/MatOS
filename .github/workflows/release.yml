@@ -37,8 +37,8 @@ jobs:
         with:
           context: .
           push: true
-          # See dev.yml — always pull fresh base images and skip the gha cache
-          # to avoid subtle stale-layer restore mismatches.
+          # See dev.yml — pin platform + always pull fresh base + skip gha cache.
+          platforms: linux/amd64
           pull: true
           no-cache: true
           build-args: |
