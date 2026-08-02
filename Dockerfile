@@ -5,9 +5,13 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 ARG APP_VERSION=local
 COPY . .
+# Log the SDK we actually ended up with so a failing CI run always tells us what
+# tag mcr.microsoft.com/dotnet/sdk:10.0 resolved to on this run.
+RUN dotnet --info
 RUN dotnet restore src/MatOS.Web/MatOS.Web.csproj
+# Verbosity: normal — enough to surface CS/MSBuild errors without the noise of `-v:d`.
 RUN dotnet publish src/MatOS.Web/MatOS.Web.csproj -c Release -o /app/publish \
-    /p:UseAppHost=false /p:InformationalVersion=${APP_VERSION}
+    -v:n /p:UseAppHost=false /p:InformationalVersion=${APP_VERSION}
 
 # ---- Runtime stage ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
