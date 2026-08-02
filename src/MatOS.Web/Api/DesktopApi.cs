@@ -1,4 +1,5 @@
 using MatOS.Web.Auth;
+using MatOS.Web.Config;
 using MatOS.Web.Services;
 
 namespace MatOS.Web.Api;
@@ -39,6 +40,25 @@ public static class DesktopApi
             await svc.SetLabel(Uid(ctx), b.Key, b.Label ?? "");
             return Results.Ok(new { ok = true });
         });
+
+        // Per-user personal preferences (wallpaper/theme/taskbar). Falls back to the global
+        // DesktopConfig when the user has never chosen a wallpaper/theme.
+        g.MapGet("/prefs", (DesktopLayoutService svc, JsonConfigService cfg, HttpContext ctx) =>
+        {
+            var p = svc.GetPrefs(Uid(ctx));
+            var d = cfg.Get<DesktopConfig>("desktop");
+            return Results.Ok(new
+            {
+                wallpaper = string.IsNullOrWhiteSpace(p.Wallpaper) ? Wallpapers.Normalize(d.Wallpaper) : p.Wallpaper,
+                theme = string.IsNullOrWhiteSpace(p.Theme) ? (string.IsNullOrWhiteSpace(d.Theme) ? "auto" : d.Theme) : p.Theme,
+                taskbarPosition = p.TaskbarPosition,
+                taskbarSearch = p.TaskbarSearch,
+                taskbarAlign = p.TaskbarAlign,
+            });
+        });
+
+        g.MapPost("/prefs", async (DesktopPrefs b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.SavePrefs(Uid(ctx), b); return Results.Ok(new { ok = true }); });
 
         g.MapPost("/pin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>
         {

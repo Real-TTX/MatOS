@@ -174,4 +174,28 @@ public class DesktopLayoutService
         }
         await _config.SaveAsync("desktop-labels", LabelStore);
     }
+
+    // ---- Per-user personal preferences (wallpaper, theme, taskbar) ----
+    private DesktopPrefsStore PrefsStore => _config.Get<DesktopPrefsStore>("desktop-prefs");
+
+    public DesktopPrefs GetPrefs(string userId)
+    {
+        lock (_gate) return PrefsStore.Users.TryGetValue(userId, out var p)
+            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign }
+            : new DesktopPrefs();
+    }
+
+    public async Task SavePrefs(string userId, DesktopPrefs prefs)
+    {
+        lock (_gate)
+        {
+            if (!PrefsStore.Users.TryGetValue(userId, out var p)) { p = new DesktopPrefs(); PrefsStore.Users[userId] = p; }
+            p.Wallpaper = prefs.Wallpaper ?? "";
+            p.Theme = prefs.Theme ?? "";
+            p.TaskbarPosition = prefs.TaskbarPosition is "top" or "bottom" ? prefs.TaskbarPosition : "bottom";
+            p.TaskbarSearch = prefs.TaskbarSearch;
+            p.TaskbarAlign = prefs.TaskbarAlign is "center" or "left" ? prefs.TaskbarAlign : "left";
+        }
+        await _config.SaveAsync("desktop-prefs", PrefsStore);
+    }
 }

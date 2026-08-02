@@ -8,7 +8,10 @@
 <div class="mset">
     <aside class="mset-side">
         <div class="mset-title">Settings</div>
+        <div class="mset-side-head">Personal <span class="mset-you" title="Only affects your account">👤</span></div>
         <button class="mset-nav active" data-p="appearance"><span class="i">🎨</span> Appearance</button>
+        <button class="mset-nav" data-p="taskbar"><span class="i">📊</span> Taskbar</button>
+        <div class="mset-side-head">System</div>
         <button class="mset-nav" data-p="general"><span class="i">⚙️</span> General</button>
         <button class="mset-nav" data-p="docker"><span class="i">🐳</span> Docker</button>
         <button class="mset-nav" data-p="about"><span class="i">ℹ️</span> About</button>
@@ -17,7 +20,7 @@
     <section class="mset-main">
         <form method="post">
             <div class="mset-panel active" data-panel="appearance">
-                <h2>Appearance</h2>
+                <h2>Appearance <span class="mset-you" title="Personal setting — applies to your account only">👤</span></h2>
                 <div class="mset-group pad">
                     <div class="mset-grouphead">Theme</div>
                     <div class="th-picker" style="padding:0.9rem 1rem 1rem">
@@ -42,6 +45,24 @@
                                 <span class="nm">@w.Name</span>
                             </label>
                         }
+                    </div>
+                </div>
+            </div>
+
+            <div class="mset-panel" data-panel="taskbar">
+                <h2>Taskbar <span class="mset-you" title="Personal setting — applies to your account only">👤</span></h2>
+                <div class="mset-group">
+                    <div class="mset-row">
+                        <div class="mset-label">Position<small>Where the taskbar sits on the screen.</small></div>
+                        <div class="tb-seg" id="tb-pos"><button type="button" data-v="bottom" class="active">Bottom</button><button type="button" data-v="top">Top</button></div>
+                    </div>
+                    <div class="mset-row">
+                        <div class="mset-label">Icon alignment<small>Where the start button + window icons cluster.</small></div>
+                        <div class="tb-seg" id="tb-align"><button type="button" data-v="left" class="active">Left</button><button type="button" data-v="center">Center</button></div>
+                    </div>
+                    <div class="mset-row">
+                        <div class="mset-label">Show search pill<small>The always-visible search input next to the Start button.</small></div>
+                        <label class="tb-switch"><input type="checkbox" id="tb-search" checked><span></span></label>
                     </div>
                 </div>
             </div>
@@ -126,6 +147,20 @@
 .th-swatch.th-auto { background:linear-gradient(90deg,#f4f5fa 0 50%,#0b0f1a 50% 100%); }
 .th-swatch.th-light { background:#f4f5fa; }
 .th-swatch.th-dark { background:#0b0f1a; }
+/* Personal-setting badge (little user icon) — same design in both sidebar sections and panel headings. */
+.mset-you { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:0.35rem; font-size:0.72rem; background:rgba(139,92,246,0.2); color:#c7b3ff; border-radius:50%; vertical-align:middle; }
+.mset-side-head { font-size:0.68rem; font-weight:700; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.06em; padding:0.7rem 0.75rem 0.3rem; }
+.mset-side-head:first-of-type { padding-top:0.4rem; }
+/* Taskbar-panel controls */
+.tb-seg { display:inline-flex; background:rgba(255,255,255,0.06); border-radius:8px; padding:2px; }
+.tb-seg button { border:none; background:transparent; padding:0.35rem 0.7rem; font:inherit; font-size:0.85rem; border-radius:6px; cursor:pointer; color:var(--mat-text-muted); }
+.tb-seg button.active { background:var(--mat-surface); color:var(--mat-text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+.tb-switch { position:relative; display:inline-block; width:38px; height:22px; }
+.tb-switch input { opacity:0; width:0; height:0; }
+.tb-switch span { position:absolute; inset:0; background:rgba(255,255,255,0.1); border-radius:999px; cursor:pointer; transition:background 0.15s; }
+.tb-switch span::before { content:""; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:transform 0.15s; }
+.tb-switch input:checked + span { background:var(--mat-accent); }
+.tb-switch input:checked + span::before { transform:translateX(16px); }
 </style>
 }
 
@@ -155,6 +190,31 @@
     const run=(c.containers||[]).filter(x=>x.running).length;
     document.getElementById("mset-inv").textContent=`${run}/${(c.containers||[]).length} containers running · ${(i.images||[]).length} images · ${(v.volumes||[]).length} volumes`;
   }catch(_){ document.getElementById("mset-inv").textContent="Docker not reachable."; } })();
+
+  // ---- Taskbar personal settings — load, wire live-preview, save on change ----
+  const posSeg = document.getElementById("tb-pos"), alignSeg = document.getElementById("tb-align"), searchCb = document.getElementById("tb-search");
+  function segValue(seg){ const b=seg.querySelector("button.active"); return b?b.dataset.v:seg.querySelector("button").dataset.v; }
+  function segSelect(seg, v){ seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.v===v)); }
+  async function loadPrefs(){
+    try{ const p=await (await fetch("/api/v1/desktop/prefs")).json();
+      if(posSeg) segSelect(posSeg, p.taskbarPosition||"bottom");
+      if(alignSeg) segSelect(alignSeg, p.taskbarAlign||"left");
+      if(searchCb) searchCb.checked = p.taskbarSearch !== false;
+    }catch(_){}
+  }
+  function savePrefs(preview){
+    const body = { wallpaper:"", theme:"", taskbarPosition: posSeg?segValue(posSeg):"bottom", taskbarAlign: alignSeg?segValue(alignSeg):"left", taskbarSearch: searchCb?searchCb.checked:true };
+    if(preview) try{ window.parent.postMessage({type:"matos:taskbar", prefs:body}, location.origin); }catch(_){}
+    fetch("/api/v1/desktop/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).catch(()=>{});
+  }
+  [posSeg, alignSeg].forEach(seg => seg && seg.addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; segSelect(seg, b.dataset.v); savePrefs(true); }));
+  if(searchCb) searchCb.addEventListener("change", ()=>savePrefs(true));
+  loadPrefs();
+
+  // ---- Deep-link into a specific panel (?panel=taskbar or postMessage matos:goto-panel) ----
+  function gotoPanel(name){ const nav=document.querySelector(`.mset-nav[data-p="${name}"]`); if(nav) nav.click(); }
+  try{ const p=new URLSearchParams(location.search).get("panel"); if(p) gotoPanel(p); }catch(_){}
+  window.addEventListener("message", e => { if(e.origin!==location.origin) return; const m=e.data; if(m && m.type==="matos:goto-panel" && m.panel) gotoPanel(m.panel); });
 })();
 </script>
 }

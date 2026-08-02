@@ -29,6 +29,28 @@ public class DesktopLabelsStore
     public Dictionary<string, Dictionary<string, string>> Users { get; set; } = new();
 }
 
+/// <summary>Per-user personal preferences that used to live in the global DesktopConfig
+/// (wallpaper, theme) plus new taskbar options. Falls back to the global DesktopConfig
+/// so existing installs don't lose their choices.</summary>
+public class DesktopPrefs
+{
+    /// <summary>Wallpaper key. Empty = fall back to global default.</summary>
+    public string Wallpaper { get; set; } = "";
+    /// <summary>"auto" | "dark" | "light". Empty = fall back to global default.</summary>
+    public string Theme { get; set; } = "";
+    /// <summary>"bottom" | "top"</summary>
+    public string TaskbarPosition { get; set; } = "bottom";
+    /// <summary>Show the search pill in the taskbar.</summary>
+    public bool TaskbarSearch { get; set; } = true;
+    /// <summary>"left" | "center" — where the window buttons + start button sit.</summary>
+    public string TaskbarAlign { get; set; } = "left";
+}
+
+public class DesktopPrefsStore
+{
+    public Dictionary<string, DesktopPrefs> Users { get; set; } = new();
+}
+
 /// <summary>An iOS/macOS-style folder holding one or more app icons. The folder itself has an
 /// icon key ("folder:{id}") that participates in placement/pinning; the child keys inside are
 /// hidden from the desktop while they're in a folder.</summary>

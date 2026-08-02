@@ -85,8 +85,19 @@
     // Per-user custom label wins.
     const custom = labels["stack:" + s.name]; if (custom) return custom;
     const c = (s.containers || []).find(x => x.matosTitle);
-    if (c && c.matosTitle) return c.matosTitle;
-    const d = stackDef(s); return d ? d.name : s.name;
+    let base = (c && c.matosTitle) ? c.matosTitle : (stackDef(s)?.name || s.name);
+    // If more than one install of the same store app exists, suffix each with its instance
+    // number so "MatCMS" doesn't appear three times in a row.
+    const app = stackApp(s);
+    if (app) {
+      const sameApp = stackData.filter(x => stackApp(x) === app);
+      if (sameApp.length > 1) {
+        const cc = (s.containers || []).find(x => x.matosInstance);
+        const inst = (cc && cc.matosInstance) || (s.name.match(/_(\d+)$/)?.[1]) || "";
+        if (inst) base = `${base} #${inst}`;
+      }
+    }
+    return base;
   }
   // Custom label for any key (folder / system / stack); used by systemApps renderer too.
   function customLabel(key) { return labels[key] || null; }
@@ -408,6 +419,25 @@
     if (tbSearchWrap) tbSearchWrap.addEventListener("click", () => tbSearch.focus());
   }
 
+  // Apply personal taskbar prefs by toggling body classes + CSS variables (styling lives in desktop.css).
+  function applyTaskbarPrefs(p) {
+    if (!p) return;
+    const body = document.body;
+    body.classList.toggle("tb-top", p.taskbarPosition === "top");
+    body.classList.toggle("tb-center", p.taskbarAlign === "center");
+    const search = document.getElementById("mat-tb-search"); if (search) search.style.display = p.taskbarSearch === false ? "none" : "";
+  }
+  // Open Settings and drop the user into a specific panel (creates a new window with a query,
+  // or navigates the existing window's iframe to the same URL).
+  function openSettingsPanel(name) {
+    const sys = systemApps(); const s = sys.find(a => a.key === "settings"); if (!s) return;
+    open({ key: "settings", title: s.title, url: s.url + "?panel=" + encodeURIComponent(name), iconHtml: s.iconHtml, width: parseInt(s.w||"1024",10), height: parseInt(s.h||"680",10) });
+    // If it was already open, MatWM restored + brought it to front but did not reload — post a message.
+    setTimeout(() => {
+      document.querySelectorAll("#mat-windows iframe").forEach(f => { if ((f.src||"").includes("/apps/settings")) { try { f.contentWindow.postMessage({ type: "matos:goto-panel", panel: name }, location.origin); } catch (_) {} } });
+    }, 60);
+  }
+
   // Windows-11 style Start-button right-click: quick jump to Task Manager / Settings / Files / Backups.
   function openQuickMenu(x, y) {
     const sys = systemApps();
@@ -418,6 +448,7 @@
     if (sys.find(a => a.key === "network")) items.push({ label: "Network", action: () => jump("network") });
     if (sys.find(a => a.key === "backups")) items.push({ label: "Backups", action: () => jump("backups") });
     items.push({ sep: true });
+    items.push({ label: "Taskbar settings", action: () => openSettingsPanel("taskbar") });
     if (sys.find(a => a.key === "settings")) items.push({ label: "Settings", action: () => jump("settings") });
     items.push({ label: "Show desktop", action: () => window.MatWM && window.MatWM.showDesktop && window.MatWM.showDesktop() });
     showCtx(x, y, items);
@@ -470,13 +501,28 @@
       };
       window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true });
     });
+    // Full context menu on start-menu items — same shape as right-clicking a desktop icon.
     startMenu.addEventListener("contextmenu", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
       const key = it.dataset.key; if (!key) return;
       e.preventDefault();
-      showCtx(e.clientX, e.clientY, [pins.has(key)
+      const items = [{ label: "Open", action: () => { launchEl(it); closeStart(); } }];
+      // Stack-key → include Settings + start/stop/restart + custom actions.
+      if (key.startsWith("stack:")) {
+        const s = stackData.find(x => x.name === key.slice(6));
+        if (s) {
+          items.push({ label: "Settings", action: () => { closeStart(); open({ key: "set:" + s.name, title: "Settings · " + stackTitle(s), url: stackSettingsUrl(s), width: 1024, height: 680 }); } });
+          const def = stackDef(s);
+          if (def && def.actions && def.actions.length) { items.push({ sep: true }); for (const ac of def.actions) items.push({ label: ac.label, action: () => { closeStart(); openAction(s, ac); } }); }
+          items.push({ sep: true });
+          if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }); items.push({ label: "Restart", action: () => stackAction(s.name, "restart") }); }
+          if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
+        }
+      }
+      items.push({ sep: true }, pins.has(key)
         ? { label: "Remove from desktop", action: () => unpin(key) }
-        : { label: "Add to desktop", action: () => pin(key) }]);
+        : { label: "Add to desktop", action: () => pin(key) });
+      showCtx(e.clientX, e.clientY, items);
     });
   }
 
@@ -588,8 +634,15 @@
   }
 
   // ---- taskbar (open windows) context menu ----
-  const dock = document.getElementById("mat-tasks");
-  if (dock) dock.addEventListener("contextmenu", (e) => {
+  // Right-click on the taskbar. Attach to the whole footer so any empty area works,
+  // then decide by what got hit:
+  //  - a taskbar app button        → per-window menu (Reset / Close)
+  //  - the Start button / search / tray widgets → leave alone (they have their own menus)
+  //  - anything else (empty area)  → the Windows-11-style quick-menu
+  const taskbar = document.getElementById("mat-taskbar");
+  if (taskbar) taskbar.addEventListener("contextmenu", (e) => {
+    // Don't hijack right-clicks on the UI widgets that already have their own menus.
+    if (e.target.closest("#mat-start-btn, #mat-tb-search, #mat-bell, #mat-user-btn, #mat-user-menu, #mat-show-desktop, .mat-clock")) return;
     e.preventDefault();
     const t = e.target.closest(".mat-task");
     if (t && t.dataset.winKey) {
@@ -599,16 +652,10 @@
         { sep: true },
         { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) },
       ]);
-    } else {
-      // Right-click on the empty part of the taskbar
-      const sys = systemApps();
-      const tm = sys.find(a => a.key === "task-manager" || a.title === "Task Manager");
-      const st = sys.find(a => a.key === "settings" || a.title === "Settings");
-      const items = [];
-      if (tm) items.push({ label: "Task Manager", action: () => open({ key: tm.key, title: tm.title, url: tm.url, iconHtml: tm.iconHtml, width: parseInt(tm.w||"1024",10), height: parseInt(tm.h||"680",10) }) });
-      if (st) items.push({ label: "Settings", action: () => open({ key: st.key, title: st.title, url: st.url, iconHtml: st.iconHtml, width: parseInt(st.w||"1024",10), height: parseInt(st.h||"680",10) }) });
-      if (items.length) showCtx(e.clientX, e.clientY, items);
+      return;
     }
+    // Empty taskbar → Win-11-style quick menu (Task Manager / Files / Network / Backups / Settings / Show desktop).
+    openQuickMenu(e.clientX, e.clientY);
   });
 
   // ---- Folders: iOS-style overlay with scale-up animation ----
@@ -958,6 +1005,8 @@
   async function init() {
     try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; } }
     catch (_) { layout = {}; }
+    // Personal preferences (wallpaper/theme fallback + taskbar).
+    try { const p = await (await fetch("/api/v1/desktop/prefs")).json(); applyTaskbarPrefs(p); } catch (_) {}
     await loadDefs();
     buildSystem(); await load(); setInterval(load, 15000);
   }
@@ -968,6 +1017,7 @@
     if (e.origin !== location.origin) return;
     const m = e.data; if (!m) return;
     if (m.type === "matos:wallpaper" && m.wallpaper) { const wp = document.getElementById("mat-wallpaper"); if (wp) wp.className = "wp-" + m.wallpaper; }
+    if (m.type === "matos:taskbar" && m.prefs) applyTaskbarPrefs(m.prefs);
     if (m.type === "matos:theme" && m.theme) {
       const html = document.documentElement; const t = String(m.theme).toLowerCase();
       if (t === "auto") { html.setAttribute("data-theme-user", "auto"); const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; html.setAttribute("data-theme", dark?"dark":"light"); }

@@ -93,6 +93,17 @@ html, body { overflow: hidden; height: 100%; }
   background: rgba(11, 15, 26, 0.72); border-top: 1px solid var(--border);
   backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3);
 }
+/* Personal preference: taskbar at the top instead of the bottom */
+body.tb-top #mat-taskbar { bottom: auto; top: 0; border-top: 0; border-bottom: 1px solid var(--border); }
+body.tb-top #mat-desktop  { inset: 52px 0 0 0; }
+/* Personal preference: cluster start + tasks in the center (Windows-11 default) */
+body.tb-center #mat-tasks { flex: 0 0 auto; justify-content: center; }
+body.tb-center #mat-start-btn { order: 0; }
+body.tb-center #mat-tb-search { order: 2; }
+body.tb-center #mat-tasks     { order: 3; margin: 0 auto; }
+body.tb-center #mat-tray      { order: 5; margin-left: auto; }
+body.tb-center #mat-show-desktop { order: 6; }
+body.tb-center::before, body.tb-center::after { }
 :root[data-theme="light"] #mat-taskbar { background: rgba(244, 245, 250, 0.78); }
 
 /* Taskbar search (Windows-11 style) */
