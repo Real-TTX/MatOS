@@ -181,18 +181,51 @@
   // reload when an install/uninstall happened in another window
   window.addEventListener("message",e=>{ if(e.origin!==location.origin)return; const m=e.data; if(m && m.type==="matos:reload"){ loadCatalog(); if(instEl.style.display!=="none") loadInstalls(); } });
 
+  // Update statuses cached across renders: containerId -> { updateAvailable, error }
+  let updateStatuses = {};
   async function loadInstalls(){
     let d; try{ d=await (await fetch("/api/v1/store/installs")).json(); }catch(_){ instEl.innerHTML="Failed to load."; return; }
     $("store-count").textContent=d.installs.length?`(${d.installs.length})`:"";
-    if(!d.installs.length){ instEl.innerHTML=`<div class="fx-muted" style="padding:1rem">No apps installed yet.</div>`; return; }
-    instEl.innerHTML=d.installs.map(i=>{ const def=catalog.find(a=>a.id===i.app);
+    if(!d.installs.length){ instEl.innerHTML=`<div class="fx-muted" style="padding:1rem">No apps installed yet — install one from Discover.</div>`; return; }
+    const headerHtml=`<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+      <button class="ui-btn" id="store-check-updates">🔄 Check for updates</button>
+      <span id="store-updates-hint" class="fx-muted" style="font-size:0.8rem"></span>
+    </div>`;
+    instEl.innerHTML=headerHtml+d.installs.map(i=>{ const def=catalog.find(a=>a.id===i.app); const st=updateStatuses[i.id];
+      const updChip = st && st.updateAvailable ? `<span class="chip open" style="margin-left:0.3rem">update available</span>`
+                     : (st && st.error ? `<span class="chip" style="margin-left:0.3rem;background:rgba(244,80,107,0.14);color:#ffb3c0" title="${escA(st.error)}">check failed</span>` : '');
+      const updBtn = st && st.updateAvailable ? `<button class="ui-btn primary" data-update="${escA(i.id)}" data-name="${escA(i.title)}">Update</button>` : '';
       return `<div class="inst"><div class="app-ico" style="width:36px;height:36px;font-size:1.1rem">${iconHtml(def?def.icon:"📦")}</div>
-      <div class="g"><div class="nm">${esc(i.title)} ${i.compose?'<span class="chip compose">stack · '+i.count+'</span>':''}</div>
+      <div class="g"><div class="nm">${esc(i.title)} ${i.compose?'<span class="chip compose">stack · '+i.count+'</span>':''}${updChip}</div>
         <div class="sub">${i.running?'<span class="pill on">running</span>':'<span class="pill off">stopped</span>'} · ${esc(i.name)}</div></div>
+      ${updBtn}
       ${i.appUrl?`<button class="ui-btn" data-open="${escA(i.appUrl)}">Open</button>`:""}
       <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.title)}">Uninstall</button></div>`; }).join("");
     instEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
     instEl.querySelectorAll("[data-uninstall]").forEach(b=>b.addEventListener("click",()=>uninstall(b.dataset.uninstall,b.dataset.name)));
+    instEl.querySelectorAll("[data-update]").forEach(b=>b.addEventListener("click",()=>applyUpdate(b.dataset.update,b.dataset.name,b)));
+    document.getElementById("store-check-updates").addEventListener("click",checkUpdates);
+  }
+  async function checkUpdates(){
+    const btn=document.getElementById("store-check-updates"); if(!btn)return; const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Checking…`;
+    document.getElementById("store-updates-hint").textContent="";
+    try{
+      const r=await fetch("/api/v1/updates/check");
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const j=await r.json();
+      updateStatuses={}; (j.statuses||[]).forEach(s=>{ updateStatuses[s.containerId]={ updateAvailable:s.updateAvailable, error:s.error }; });
+      const avail=(j.statuses||[]).filter(s=>s.updateAvailable).length;
+      document.getElementById("store-updates-hint").textContent = avail?`${avail} update${avail===1?"":"s"} available`:"All up to date.";
+      loadInstalls();
+    }catch(e){ flash("Update check failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; }
+  }
+  async function applyUpdate(id,name,btn){
+    if(!confirm(`Update ${name}? The container will be recreated with the latest image.`)) return;
+    const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span>`;
+    try{ const r=await fetch("/api/v1/updates/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({containerId:id})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
+      flash(`Updated ${name}.`,true); delete updateStatuses[id]; loadInstalls();
+    }catch(e){ flash("Update failed: "+e.message,false); btn.disabled=false; btn.innerHTML=orig; }
   }
   async function uninstall(id,name){ if(!confirm(`Uninstall ${name}?`))return; const rmVol=confirm("Also delete its data volumes? (OK = delete, Cancel = keep)");
     try{ const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})});

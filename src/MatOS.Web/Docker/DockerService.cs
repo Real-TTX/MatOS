@@ -37,6 +37,9 @@ public partial class DockerService
     private DockerClient CreateClient() =>
         new DockerClientConfiguration(new Uri(_endpoint)).CreateClient();
 
+    /// <summary>Exposed for other services (UpdateService) that need low-level Docker access.</summary>
+    public DockerClient CreateRawClient() => CreateClient();
+
     public async Task<bool> PingAsync(CancellationToken ct = default)
     {
         try

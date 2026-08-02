@@ -26,6 +26,7 @@ builder.Services.AddSingleton<DesktopLayoutService>();
 builder.Services.AddSingleton<MatOS.Web.Docker.VolumeFilesService>();
 builder.Services.AddSingleton<MatOS.Web.Services.BackupService>();
 builder.Services.AddSingleton<MatOS.Web.Services.NotificationService>();
+builder.Services.AddSingleton<MatOS.Web.Services.UpdateService>();
 builder.Services.AddHostedService<MatOS.Web.Services.BackupSchedulerService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.StoreService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.StoreSourceService>();
@@ -97,5 +98,6 @@ api.MapFilesApi();
 api.MapStoreApi();
 api.MapBackupsApi();
 api.MapNotificationsApi();
+api.MapUpdatesApi();
 
 app.Run();
