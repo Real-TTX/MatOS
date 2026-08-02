@@ -33,16 +33,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          # See dev.yml — pin platform + always pull fresh base + skip gha cache.
-          platforms: linux/amd64
-          pull: true
-          no-cache: true
-          build-args: |
-            APP_VERSION=${{ steps.v.outputs.version }}
-          tags: |
-            ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}
-            ${{ steps.v.outputs.image }}:latest
+      # See dev.yml — manual buildx so a failure's real output becomes a readable annotation.
+      - name: Build & push image
+        run: |
+          set +o pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --pull --no-cache \
+            --build-arg APP_VERSION="${{ steps.v.outputs.version }}" \
+            -t "${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}" \
+            -t "${{ steps.v.outputs.image }}:latest" \
+            --push . 2>&1 | tee /tmp/build.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            emit() { local esc; esc=$(printf '%s' "$1" | sed 's/%/%25/g; s/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g'); echo "::error::$esc"; }
+            emit "DIAG: $(sed -n '/=== DIAG ===/,/=== \/DIAG ===/p' /tmp/build.log | head -c 1800)"
+            emit "LOG TAIL: $(tail -c 2500 /tmp/build.log)"
+          fi
+          exit "$rc"

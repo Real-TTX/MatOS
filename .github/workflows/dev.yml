@@ -31,18 +31,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          # Pin the target platform to what the runner actually is (amd64) so
-          # buildx never silently tries to also build linux/arm64 under QEMU,
-          # which is where dotnet SDK 10 has known crash reports.
-          platforms: linux/amd64
-          pull: true
-          no-cache: true
-          build-args: |
-            APP_VERSION=${{ steps.v.outputs.version }}
-          tags: |
-            ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}
-            ${{ steps.v.outputs.image }}:nightly
+      # Manual buildx (instead of docker/build-push-action) so a failure's real output can be
+      # surfaced as a check-run annotation — annotations are readable via the public API without
+      # admin/log-download rights, which is what let us diagnose this build finally.
+      - name: Build & push image
+        run: |
+          set +o pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --pull --no-cache \
+            --build-arg APP_VERSION="${{ steps.v.outputs.version }}" \
+            -t "${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}" \
+            -t "${{ steps.v.outputs.image }}:nightly" \
+            --push . 2>&1 | tee /tmp/build.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            emit() { local esc; esc=$(printf '%s' "$1" | sed 's/%/%25/g; s/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g'); echo "::error::$esc"; }
+            emit "DIAG: $(sed -n '/=== DIAG ===/,/=== \/DIAG ===/p' /tmp/build.log | head -c 1800)"
+            emit "LOG TAIL: $(tail -c 2500 /tmp/build.log)"
+          fi
+          exit "$rc"
