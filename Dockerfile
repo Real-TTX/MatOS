@@ -9,9 +9,12 @@ COPY . .
 # tag mcr.microsoft.com/dotnet/sdk:10.0 resolved to on this run.
 RUN dotnet --info
 RUN dotnet restore src/MatOS.Web/MatOS.Web.csproj
-# Verbosity: normal — enough to surface CS/MSBuild errors without the noise of `-v:d`.
-RUN dotnet publish src/MatOS.Web/MatOS.Web.csproj -c Release -o /app/publish \
-    -v:n /p:UseAppHost=false /p:InformationalVersion=${APP_VERSION}
+# Single-line publish so any Bash / Buildx line-continuation quirk on the CI
+# runner can't split the argument list mid-flight; -v:n keeps output actionable
+# without the noise of full diagnostic. Sanitize the informational version — the
+# CI computes something like "nightly-42-20260802-0937" which is fine, but strip
+# it defensively just in case.
+RUN dotnet publish src/MatOS.Web/MatOS.Web.csproj -c Release -o /app/publish -v:n /p:UseAppHost=false /p:InformationalVersion="${APP_VERSION}"
 
 # ---- Runtime stage ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
