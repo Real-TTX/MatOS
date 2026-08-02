@@ -1,11 +1,18 @@
 @using MatOS.Web.Config
 @using MatOS.Web.Services
+@using MatOS.Web.Auth
 @inject JsonConfigService Config
+@inject DesktopLayoutService DesktopSvc
 @{
     var desktop = Config.Get<DesktopConfig>("desktop");
     var system = Config.Get<SystemConfig>("system");
-    var wallpaper = Wallpapers.Normalize(desktop.Wallpaper);
-    var theme = (desktop.Theme ?? "auto").ToLowerInvariant() switch { "light" => "light", "dark" => "dark", _ => "auto" };
+    var uid = User.GetUserId()?.ToString() ?? "0";
+    var prefs = DesktopSvc.GetPrefs(uid);
+    var wallpaper = Wallpapers.Normalize(string.IsNullOrWhiteSpace(prefs.Wallpaper) ? desktop.Wallpaper : prefs.Wallpaper);
+    var wpStyle = prefs.WallpaperStyle is "fill" or "fit" or "center" or "tile" ? prefs.WallpaperStyle : "fill";
+    var effTheme = string.IsNullOrWhiteSpace(prefs.Theme) ? desktop.Theme : prefs.Theme;
+    var theme = (effTheme ?? "auto").ToLowerInvariant() switch { "light" => "light", "dark" => "dark", _ => "auto" };
+    var accent = prefs.AccentColor;
     var name = User.Identity?.Name ?? "user";
     var role = User.IsAdmin() ? "Administrator" : "User";
     var initial = string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
@@ -24,9 +31,16 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/desktop.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/window.css" asp-append-version="true" />
+    @if (!string.IsNullOrWhiteSpace(accent))
+    {
+        <style>:root{--accent:@accent;--accent-2:@accent;--accent-grad:@accent;--mat-accent:@accent;--mat-accent-2:@accent;}</style>
+    }
 </head>
-<body>
-    <div id="mat-wallpaper" class="wp-@wallpaper"></div>
+@{
+    var bodyClasses = string.Join(" ", new[] { prefs.TaskbarPosition == "top" ? "tb-top" : null, prefs.TaskbarAlign == "center" ? "tb-center" : null }.Where(c => c != null));
+}
+<body class="@bodyClasses">
+    <div id="mat-wallpaper" class="wp-@wallpaper wps-@wpStyle"></div>
 
     <main id="mat-desktop">
         @RenderBody()

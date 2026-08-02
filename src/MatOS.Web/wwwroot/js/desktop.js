@@ -1016,7 +1016,18 @@
   window.addEventListener("message", (e) => {
     if (e.origin !== location.origin) return;
     const m = e.data; if (!m) return;
-    if (m.type === "matos:wallpaper" && m.wallpaper) { const wp = document.getElementById("mat-wallpaper"); if (wp) wp.className = "wp-" + m.wallpaper; }
+    if (m.type === "matos:wallpaper" && m.wallpaper) {
+      const wp = document.getElementById("mat-wallpaper");
+      if (wp) { const style = m.style || (wp.className.match(/wps-(\S+)/) || [])[1] || "fill"; wp.className = "wp-" + m.wallpaper + " wps-" + style; }
+    }
+    if (m.type === "matos:accent") {
+      const hex = m.accent || "";
+      const props = ["--accent", "--accent-2", "--accent-grad", "--mat-accent", "--mat-accent-2"];
+      const apply = (root) => { if (hex) props.forEach(p => root.style.setProperty(p, hex)); else props.forEach(p => root.style.removeProperty(p)); };
+      apply(document.documentElement);
+      // Live-propagate into every currently open (same-origin, internal) window too.
+      document.querySelectorAll("#mat-windows iframe").forEach(f => { try { if (f.contentDocument) apply(f.contentDocument.documentElement); } catch (_) {} });
+    }
     if (m.type === "matos:taskbar" && m.prefs) applyTaskbarPrefs(m.prefs);
     if (m.type === "matos:theme" && m.theme) {
       const html = document.documentElement; const t = String(m.theme).toLowerCase();

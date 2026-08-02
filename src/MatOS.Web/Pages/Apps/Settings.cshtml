@@ -35,16 +35,39 @@
                     </div>
                 </div>
                 <div class="mset-group pad">
-                    <div class="mset-grouphead">Wallpaper</div>
+                    <div class="mset-grouphead" style="display:flex;align-items:center;justify-content:space-between">
+                        <span>Wallpaper</span>
+                        <div class="tb-seg" id="wp-style" style="margin-right:0.9rem">
+                            <button type="button" data-v="fill" class="@(Model.WallpaperStyle=="fill"?"active":"")" title="Fill the screen, cropping if needed">Fill</button>
+                            <button type="button" data-v="fit" class="@(Model.WallpaperStyle=="fit"?"active":"")" title="Fit the whole image, no cropping">Fit</button>
+                            <button type="button" data-v="center" class="@(Model.WallpaperStyle=="center"?"active":"")" title="Actual size, centered">Center</button>
+                            <button type="button" data-v="tile" class="@(Model.WallpaperStyle=="tile"?"active":"")" title="Repeat at actual size">Tile</button>
+                        </div>
+                    </div>
                     <div class="wp-picker" style="padding:0.9rem 1rem 1rem">
                         @foreach (var w in Model.AllWallpapers)
                         {
                             <label class="wp-tile @(Model.Wallpaper == w.Key ? "selected" : "")" data-key="@w.Key">
                                 <input type="radio" name="Wallpaper" value="@w.Key" @(Model.Wallpaper == w.Key ? "checked" : "") hidden />
-                                <span class="swatch wp-@w.Key"></span>
+                                <span class="swatch wp-@w.Key wps-fill"><span class="wp-check">✓</span></span>
                                 <span class="nm">@w.Name</span>
                             </label>
                         }
+                    </div>
+                </div>
+                <div class="mset-group pad">
+                    <div class="mset-grouphead">Accent colour</div>
+                    <div class="ac-picker" style="padding:0.9rem 1rem 1rem" id="ac-picker" data-current="@Model.AccentColor">
+                        @{ var presets = new[] { "#8b5cf6", "#22b8ff", "#34d399", "#fbbf24", "#f4506b", "#ec4899", "#f97316" }; }
+                        @foreach (var c in presets)
+                        {
+                            <button type="button" class="ac-swatch @(string.Equals(Model.AccentColor, c, StringComparison.OrdinalIgnoreCase) ? "selected" : "")" data-v="@c" style="background:@c"></button>
+                        }
+                        <label class="ac-custom" title="Custom colour">
+                            <input type="color" id="ac-custom-input" value="@(string.IsNullOrWhiteSpace(Model.AccentColor) ? "#8b5cf6" : Model.AccentColor)" />
+                            <span>Custom</span>
+                        </label>
+                        <button type="button" class="ui-btn" id="ac-reset">Reset to default</button>
                     </div>
                 </div>
             </div>
@@ -54,15 +77,15 @@
                 <div class="mset-group">
                     <div class="mset-row">
                         <div class="mset-label">Position<small>Where the taskbar sits on the screen.</small></div>
-                        <div class="tb-seg" id="tb-pos"><button type="button" data-v="bottom" class="active">Bottom</button><button type="button" data-v="top">Top</button></div>
+                        <div class="tb-seg" id="tb-pos"><button type="button" data-v="bottom" class="@(Model.TaskbarPosition!="top"?"active":"")">Bottom</button><button type="button" data-v="top" class="@(Model.TaskbarPosition=="top"?"active":"")">Top</button></div>
                     </div>
                     <div class="mset-row">
                         <div class="mset-label">Icon alignment<small>Where the start button + window icons cluster.</small></div>
-                        <div class="tb-seg" id="tb-align"><button type="button" data-v="left" class="active">Left</button><button type="button" data-v="center">Center</button></div>
+                        <div class="tb-seg" id="tb-align"><button type="button" data-v="left" class="@(Model.TaskbarAlign!="center"?"active":"")">Left</button><button type="button" data-v="center" class="@(Model.TaskbarAlign=="center"?"active":"")">Center</button></div>
                     </div>
                     <div class="mset-row">
                         <div class="mset-label">Show search pill<small>The always-visible search input next to the Start button.</small></div>
-                        <label class="tb-switch"><input type="checkbox" id="tb-search" checked><span></span></label>
+                        <label class="tb-switch"><input type="checkbox" id="tb-search" @(Model.TaskbarSearch?"checked":"")><span></span></label>
                     </div>
                 </div>
             </div>
@@ -161,6 +184,22 @@
 .tb-switch span::before { content:""; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:transform 0.15s; }
 .tb-switch input:checked + span { background:var(--mat-accent); }
 .tb-switch input:checked + span::before { transform:translateX(16px); }
+/* Bigger, clearer wallpaper thumbnails with a checkmark on the selected tile */
+.wp-picker { grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
+.wp-tile .swatch { height:104px; position:relative; transition:transform 0.12s ease; }
+.wp-tile:hover .swatch { transform:scale(1.02); }
+.wp-check { position:absolute; top:0.4rem; right:0.4rem; width:22px; height:22px; border-radius:50%; background:var(--mat-accent); color:#fff; display:none; align-items:center; justify-content:center; font-size:0.75rem; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+.wp-tile.selected .wp-check { display:flex; }
+/* Accent colour picker */
+.ac-picker { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; }
+.ac-swatch { width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.3); position:relative; }
+.ac-swatch:hover { transform:scale(1.08); }
+.ac-swatch.selected { border-color:#fff; box-shadow:0 0 0 3px var(--mat-accent); }
+.ac-custom { display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.82rem; color:var(--mat-text-muted); padding:0.3rem 0.5rem; border-radius:8px; }
+.ac-custom:hover { background:rgba(255,255,255,0.06); }
+.ac-custom input[type=color] { width:34px; height:34px; border:none; border-radius:50%; padding:0; cursor:pointer; background:transparent; }
+.ac-custom input[type=color]::-webkit-color-swatch-wrapper { padding:0; border-radius:50%; overflow:hidden; }
+.ac-custom input[type=color]::-webkit-color-swatch { border:2px solid transparent; border-radius:50%; }
 </style>
 }
 
@@ -171,19 +210,6 @@
     document.querySelectorAll(".mset-nav").forEach(x=>x.classList.toggle("active",x===n));
     document.querySelectorAll(".mset-panel").forEach(p=>p.classList.toggle("active",p.dataset.panel===n.dataset.p));
   }));
-  // wallpaper live preview to the desktop
-  const picker=document.querySelector(".wp-picker");
-  function preview(k){ try{ window.parent.postMessage({type:"matos:wallpaper",wallpaper:k},location.origin); }catch(_){} }
-  if(picker){ picker.addEventListener("click",e=>{ const t=e.target.closest(".wp-tile"); if(!t)return;
-    picker.querySelectorAll(".wp-tile").forEach(x=>x.classList.toggle("selected",x===t)); preview(t.dataset.key); });
-    const cur=picker.querySelector(".wp-tile.selected"); if(cur) preview(cur.dataset.key); }
-  // theme live preview
-  const thPicker=document.querySelector(".th-picker");
-  function previewTheme(k){ try{ window.parent.postMessage({type:"matos:theme",theme:k},location.origin); }catch(_){} }
-  if(thPicker){ thPicker.addEventListener("click",e=>{ const t=e.target.closest(".th-tile"); if(!t)return;
-    thPicker.querySelectorAll(".th-tile").forEach(x=>x.classList.toggle("selected",x===t));
-    const inp=t.querySelector("input"); if(inp) inp.checked=true;
-    previewTheme(t.dataset.key); }); }
   // docker inventory counts
   (async function(){ try{
     const [c,i,v]=await Promise.all([fetch("/api/v1/docker/containers").then(r=>r.json()),fetch("/api/v1/docker/images").then(r=>r.json()),fetch("/api/v1/docker/volumes").then(r=>r.json())]);
@@ -191,25 +217,67 @@
     document.getElementById("mset-inv").textContent=`${run}/${(c.containers||[]).length} containers running · ${(i.images||[]).length} images · ${(v.volumes||[]).length} volumes`;
   }catch(_){ document.getElementById("mset-inv").textContent="Docker not reachable."; } })();
 
-  // ---- Taskbar personal settings — load, wire live-preview, save on change ----
+  // ---- Personal Appearance + Taskbar prefs: server already rendered the correct initial state
+  // (no flash-of-default). Every control below both live-previews on the desktop AND persists
+  // the FULL current state in one shot, so toggling one control never blanks another.
+  const wpPicker = document.querySelector(".wp-picker");
+  const thPicker = document.querySelector(".th-picker");
+  const wpStyleSeg = document.getElementById("wp-style");
+  const acPicker = document.getElementById("ac-picker");
+  const acCustom = document.getElementById("ac-custom-input");
   const posSeg = document.getElementById("tb-pos"), alignSeg = document.getElementById("tb-align"), searchCb = document.getElementById("tb-search");
-  function segValue(seg){ const b=seg.querySelector("button.active"); return b?b.dataset.v:seg.querySelector("button").dataset.v; }
-  function segSelect(seg, v){ seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.v===v)); }
-  async function loadPrefs(){
-    try{ const p=await (await fetch("/api/v1/desktop/prefs")).json();
-      if(posSeg) segSelect(posSeg, p.taskbarPosition||"bottom");
-      if(alignSeg) segSelect(alignSeg, p.taskbarAlign||"left");
-      if(searchCb) searchCb.checked = p.taskbarSearch !== false;
+
+  function segValue(seg){ const b=seg && seg.querySelector("button.active"); return b?b.dataset.v:(seg?seg.querySelector("button").dataset.v:""); }
+  function segSelect(seg, v){ if(seg) seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.v===v)); }
+  function currentWallpaper(){ const t=wpPicker && wpPicker.querySelector(".wp-tile.selected"); return t?t.dataset.key:"aurora"; }
+  function currentTheme(){ const t=thPicker && thPicker.querySelector(".th-tile.selected"); return t?t.dataset.key:"auto"; }
+  function currentAccent(){ const s=acPicker && acPicker.querySelector(".ac-swatch.selected"); return s?s.dataset.v:(acPicker && acPicker.dataset.customActive==="1" ? acCustom.value : ""); }
+
+  function gatherPrefs(){
+    return {
+      wallpaper: currentWallpaper(),
+      theme: currentTheme(),
+      wallpaperStyle: wpStyleSeg ? segValue(wpStyleSeg) : "fill",
+      accentColor: currentAccent(),
+      taskbarPosition: posSeg ? segValue(posSeg) : "bottom",
+      taskbarAlign: alignSeg ? segValue(alignSeg) : "left",
+      taskbarSearch: searchCb ? searchCb.checked : true,
+    };
+  }
+  function previewAll(body){
+    try{
+      window.parent.postMessage({type:"matos:wallpaper", wallpaper:body.wallpaper, style:body.wallpaperStyle}, location.origin);
+      window.parent.postMessage({type:"matos:theme", theme:body.theme}, location.origin);
+      window.parent.postMessage({type:"matos:accent", accent:body.accentColor}, location.origin);
+      window.parent.postMessage({type:"matos:taskbar", prefs:body}, location.origin);
     }catch(_){}
   }
-  function savePrefs(preview){
-    const body = { wallpaper:"", theme:"", taskbarPosition: posSeg?segValue(posSeg):"bottom", taskbarAlign: alignSeg?segValue(alignSeg):"left", taskbarSearch: searchCb?searchCb.checked:true };
-    if(preview) try{ window.parent.postMessage({type:"matos:taskbar", prefs:body}, location.origin); }catch(_){}
+  function saveAll(){
+    const body = gatherPrefs();
+    previewAll(body);
     fetch("/api/v1/desktop/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).catch(()=>{});
   }
-  [posSeg, alignSeg].forEach(seg => seg && seg.addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; segSelect(seg, b.dataset.v); savePrefs(true); }));
-  if(searchCb) searchCb.addEventListener("change", ()=>savePrefs(true));
-  loadPrefs();
+
+  if(wpPicker) wpPicker.addEventListener("click", e=>{ const t=e.target.closest(".wp-tile"); if(!t) return;
+    wpPicker.querySelectorAll(".wp-tile").forEach(x=>x.classList.toggle("selected", x===t)); saveAll(); });
+  if(wpStyleSeg) wpStyleSeg.addEventListener("click", e=>{ const b=e.target.closest("button"); if(!b) return; segSelect(wpStyleSeg,b.dataset.v); saveAll(); });
+  if(thPicker) thPicker.addEventListener("click", e=>{ const t=e.target.closest(".th-tile"); if(!t) return;
+    thPicker.querySelectorAll(".th-tile").forEach(x=>x.classList.toggle("selected", x===t));
+    const inp=t.querySelector("input"); if(inp) inp.checked=true; saveAll(); });
+  if(acPicker){
+    acPicker.addEventListener("click", e=>{ const b=e.target.closest(".ac-swatch"); if(!b) return;
+      acPicker.querySelectorAll(".ac-swatch").forEach(x=>x.classList.toggle("selected", x===b));
+      acPicker.dataset.customActive="0"; saveAll(); });
+    if(acCustom) acCustom.addEventListener("input", ()=>{
+      acPicker.querySelectorAll(".ac-swatch").forEach(x=>x.classList.remove("selected"));
+      acPicker.dataset.customActive="1"; saveAll(); });
+    const resetBtn=document.getElementById("ac-reset");
+    if(resetBtn) resetBtn.addEventListener("click", ()=>{
+      acPicker.querySelectorAll(".ac-swatch").forEach(x=>x.classList.remove("selected"));
+      acPicker.dataset.customActive="0"; if(acCustom) acCustom.value="#8b5cf6"; saveAll(); });
+  }
+  [posSeg, alignSeg].forEach(seg => seg && seg.addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; segSelect(seg, b.dataset.v); saveAll(); }));
+  if(searchCb) searchCb.addEventListener("change", saveAll);
 
   // ---- Deep-link into a specific panel (?panel=taskbar or postMessage matos:goto-panel) ----
   function gotoPanel(name){ const nav=document.querySelector(`.mset-nav[data-p="${name}"]`); if(nav) nav.click(); }

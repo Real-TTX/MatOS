@@ -38,6 +38,10 @@ public class DesktopPrefs
     public string Wallpaper { get; set; } = "";
     /// <summary>"auto" | "dark" | "light". Empty = fall back to global default.</summary>
     public string Theme { get; set; } = "";
+    /// <summary>"fill" (cover) | "fit" (contain) | "center" (actual size) | "tile" (repeat).</summary>
+    public string WallpaperStyle { get; set; } = "fill";
+    /// <summary>Accent colour as a 6-digit hex ("#8b5cf6"). Empty = built-in default.</summary>
+    public string AccentColor { get; set; } = "";
     /// <summary>"bottom" | "top"</summary>
     public string TaskbarPosition { get; set; } = "bottom";
     /// <summary>Show the search pill in the taskbar.</summary>

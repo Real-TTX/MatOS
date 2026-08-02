@@ -1,3 +1,9 @@
+@using MatOS.Web.Services
+@using MatOS.Web.Auth
+@inject DesktopLayoutService DesktopSvc
+@{
+    var accent = DesktopSvc.GetPrefs(User.GetUserId()?.ToString() ?? "0").AccentColor;
+}
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -7,6 +13,10 @@
     <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="~/css/controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/windows.css" asp-append-version="true" />
+    @if (!string.IsNullOrWhiteSpace(accent))
+    {
+        <style>:root{--mat-accent:@accent;--mat-accent-2:@accent;}</style>
+    }
     @await RenderSectionAsync("Head", required: false)
 </head>
 <body>

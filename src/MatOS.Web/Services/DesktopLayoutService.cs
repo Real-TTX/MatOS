@@ -181,9 +181,11 @@ public class DesktopLayoutService
     public DesktopPrefs GetPrefs(string userId)
     {
         lock (_gate) return PrefsStore.Users.TryGetValue(userId, out var p)
-            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign }
+            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, WallpaperStyle = p.WallpaperStyle, AccentColor = p.AccentColor, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign }
             : new DesktopPrefs();
     }
+
+    private static readonly System.Text.RegularExpressions.Regex HexColor = new(@"^#[0-9a-fA-F]{6}$");
 
     public async Task SavePrefs(string userId, DesktopPrefs prefs)
     {
@@ -192,6 +194,8 @@ public class DesktopLayoutService
             if (!PrefsStore.Users.TryGetValue(userId, out var p)) { p = new DesktopPrefs(); PrefsStore.Users[userId] = p; }
             p.Wallpaper = prefs.Wallpaper ?? "";
             p.Theme = prefs.Theme ?? "";
+            p.WallpaperStyle = prefs.WallpaperStyle is "fill" or "fit" or "center" or "tile" ? prefs.WallpaperStyle : "fill";
+            p.AccentColor = !string.IsNullOrWhiteSpace(prefs.AccentColor) && HexColor.IsMatch(prefs.AccentColor) ? prefs.AccentColor : "";
             p.TaskbarPosition = prefs.TaskbarPosition is "top" or "bottom" ? prefs.TaskbarPosition : "bottom";
             p.TaskbarSearch = prefs.TaskbarSearch;
             p.TaskbarAlign = prefs.TaskbarAlign is "center" or "left" ? prefs.TaskbarAlign : "left";

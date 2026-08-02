@@ -1,3 +1,4 @@
+using MatOS.Web.Auth;
 using MatOS.Web.Config;
 using MatOS.Web.Docker;
 using MatOS.Web.Services;
@@ -10,14 +11,24 @@ public class SettingsModel : PageModel
 {
     private readonly JsonConfigService _config;
     private readonly DockerService _docker;
+    private readonly DesktopLayoutService _desktop;
     private readonly IConfiguration _cfg;
-    public SettingsModel(JsonConfigService config, DockerService docker, IConfiguration cfg)
+    public SettingsModel(JsonConfigService config, DockerService docker, DesktopLayoutService desktop, IConfiguration cfg)
     {
-        _config = config; _docker = docker; _cfg = cfg;
+        _config = config; _docker = docker; _desktop = desktop; _cfg = cfg;
     }
 
-    [BindProperty] public string Wallpaper { get; set; } = "aurora";
-    [BindProperty] public string Theme { get; set; } = "auto";
+    // Personal (per-user) — hydrated from DesktopPrefs, falling back to the system default for
+    // Wallpaper/Theme so a fresh account sees something sensible before personalizing.
+    public string Wallpaper { get; set; } = "aurora";
+    public string Theme { get; set; } = "auto";
+    public string WallpaperStyle { get; set; } = "fill";
+    public string AccentColor { get; set; } = "";
+    public string TaskbarPosition { get; set; } = "bottom";
+    public bool TaskbarSearch { get; set; } = true;
+    public string TaskbarAlign { get; set; } = "left";
+
+    // System — shared by every user, saved via the form post below.
     [BindProperty] public string InstanceName { get; set; } = "matOS";
     [BindProperty] public string BaseDomain { get; set; } = "apps.localhost";
     [BindProperty] public string Network { get; set; } = "";
@@ -35,20 +46,26 @@ public class SettingsModel : PageModel
     {
         var d = _config.Get<DesktopConfig>("desktop");
         var s = _config.Get<SystemConfig>("system");
-        Wallpaper = d.Wallpaper;
-        Theme = string.IsNullOrWhiteSpace(d.Theme) ? "auto" : d.Theme;
+        var uid = User.GetUserId()?.ToString() ?? "0";
+        var p = _desktop.GetPrefs(uid);
+
+        Wallpaper = Wallpapers.Normalize(string.IsNullOrWhiteSpace(p.Wallpaper) ? d.Wallpaper : p.Wallpaper);
+        Theme = string.IsNullOrWhiteSpace(p.Theme) ? (string.IsNullOrWhiteSpace(d.Theme) ? "auto" : d.Theme) : p.Theme;
+        WallpaperStyle = p.WallpaperStyle;
+        AccentColor = p.AccentColor;
+        TaskbarPosition = p.TaskbarPosition;
+        TaskbarSearch = p.TaskbarSearch;
+        TaskbarAlign = p.TaskbarAlign;
+
         InstanceName = s.InstanceName;
         BaseDomain = s.BaseDomain;
         Network = s.Network;
     }
 
+    // System settings only — personal Appearance/Taskbar choices save instantly via
+    // /api/v1/desktop/prefs (see the script section) so they don't wait on this form's Save.
     public async Task<IActionResult> OnPostAsync()
     {
-        var d = _config.Get<DesktopConfig>("desktop");
-        d.Wallpaper = Wallpapers.Normalize(Wallpaper);
-        d.Theme = Theme switch { "dark" => "dark", "light" => "light", _ => "auto" };
-        await _config.SaveAsync("desktop", d);
-
         var s = _config.Get<SystemConfig>("system");
         s.InstanceName = string.IsNullOrWhiteSpace(InstanceName) ? "matOS" : InstanceName.Trim();
         s.BaseDomain = string.IsNullOrWhiteSpace(BaseDomain) ? "apps.localhost" : BaseDomain.Trim();

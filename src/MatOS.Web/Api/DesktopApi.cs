@@ -51,6 +51,8 @@ public static class DesktopApi
             {
                 wallpaper = string.IsNullOrWhiteSpace(p.Wallpaper) ? Wallpapers.Normalize(d.Wallpaper) : p.Wallpaper,
                 theme = string.IsNullOrWhiteSpace(p.Theme) ? (string.IsNullOrWhiteSpace(d.Theme) ? "auto" : d.Theme) : p.Theme,
+                wallpaperStyle = string.IsNullOrWhiteSpace(p.WallpaperStyle) ? "fill" : p.WallpaperStyle,
+                accentColor = p.AccentColor ?? "",
                 taskbarPosition = p.TaskbarPosition,
                 taskbarSearch = p.TaskbarSearch,
                 taskbarAlign = p.TaskbarAlign,
