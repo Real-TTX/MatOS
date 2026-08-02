@@ -1,11 +1,17 @@
+@using MatOS.Web.Config
 @using MatOS.Web.Services
 @using MatOS.Web.Auth
+@inject JsonConfigService Config
 @inject DesktopLayoutService DesktopSvc
 @{
-    var accent = DesktopSvc.GetPrefs(User.GetUserId()?.ToString() ?? "0").AccentColor;
+    var prefs = DesktopSvc.GetPrefs(User.GetUserId()?.ToString() ?? "0");
+    var accent = prefs.AccentColor;
+    var desktop = Config.Get<DesktopConfig>("desktop");
+    var effTheme = string.IsNullOrWhiteSpace(prefs.Theme) ? desktop.Theme : prefs.Theme;
+    var theme = (effTheme ?? "auto").ToLowerInvariant() switch { "light" => "light", "dark" => "dark", _ => "auto" };
 }
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="@theme">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -30,6 +36,18 @@
         </div>
         @RenderBody()
     </div>
+    <script>
+      // Resolve auto->light/dark from the OS preference, and update whenever it changes
+      // (mirrors the same snippet in _DesktopLayout.cshtml so windows match the desktop).
+      (function(){ const html=document.documentElement; const stored=html.getAttribute("data-theme")||"auto";
+        const apply=()=>{ if(html.getAttribute("data-theme-user")==="auto" || (!html.getAttribute("data-theme-user") && stored==="auto")){
+          const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          html.setAttribute("data-theme", dark?"dark":"light"); }};
+        if(stored==="auto"){ html.setAttribute("data-theme-user","auto"); apply();
+          if(window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",apply); }
+        else { html.setAttribute("data-theme-user", stored); }
+      })();
+    </script>
     <script src="~/js/controls.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

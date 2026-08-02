@@ -1,7 +1,9 @@
-/* ---- System-app window content — dark theme matching the matOS shell -------- */
+/* ---- System-app window content — matches the matOS shell (light + dark) ---- */
 :root {
   --mat-accent: #8b5cf6;
   --mat-accent-2: #22b8ff;
+}
+:root, :root[data-theme="dark"] {
   --mat-bg: #0e1220;
   --mat-surface: #171d2c;
   --mat-surface-2: #222a41;
@@ -9,6 +11,25 @@
   --mat-border-strong: rgba(255, 255, 255, 0.22);
   --mat-text: #eef1f8;
   --mat-text-muted: #9aa3ba;
+  --mat-input-bg: rgba(0, 0, 0, 0.28);
+  --mat-ok-bg: rgba(52, 211, 153, 0.16);
+  --mat-ok-text: #7ff0c4;
+  --mat-danger-bg: rgba(244, 80, 107, 0.16);
+  --mat-danger-text: #ffb3c0;
+}
+:root[data-theme="light"] {
+  --mat-bg: #f4f5fa;
+  --mat-surface: #ffffff;
+  --mat-surface-2: #f4f5fa;
+  --mat-border: rgba(0, 0, 0, 0.12);
+  --mat-border-strong: rgba(0, 0, 0, 0.22);
+  --mat-text: #10131c;
+  --mat-text-muted: #4c5266;
+  --mat-input-bg: rgba(0, 0, 0, 0.04);
+  --mat-ok-bg: #dcfce7;
+  --mat-ok-text: #166534;
+  --mat-danger-bg: #fee2e2;
+  --mat-danger-text: #991b1b;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -38,19 +59,20 @@ a { color: var(--mat-accent-2); }
 .ui-btn:hover { background: var(--mat-surface-2); border-color: var(--mat-border-strong); }
 .ui-btn.primary { background: var(--mat-accent); border-color: transparent; color: #fff; }
 .ui-btn.primary:hover { filter: brightness(1.08); }
-.ui-btn.danger { color: #ffb3c0; border-color: rgba(244, 80, 107, 0.4); background: rgba(244, 80, 107, 0.14); }
-.ui-btn.danger:hover { background: rgba(244, 80, 107, 0.26); }
+.ui-btn.danger { color: var(--mat-danger-text); border-color: rgba(244, 80, 107, 0.4); background: var(--mat-danger-bg); }
+.ui-btn.danger:hover { filter: brightness(0.96); }
 .ui-input, .ui-select, textarea.ui-input { padding: 0.5rem 0.65rem; border-radius: 9px; border: 1px solid var(--mat-border);
-  background: rgba(0, 0, 0, 0.28); color: var(--mat-text); font: inherit; }
+  background: var(--mat-input-bg); color: var(--mat-text); font: inherit; }
 .ui-input:focus, .ui-select:focus { outline: none; border-color: var(--mat-accent); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22); }
 textarea.ui-input { resize: vertical; }
 
 .pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
-.pill.on { background: rgba(52, 211, 153, 0.16); color: #7ff0c4; }
-.pill.off { background: rgba(244, 80, 107, 0.16); color: #ffb3c0; }
+.pill.on { background: var(--mat-ok-bg); color: var(--mat-ok-text); }
+.pill.off { background: var(--mat-danger-bg); color: var(--mat-danger-text); }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85em; }
 .fx-muted { color: var(--mat-text-muted); }
 
+/* The log console keeps its terminal look regardless of theme (readability of log output). */
 .logbox { background: #080b14; color: #d7def0; border: 1px solid var(--mat-border); border-radius: 10px; padding: 0.8rem 0.9rem;
   height: 320px; overflow: auto; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.45; }
 
@@ -70,18 +92,35 @@ textarea.ui-input { resize: vertical; }
 .wp-nebula  { background: radial-gradient(180px 140px at 90% -5%, #a21caf 0%, transparent 52%), radial-gradient(200px 180px at -5% 100%, #4f46e5 0%, transparent 52%), linear-gradient(160deg, #1a1030, #0b0f1a); }
 .wp-graphite{ background: radial-gradient(200px 160px at 20% 0%, #334155 0%, transparent 55%), linear-gradient(160deg, #1e222b, #0c0e12); }
 
-/* ---- Dark overrides for the ported TagHelper control library (Users page) ---- */
-.mat-btn { background: var(--mat-surface); color: var(--mat-text); }
-.mat-btn:hover { background: var(--mat-surface-2); }
-.mat-btn-primary, .mat-btn-primary:hover { color: #fff; }
-.mat-toolbar, .mat-table-scroll { background: var(--mat-surface); }
-.mat-tbl thead th { background: rgba(255, 255, 255, 0.04); }
-.mat-tbl tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
-.mat-search { background: rgba(0, 0, 0, 0.28); }
-.mat-badge { background: rgba(255, 255, 255, 0.09); color: var(--mat-text); }
-.mat-badge.ok { background: rgba(52, 211, 153, 0.16); color: #7ff0c4; }
-.mat-badge.muted { background: rgba(255, 255, 255, 0.06); color: var(--mat-text-muted); }
-.mat-page-btn { background: var(--mat-surface); color: var(--mat-text); }
-.mat-page-btn:hover { background: var(--mat-surface-2); }
-.mat-input:focus { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22); }
-.mat-form-error-summary { background: rgba(244, 80, 107, 0.14); color: #ffb3c0; border: 1px solid rgba(244, 80, 107, 0.4); }
+/* photo-style wallpapers (mirror of desktop.css wp-*) */
+.wp-mountains  { background-color: #1a1428; background-image: url('/img/wallpapers/mountains.svg'); }
+.wp-bigsur     { background-color: #2c2244; background-image: url('/img/wallpapers/bigsur.svg'); }
+.wp-night-city { background-color: #0a1128; background-image: url('/img/wallpapers/night-city.svg'); }
+.wp-beach      { background-color: #134463; background-image: url('/img/wallpapers/beach.svg'); }
+.wp-meadow     { background-color: #325a24; background-image: url('/img/wallpapers/meadow.svg'); }
+.wp-space      { background-color: #04081a; background-image: url('/img/wallpapers/space.svg'); }
+
+/* wallpaper-style sizing (mirror of desktop.css wps-*) — the picker always previews swatches
+   in "fill" mode regardless of the user's chosen style, so photo wallpapers crop cleanly
+   instead of tiling at natural size. */
+.wps-fill   { background-size: cover;   background-position: center;   background-repeat: no-repeat; }
+.wps-fit    { background-size: contain; background-position: center;   background-repeat: no-repeat; }
+.wps-center { background-size: auto;    background-position: center;   background-repeat: no-repeat; }
+.wps-tile   { background-size: auto;    background-position: top left; background-repeat: repeat; }
+
+/* ---- Dark-theme overrides for the ported TagHelper control library (Users page).
+   controls.css ships light-mode defaults; these apply only under data-theme="dark". ---- */
+:root[data-theme="dark"] .mat-btn { background: var(--mat-surface); color: var(--mat-text); }
+:root[data-theme="dark"] .mat-btn:hover { background: var(--mat-surface-2); }
+:root[data-theme="dark"] .mat-btn-primary, :root[data-theme="dark"] .mat-btn-primary:hover { color: #fff; }
+:root[data-theme="dark"] .mat-toolbar, :root[data-theme="dark"] .mat-table-scroll { background: var(--mat-surface); }
+:root[data-theme="dark"] .mat-tbl thead th { background: rgba(255, 255, 255, 0.04); }
+:root[data-theme="dark"] .mat-tbl tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+:root[data-theme="dark"] .mat-search { background: var(--mat-input-bg); }
+:root[data-theme="dark"] .mat-badge { background: rgba(255, 255, 255, 0.09); color: var(--mat-text); }
+:root[data-theme="dark"] .mat-badge.ok { background: var(--mat-ok-bg); color: var(--mat-ok-text); }
+:root[data-theme="dark"] .mat-badge.muted { background: rgba(255, 255, 255, 0.06); color: var(--mat-text-muted); }
+:root[data-theme="dark"] .mat-page-btn { background: var(--mat-surface); color: var(--mat-text); }
+:root[data-theme="dark"] .mat-page-btn:hover { background: var(--mat-surface-2); }
+:root[data-theme="dark"] .mat-input:focus { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22); }
+:root[data-theme="dark"] .mat-form-error-summary { background: var(--mat-danger-bg); color: var(--mat-danger-text); border: 1px solid rgba(244, 80, 107, 0.4); }
