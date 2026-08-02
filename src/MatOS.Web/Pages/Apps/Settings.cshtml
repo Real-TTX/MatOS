@@ -87,6 +87,10 @@
                         <div class="mset-label">Show search pill<small>The always-visible search input next to the Start button.</small></div>
                         <label class="tb-switch"><input type="checkbox" id="tb-search" @(Model.TaskbarSearch?"checked":"")><span></span></label>
                     </div>
+                    <div class="mset-row">
+                        <div class="mset-label">Show labels<small>App titles next to each taskbar icon. Turn off to fit more icons (icons only).</small></div>
+                        <label class="tb-switch"><input type="checkbox" id="tb-labels" @(Model.TaskbarLabels?"checked":"")><span></span></label>
+                    </div>
                 </div>
             </div>
 
@@ -225,7 +229,7 @@
   const wpStyleSeg = document.getElementById("wp-style");
   const acPicker = document.getElementById("ac-picker");
   const acCustom = document.getElementById("ac-custom-input");
-  const posSeg = document.getElementById("tb-pos"), alignSeg = document.getElementById("tb-align"), searchCb = document.getElementById("tb-search");
+  const posSeg = document.getElementById("tb-pos"), alignSeg = document.getElementById("tb-align"), searchCb = document.getElementById("tb-search"), labelsCb = document.getElementById("tb-labels");
 
   function segValue(seg){ const b=seg && seg.querySelector("button.active"); return b?b.dataset.v:(seg?seg.querySelector("button").dataset.v:""); }
   function segSelect(seg, v){ if(seg) seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.v===v)); }
@@ -242,6 +246,7 @@
       taskbarPosition: posSeg ? segValue(posSeg) : "bottom",
       taskbarAlign: alignSeg ? segValue(alignSeg) : "left",
       taskbarSearch: searchCb ? searchCb.checked : true,
+      taskbarLabels: labelsCb ? labelsCb.checked : true,
     };
   }
   function previewAll(body){
@@ -278,6 +283,7 @@
   }
   [posSeg, alignSeg].forEach(seg => seg && seg.addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; segSelect(seg, b.dataset.v); saveAll(); }));
   if(searchCb) searchCb.addEventListener("change", saveAll);
+  if(labelsCb) labelsCb.addEventListener("change", saveAll);
 
   // ---- Deep-link into a specific panel (?panel=taskbar or postMessage matos:goto-panel) ----
   function gotoPanel(name){ const nav=document.querySelector(`.mset-nav[data-p="${name}"]`); if(nav) nav.click(); }

@@ -27,6 +27,7 @@ public class SettingsModel : PageModel
     public string TaskbarPosition { get; set; } = "bottom";
     public bool TaskbarSearch { get; set; } = true;
     public string TaskbarAlign { get; set; } = "left";
+    public bool TaskbarLabels { get; set; } = true;
 
     // System — shared by every user, saved via the form post below.
     [BindProperty] public string InstanceName { get; set; } = "matOS";
@@ -56,6 +57,7 @@ public class SettingsModel : PageModel
         TaskbarPosition = p.TaskbarPosition;
         TaskbarSearch = p.TaskbarSearch;
         TaskbarAlign = p.TaskbarAlign;
+        TaskbarLabels = p.TaskbarLabels;
 
         InstanceName = s.InstanceName;
         BaseDomain = s.BaseDomain;

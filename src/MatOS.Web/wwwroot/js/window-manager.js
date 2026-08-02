@@ -191,11 +191,16 @@
     });
   }
 
+  let pinnedKeys = new Set();
+  const changeListeners = [];
+  function notifyChange() { for (const cb of changeListeners) { try { cb(); } catch (_) {} } }
+
   function syncDock() {
     const d = dock();
     if (!d) return;
     d.innerHTML = "";
     for (const w of wins.values()) {
+      if (pinnedKeys.has(w.key)) continue; // pinned apps render their own (always-present) button
       const b = document.createElement("button");
       b.className = "mat-task" + (w.el.classList.contains("focused") && !w.minimized ? " active" : "");
       b.title = w.opts.title || "";
@@ -204,14 +209,23 @@
                     : w.opts.icon ? `<img src="${w.opts.icon}" alt=""/>`
                     : `<span class="mat-task-ico">${(w.opts.title || "?").slice(0,1)}</span>`) +
                     `<span class="mat-task-label">${escapeHtml(w.opts.title || "")}</span>`;
-      b.addEventListener("click", () => {
-        if (w.minimized) { restore(w); bringToFront(w); }
-        else if (w.el.classList.contains("focused")) { minimize(w); }
-        else { bringToFront(w); }
-      });
+      b.addEventListener("click", () => toggleFocusOrMinimize(w.key));
       d.appendChild(b);
     }
+    notifyChange();
   }
+
+  // ---- Taskbar-pin support: state queries + the same click behaviour regular buttons use ----
+  function setPinnedKeys(keys) { pinnedKeys = new Set(keys || []); syncDock(); }
+  function isOpen(key) { return wins.has(key); }
+  function getState(key) { const w = wins.get(key); return w ? { minimized: w.minimized, focused: w.el.classList.contains("focused") } : null; }
+  function toggleFocusOrMinimize(key) {
+    const w = wins.get(key); if (!w) return;
+    if (w.minimized) { restore(w); bringToFront(w); }
+    else if (w.el.classList.contains("focused")) { minimize(w); }
+    else { bringToFront(w); }
+  }
+  function onChange(cb) { if (typeof cb === "function") changeListeners.push(cb); }
 
   function resizeHandles() {
     return ["n","s","e","w","ne","nw","se","sw"]
@@ -247,5 +261,5 @@
     restore(w); bringToFront(w);
   }
 
-  window.MatWM = { open, close, closeKey, reset, showDesktop };
+  window.MatWM = { open, close, closeKey, reset, showDesktop, setPinnedKeys, isOpen, getState, toggleFocusOrMinimize, onChange };
 })();

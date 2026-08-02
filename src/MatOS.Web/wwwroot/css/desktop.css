@@ -241,6 +241,18 @@ body.tb-top #mat-toasts { bottom: auto; top: 60px; }
 .mat-task img, .mat-task .mat-task-ico { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto;
   display: grid; place-items: center; }
 .mat-task .mat-task-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Taskbar pins (Windows-11 style): always-present buttons, reusing .mat-task's look.
+   A small dot marks a pinned app that's currently running (but not the focused/front window). */
+#mat-tasks-pinned { flex: 0 0 auto; display: flex; align-items: center; gap: 0.35rem; }
+.mat-task.pinned { position: relative; }
+.mat-task.pinned.running::after {
+  content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px;
+  border-radius: 50%; background: var(--accent); transform: translateX(-50%);
+}
+.mat-task.pinned.active::after { background: transparent; } /* the accent bottom-border already shows focus */
+/* Personal preference: hide taskbar labels entirely (fit more icons) */
+body.tb-no-labels .mat-task-label { display: none; }
+body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-content: center; }
 
 #mat-tray { flex: 0 0 auto; display: flex; align-items: center; gap: 0.6rem; padding-right: 0.25rem; }
 .mat-clock { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.78rem; text-align: right; line-height: 1.15; }

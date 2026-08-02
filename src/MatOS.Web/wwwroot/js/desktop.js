@@ -66,6 +66,7 @@
   let folders = [];   // [{id,name,keys:[...]}]
   let widgets = [];   // [{id,type,x,y,w,h,config}]
   let labels = {};    // key -> custom display name (per user)
+  let taskbarPins = new Set(); // app keys pinned to the taskbar (Windows-11 style — always shown)
   const pendingInstalls = new Map(); // installId -> { appId, name, icon }
   const stackKey = s => "stack:" + s.name;
   const primaryWeb = s => (s.containers || []).find(c => c.hasWebUi && c.running && c.appUrl);
@@ -443,7 +444,38 @@
     const body = document.body;
     body.classList.toggle("tb-top", p.taskbarPosition === "top");
     body.classList.toggle("tb-center", p.taskbarAlign === "center");
+    body.classList.toggle("tb-no-labels", p.taskbarLabels === false);
     const search = document.getElementById("mat-tb-search"); if (search) search.style.display = p.taskbarSearch === false ? "none" : "";
+  }
+
+  // ---- Taskbar pins (Windows-11 style: always-present buttons, running or not) ----
+  const tasksPinnedEl = document.getElementById("mat-tasks-pinned");
+  function renderTaskbarPins() {
+    if (!tasksPinnedEl) return;
+    tasksPinnedEl.innerHTML = "";
+    for (const key of taskbarPins) {
+      const title = customLabel(key) || labelForKey(key);
+      const iconHtml = iconForKey(key) || CUBE;
+      const state = window.MatWM ? window.MatWM.getState(key) : null;
+      const b = document.createElement("button");
+      b.className = "mat-task pinned" + (state ? (state.minimized ? "" : (state.focused ? " active" : " running")) : "");
+      b.title = title || ""; b.dataset.key = key;
+      b.innerHTML = `<span class="mat-task-ico mat-task-ico-svg">${iconHtml}</span><span class="mat-task-label">${escAttrSafe(title)}</span>`;
+      b.addEventListener("click", () => { if (window.MatWM && window.MatWM.isOpen(key)) window.MatWM.toggleFocusOrMinimize(key); else launchByKey(key); });
+      tasksPinnedEl.appendChild(b);
+    }
+  }
+  function escAttrSafe(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+  function isPinnedToTaskbar(key) { return taskbarPins.has(key); }
+  function pinToTaskbar(key) {
+    if (!key || taskbarPins.has(key)) return;
+    taskbarPins.add(key); renderTaskbarPins(); if (window.MatWM) window.MatWM.setPinnedKeys([...taskbarPins]);
+    fetch("/api/v1/desktop/taskbar-pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(() => {});
+  }
+  function unpinFromTaskbar(key) {
+    if (!taskbarPins.has(key)) return;
+    taskbarPins.delete(key); renderTaskbarPins(); if (window.MatWM) window.MatWM.setPinnedKeys([...taskbarPins]);
+    fetch("/api/v1/desktop/taskbar-unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(() => {});
   }
   // Open Settings and drop the user into a specific panel (creates a new window with a query,
   // or navigates the existing window's iframe to the same URL).
@@ -540,6 +572,9 @@
       items.push({ sep: true }, pins.has(key)
         ? { label: "Remove from desktop", action: () => unpin(key) }
         : { label: "Add to desktop", action: () => pin(key) });
+      items.push(isPinnedToTaskbar(key)
+        ? { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) }
+        : { label: "Pin to taskbar", action: () => pinToTaskbar(key) });
       showCtx(e.clientX, e.clientY, items);
     });
   }
@@ -589,7 +624,11 @@
         items.push({ sep: true });
         items.push({ label: "New folder from this app", action: () => moveKeyToFolder(key, null) });
         for (const f of folders) if (!f.keys.includes(key)) items.push({ label: 'Move to "' + f.name + '"', action: () => moveKeyToFolder(key, f.id) });
-        items.push({ sep: true }, { label: "Rename", action: () => renameIcon(key) }, { label: "Remove from desktop", action: () => unpin(key) }, { label: "Auto-arrange icons", action: autoArrange });
+        items.push({ sep: true }, { label: "Rename", action: () => renameIcon(key) }, { label: "Remove from desktop", action: () => unpin(key) });
+        items.push(isPinnedToTaskbar(key)
+          ? { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) }
+          : { label: "Pin to taskbar", action: () => pinToTaskbar(key) });
+        items.push({ label: "Auto-arrange icons", action: autoArrange });
         showCtx(e.clientX, e.clientY, items);
       } else {
         showCtx(e.clientX, e.clientY, [
@@ -664,12 +703,27 @@
     e.preventDefault();
     const t = e.target.closest(".mat-task");
     if (t && t.dataset.winKey) {
+      // A regular open-window button (not pinned — pinned+open buttons live under data-key below).
       const key = t.dataset.winKey;
       showCtx(e.clientX, e.clientY, [
         { label: "Reset app", action: () => window.MatWM.reset(key) },
         { sep: true },
+        { label: "Pin to taskbar", action: () => pinToTaskbar(key) },
+        { sep: true },
         { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) },
       ]);
+      return;
+    }
+    if (t && t.dataset.key) {
+      // A pinned taskbar button — may or may not currently be open.
+      const key = t.dataset.key;
+      const open = window.MatWM && window.MatWM.isOpen(key);
+      const items = [];
+      if (!open) items.push({ label: "Open", action: () => launchByKey(key) });
+      else { items.push({ label: "Reset app", action: () => window.MatWM.reset(key) }); }
+      items.push({ sep: true }, { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) });
+      if (open) items.push({ sep: true }, { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) });
+      showCtx(e.clientX, e.clientY, items);
       return;
     }
     // Empty taskbar → Win-11-style quick menu (Task Manager / Files / Network / Backups / Settings / Show desktop).
@@ -1021,12 +1075,14 @@
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); } }
     catch (_) { layout = {}; }
     // Personal preferences (wallpaper/theme fallback + taskbar).
     try { const p = await (await fetch("/api/v1/desktop/prefs")).json(); applyTaskbarPrefs(p); } catch (_) {}
     await loadDefs();
     buildSystem(); await load(); setInterval(load, 15000);
+    if (window.MatWM) { window.MatWM.setPinnedKeys([...taskbarPins]); window.MatWM.onChange(renderTaskbarPins); }
+    renderTaskbarPins();
   }
   init();
 

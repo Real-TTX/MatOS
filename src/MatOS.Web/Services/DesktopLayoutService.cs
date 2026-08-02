@@ -181,7 +181,7 @@ public class DesktopLayoutService
     public DesktopPrefs GetPrefs(string userId)
     {
         lock (_gate) return PrefsStore.Users.TryGetValue(userId, out var p)
-            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, WallpaperStyle = p.WallpaperStyle, AccentColor = p.AccentColor, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign }
+            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, WallpaperStyle = p.WallpaperStyle, AccentColor = p.AccentColor, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign, TaskbarLabels = p.TaskbarLabels }
             : new DesktopPrefs();
     }
 
@@ -199,7 +199,32 @@ public class DesktopLayoutService
             p.TaskbarPosition = prefs.TaskbarPosition is "top" or "bottom" ? prefs.TaskbarPosition : "bottom";
             p.TaskbarSearch = prefs.TaskbarSearch;
             p.TaskbarAlign = prefs.TaskbarAlign is "center" or "left" ? prefs.TaskbarAlign : "left";
+            p.TaskbarLabels = prefs.TaskbarLabels;
         }
         await _config.SaveAsync("desktop-prefs", PrefsStore);
+    }
+
+    // ---- Taskbar pins (Windows-11 style — always shown, running or not) ----
+    private TaskbarPinsStore TaskbarPinStore => _config.Get<TaskbarPinsStore>("taskbar-pins");
+
+    public List<string> GetTaskbarPins(string userId)
+    {
+        lock (_gate) return TaskbarPinStore.Users.TryGetValue(userId, out var l) ? new List<string>(l) : new List<string>();
+    }
+
+    public async Task AddTaskbarPin(string userId, string key)
+    {
+        lock (_gate)
+        {
+            if (!TaskbarPinStore.Users.TryGetValue(userId, out var l)) { l = new List<string>(); TaskbarPinStore.Users[userId] = l; }
+            if (!l.Contains(key)) l.Add(key);
+        }
+        await _config.SaveAsync("taskbar-pins", TaskbarPinStore);
+    }
+
+    public async Task RemoveTaskbarPin(string userId, string key)
+    {
+        lock (_gate) { if (TaskbarPinStore.Users.TryGetValue(userId, out var l)) l.Remove(key); }
+        await _config.SaveAsync("taskbar-pins", TaskbarPinStore);
     }
 }

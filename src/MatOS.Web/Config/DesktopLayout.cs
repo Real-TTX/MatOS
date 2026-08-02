@@ -21,6 +21,15 @@ public class DesktopPinsStore
     public Dictionary<string, List<string>> Users { get; set; } = new();
 }
 
+/// <summary>Which app icons each user has pinned to the TASKBAR (Windows-11 style) — independent
+/// of desktop pins. A taskbar-pinned app always shows a button, running or not; clicking it
+/// launches or restores/focuses/minimizes like a normal open-window button. Keyed by user id ->
+/// icon keys, in pin order (left to right).</summary>
+public class TaskbarPinsStore
+{
+    public Dictionary<string, List<string>> Users { get; set; } = new();
+}
+
 /// <summary>Per-user custom labels for desktop icons. Lets each user rename a stack icon
 /// like "matos_matcms_1" to something meaningful ("Blog", "Docs Site"). Keyed by user id →
 /// icon key → display name.</summary>
@@ -48,6 +57,9 @@ public class DesktopPrefs
     public bool TaskbarSearch { get; set; } = true;
     /// <summary>"left" | "center" — where the window buttons + start button sit.</summary>
     public string TaskbarAlign { get; set; } = "left";
+    /// <summary>Show each app's title text next to its icon on the taskbar (Windows-11 lets you
+    /// turn this off to fit more icons — "Never show" / "Show labels").</summary>
+    public bool TaskbarLabels { get; set; } = true;
 }
 
 public class DesktopPrefsStore

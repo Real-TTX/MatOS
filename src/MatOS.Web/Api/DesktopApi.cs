@@ -31,6 +31,7 @@ public static class DesktopApi
                 folders = svc.GetFolders(uid),
                 widgets = svc.GetWidgets(uid),
                 labels = svc.GetLabels(uid),
+                taskbarPins = svc.GetTaskbarPins(uid),
             });
         });
 
@@ -56,6 +57,7 @@ public static class DesktopApi
                 taskbarPosition = p.TaskbarPosition,
                 taskbarSearch = p.TaskbarSearch,
                 taskbarAlign = p.TaskbarAlign,
+                taskbarLabels = p.TaskbarLabels,
             });
         });
 
@@ -116,6 +118,21 @@ public static class DesktopApi
 
         g.MapPost("/widgets/remove", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
         { await svc.RemoveWidget(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
+
+        // ---- Taskbar pins (Windows-11 style) ----
+        g.MapPost("/taskbar-pin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        {
+            if (string.IsNullOrWhiteSpace(b.Key)) return Results.BadRequest();
+            await svc.AddTaskbarPin(Uid(ctx), b.Key);
+            return Results.Ok(new { ok = true });
+        });
+
+        g.MapPost("/taskbar-unpin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        {
+            if (string.IsNullOrWhiteSpace(b.Key)) return Results.BadRequest();
+            await svc.RemoveTaskbarPin(Uid(ctx), b.Key);
+            return Results.Ok(new { ok = true });
+        });
     }
 
     private static string Uid(HttpContext ctx) => ctx.User.GetUserId()?.ToString() ?? "0";

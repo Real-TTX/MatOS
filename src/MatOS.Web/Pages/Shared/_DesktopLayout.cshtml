@@ -37,7 +37,7 @@
     }
 </head>
 @{
-    var bodyClasses = string.Join(" ", new[] { prefs.TaskbarPosition == "top" ? "tb-top" : null, prefs.TaskbarAlign == "center" ? "tb-center" : null }.Where(c => c != null));
+    var bodyClasses = string.Join(" ", new[] { prefs.TaskbarPosition == "top" ? "tb-top" : null, prefs.TaskbarAlign == "center" ? "tb-center" : null, !prefs.TaskbarLabels ? "tb-no-labels" : null }.Where(c => c != null));
 }
 <body class="@bodyClasses">
     <div id="mat-wallpaper" class="wp-@wallpaper wps-@wpStyle"></div>
@@ -108,6 +108,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                 <input id="mat-tb-search-input" type="search" placeholder="Search" autocomplete="off" aria-label="Search apps" />
             </div>
+            <div id="mat-tasks-pinned"></div>
             <div id="mat-tasks"></div>
         </div>
         <div id="mat-tray">
