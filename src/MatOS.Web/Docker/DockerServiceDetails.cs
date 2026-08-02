@@ -123,14 +123,32 @@ public partial class DockerService
     {
         var all = await ListContainersAsync(true, ct);
         var stacks = new List<StackInfo>();
+        var used = new HashSet<string>();
 
-        foreach (var g in all.Where(c => c.Labels.ContainsKey(ComposeLabels.Project))
+        // matOS-managed installs: an install's identity is (matos.app, matos.instance), NOT the
+        // compose project — an app's compose file can hard-code a top-level `name:` that makes
+        // every install of that app share one project, so grouping by project would merge
+        // separate installs into one icon. Group these first and give each a unique name.
+        static bool HasLabel(ContainerInfo c, string k) => c.Labels.TryGetValue(k, out var v) && !string.IsNullOrEmpty(v);
+        foreach (var g in all.Where(c => c.MatosManaged && HasLabel(c, MatosLabels.App) && HasLabel(c, MatosLabels.Instance))
+                             .GroupBy(c => (App: c.Labels[MatosLabels.App], Inst: c.Labels[MatosLabels.Instance])))
+        {
+            var list = g.OrderBy(c => c.Name).ToList();
+            stacks.Add(new StackInfo($"{g.Key.App}-{g.Key.Inst}", false, list.Count, list.Count(x => x.IsRunning), list));
+            foreach (var c in list) used.Add(c.Id);
+        }
+
+        // Foreign compose projects (containers not already claimed by a matOS install above).
+        foreach (var g in all.Where(c => !used.Contains(c.Id) && c.Labels.ContainsKey(ComposeLabels.Project))
                              .GroupBy(c => c.Labels[ComposeLabels.Project]))
         {
             var list = g.OrderBy(c => c.Name).ToList();
             stacks.Add(new StackInfo(g.Key, false, list.Count, list.Count(x => x.IsRunning), list));
+            foreach (var c in list) used.Add(c.Id);
         }
-        foreach (var c in all.Where(c => !c.Labels.ContainsKey(ComposeLabels.Project)))
+
+        // Standalone containers (no compose project).
+        foreach (var c in all.Where(c => !used.Contains(c.Id)))
             stacks.Add(new StackInfo(c.Name, true, 1, c.IsRunning ? 1 : 0, new[] { c }));
 
         return stacks.OrderByDescending(s => s.AnyRunning).ThenBy(s => s.Name).ToList();
@@ -139,12 +157,14 @@ public partial class DockerService
     public async Task<StackInfo?> GetStackAsync(string name, CancellationToken ct = default)
         => (await ListStacksAsync(ct)).FirstOrDefault(s => s.Name == name);
 
-    public async Task StackActionAsync(string project, string action, CancellationToken ct = default)
+    public async Task StackActionAsync(string name, string action, CancellationToken ct = default)
     {
-        var all = await ListContainersAsync(true, ct);
-        var targets = all.Where(c => c.Labels.TryGetValue(ComposeLabels.Project, out var p) && p == project).ToList();
-        if (targets.Count == 0) targets = all.Where(c => c.Name == project).ToList(); // standalone by name
-        foreach (var c in targets)
+        // Resolve through the same grouping ListStacksAsync uses so the action targets exactly
+        // this stack's containers — matOS installs that share a compose project must not be
+        // started/stopped together.
+        var stack = await GetStackAsync(name, ct);
+        if (stack is null) return;
+        foreach (var c in stack.Containers)
         {
             switch (action)
             {

@@ -194,6 +194,7 @@ public static class DockerApi
             running = c.IsRunning,
             matosManaged = c.MatosManaged,
             matosApp = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.App, out var mapp) ? mapp : null,
+            matosInstance = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.Instance, out var minst) ? minst : null,
             matosTitle = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.Title, out var mtitle) ? mtitle : null,
             appUrl,
             hasWebUi = appUrl is not null,
