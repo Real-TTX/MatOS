@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using MatOS.Web.Data;
+using MatOS.Web.Entities;
 using MatOS.Web.Services;
 
 namespace MatOS.Web.Auth;

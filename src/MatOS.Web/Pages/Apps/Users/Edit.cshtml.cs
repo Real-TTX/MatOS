@@ -1,6 +1,6 @@
 using MatOS.Web.Auth;
 using MatOS.Web.Controls.Common;
-using MatOS.Web.Data;
+using MatOS.Web.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 

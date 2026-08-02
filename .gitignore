@@ -10,9 +10,14 @@
 .vscode/
 *.user
 
-# Local runtime data (JSON configs, keys, backups)
-data/
-appdata/
+# Local runtime data (JSON configs, keys, backups) — anchored to the exact dev-mode
+# data dir (contentRoot/data, see MatosPaths.cs) so this can never again shadow a
+# source folder that merely shares the name at a different path or case (this is
+# exactly what silently dropped src/MatOS.Web/Data/Entities.cs from every commit:
+# an unanchored `data/` pattern + Windows git's case-insensitive matching hid the
+# whole folder without a single local warning).
+/src/MatOS.Web/data/
+/src/MatOS.Web/appdata/
 *.db
 
 # OS junk

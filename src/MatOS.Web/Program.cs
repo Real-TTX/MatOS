@@ -1,6 +1,6 @@
 using MatOS.Web.Api;
 using MatOS.Web.Auth;
-using MatOS.Web.Data;
+using MatOS.Web.Entities;
 using MatOS.Web.Docker;
 using MatOS.Web.Services;
 using Microsoft.AspNetCore.Authentication;

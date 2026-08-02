@@ -1,4 +1,4 @@
-using MatOS.Web.Data;
+using MatOS.Web.Entities;
 
 namespace MatOS.Web.Auth;
 
