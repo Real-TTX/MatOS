@@ -511,7 +511,7 @@
   if (startBtn) {
     startBtn.addEventListener("click", (e) => { e.stopPropagation(); startMenu.hidden ? openStart() : closeStart(); });
     startBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); closeStart(); openQuickMenu(e.clientX, e.clientY); });
-    document.addEventListener("click", (e) => { if (!startMenu.hidden && !startMenu.contains(e.target) && !startBtn.contains(e.target)) closeStart(); });
+    document.addEventListener("click", (e) => { if (!startMenu.hidden && !startMenu.contains(e.target) && !startBtn.contains(e.target) && !(tbSearchWrap && tbSearchWrap.contains(e.target))) closeStart(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeStart(); hideCtx(); } });
     startSearch.addEventListener("input", () => renderStartMenu(startSearch.value));
     startSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) { e.preventDefault(); f.click(); } } });
