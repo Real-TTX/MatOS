@@ -5,16 +5,14 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 ARG APP_VERSION=local
 COPY . .
-# Log the SDK we actually ended up with so a failing CI run always tells us what
-# tag mcr.microsoft.com/dotnet/sdk:10.0 resolved to on this run.
-RUN dotnet --info
+# Log the SDK we actually ended up with, plus arch + free-space, so failing CI
+# runs always tell us what mcr.microsoft.com/dotnet/sdk:10.0 resolved to and
+# on what platform.
+RUN echo "=== DIAG ===" && uname -a && df -h / && dotnet --info && echo "=== /DIAG ==="
 RUN dotnet restore src/MatOS.Web/MatOS.Web.csproj
-# Single-line publish so any Bash / Buildx line-continuation quirk on the CI
-# runner can't split the argument list mid-flight; -v:n keeps output actionable
-# without the noise of full diagnostic. Sanitize the informational version — the
-# CI computes something like "nightly-42-20260802-0937" which is fine, but strip
-# it defensively just in case.
-RUN dotnet publish src/MatOS.Web/MatOS.Web.csproj -c Release -o /app/publish -v:n /p:UseAppHost=false /p:InformationalVersion="${APP_VERSION}"
+# Redirect publish output into a file so even if the terminal gets truncated
+# by buildx, `cat` at the end still shows the tail on failure.
+RUN sh -c 'dotnet publish src/MatOS.Web/MatOS.Web.csproj -c Release -o /app/publish /p:UseAppHost=false /p:InformationalVersion="${APP_VERSION}" > /tmp/publish.log 2>&1; rc=$?; echo "--- publish tail ---"; tail -80 /tmp/publish.log; exit $rc'
 
 # ---- Runtime stage ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
