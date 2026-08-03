@@ -230,9 +230,7 @@
   function appRowHtml(a){
     const opener=a.handles && a.handles.length, local=!a.builtIn && !a.source;
     const chips=`${a.source?`<span class="chip src" title="From source: ${escA(a.source)}">${esc(a.source)}</span>`:''}${local?'<span class="chip">custom</span>':''}${(a.kind==='compose'&&!a.builtIn)?'<span class="chip compose">compose</span>':''}${opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:''}`;
-    const installBtn=(opener && a.registered)
-      ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
-      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
+    const installBtn=`<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
     const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}" title="Edit">✎</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}" title="Delete">🗑</button>`:'';
     return `<div class="app-row" data-detail="${escA(a.id)}"><div class="app-ico">${iconHtml(a.icon)}</div>
       <div class="g"><h3>${esc(a.name)}${chips}</h3><div class="tag">${esc(a.tagline||a.description||'')}</div></div>
@@ -249,7 +247,6 @@
     }
     catEl.innerHTML=html;
     catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>openInstall(b.dataset.install,b.dataset.name)));
-    catEl.querySelectorAll("[data-unreg]").forEach(b=>b.addEventListener("click",()=>unregister(b.dataset.unreg,b.dataset.name)));
     catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
     // Click the tile (not a button) → app detail page.
@@ -258,7 +255,6 @@
 
   function wireDetailButtons(){
     detEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>openInstall(b.dataset.install,b.dataset.name)));
-    detEl.querySelectorAll("[data-unreg]").forEach(b=>b.addEventListener("click",()=>unregister(b.dataset.unreg,b.dataset.name)));
     detEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     detEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
   }
@@ -272,9 +268,7 @@
     const a=catalog.find(x=>x.id===id); if(!a){ detEl.innerHTML='<div class="fx-muted" style="padding:1rem">App not found.</div>'; return; }
     const opener=a.handles&&a.handles.length, local=!a.builtIn&&!a.source, cat=catOf(a);
     const chips=`<span class="chip">${esc(cat)}</span>${a.source?`<span class="chip src">${esc(a.source)}</span>`:''}${local?'<span class="chip">custom</span>':''}${(a.kind==='compose'&&!a.builtIn)?'<span class="chip compose">compose</span>':''}${opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:''}`;
-    const installBtn=(opener&&a.registered)
-      ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
-      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
+    const installBtn=`<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
     const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:'';
     const actionsCard=(a.actions&&a.actions.length)?`<div class="card"><h3>Actions</h3><div class="detail-actions">${a.actions.map(x=>`<div class="da">${esc(x.label)}<span class="mono">${esc(x.url)}</span></div>`).join("")}</div></div>`:'';
     const rows=[["Category",esc(cat)]];
@@ -304,8 +298,6 @@
 
   // Install always opens the dedicated install wizard window (params → review → install → done).
   function openInstall(id,name){ try{ window.parent.postMessage({type:"matos:open", url:"/apps/install/"+encodeURIComponent(id), key:"install:"+id, title:"Install "+(name||id), width:680, height:620}, location.origin); }catch(_){ location.href="/apps/install/"+encodeURIComponent(id); } }
-  async function unregister(id,name){ if(!await matDialog.confirm(`Uninstall "${name}"? It will no longer appear in "Open with".`,{title:"Uninstall",danger:true,okLabel:"Uninstall"}))return;
-    try{ const r=await fetch("/api/v1/store/unregister",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); if(!r.ok)throw new Error(r.status); flash("Uninstalled "+name+".",true); loadCatalog(); }catch(e){ flash("Uninstall failed: "+e.message,false); } }
 
   // reload when an install/uninstall happened in another window
   window.addEventListener("message",e=>{ if(e.origin!==location.origin)return; const m=e.data; if(m && m.type==="matos:reload"){ loadCatalog(); if(instEl.style.display!=="none") loadInstalls(); } });

@@ -409,11 +409,14 @@
     const toItem = s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) });
     const apps = stackData.filter(s => stackApp(s) && match(stackTitle(s))).map(toItem);
     const cons = stackData.filter(s => !stackApp(s) && match(stackTitle(s))).map(toItem);
-    smApps.innerHTML = apps.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
+    // Show apps that are still installing as placeholders in the Start menu too (not just the desktop).
+    const pend = [...pendingInstalls.values()].filter(p => match(p.name));
+    const pendHtml = pend.map(p => `<div class="sm-item sm-installing"><span class="sm-ico">${appIconHtml(p.icon) || CUBE}</span><span class="sm-label">${esc(p.name)}</span><span class="sm-inst-badge">Installing…</span></div>`).join("");
+    smApps.innerHTML = pendHtml + apps.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
     smContainers.innerHTML = cons.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
-    if (smAppsTitle) smAppsTitle.style.display = apps.length ? "" : "none";
+    if (smAppsTitle) smAppsTitle.style.display = (apps.length + pend.length) ? "" : "none";
     if (smContainersTitle) smContainersTitle.style.display = cons.length ? "" : "none";
-    smEmpty.hidden = (sys.length + apps.length + cons.length) > 0;
+    smEmpty.hidden = (sys.length + apps.length + cons.length + pend.length) > 0;
   }
   // Position a taskbar popup (start menu / notification panel) relative to its anchor button,
   // so it stays correctly attached regardless of taskbar position (top/bottom) or icon
@@ -1124,12 +1127,12 @@
       // A rough placement near the top-left free area, so the user sees it right away.
       const key = "pending:" + m.installId;
       layout[key] = slotToXY(defaultIndex++);
-      reconcileDesktop();
+      reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : "");
     }
     if (m.type === "matos:install-failed" && m.installId) {
       pendingInstalls.delete(m.installId);
       const key = "pending:" + m.installId; delete layout[key];
-      reconcileDesktop();
+      reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : "");
     }
   });
 

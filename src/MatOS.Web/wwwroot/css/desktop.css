@@ -305,6 +305,10 @@ body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-conte
 .sm-item { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.6rem 0.3rem;
   border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--text); cursor: pointer; font: inherit; }
 .sm-item:hover { background: var(--surface-2); border-color: var(--border); }
+.sm-item.sm-installing { cursor: default; opacity: 0.85; }
+.sm-item.sm-installing .sm-ico { animation: sm-pulse 1.1s ease-in-out infinite; }
+.sm-inst-badge { font-size: 0.6rem; font-weight: 700; color: var(--accent); }
+@keyframes sm-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 .sm-ico { position: relative; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
   background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
 .sm-ico.sys { background: var(--accent-grad); border-color: transparent; }

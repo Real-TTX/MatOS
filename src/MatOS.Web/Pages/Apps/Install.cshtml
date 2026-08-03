@@ -165,9 +165,7 @@
     currentInstallId = "i" + Math.random().toString(36).slice(2,10);
     if(!opener){ try{ window.parent.postMessage({type:"matos:installing", installId: currentInstallId, appId: id, name: app.name, icon: app.icon}, location.origin); }catch(_){} }
     try{
-      let r;
-      if(opener){ r=await fetch("/api/v1/store/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); }
-      else { r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:hasVars?collectVars():{}})}); }
+      const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:hasVars?collectVars():{}})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||e.title||("HTTP "+r.status)); }
       result = await r.json().catch(()=>({}));
       prog.done(true); installed=true; refresh();

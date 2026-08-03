@@ -30,8 +30,7 @@ public static class StoreApi
                 env = a.Env,
                 actions = a.Actions.Select(x => new { x.Label, x.Url }),
                 variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required }),
-                handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>(),
-                registered = a.Handlers is { Length: > 0 } && svc.IsRegistered(a.Id)
+                handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>()
             })
         }));
 
@@ -148,15 +147,6 @@ public static class StoreApi
                 .Select(a => new { a.Id, a.Name, a.Icon });
             return Results.Ok(new { ext = e, apps });
         });
-
-        g.MapPost("/register", async (DeleteAppBody b, InstallService svc, CancellationToken ct) =>
-        {
-            var r = await svc.InstallAsync(b.Id, null, ct);   // handler apps -> RegisterAsync
-            return r.Ok ? Results.Ok(new { ok = true }) : Results.Problem(r.Error);
-        }).RequireAuthorization("Admin");
-
-        g.MapPost("/unregister", async (DeleteAppBody b, InstallService svc, CancellationToken ct) =>
-            Results.Ok(new { ok = await svc.UnregisterAsync(b.Id, ct) })).RequireAuthorization("Admin");
 
         g.MapPost("/open-with", async (OpenWithBody b, InstallService svc, HttpRequest req, CancellationToken ct) =>
         {
