@@ -54,7 +54,9 @@ html, body { overflow: hidden; height: 100%; }
 .mat-app.selected .mat-app-label { background: rgba(139,92,246,0.28); border-radius: 4px; padding: 0 3px; }
 /* Rubber-band rectangle */
 .mat-band { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent); background: rgba(139,92,246,0.14); border-radius: 3px; }
-.mat-app-icon img { width: 100%; height: 100%; object-fit: cover; }
+/* Icon images must not capture the pointer or start a native image-drag, or they hijack the
+   desktop's custom icon dragging (turning a drag into repeated launches). */
+.mat-app-icon img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-drag: none; user-select: none; }
 .mat-app-icon svg { width: 34px; height: 34px; }
 .mat-app-icon .mat-emoji { font-size: 34px; line-height: 1; }
 .mat-app-icon.sys { background: var(--accent-grad); border-color: transparent; }

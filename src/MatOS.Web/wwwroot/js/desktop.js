@@ -77,7 +77,7 @@
   }
   function appIconHtml(icon) {
     if (!icon) return null;
-    if (/^(https?:|data:)/i.test(icon)) return `<img src="${escAttr(icon)}" alt="">`;
+    if (/^(https?:|data:)/i.test(icon)) return `<img src="${escAttr(icon)}" alt="" draggable="false">`;
     return `<span class="mat-emoji">${esc(icon)}</span>`;
   }
   function stackApp(s) { const c = (s.containers || []).find(x => x.matosApp); return c ? c.matosApp : null; }
