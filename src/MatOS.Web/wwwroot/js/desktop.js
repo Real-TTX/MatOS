@@ -82,23 +82,35 @@
   }
   function stackApp(s) { const c = (s.containers || []).find(x => x.matosApp); return c ? c.matosApp : null; }
   function stackDef(s) { const a = stackApp(s); return a ? appDefs[a] : null; }
-  function stackTitle(s) {
-    // Per-user custom label wins.
-    const custom = labels["stack:" + s.name]; if (custom) return custom;
+  // Pre-disambiguation title: the stored matos.title (the installer now bakes the instance
+  // number into it, e.g. "MatCMS 2"), else the app-def name, else the raw stack name.
+  function stackBaseTitle(s) {
     const c = (s.containers || []).find(x => x.matosTitle);
-    let base = (c && c.matosTitle) ? c.matosTitle : (stackDef(s)?.name || s.name);
-    // If more than one install of the same store app exists, suffix each with its instance
-    // number so "MatCMS" doesn't appear three times in a row.
+    return (c && c.matosTitle) ? c.matosTitle : (stackDef(s)?.name || s.name);
+  }
+  // What a stack actually shows as its base — a per-user rename wins, so a renamed sibling
+  // ("Blog") is never treated as clashing with "MatCMS".
+  function effectiveBaseTitle(s) { return labels["stack:" + s.name] || stackBaseTitle(s); }
+  // Instance number used only when disambiguating a clash: matos.instance, else a trailing
+  // _<n> in the stack name, else "".
+  function stackInstance(s) {
+    const cc = (s.containers || []).find(x => x.matosInstance);
+    return (cc && cc.matosInstance) || (s.name.match(/_(\d+)$/)?.[1]) || "";
+  }
+  function stackTitle(s) {
+    // Per-user custom label always wins.
+    const custom = labels["stack:" + s.name]; if (custom) return custom;
+    const base = stackBaseTitle(s);
     const app = stackApp(s);
-    if (app) {
-      const sameApp = stackData.filter(x => stackApp(x) === app);
-      if (sameApp.length > 1) {
-        const cc = (s.containers || []).find(x => x.matosInstance);
-        const inst = (cc && cc.matosInstance) || (s.name.match(/_(\d+)$/)?.[1]) || "";
-        if (inst) base = `${base} #${inst}`;
-      }
-    }
-    return base;
+    if (!app) return base;
+    // Disambiguate ONLY on a real clash: another install of the same app whose displayed base
+    // title is byte-for-byte identical. Installs whose stored title already carries a number
+    // ("MatCMS 2") are unique, so they're shown verbatim — never "MatCMS 2 2". Legacy installs
+    // whose stored title is still plain "MatCMS" collide and get " <instance>" appended.
+    const collides = stackData.some(x => x !== s && stackApp(x) === app && effectiveBaseTitle(x) === base);
+    if (!collides) return base;
+    const inst = stackInstance(s);
+    return inst ? `${base} ${inst}` : base;
   }
   // Custom label for any key (folder / system / stack); used by systemApps renderer too.
   function customLabel(key) { return labels[key] || null; }

@@ -166,6 +166,11 @@ public class InstallService
         catch (Exception ex) { _log.LogWarning(ex, "Install (image) of {App} failed", app.Id); Notify(MatOS.Web.Services.NotificationKind.Error, $"Install failed: {app.Name}", ex.Message); return new(false, name, port, ex.Message); }
     }
 
+    // Display title for an install: the first install of an app is just its name, and every
+    // subsequent one gets its instance number appended with a plain space ("MatCMS 2") so the
+    // desktop doesn't show the same name repeated. The user can still rename any icon afterwards.
+    private static string InstanceTitle(string name, int instance) => instance >= 2 ? $"{name} {instance}" : name;
+
     // Installs are internal by default (matcad.enable=false); "Publish" turns on the
     // reverse-proxy route + hostname. matcad.port is kept for when it gets published.
     private Dictionary<string, string> ManagedLabels(AppDef app, int instance, bool ui) => new()
@@ -173,7 +178,7 @@ public class InstallService
         ["matos.managed"] = "true",
         ["matos.app"] = app.Id,
         ["matos.instance"] = instance.ToString(),
-        ["matos.title"] = app.Name,
+        ["matos.title"] = InstanceTitle(app.Name, instance),
         ["matcad.enable"] = "false",
         ["matcad.port"] = app.UiPort.ToString(),
     };
@@ -204,7 +209,7 @@ public class InstallService
             sb.AppendLine("      matos.managed: \"true\"");
             sb.AppendLine($"      matos.app: \"{app.Id}\"");
             sb.AppendLine($"      matos.instance: \"{instance}\"");
-            sb.AppendLine($"      matos.title: \"{YamlStr(app.Name)}\"");
+            sb.AppendLine($"      matos.title: \"{YamlStr(InstanceTitle(app.Name, instance))}\"");
             if (s == ui)
             {
                 sb.AppendLine("      matcad.enable: \"false\"");
@@ -315,7 +320,10 @@ public class InstallService
             sb.AppendLine("      matos.managed: \"true\"");
             sb.AppendLine($"      matos.app: \"{app.Id}\"");
             sb.AppendLine($"      matos.instance: \"{instance}\"");
-            sb.AppendLine($"      matos.title: \"{YamlStr(app.Name)}\"");
+            // Keep the numbered title in sync with the install path (line ~211) — otherwise
+            // publishing/unpublishing a compose app would revert its title to the plain name.
+            int.TryParse(instance, out var instNum);
+            sb.AppendLine($"      matos.title: \"{YamlStr(InstanceTitle(app.Name, instNum))}\"");
             if (s == ui)
             {
                 sb.AppendLine($"      matcad.enable: \"{(enabled ? "true" : "false")}\"");
