@@ -54,9 +54,9 @@ public class InstallService
     {
         var app = _store.Find(appId);
         if (app == null) return Task.FromResult(new InstallResult(false, null, 0, "Unknown app."));
-        // Handler/opener apps don't run a persistent container — installing them registers the
-        // app so it appears in the File Explorer's "Open with" for its file types.
-        if (app.Handlers is { Length: > 0 }) return RegisterAsync(app, ct);
+        // Every app installs the same way — including apps that also declare "Open with" file
+        // handlers. They can be installed any number of times like any other app; the handler
+        // just makes them appear in the File Explorer's "Open with" for their file types.
         return string.Equals(app.Kind, "compose", StringComparison.OrdinalIgnoreCase)
             ? InstallComposeAsync(app, vars ?? new Dictionary<string, string>(), ct)
             : InstallImageAsync(app, vars ?? new Dictionary<string, string>(), ct);

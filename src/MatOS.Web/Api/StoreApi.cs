@@ -137,12 +137,14 @@ public static class StoreApi
             return Results.Ok(new { sources = await src.SyncAllAsync(ct) });
         }).RequireAuthorization("Admin");
 
-        // ---- File handlers ("open with") — only apps the user has installed/registered ----
-        g.MapGet("/handlers", (string? ext, StoreService store, InstallService svc) =>
+        // ---- File handlers ("open with") — every catalog app that declares this file type,
+        // no registration gate. "Open with X" spawns a fresh (ephemeral) container per file, so
+        // any app that can open the type is listed, as many as apply. ----
+        g.MapGet("/handlers", (string? ext, StoreService store) =>
         {
             var e = NormExt(ext ?? "");
             var apps = store.AllApps()
-                .Where(a => a.Handlers != null && a.Handlers.Any(h => h.Extensions.Any(x => NormExt(x) == e)) && svc.IsRegistered(a.Id))
+                .Where(a => a.Handlers != null && a.Handlers.Any(h => h.Extensions.Any(x => NormExt(x) == e)))
                 .Select(a => new { a.Id, a.Name, a.Icon });
             return Results.Ok(new { ext = e, apps });
         });

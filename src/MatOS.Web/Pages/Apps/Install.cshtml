@@ -102,8 +102,10 @@
     let cat; try{ cat=await (await fetch("/api/v1/store/catalog")).json(); }catch(_){ $("wz-load").textContent="Failed to load."; return; }
     app=(cat.apps||[]).find(a=>a.id===id);
     if(!app){ $("wz-load").textContent="App not found."; return; }
-    opener=!!(app.handles && app.handles.length);
-    hasVars=!opener && !!(app.variables && app.variables.length);
+    // Apps that also declare "Open with" handlers install exactly like any other app now — no
+    // special "register" path. (opener stays false so the normal install flow runs.)
+    opener=false;
+    hasVars=!!(app.variables && app.variables.length);
     steps = hasVars ? ["params","review","install","actions"] : ["review","install","actions"];
 
     $("wz-ico").innerHTML = isImg(app.icon)?`<img src="${escA(app.icon)}" alt="">`:esc(app.icon||"📦");

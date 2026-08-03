@@ -232,7 +232,7 @@
     const chips=`${a.source?`<span class="chip src" title="From source: ${escA(a.source)}">${esc(a.source)}</span>`:''}${local?'<span class="chip">custom</span>':''}${(a.kind==='compose'&&!a.builtIn)?'<span class="chip compose">compose</span>':''}${opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:''}`;
     const installBtn=(opener && a.registered)
       ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
-      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">${opener?'Get':'Install'}</button>`;
+      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
     const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}" title="Edit">✎</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}" title="Delete">🗑</button>`:'';
     return `<div class="app-row" data-detail="${escA(a.id)}"><div class="app-ico">${iconHtml(a.icon)}</div>
       <div class="g"><h3>${esc(a.name)}${chips}</h3><div class="tag">${esc(a.tagline||a.description||'')}</div></div>
@@ -274,7 +274,7 @@
     const chips=`<span class="chip">${esc(cat)}</span>${a.source?`<span class="chip src">${esc(a.source)}</span>`:''}${local?'<span class="chip">custom</span>':''}${(a.kind==='compose'&&!a.builtIn)?'<span class="chip compose">compose</span>':''}${opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:''}`;
     const installBtn=(opener&&a.registered)
       ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
-      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">${opener?'Get':'Install'}</button>`;
+      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
     const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:'';
     const actionsCard=(a.actions&&a.actions.length)?`<div class="card"><h3>Actions</h3><div class="detail-actions">${a.actions.map(x=>`<div class="da">${esc(x.label)}<span class="mono">${esc(x.url)}</span></div>`).join("")}</div></div>`:'';
     const rows=[["Category",esc(cat)]];
