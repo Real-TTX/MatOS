@@ -56,6 +56,13 @@ public static class Wallpapers
         new Wallpaper("earth", "Earth"),
         new Wallpaper("yosemite", "Yosemite"),
         new Wallpaper("galaxy", "Galaxy"),
+        // Photorealistic stock photos (Unsplash, free license), bundled locally.
+        new Wallpaper("valley-dawn", "Valley Dawn"),
+        new Wallpaper("highlands", "Highlands"),
+        new Wallpaper("forest-path", "Forest Path"),
+        new Wallpaper("city-avenue", "City Avenue"),
+        new Wallpaper("liquid-marble", "Liquid Marble"),
+        new Wallpaper("bubble-nebula", "Bubble Nebula"),
     };
 
     public static bool IsValid(string key) => All.Any(w => w.Key == key);

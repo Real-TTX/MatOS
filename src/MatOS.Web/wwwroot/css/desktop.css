@@ -32,6 +32,12 @@ html, body { overflow: hidden; height: 100%; }
 .wp-earth      { background-color: #02030a; background-image: url('/img/wallpapers/earth.svg'); }
 .wp-yosemite   { background-color: #ff9e6b; background-image: url('/img/wallpapers/yosemite.svg'); }
 .wp-galaxy     { background-color: #04030d; background-image: url('/img/wallpapers/galaxy.svg'); }
+.wp-valley-dawn   { background-color: #b9c6cf; background-image: url('/img/wallpapers/valley-dawn.jpg'); }
+.wp-highlands     { background-color: #5f7d5a; background-image: url('/img/wallpapers/highlands.jpg'); }
+.wp-forest-path   { background-color: #223018; background-image: url('/img/wallpapers/forest-path.jpg'); }
+.wp-city-avenue   { background-color: #9fabb3; background-image: url('/img/wallpapers/city-avenue.jpg'); }
+.wp-liquid-marble { background-color: #d9a6d8; background-image: url('/img/wallpapers/liquid-marble.jpg'); }
+.wp-bubble-nebula { background-color: #0a1626; background-image: url('/img/wallpapers/bubble-nebula.jpg'); }
 
 /* Wallpaper style/positioning — a companion class on #mat-wallpaper, independent of which
    .wp-* is active. Gradients render slightly differently under "tile"/"center" (repeating at
