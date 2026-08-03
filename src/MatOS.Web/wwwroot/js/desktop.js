@@ -137,7 +137,7 @@
   }
   function openAction(s, ac) {
     const u = resolveActionUrl(s, ac);
-    if (!u) { alert("This action needs the app's web UI to be running."); return; }
+    if (!u) { matDialog.alert("This action needs the app's web UI to be running.", { title: "Not available" }); return; }
     open({ key: "act:" + s.name + ":" + ac.label, title: stackTitle(s) + " · " + ac.label, url: u, width: 1024, height: 680 });
   }
 
@@ -345,7 +345,7 @@
     // Compute current visible name for the prompt default.
     let current = "";
     const el = iconEls.get(key); if (el) current = el.querySelector(".mat-app-label")?.textContent || "";
-    const next = prompt("New name for this icon (leave empty to reset):", current);
+    const next = await matDialog.prompt("New name for this icon (leave empty to reset):", { value: current, title: "Rename" });
     if (next === null) return;
     const label = next.trim();
     if (label) labels[key] = label; else delete labels[key];
@@ -616,7 +616,7 @@
           { label: "Open", action: () => openFolderOverlay(iconEl) },
           { label: "Rename", action: () => openFolderOverlay(iconEl) },
           { sep: true },
-          { label: "Delete folder", danger: true, action: () => { if (confirm("Delete this folder? Its apps go back to the desktop.")) deleteFolder(fid); } },
+          { label: "Delete folder", danger: true, action: async () => { if (await matDialog.confirm("Delete this folder? Its apps go back to the desktop.", { title: "Delete folder", danger: true, okLabel: "Delete" })) deleteFolder(fid); } },
         ]);
         return;
       }
@@ -694,8 +694,11 @@
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
       if (e.key === "Escape" && selectedKeys.size) clearSelection();
       if (e.key === "Delete" && selectedKeys.size) {
-        const ks = [...selectedKeys]; if (!confirm(`Remove ${ks.length} icon${ks.length===1?"":"s"} from the desktop?`)) return;
-        clearSelection(); for (const k of ks) if (!k.startsWith("folder:")) unpin(k);
+        const ks = [...selectedKeys];
+        matDialog.confirm(`Remove ${ks.length} icon${ks.length===1?"":"s"} from the desktop?`, { title: "Remove from desktop", okLabel: "Remove" }).then(ok => {
+          if (!ok) return;
+          clearSelection(); for (const k of ks) if (!k.startsWith("folder:")) unpin(k);
+        });
       }
     });
   }
@@ -1214,7 +1217,7 @@
     });
     document.addEventListener("click", (e) => { if (!notifyPanel.hidden && !notifyPanel.contains(e.target) && e.target !== bellBtn && !bellBtn.contains(e.target)) notifyPanel.hidden = true; });
     document.getElementById("mat-notify-mark-all").addEventListener("click", async () => { try { await fetch("/api/v1/notifications/mark-all-read", { method: "POST" }); } catch (_) {} loadNotifications(); });
-    document.getElementById("mat-notify-clear").addEventListener("click", async () => { if (!confirm("Clear all notifications?")) return; try { await fetch("/api/v1/notifications/clear", { method: "POST" }); } catch (_) {} loadNotifications(); });
+    document.getElementById("mat-notify-clear").addEventListener("click", async () => { if (!await matDialog.confirm("Clear all notifications?", { title: "Clear notifications", okLabel: "Clear" })) return; try { await fetch("/api/v1/notifications/clear", { method: "POST" }); } catch (_) {} loadNotifications(); });
     loadNotifications(); setInterval(loadNotifications, 15000);
   }
 

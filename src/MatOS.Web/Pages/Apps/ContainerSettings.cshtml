@@ -64,7 +64,7 @@ table.vt tbody tr { border-top:1px solid var(--mat-border); }
   }));
 
   async function action(a){
-    if(a==="remove" && !confirm("Remove this container? This cannot be undone.")) return;
+    if(a==="remove" && !await matDialog.confirm("Remove this container? This cannot be undone.",{title:"Remove container",danger:true,okLabel:"Remove"})) return;
     const url = a==="remove" ? `/api/v1/docker/containers/${id}/remove` : `/api/v1/docker/containers/${id}/${a}`;
     try{ await fetch(url,{method:"POST"}); }catch(_){}
     if(a==="remove"){ document.getElementById("cs-name").textContent="(removed)"; return; }

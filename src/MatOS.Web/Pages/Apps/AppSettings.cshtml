@@ -121,7 +121,7 @@
   async function lifecycle(action){ const url=cur.isCompose?`/api/v1/docker/stacks/${encodeURIComponent(cur.project)}/${action}`:`/api/v1/docker/containers/${id}/${action}`;
     try{ await fetch(url,{method:"POST"}); }catch(_){ } setTimeout(load,800); }
   document.getElementById("as-uninstall").addEventListener("click",async()=>{
-    if(!confirm("Uninstall this app? Its container(s) will be removed."))return; const rmVol=confirm("Also delete its data volumes? (OK = delete, Cancel = keep)");
+    if(!await matDialog.confirm("Uninstall this app? Its container(s) will be removed.",{title:"Uninstall",danger:true,okLabel:"Uninstall"}))return; const rmVol=await matDialog.confirm("Also delete this app's data volumes? This cannot be undone.",{title:"Delete data?",danger:true,okLabel:"Delete data",cancelLabel:"Keep data"});
     try{ const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})}); if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||r.status);}
       document.getElementById("as-name").textContent="(uninstalled)"; window.parent.postMessage({type:"matos:refresh"},location.origin);
     }catch(e){ err("Uninstall failed: "+e.message); } });

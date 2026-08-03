@@ -156,7 +156,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
   $("bk-rst-go").addEventListener("click",async()=>{
     const b=state.backups[rstIdx]; if(!b) return;
     const into=$("bk-rst-tgt").value;
-    if(!confirm(`Restore backup INTO "${into}"? Existing files in that volume will be removed first.`)) return;
+    if(!await matDialog.confirm(`Restore backup INTO "${into}"? Existing files in that volume will be removed first.`,{title:"Restore backup",danger:true,okLabel:"Restore"})) return;
     const btn=$("bk-rst-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Restoring…";
     try{ const r=await fetch("/api/v1/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName,restoreInto:into})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
@@ -164,7 +164,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
   });
 
-  async function del(b){ if(!confirm(`Delete backup "${b.fileName}" from ${b.targetVolume}?`)) return;
+  async function del(b){ if(!await matDialog.confirm(`Delete backup "${b.fileName}" from ${b.targetVolume}?`,{title:"Delete backup",danger:true,okLabel:"Delete"})) return;
     try{ await fetch("/api/v1/backups/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})}); load(); }
     catch(e){ flash("Delete failed.",false); } }
 
@@ -252,7 +252,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
       $("bk-sched-dlg").hidden=true; flash("Schedule saved.",true); loadSchedules();
     }catch(e){ flash("Save failed: "+e.message,false); }
   });
-  async function delSched(s){ if(!confirm(`Delete schedule "${s.name}"?`)) return;
+  async function delSched(s){ if(!await matDialog.confirm(`Delete schedule "${s.name}"?`,{title:"Delete schedule",danger:true,okLabel:"Delete"})) return;
     try{ await fetch("/api/v1/backups/schedules/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:s.id})}); loadSchedules(); }
     catch(_){ flash("Delete failed.",false); } }
 

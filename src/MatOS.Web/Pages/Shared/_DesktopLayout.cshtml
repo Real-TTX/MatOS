@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/desktop.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/window.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/dialog.css" asp-append-version="true" />
     @if (!string.IsNullOrWhiteSpace(accent))
     {
         <style>:root{--accent:@accent;--accent-2:@accent;--accent-grad:@accent;--mat-accent:@accent;--mat-accent-2:@accent;}</style>
@@ -152,6 +153,7 @@
         else { html.setAttribute("data-theme-user", stored); }
       })();
     </script>
+    <script src="~/js/dialog.js" asp-append-version="true"></script>
     <script src="~/js/window-manager.js" asp-append-version="true"></script>
     <script src="~/js/desktop.js" asp-append-version="true"></script>
 </body>

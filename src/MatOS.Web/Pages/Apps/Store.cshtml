@@ -175,7 +175,7 @@
 
   // Install always opens the dedicated install wizard window (params → review → install → done).
   function openInstall(id,name){ try{ window.parent.postMessage({type:"matos:open", url:"/apps/install/"+encodeURIComponent(id), key:"install:"+id, title:"Install "+(name||id), width:680, height:620}, location.origin); }catch(_){ location.href="/apps/install/"+encodeURIComponent(id); } }
-  async function unregister(id,name){ if(!confirm(`Uninstall "${name}"? It will no longer appear in "Open with".`))return;
+  async function unregister(id,name){ if(!await matDialog.confirm(`Uninstall "${name}"? It will no longer appear in "Open with".`,{title:"Uninstall",danger:true,okLabel:"Uninstall"}))return;
     try{ const r=await fetch("/api/v1/store/unregister",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); if(!r.ok)throw new Error(r.status); flash("Uninstalled "+name+".",true); loadCatalog(); }catch(e){ flash("Uninstall failed: "+e.message,false); } }
 
   // reload when an install/uninstall happened in another window
@@ -220,14 +220,14 @@
     }catch(e){ flash("Update check failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; }
   }
   async function applyUpdate(id,name,btn){
-    if(!confirm(`Update ${name}? The container will be recreated with the latest image.`)) return;
+    if(!await matDialog.confirm(`Update ${name}? The container will be recreated with the latest image.`,{title:"Update",okLabel:"Update"})) return;
     const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML=`<span class="spin"></span>`;
     try{ const r=await fetch("/api/v1/updates/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({containerId:id})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
       flash(`Updated ${name}.`,true); delete updateStatuses[id]; loadInstalls();
     }catch(e){ flash("Update failed: "+e.message,false); btn.disabled=false; btn.innerHTML=orig; }
   }
-  async function uninstall(id,name){ if(!confirm(`Uninstall ${name}?`))return; const rmVol=confirm("Also delete its data volumes? (OK = delete, Cancel = keep)");
+  async function uninstall(id,name){ if(!await matDialog.confirm(`Uninstall ${name}?`,{title:"Uninstall",danger:true,okLabel:"Uninstall"}))return; const rmVol=await matDialog.confirm("Also delete this app's data volumes? This cannot be undone.",{title:"Delete data?",danger:true,okLabel:"Delete data",cancelLabel:"Keep data"});
     try{ const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,removeVolume:rmVol})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||r.status); } flash("Uninstalled "+name+".",true); loadInstalls();
     }catch(e){ flash("Uninstall failed: "+e.message,false); } }
@@ -278,7 +278,7 @@
       flash("Saved.",true); resetForm(); await loadCatalog(); document.querySelector('#store-tabs .tab[data-tab="catalog"]').click();
     }catch(e){ flash("Save failed: "+e.message,false); }
   });
-  async function delApp(id,name){ if(!confirm(`Delete custom app "${name}"? (Installed instances are not affected.)`))return;
+  async function delApp(id,name){ if(!await matDialog.confirm(`Delete custom app "${name}"? (Installed instances are not affected.)`,{title:"Delete app",danger:true,okLabel:"Delete"}))return;
     try{ await fetch("/api/v1/store/apps/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); flash("Deleted.",true); loadCatalog(); }catch(e){ flash("Delete failed.",false); } }
 
   // ---- remote sources ----
@@ -315,7 +315,7 @@
       await loadSources(); await loadCatalog();
     }catch(e){ flash("Sync failed: "+e.message,false); } finally{ btn.disabled=false; btn.innerHTML=orig; } }
   async function toggleSrc(id,enabled){ try{ await fetch("/api/v1/store/sources/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,enabled})}); loadSources(); loadCatalog(); }catch(e){ flash("Failed.",false); } }
-  async function delSrc(id,name){ if(!confirm(`Remove source "${name}"? Its apps disappear from Discover (installed apps are not affected).`))return;
+  async function delSrc(id,name){ if(!await matDialog.confirm(`Remove source "${name}"? Its apps disappear from Discover (installed apps are not affected).`,{title:"Remove source",danger:true,okLabel:"Remove"}))return;
     try{ await fetch("/api/v1/store/sources/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})}); flash("Removed.",true); loadSources(); loadCatalog(); }catch(e){ flash("Remove failed.",false); } }
 
   loadCatalog();

@@ -383,7 +383,7 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     try{
       const r=await jpost("/api/v1/store/open-with",{appId,volume:cur.volume,path});
       window.parent.postMessage({type:"matos:open", url:r.url, key:"open:"+r.id, title:r.title||("Open — "+name), width:1120, height:760, ephemeralId:r.id}, location.origin);
-    }catch(e){ alert("Open with failed: "+e.message); }
+    }catch(e){ matDialog.alert("Open with failed: "+e.message, {title:"Open with"}); }
     finally{ document.body.style.cursor=""; }
   }
 
@@ -393,25 +393,25 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
 
   // ---- ops ----
   function updateOps(){ const has=!!sel; ["fx-copy","fx-cut","fx-rename","fx-delete"].forEach(id=>document.getElementById(id).disabled=!has); document.getElementById("fx-paste").disabled=!clip; }
-  document.getElementById("fx-newfolder").addEventListener("click",async()=>{ const n=prompt("New folder name:"); if(!n)return; try{ await jpost(api(cur.volume,"mkdir"),{path:join(cur.path,n)}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); } });
+  document.getElementById("fx-newfolder").addEventListener("click",async()=>{ const n=await matDialog.prompt("New folder name:",{title:"New folder"}); if(!n)return; try{ await jpost(api(cur.volume,"mkdir"),{path:join(cur.path,n)}); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert(e.message); } });
   const fileInput=document.getElementById("fx-file");
   document.getElementById("fx-upload").addEventListener("click",()=>{ if(cur.volume) fileInput.click(); });
   fileInput.addEventListener("change",async()=>{ if(!fileInput.files.length)return; const fd=new FormData(); fd.append("path",cur.path); fd.append("file",fileInput.files[0]);
-    try{ const r=await fetch(api(cur.volume,"upload"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); openFolder(cur.volume,cur.path); }catch(e){ alert("Upload failed: "+e.message); }finally{ fileInput.value=""; } });
+    try{ const r=await fetch(api(cur.volume,"upload"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert("Upload failed: "+e.message, {title:"Upload"}); }finally{ fileInput.value=""; } });
   document.getElementById("fx-copy").addEventListener("click",()=>{ if(sel){ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); } });
   document.getElementById("fx-cut").addEventListener("click",()=>{ if(sel){ clip={op:"cut",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); } });
   document.getElementById("fx-paste").addEventListener("click",paste);
   async function paste(){ if(!clip)return; const body={srcVolume:clip.volume,srcPath:clip.path,dstVolume:cur.volume,dstDir:cur.path};
-    try{ await jpost("/api/v1/files/"+(clip.op==="cut"?"move":"copy"),body); if(clip.op==="cut")clip=null; updateOps(); openFolder(cur.volume,cur.path); }catch(e){ alert("Paste failed: "+e.message); } }
+    try{ await jpost("/api/v1/files/"+(clip.op==="cut"?"move":"copy"),body); if(clip.op==="cut")clip=null; updateOps(); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert("Paste failed: "+e.message, {title:"Paste"}); } }
   document.getElementById("fx-rename").addEventListener("click",doRename);
-  async function doRename(){ if(!sel)return; const nn=prompt("Rename to:",sel.name); if(!nn||nn===sel.name)return; try{ await jpost(api(cur.volume,"rename"),{path:sel.path,newName:nn}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); } }
+  async function doRename(){ if(!sel)return; const nn=await matDialog.prompt("Rename to:",{value:sel.name,title:"Rename"}); if(!nn||nn===sel.name)return; try{ await jpost(api(cur.volume,"rename"),{path:sel.path,newName:nn}); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert(e.message); } }
   document.getElementById("fx-delete").addEventListener("click",doDelete);
-  async function doDelete(){ if(!sel)return; if(!confirm(`Delete "${sel.name}"? This cannot be undone.`))return; try{ await jpost(api(cur.volume,"delete"),{path:sel.path}); openFolder(cur.volume,cur.path); }catch(e){ alert(e.message); } }
+  async function doDelete(){ if(!sel)return; if(!await matDialog.confirm(`Delete "${sel.name}"? This cannot be undone.`,{title:"Delete",danger:true,okLabel:"Delete"}))return; try{ await jpost(api(cur.volume,"delete"),{path:sel.path}); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert(e.message); } }
   document.getElementById("fx-export").addEventListener("click",()=>{ if(cur.volume) dl.src=api(cur.volume,"export"); });
   const archiveInput=document.getElementById("fx-archive");
-  document.getElementById("fx-import").addEventListener("click",()=>{ if(cur.volume && confirm("Import a .tar.gz into '"+cur.volume+"'? Existing files may be overwritten.")) archiveInput.click(); });
+  document.getElementById("fx-import").addEventListener("click",async()=>{ if(cur.volume && await matDialog.confirm("Import a .tar.gz into '"+cur.volume+"'? Existing files may be overwritten.",{title:"Import archive",okLabel:"Import"})) archiveInput.click(); });
   archiveInput.addEventListener("change",async()=>{ if(!archiveInput.files.length)return; const fd=new FormData(); fd.append("file",archiveInput.files[0]);
-    try{ const r=await fetch(api(cur.volume,"import"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); alert("Import complete."); openFolder(cur.volume,cur.path); }catch(e){ alert("Import failed: "+e.message); }finally{ archiveInput.value=""; } });
+    try{ const r=await fetch(api(cur.volume,"import"),{method:"POST",body:fd}); if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||r.status); matDialog.alert("Import complete.", {title:"Import"}); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert("Import failed: "+e.message, {title:"Import"}); }finally{ archiveInput.value=""; } });
 
   // ---- context menu ----
   const ctx=document.createElement("div"); ctx.id="fx-ctx"; ctx.hidden=true; document.body.appendChild(ctx);
@@ -458,13 +458,13 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   // ---- editor ----
   let editing=null;
   async function openFile(path){ const vk=viewerKind(path); if(vk){ showViewer(path,vk); return; }
-    let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ alert(e.message); return; }
-    if(d.binary){ if(confirm("Binary file. Download instead?")) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
+    let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ matDialog.alert(e.message); return; }
+    if(d.binary){ if(await matDialog.confirm("Binary file. Download instead?",{title:"Binary file",okLabel:"Download"})) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
     editing=path; document.getElementById("fx-editor-name").textContent=path; document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated) ":"")+fmtBytes(d.size);
     document.getElementById("fx-text").value=d.text||""; document.getElementById("fx-editor").hidden=false; }
   document.getElementById("fx-close").addEventListener("click",()=>{ document.getElementById("fx-editor").hidden=true; editing=null; });
   document.getElementById("fx-save").addEventListener("click",async()=>{ if(editing==null)return; try{ await jpost(api(cur.volume,"write"),{path:editing,content:document.getElementById("fx-text").value});
-    document.getElementById("fx-editor-info").textContent="Saved ✓"; }catch(e){ alert("Save failed: "+e.message); } });
+    document.getElementById("fx-editor-info").textContent="Saved ✓"; }catch(e){ matDialog.alert("Save failed: "+e.message, {title:"Save"}); } });
 
   // ---- volume management (create local / SMB, remove) ----
   const nv=document.getElementById("fx-newvol");
@@ -475,19 +475,19 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     const body={ name:document.getElementById("nv-name").value.trim(), kind:document.getElementById("nv-kind").value,
       server:document.getElementById("nv-server").value.trim(), share:document.getElementById("nv-share").value.trim(),
       username:document.getElementById("nv-user").value.trim(), password:document.getElementById("nv-pass").value, options:document.getElementById("nv-opts").value.trim() };
-    if(!body.name){ alert("Name is required."); return; }
+    if(!body.name){ matDialog.alert("Name is required.", {title:"New volume"}); return; }
     try{ const r=await fetch("/api/v1/files/volumes/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
       nv.hidden=true; document.getElementById("nv-name").value=""; treeData=null; await buildTree(); if(homeEl.classList.contains("active")) showHome();
-    }catch(e){ alert("Create failed: "+e.message); }
+    }catch(e){ matDialog.alert("Create failed: "+e.message, {title:"New volume"}); }
   });
   async function removeVolume(name){
-    if(!confirm(`Remove volume "${name}"? Docker refuses if it is in use.`))return;
+    if(!await matDialog.confirm(`Remove volume "${name}"? Docker refuses if it is in use.`,{title:"Remove volume",danger:true,okLabel:"Remove"}))return;
     try{ const r=await fetch("/api/v1/files/volumes/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||r.status); }
       treeData=null; await buildTree();
       if(cur.volume===name){ showHome(); } else if(homeEl.classList.contains("active")) showHome();
-    }catch(e){ alert("Remove failed: "+e.message); }
+    }catch(e){ matDialog.alert("Remove failed: "+e.message, {title:"Remove volume"}); }
   }
 
   // empty-area context menu (bound once)
