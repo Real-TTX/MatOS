@@ -23,6 +23,12 @@ html, body { overflow: hidden; height: 100%; }
 .wp-beach      { background-color: #134463; background-image: url('/img/wallpapers/beach.svg'); }
 .wp-meadow     { background-color: #325a24; background-image: url('/img/wallpapers/meadow.svg'); }
 .wp-space      { background-color: #04081a; background-image: url('/img/wallpapers/space.svg'); }
+.wp-jungle-temple  { background-color: #f7a03a; background-image: url('/img/wallpapers/jungle-temple.svg'); }
+.wp-desert-dunes   { background-color: #eab873; background-image: url('/img/wallpapers/desert-dunes.svg'); }
+.wp-hero-hills     { background-color: #8fd0ff; background-image: url('/img/wallpapers/hero-hills.svg'); }
+.wp-spooky-manor   { background-color: #241b3a; background-image: url('/img/wallpapers/spooky-manor.svg'); }
+.wp-toon-town      { background-color: #5fb8f0; background-image: url('/img/wallpapers/toon-town.svg'); }
+.wp-monster-meadow { background-color: #7ad0ff; background-image: url('/img/wallpapers/monster-meadow.svg'); }
 
 /* Wallpaper style/positioning — a companion class on #mat-wallpaper, independent of which
    .wp-* is active. Gradients render slightly differently under "tile"/"center" (repeating at

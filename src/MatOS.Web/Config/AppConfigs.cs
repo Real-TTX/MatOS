@@ -45,6 +45,13 @@ public static class Wallpapers
         new Wallpaper("beach", "Beach"),
         new Wallpaper("meadow", "Meadow"),
         new Wallpaper("space", "Deep Space"),
+        // Comic / cel-shaded illustrated scenes (all original artwork).
+        new Wallpaper("jungle-temple", "Jungle Temple"),
+        new Wallpaper("desert-dunes", "Desert Dunes"),
+        new Wallpaper("hero-hills", "Hero's Hills"),
+        new Wallpaper("spooky-manor", "Spooky Manor"),
+        new Wallpaper("toon-town", "Toon Town"),
+        new Wallpaper("monster-meadow", "Monster Meadow"),
     };
 
     public static bool IsValid(string key) => All.Any(w => w.Key == key);
