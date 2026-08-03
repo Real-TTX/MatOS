@@ -6,17 +6,23 @@
     Layout = "_WindowLayout";
 }
 
-<div id="store">
-    <div class="tabbar" id="store-tabs" style="margin-bottom:1rem">
-        <button class="tab active" data-tab="catalog">Discover</button>
-        <button class="tab" data-tab="installed">Installed <span id="store-count" class="fx-muted"></span></button>
-        <button class="tab" data-tab="add">+ Add app</button>
-        <button class="tab" data-tab="sources">Sources</button>
-    </div>
-    <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
-
-    <div id="store-catalog" class="store-grid"></div>
-    <div id="store-installed" style="display:none"></div>
+<div id="store" class="store-shell">
+    <aside class="store-side">
+        <div class="store-brand"><span aria-hidden="true">🏬</span> App Store</div>
+        <div class="store-search-wrap"><span aria-hidden="true">🔎</span><input id="store-search" type="search" placeholder="Search apps…" autocomplete="off" aria-label="Search apps" /></div>
+        <nav class="store-nav" id="store-nav">
+            <button class="store-nav-btn active" data-tab="catalog"><span class="i" aria-hidden="true">✨</span> Discover</button>
+            <button class="store-nav-btn" data-tab="installed"><span class="i" aria-hidden="true">📥</span> Installed <span id="store-count" class="store-nav-count"></span></button>
+            <button class="store-nav-btn" data-tab="add"><span class="i" aria-hidden="true">＋</span> Add app</button>
+            <button class="store-nav-btn" data-tab="sources"><span class="i" aria-hidden="true">🔗</span> Sources</button>
+        </nav>
+        <div class="store-cats-head">Categories</div>
+        <nav class="store-cats" id="store-cats"></nav>
+    </aside>
+    <section class="store-main">
+        <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
+        <div id="store-catalog"></div>
+        <div id="store-installed" style="display:none"></div>
 
     <div id="store-sources" style="display:none">
         <div class="card" style="max-width:760px">
@@ -89,15 +95,48 @@
             </div>
         </div>
     </div>
-
+    </section>
 </div>
 
 @section Head {
 <style>
-.tabbar { display:flex; gap:0.15rem; border-bottom:1px solid var(--mat-border); }
-.tab { border:none; background:transparent; padding:0.5rem 0.85rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
-.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
-.store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:0.9rem; }
+/* ---- Apple-App-Store-style layout: sidebar (search + nav + categories) | main (hero + rows) ---- */
+.store-shell { display:flex; gap:1.4rem; align-items:flex-start; }
+.store-side { flex:0 0 210px; position:sticky; top:0; display:flex; flex-direction:column; gap:0.4rem; }
+.store-brand { display:flex; align-items:center; gap:0.4rem; font-weight:850; font-size:1.1rem; letter-spacing:-0.02em; padding:0.1rem 0.4rem 0.5rem; }
+.store-search-wrap { display:flex; align-items:center; gap:0.4rem; background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:11px; padding:0.45rem 0.65rem; }
+.store-search-wrap input { flex:1; min-width:0; border:none; background:transparent; color:var(--mat-text); font:inherit; outline:none; }
+.store-nav { display:flex; flex-direction:column; gap:0.12rem; margin-top:0.6rem; }
+.store-nav-btn { display:flex; align-items:center; gap:0.55rem; border:none; background:transparent; color:var(--mat-text-muted); font:inherit; font-weight:650; text-align:left; padding:0.5rem 0.65rem; border-radius:10px; cursor:pointer; }
+.store-nav-btn .i { width:1.2rem; text-align:center; }
+.store-nav-btn:hover { background:var(--mat-surface-2); color:var(--mat-text); }
+.store-nav-btn.active { background:var(--mat-accent); color:#fff; }
+.store-nav-count { margin-left:auto; font-size:0.78rem; opacity:0.85; }
+.store-cats-head { margin-top:1rem; padding:0 0.65rem 0.2rem; font-size:0.68rem; font-weight:850; text-transform:uppercase; letter-spacing:0.08em; color:var(--mat-text-muted); }
+.store-cats { display:flex; flex-direction:column; gap:0.05rem; }
+.store-cat-btn { display:flex; align-items:center; gap:0.5rem; border:none; background:transparent; color:var(--mat-text-muted); font:inherit; text-align:left; padding:0.4rem 0.65rem; border-radius:10px; cursor:pointer; font-size:0.9rem; }
+.store-cat-btn:hover { background:var(--mat-surface-2); color:var(--mat-text); }
+.store-cat-btn.active { color:var(--mat-text); font-weight:750; background:var(--mat-surface-2); }
+.store-main { flex:1 1 auto; min-width:0; }
+.store-hero { position:relative; overflow:hidden; border-radius:20px; padding:1.7rem 1.9rem; margin-bottom:1.5rem; background:linear-gradient(120deg, var(--mat-accent) 0%, #c026d3 100%); color:#fff; box-shadow:0 16px 40px color-mix(in srgb, var(--mat-accent), transparent 65%); }
+.store-hero .eyebrow { text-transform:uppercase; letter-spacing:0.14em; font-size:0.7rem; font-weight:850; opacity:0.9; }
+.store-hero h1 { margin:0.35rem 0 0.4rem; font-size:1.9rem; letter-spacing:-0.03em; line-height:1.1; }
+.store-hero p { margin:0; opacity:0.94; max-width:560px; font-size:0.95rem; }
+.store-hero .glyph { position:absolute; right:-0.5rem; top:50%; transform:translateY(-50%); font-size:8rem; opacity:0.18; pointer-events:none; }
+.store-sec-head { display:flex; align-items:baseline; gap:0.6rem; margin:1.5rem 0 0.8rem; }
+.store-sec-head:first-child { margin-top:0; }
+.store-sec-head h2 { margin:0; font-size:1.2rem; letter-spacing:-0.01em; }
+.store-sec-head .cnt { color:var(--mat-text-muted); font-size:0.82rem; }
+.store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:0.7rem; }
+.app-row { display:flex; align-items:center; gap:0.85rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:15px; padding:0.75rem 0.9rem; transition:border-color .12s, background .12s; }
+.app-row:hover { border-color:var(--mat-border-strong); background:var(--mat-surface-2); }
+.app-row > .app-ico { width:58px; height:58px; border-radius:15px; font-size:1.9rem; }
+.app-row .g { flex:1 1 auto; min-width:0; }
+.app-row .g h3 { margin:0; font-size:1rem; display:flex; align-items:center; gap:0.35rem; }
+.app-row .g .tag { color:var(--mat-text-muted); font-size:0.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.app-row .acts { display:flex; align-items:center; gap:0.3rem; flex:0 0 auto; }
+.app-row .acts .ui-btn { border-radius:999px; padding:0.4rem 0.95rem; font-weight:750; }
+@@media (max-width:760px){ .store-shell { flex-direction:column; } .store-side { flex:none; width:100%; position:static; } }
 .app-card { display:flex; flex-direction:column; gap:0.5rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1rem; }
 .app-card .top { display:flex; align-items:center; gap:0.7rem; }
 .app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
@@ -147,37 +186,54 @@
   let catalog=[];
   function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",5000); }
 
-  document.querySelectorAll("#store-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
-    document.querySelectorAll("#store-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+  document.querySelectorAll("#store-nav .store-nav-btn").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll("#store-nav .store-nav-btn").forEach(x=>x.classList.toggle("active",x===t));
     const tab=t.dataset.tab; catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none"; srcEl.style.display=tab==="sources"?"":"none";
+    document.querySelector(".store-cats-head").style.display=tab==="catalog"?"":"none"; document.getElementById("store-cats").style.display=tab==="catalog"?"":"none";
     if(tab==="installed") loadInstalls(); if(tab==="add" && !$("a-id").value) resetForm(); if(tab==="sources") loadSources();
   }));
 
-  async function loadCatalog(){
-    try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
-    catEl.innerHTML=catalog.map(a=>{ const local=!a.builtIn && !a.source; const opener=a.handles && a.handles.length;
-      const badge=a.source?`<span class="chip src" title="From source: ${escA(a.source)}">${esc(a.source)}</span>`:(a.builtIn?'':'<span class="chip">custom</span>');
-      const installBtn = (opener && a.registered)
-        ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
-        : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
-      const editDel = local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:'';
-      // Built-in Store apps are just "Apps" — never surface the internal image-vs-compose
-      // packaging. The "compose" chip and the raw compose meta only make sense for a custom
-      // app the user themselves added as a Compose YAML.
-      const meta = opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`
-        : (a.kind==='compose'
-            ? (a.builtIn ? `<span class="chip">${esc(a.category||'App')}</span>` : `<span class="mono">${a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'}</span>`)
-            : `<span class="mono">${esc(a.image)}</span>`);
-      return `<div class="app-card">
-      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${badge}${(a.kind==='compose' && !a.builtIn)?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
-      <p>${esc(a.description)}</p>
-      <div class="foot">${installBtn}${editDel}<span class="spacer" style="flex:1"></span>${meta}</div>
-    </div>`; }).join("");
+  let search="", activeCat="all";
+  const catOf=a=>a.category||"Other";
+  const matchSearch=a=>{ if(!search)return true; const q=search.toLowerCase(); return [a.name,a.tagline,a.description,a.category].some(v=>(v||"").toLowerCase().includes(q)); };
+  function renderCats(){
+    const cats=[...new Set(catalog.map(catOf))].sort((x,y)=>x.localeCompare(y));
+    const cel=$("store-cats");
+    cel.innerHTML=`<button class="store-cat-btn${activeCat==='all'?' active':''}" data-cat="all">All apps</button>`
+      + cats.map(c=>`<button class="store-cat-btn${activeCat===c?' active':''}" data-cat="${escA(c)}">${esc(c)}</button>`).join("");
+    cel.querySelectorAll("[data-cat]").forEach(b=>b.addEventListener("click",()=>{ activeCat=b.dataset.cat; renderCats(); renderCatalog(); }));
+  }
+  function appRowHtml(a){
+    const opener=a.handles && a.handles.length, local=!a.builtIn && !a.source;
+    const chips=`${a.source?`<span class="chip src" title="From source: ${escA(a.source)}">${esc(a.source)}</span>`:''}${local?'<span class="chip">custom</span>':''}${(a.kind==='compose'&&!a.builtIn)?'<span class="chip compose">compose</span>':''}${opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:''}`;
+    const installBtn=(opener && a.registered)
+      ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
+      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">${opener?'Get':'Install'}</button>`;
+    const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}" title="Edit">✎</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}" title="Delete">🗑</button>`:'';
+    return `<div class="app-row"><div class="app-ico">${iconHtml(a.icon)}</div>
+      <div class="g"><h3>${esc(a.name)}${chips}</h3><div class="tag">${esc(a.tagline||a.description||'')}</div></div>
+      <div class="acts">${editDel}${installBtn}</div></div>`;
+  }
+  const heroHtml=()=>`<div class="store-hero"><span class="glyph" aria-hidden="true">🚀</span><div class="eyebrow">matOS App Store</div><h1>Run anything as an app</h1><p>Install self-hosted apps as containers or stacks — one click, each gets its own volume and lands on your desktop.</p></div>`;
+  function renderCatalog(){
+    const apps=catalog.filter(a=>matchSearch(a) && (activeCat==='all'||catOf(a)===activeCat));
+    let html=(activeCat==='all' && !search)?heroHtml():'';
+    if(!apps.length){ catEl.innerHTML=html+`<div class="fx-muted" style="padding:1.5rem">No apps match.</div>`; return; }
+    const groups={}; for(const a of apps){ (groups[catOf(a)]=groups[catOf(a)]||[]).push(a); }
+    for(const cat of Object.keys(groups).sort((x,y)=>x.localeCompare(y))){
+      html+=`<div class="store-sec-head"><h2>${esc(cat)}</h2><span class="cnt">${groups[cat].length} app${groups[cat].length===1?'':'s'}</span></div><div class="store-grid">${groups[cat].map(appRowHtml).join("")}</div>`;
+    }
+    catEl.innerHTML=html;
     catEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>openInstall(b.dataset.install,b.dataset.name)));
     catEl.querySelectorAll("[data-unreg]").forEach(b=>b.addEventListener("click",()=>unregister(b.dataset.unreg,b.dataset.name)));
     catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
   }
+  async function loadCatalog(){
+    try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
+    renderCats(); renderCatalog();
+  }
+  { const se=$("store-search"); if(se) se.addEventListener("input",()=>{ search=se.value.trim(); renderCatalog(); }); }
 
   // Install always opens the dedicated install wizard window (params → review → install → done).
   function openInstall(id,name){ try{ window.parent.postMessage({type:"matos:open", url:"/apps/install/"+encodeURIComponent(id), key:"install:"+id, title:"Install "+(name||id), width:680, height:620}, location.origin); }catch(_){ location.href="/apps/install/"+encodeURIComponent(id); } }
@@ -259,7 +315,7 @@
 
   function resetForm(){ $("add-title").textContent="Add an app"; ["a-id","a-name","a-image","a-tag","a-desc","a-cat","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value="");
     $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-vars").innerHTML=""; $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); }
-  function editApp(id){ const a=catalog.find(x=>x.id===id); if(!a)return; document.querySelector('#store-tabs .tab[data-tab="add"]').click();
+  function editApp(id){ const a=catalog.find(x=>x.id===id); if(!a)return; document.querySelector('#store-nav .store-nav-btn[data-tab="add"]').click();
     $("add-title").textContent="Edit "+a.name; $("a-id").value=a.id; $("a-name").value=a.name; $("a-cat").value=a.category; $("a-tag").value=a.tagline; $("a-desc").value=a.description; iconInput.value=a.icon; iconPrev.innerHTML=iconHtml(a.icon);
     $("a-kind").value=a.kind||"image"; $("a-kind").dispatchEvent(new Event("change"));
     $("a-image").value=a.image||""; $("a-port").value=a.uiPort||80; $("a-vols").value=(a.volumes||[]).join("\n"); $("a-env").value=Object.entries(a.env||{}).map(([k,v])=>k+"="+v).join("\n");
@@ -281,7 +337,7 @@
     if(kind==="compose" && !app.compose.trim()){ flash("A compose file is required.",false); return; }
     try{ const r=await fetch("/api/v1/store/apps",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(app)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
-      flash("Saved.",true); resetForm(); await loadCatalog(); document.querySelector('#store-tabs .tab[data-tab="catalog"]').click();
+      flash("Saved.",true); resetForm(); await loadCatalog(); document.querySelector('#store-nav .store-nav-btn[data-tab="catalog"]').click();
     }catch(e){ flash("Save failed: "+e.message,false); }
   });
   async function delApp(id,name){ if(!await matDialog.confirm(`Delete custom app "${name}"? (Installed instances are not affected.)`,{title:"Delete app",danger:true,okLabel:"Delete"}))return;
