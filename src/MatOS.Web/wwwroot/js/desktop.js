@@ -644,9 +644,7 @@
         showCtx(e.clientX, e.clientY, items);
       } else {
         showCtx(e.clientX, e.clientY, [
-          { label: "Add apps…", action: openStart },
           { label: "New folder", action: () => createFolderAt(e.clientX, e.clientY) },
-          { label: "Add widget…", action: () => showAddWidgetMenu(e.clientX, e.clientY) },
           { sep: true }, { label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }
         ]);
       }
