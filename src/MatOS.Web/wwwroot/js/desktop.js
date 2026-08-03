@@ -568,26 +568,7 @@
       const it = e.target.closest(".sm-item"); if (!it) return;
       const key = it.dataset.key; if (!key) return;
       e.preventDefault();
-      const items = [{ label: "Open", action: () => { launchEl(it); closeStart(); } }];
-      // Stack-key → include Settings + start/stop/restart + custom actions.
-      if (key.startsWith("stack:")) {
-        const s = stackData.find(x => x.name === key.slice(6));
-        if (s) {
-          items.push({ label: "Settings", action: () => { closeStart(); open({ key: "set:" + s.name, title: "Settings · " + stackTitle(s), url: stackSettingsUrl(s), width: 1024, height: 680 }); } });
-          const def = stackDef(s);
-          if (def && def.actions && def.actions.length) { items.push({ sep: true }); for (const ac of def.actions) items.push({ label: ac.label, action: () => { closeStart(); openAction(s, ac); } }); }
-          items.push({ sep: true });
-          if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }); items.push({ label: "Restart", action: () => stackAction(s.name, "restart") }); }
-          if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
-        }
-      }
-      items.push({ sep: true }, pins.has(key)
-        ? { label: "Remove from desktop", action: () => unpin(key) }
-        : { label: "Add to desktop", action: () => pin(key) });
-      items.push(isPinnedToTaskbar(key)
-        ? { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) }
-        : { label: "Pin to taskbar", action: () => pinToTaskbar(key) });
-      showCtx(e.clientX, e.clientY, items);
+      showCtx(e.clientX, e.clientY, appMenuItems(key, { after: closeStart }));
     });
   }
 
@@ -605,6 +586,48 @@
     ctx.style.left = Math.min(x, window.innerWidth - ctx.offsetWidth - 8) + "px";
     ctx.style.top = Math.min(y, window.innerHeight - ctx.offsetHeight - 8) + "px";
   }
+
+  // ---- One right-click menu for an app/stack key, used EVERYWHERE (desktop icon, start
+  // menu, folder overlay, taskbar). The core app actions are always identical; `where`
+  // only supplies the location-specific extras, so there is a single source of truth. ----
+  function stackForKey(key) { return (key && key.startsWith("stack:")) ? stackData.find(x => x.name === key.slice(6)) : null; }
+  function openStackSettings(s) { open({ key: "set:" + s.name, title: "Settings · " + stackTitle(s), url: stackSettingsUrl(s), width: 1024, height: 680 }); }
+  function appMenuItems(key, where) {
+    where = where || {};
+    const after = where.after || (() => {});
+    const s = stackForKey(key);
+    const isOpen = !!(window.MatWM && window.MatWM.isOpen(key));
+    const items = [];
+    items.push({ label: isOpen ? "Bring to front" : "Open", action: () => { launchByKey(key); after(); } });
+    if (s) {
+      items.push({ label: "Settings", action: () => { after(); openStackSettings(s); } });
+      const def = stackDef(s);
+      if (def && def.actions && def.actions.length) { items.push({ sep: true }); for (const ac of def.actions) items.push({ label: ac.label, action: () => { after(); openAction(s, ac); } }); }
+      items.push({ sep: true });
+      if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }, { label: "Restart", action: () => stackAction(s.name, "restart") }); }
+      if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
+    } else if (isOpen) {
+      items.push({ label: "Reset app", action: () => window.MatWM.reset(key) });
+    }
+    items.push({ sep: true }, { label: "Rename", action: () => renameIcon(key) });
+    if (where.inFolder) {
+      items.push({ label: "Remove from folder", danger: true, action: where.onRemoveFromFolder });
+    } else {
+      items.push({ sep: true });
+      items.push({ label: "New folder from this app", action: () => moveKeyToFolder(key, null) });
+      for (const f of folders) if (!f.keys.includes(key)) items.push({ label: 'Move to "' + f.name + '"', action: () => moveKeyToFolder(key, f.id) });
+      items.push({ sep: true });
+      items.push(pins.has(key)
+        ? { label: "Remove from desktop", danger: true, action: () => { unpin(key); after(); } }
+        : { label: "Add to desktop", action: () => { pin(key); after(); } });
+      items.push(isPinnedToTaskbar(key)
+        ? { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) }
+        : { label: "Pin to taskbar", action: () => pinToTaskbar(key) });
+    }
+    if (isOpen) items.push({ sep: true }, { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) });
+    return items;
+  }
+
   if (layer) {
     layer.addEventListener("contextmenu", (e) => {
       e.preventDefault();
@@ -620,26 +643,8 @@
         ]);
         return;
       }
-      if (iconEl) {
-        const key = iconEl.dataset.key;
-        const s = stackData.find(x => x.name === iconEl.dataset.stackName);
-        const items = [{ label: "Open", action: () => launchEl(iconEl) }];
-        if (s) {
-          items.push({ label: "Settings", action: () => open({ key: "set:" + s.name, title: "Settings · " + stackTitle(s), url: stackSettingsUrl(s), width: 1024, height: 680 }) });
-          const def = stackDef(s);
-          if (def && def.actions && def.actions.length) { items.push({ sep: true }); for (const ac of def.actions) items.push({ label: ac.label, action: () => openAction(s, ac) }); }
-          items.push({ sep: true });
-          if (s.anyRunning) { items.push({ label: "Stop", action: () => stackAction(s.name, "stop") }); items.push({ label: "Restart", action: () => stackAction(s.name, "restart") }); }
-          if (!s.allRunning) items.push({ label: "Start", action: () => stackAction(s.name, "start") });
-        }
-        // Move to folder (any icon — system or store)
-        items.push({ sep: true });
-        items.push({ label: "New folder from this app", action: () => moveKeyToFolder(key, null) });
-        for (const f of folders) if (!f.keys.includes(key)) items.push({ label: 'Move to "' + f.name + '"', action: () => moveKeyToFolder(key, f.id) });
-        items.push({ sep: true }, { label: "Rename", action: () => renameIcon(key) }, { label: "Remove from desktop", action: () => unpin(key) });
-        items.push(isPinnedToTaskbar(key)
-          ? { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) }
-          : { label: "Pin to taskbar", action: () => pinToTaskbar(key) });
+      if (iconEl && iconEl.dataset.key) {
+        const items = appMenuItems(iconEl.dataset.key, {});
         items.push({ label: "Auto-arrange icons", action: autoArrange });
         showCtx(e.clientX, e.clientY, items);
       } else {
@@ -715,28 +720,10 @@
     if (e.target.closest("#mat-start-btn, #mat-tb-search, #mat-bell, #mat-user-btn, #mat-user-menu, #mat-show-desktop, .mat-clock")) return;
     e.preventDefault();
     const t = e.target.closest(".mat-task");
-    if (t && t.dataset.winKey) {
-      // A regular open-window button (not pinned — pinned+open buttons live under data-key below).
-      const key = t.dataset.winKey;
-      showCtx(e.clientX, e.clientY, [
-        { label: "Reset app", action: () => window.MatWM.reset(key) },
-        { sep: true },
-        { label: "Pin to taskbar", action: () => pinToTaskbar(key) },
-        { sep: true },
-        { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) },
-      ]);
-      return;
-    }
-    if (t && t.dataset.key) {
-      // A pinned taskbar button — may or may not currently be open.
-      const key = t.dataset.key;
-      const open = window.MatWM && window.MatWM.isOpen(key);
-      const items = [];
-      if (!open) items.push({ label: "Open", action: () => launchByKey(key) });
-      else { items.push({ label: "Reset app", action: () => window.MatWM.reset(key) }); }
-      items.push({ sep: true }, { label: "Unpin from taskbar", action: () => unpinFromTaskbar(key) });
-      if (open) items.push({ sep: true }, { label: "Close", danger: true, action: () => window.MatWM.closeKey(key) });
-      showCtx(e.clientX, e.clientY, items);
+    // Both a running-window button (data-winKey) and a pinned button (data-key) are just an
+    // app key → the same unified menu as everywhere else.
+    if (t && (t.dataset.winKey || t.dataset.key)) {
+      showCtx(e.clientX, e.clientY, appMenuItems(t.dataset.winKey || t.dataset.key, {}));
       return;
     }
     // Empty taskbar → Win-11-style quick menu (Task Manager / Files / Network / Backups / Settings / Show desktop).
@@ -765,7 +752,10 @@
         btn.innerHTML = `<span class="mat-folder-item-ico">${html}</span><span class="mat-folder-item-lbl">${esc(labelForKey(k))}</span>`;
         btn.addEventListener("click", (e) => { if (btn.dataset.suppressClick) { delete btn.dataset.suppressClick; return; } launchByKey(k); closeIt(); });
         btn.addEventListener("contextmenu", (e) => { e.preventDefault();
-          showCtx(e.clientX, e.clientY, [{ label: "Remove from folder", danger:true, action: () => removeFromFolder(f.id, k).then(() => renderGrid()) }]); });
+          showCtx(e.clientX, e.clientY, appMenuItems(k, {
+            inFolder: true, after: closeIt,
+            onRemoveFromFolder: () => removeFromFolder(f.id, k).then(() => renderGrid())
+          })); });
         // Drag an item out of the folder onto the desktop
         btn.addEventListener("pointerdown", (e) => {
           if (e.pointerType === "mouse" && e.button !== 0) return;
