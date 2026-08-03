@@ -104,7 +104,10 @@
     makeResizable(w);
 
     const bar = el.querySelector(".mat-titlebar");
-    bar.addEventListener("dblclick", (e) => { if (!e.target.closest(".mat-win-btn")) toggleMax(w); });
+    bar.addEventListener("dblclick", (e) => { if (!e.target.closest(".mat-win-btn") && !e.target.closest(".mat-win-icon")) toggleMax(w); });
+    // Double-clicking the window icon (far left) closes the window, like the Windows system menu.
+    const winIcon = el.querySelector(".mat-win-icon");
+    if (winIcon) winIcon.addEventListener("dblclick", (e) => { e.stopPropagation(); close(w); });
 
     bringToFront(w);
     syncDock();

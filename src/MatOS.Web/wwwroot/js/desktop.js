@@ -616,9 +616,6 @@
       items.push({ label: "Remove from folder", danger: true, action: where.onRemoveFromFolder });
     } else {
       items.push({ sep: true });
-      items.push({ label: "New folder from this app", action: () => moveKeyToFolder(key, null) });
-      for (const f of folders) if (!f.keys.includes(key)) items.push({ label: 'Move to "' + f.name + '"', action: () => moveKeyToFolder(key, f.id) });
-      items.push({ sep: true });
       items.push(pins.has(key)
         ? { label: "Remove from desktop", danger: true, action: () => { unpin(key); after(); } }
         : { label: "Add to desktop", action: () => { pin(key); after(); } });
