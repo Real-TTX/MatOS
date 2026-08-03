@@ -233,6 +233,77 @@ volumes:
   data:
 ", "app", 8080, Ico("xwiki")),
 
+        // ---- Mat* apps (Real-TTX). matdo/matmon pull from GHCR; matlan/matstat use locally
+        //      built images (like matcms), so they install where that image is present. ----
+        Compose("matdo", "Matdo", "Self-hosted to-dos",
+            "Matdo task/planning app with a bundled PostgreSQL database. First visit creates the admin account; set the public base URL in settings once you publish it.",
+            "Productivity", @"services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=matdo
+      - POSTGRES_PASSWORD=matdo
+      - POSTGRES_DB=matdo
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: unless-stopped
+  app:
+    image: ghcr.io/real-ttx/matdo:latest
+    environment:
+      - ConnectionStrings__Postgres=Host=db;Port=5432;Database=matdo;Username=matdo;Password=matdo
+    volumes:
+      - data:/data
+    depends_on:
+      - db
+    restart: unless-stopped
+volumes:
+  db:
+  data:
+", "app", 6006, "✅"),
+
+        Image("matmon", "Matmon", "Monitoring & status",
+            "The Matmon monitoring/status dashboard (primary node). Single container using local JSON storage — first visit opens a setup wizard to create the admin account.",
+            "Utilities", "ghcr.io/real-ttx/matmon:latest", 8099, "📊",
+            new[] { "/app/data", "/app/backups", "/app/keys" },
+            new Dictionary<string, string> { ["ASPNETCORE_URLS"] = "http://+:8099", ["Matmon__Mode"] = "Primary" },
+            Array.Empty<AppAction>()),
+
+        Image("matlan", "Matlan", "LAN tool",
+            "Matlan runs as a single container with its own data + template volumes. Note: this uses a locally built image (matlan:local), so install it where that image exists.",
+            "Utilities", "matlan:local", 8080, "🖧",
+            new[] { "/app/data", "/app/template" },
+            new Dictionary<string, string> { ["ASPNETCORE_ENVIRONMENT"] = "Production", ["Storage__DataPath"] = "/app/data", ["Storage__TemplatePath"] = "/app/template" },
+            Array.Empty<AppAction>()),
+
+        Compose("matstat", "Matstat", "Statistics dashboard",
+            "Matstat with a bundled Microsoft SQL Server database. Note: the app uses a locally built image (matstat:local) and SQL Server is a large (~1.5 GB) download that needs a couple of GB of RAM.",
+            "Utilities", @"services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Matstat_2026!
+      - MSSQL_PID=Developer
+    volumes:
+      - db:/var/opt/mssql
+    restart: unless-stopped
+  app:
+    image: matstat:local
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - MATSTAT_DATA_DIR=/app/data
+      - MATSTAT_ADMIN_PASSWORD=Admin_2026!
+      - ConnectionStrings__MatstatDb=Server=db,1433;Database=Matstat;User Id=sa;Password=Matstat_2026!;TrustServerCertificate=True;Encrypt=False
+    volumes:
+      - data:/app/data
+    depends_on:
+      - db
+    restart: unless-stopped
+volumes:
+  db:
+  data:
+", "app", 8080, "📈"),
+
         // ---- LinuxServer.io desktop apps in the browser (KasmVNC) ----
         Compose("brave", "Brave", "Brave browser in your browser",
             "The Brave web browser running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
