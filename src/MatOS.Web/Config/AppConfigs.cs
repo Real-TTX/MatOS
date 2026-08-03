@@ -65,6 +65,14 @@ public static class Wallpapers
         new Wallpaper("bubble-nebula", "Bubble Nebula"),
     };
 
+    /// <summary>The small "sticky" set always shown up-front in the Settings picker; the rest of
+    /// <see cref="All"/> lives behind the "More wallpapers" dialog. A deliberate spread across the
+    /// styles (gradient / illustrated / real photo) so the default row already feels varied.</summary>
+    public static readonly IReadOnlyList<string> Defaults = new[]
+    {
+        "aurora", "dusk", "ocean", "mountains", "valley-dawn", "bubble-nebula",
+    };
+
     public static bool IsValid(string key) => All.Any(w => w.Key == key);
     public static string Normalize(string? key) => key is not null && IsValid(key) ? key : "aurora";
 }

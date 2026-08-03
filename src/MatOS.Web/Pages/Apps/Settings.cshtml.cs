@@ -35,6 +35,7 @@ public class SettingsModel : PageModel
     [BindProperty] public string Network { get; set; } = "";
 
     public IReadOnlyList<Wallpapers.Wallpaper> AllWallpapers => Wallpapers.All;
+    public IReadOnlyList<string> DefaultWallpapers => Wallpapers.Defaults;
     public bool Saved => Request.Query.ContainsKey("saved");
 
     public string Version => BuildInfo.Version;

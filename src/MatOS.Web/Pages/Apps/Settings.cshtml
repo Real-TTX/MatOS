@@ -44,15 +44,22 @@
                             <button type="button" data-v="tile" class="@(Model.WallpaperStyle=="tile"?"active":"")" title="Repeat at actual size">Tile</button>
                         </div>
                     </div>
-                    <div class="wp-picker" style="padding:0.9rem 1rem 1rem">
-                        @foreach (var w in Model.AllWallpapers)
-                        {
-                            <label class="wp-tile @(Model.Wallpaper == w.Key ? "selected" : "")" data-key="@w.Key">
-                                <input type="radio" name="Wallpaper" value="@w.Key" @(Model.Wallpaper == w.Key ? "checked" : "") hidden />
-                                <span class="swatch wp-@w.Key wps-fill"><span class="wp-check">✓</span></span>
-                                <span class="nm">@w.Name</span>
-                            </label>
-                        }
+                    <div class="wp-picker" id="wp-picker" style="padding:0.9rem 1rem 0.4rem"></div>
+                    <div style="padding:0 1rem 1rem">
+                        <button type="button" class="ui-btn" id="wp-more">More wallpapers…</button>
+                    </div>
+                </div>
+                @* Data for the JS-driven picker: the full catalogue + the sticky default set. *@
+                <script type="application/json" id="wp-data">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new {
+                    all = Model.AllWallpapers.Select(w => new { key = w.Key, name = w.Name }),
+                    sticky = Model.DefaultWallpapers,
+                    current = Model.Wallpaper,
+                }))</script>
+                @* "More wallpapers" dialog — lists every wallpaper; picking one pins it to the front of the picker. *@
+                <div class="wp-modal" id="wp-modal" hidden>
+                    <div class="wp-modal-card">
+                        <div class="wp-modal-head"><span>All wallpapers</span><button type="button" class="wp-modal-x" id="wp-modal-close" title="Close">✕</button></div>
+                        <div class="wp-picker wp-modal-grid" id="wp-all"></div>
                     </div>
                 </div>
                 <div class="mset-group pad">
@@ -194,6 +201,14 @@
 .wp-tile:hover .swatch { transform:scale(1.02); }
 .wp-check { position:absolute; top:0.4rem; right:0.4rem; width:22px; height:22px; border-radius:50%; background:var(--mat-accent); color:#fff; display:none; align-items:center; justify-content:center; font-size:0.75rem; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,.4); }
 .wp-tile.selected .wp-check { display:flex; }
+/* "More wallpapers" dialog */
+.wp-modal { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); backdrop-filter:blur(4px); }
+.wp-modal[hidden] { display:none; }
+.wp-modal-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:16px; width:min(900px,92vw); max-height:82vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,.55); overflow:hidden; }
+.wp-modal-head { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.2rem; font-weight:700; font-size:1.05rem; color:var(--mat-text); border-bottom:1px solid var(--mat-border); }
+.wp-modal-x { background:none; border:none; color:var(--mat-text-muted); font-size:1.05rem; cursor:pointer; line-height:1; padding:0.2rem 0.4rem; border-radius:8px; }
+.wp-modal-x:hover { color:var(--mat-text); background:var(--mat-border); }
+.wp-modal-grid { overflow:auto; padding:1.1rem 1.2rem 1.3rem; margin:0; }
 /* Accent colour picker */
 .ac-picker { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; }
 .ac-swatch { width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.3); position:relative; }
@@ -224,8 +239,30 @@
   // ---- Personal Appearance + Taskbar prefs: server already rendered the correct initial state
   // (no flash-of-default). Every control below both live-previews on the desktop AND persists
   // the FULL current state in one shot, so toggling one control never blanks another.
-  const wpPicker = document.querySelector(".wp-picker");
+  const wpPicker = document.getElementById("wp-picker");
   const thPicker = document.querySelector(".th-picker");
+  // Wallpaper picker: only a sticky handful is shown; the rest live behind "More wallpapers".
+  // Picking a non-sticky one pins it to the front of the picker (and it's replaced there when a
+  // different non-sticky one is chosen), matching the desktop's single "extra" slot.
+  const wpData = (() => { try { return JSON.parse(document.getElementById("wp-data").textContent); } catch(_) { return {all:[],sticky:[],current:"aurora"}; } })();
+  let wpSel = wpData.current || "aurora";
+  const wpByKey = k => wpData.all.find(w => w.key === k);
+  function wpTile(w, sel){
+    return `<label class="wp-tile${sel?" selected":""}" data-key="${w.key}">`
+      + `<input type="radio" name="Wallpaper" value="${w.key}"${sel?" checked":""} hidden />`
+      + `<span class="swatch wp-${w.key} wps-fill"><span class="wp-check">✓</span></span>`
+      + `<span class="nm">${w.name}</span></label>`;
+  }
+  function renderWpPicker(){
+    const keys = wpData.sticky.slice();
+    if (wpSel && !keys.includes(wpSel)) keys.unshift(wpSel); // pin the current non-sticky pick to the front
+    wpPicker.innerHTML = keys.map(k => wpByKey(k)).filter(Boolean).map(w => wpTile(w, w.key === wpSel)).join("");
+  }
+  function renderWpModal(){
+    const grid = document.getElementById("wp-all");
+    if (grid) grid.innerHTML = wpData.all.map(w => wpTile(w, w.key === wpSel)).join("");
+  }
+  if (wpPicker) renderWpPicker();
   const wpStyleSeg = document.getElementById("wp-style");
   const acPicker = document.getElementById("ac-picker");
   const acCustom = document.getElementById("ac-custom-input");
@@ -233,7 +270,7 @@
 
   function segValue(seg){ const b=seg && seg.querySelector("button.active"); return b?b.dataset.v:(seg?seg.querySelector("button").dataset.v:""); }
   function segSelect(seg, v){ if(seg) seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.v===v)); }
-  function currentWallpaper(){ const t=wpPicker && wpPicker.querySelector(".wp-tile.selected"); return t?t.dataset.key:"aurora"; }
+  function currentWallpaper(){ return wpSel || "aurora"; }
   function currentTheme(){ const t=thPicker && thPicker.querySelector(".th-tile.selected"); return t?t.dataset.key:"auto"; }
   function currentAccent(){ const s=acPicker && acPicker.querySelector(".ac-swatch.selected"); return s?s.dataset.v:(acPicker && acPicker.dataset.customActive==="1" ? acCustom.value : ""); }
 
@@ -263,8 +300,22 @@
     fetch("/api/v1/desktop/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).catch(()=>{});
   }
 
-  if(wpPicker) wpPicker.addEventListener("click", e=>{ const t=e.target.closest(".wp-tile"); if(!t) return;
-    wpPicker.querySelectorAll(".wp-tile").forEach(x=>x.classList.toggle("selected", x===t)); saveAll(); });
+  function pickWallpaper(key){ if(!key || !wpByKey(key)) return; wpSel = key; renderWpPicker(); saveAll(); }
+  if(wpPicker) wpPicker.addEventListener("click", e=>{ const t=e.target.closest(".wp-tile"); if(!t) return; pickWallpaper(t.dataset.key); });
+  // "More wallpapers" dialog
+  const wpModal = document.getElementById("wp-modal");
+  const wpMore = document.getElementById("wp-more");
+  function openWpModal(){ if(!wpModal) return; renderWpModal(); wpModal.hidden = false; }
+  function closeWpModal(){ if(wpModal) wpModal.hidden = true; }
+  if(wpMore) wpMore.addEventListener("click", openWpModal);
+  const wpModalClose = document.getElementById("wp-modal-close");
+  if(wpModalClose) wpModalClose.addEventListener("click", closeWpModal);
+  if(wpModal){
+    wpModal.addEventListener("click", e=>{ if(e.target === wpModal) closeWpModal(); }); // backdrop click
+    const grid = document.getElementById("wp-all");
+    if(grid) grid.addEventListener("click", e=>{ const t=e.target.closest(".wp-tile"); if(!t) return; pickWallpaper(t.dataset.key); closeWpModal(); });
+  }
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape" && wpModal && !wpModal.hidden) closeWpModal(); });
   if(wpStyleSeg) wpStyleSeg.addEventListener("click", e=>{ const b=e.target.closest("button"); if(!b) return; segSelect(wpStyleSeg,b.dataset.v); saveAll(); });
   if(thPicker) thPicker.addEventListener("click", e=>{ const t=e.target.closest(".th-tile"); if(!t) return;
     thPicker.querySelectorAll(".th-tile").forEach(x=>x.classList.toggle("selected", x===t));
