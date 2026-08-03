@@ -80,7 +80,7 @@
     cur={id,appId,project,isCompose,def,title:c.matosTitle||(def&&def.name)||c.name};
     document.getElementById("as-ico").innerHTML=iconHtml(def?def.icon:"📦");
     document.getElementById("as-name").textContent=cur.title;
-    document.getElementById("as-sub").textContent=(isCompose?"Compose stack · "+project:"Single container")+" · "+c.image;
+    document.getElementById("as-sub").textContent=(isCompose?"Compose stack · "+project:"Stack")+" · "+c.image;
     const st=document.getElementById("as-state"); st.textContent=c.running?"running":c.state; st.className="pill "+(c.running?"on":"off");
     document.title="App · "+cur.title;
 
