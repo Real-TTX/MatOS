@@ -137,6 +137,102 @@ volumes:
                 },
             }),
 
+        Image("nextcloud", "Nextcloud", "Your own cloud",
+            "Self-hosted files, calendar, contacts and more. Runs as a single container using its built-in SQLite database — the first visit opens a setup wizard where you create the admin account (pick SQLite to keep it one container).",
+            "Productivity", "nextcloud:latest", 80, Ico("nextcloud"),
+            new[] { "/var/www/html" }, new Dictionary<string, string>(),
+            Array.Empty<AppAction>()),
+
+        Compose("wordpress", "WordPress", "Blogging & CMS",
+            "The world's most popular website & blog platform, with its MariaDB database bundled in. The first visit runs WordPress's famous 5-minute install — just pick a site title and create the admin account.",
+            "Web", @"services:
+  db:
+    image: mariadb:11
+    environment:
+      - MARIADB_ROOT_PASSWORD=wordpress
+      - MARIADB_DATABASE=wordpress
+      - MARIADB_USER=wordpress
+      - MARIADB_PASSWORD=wordpress
+    volumes:
+      - db:/var/lib/mysql
+    restart: unless-stopped
+  app:
+    image: wordpress:latest
+    environment:
+      - WORDPRESS_DB_HOST=db
+      - WORDPRESS_DB_USER=wordpress
+      - WORDPRESS_DB_PASSWORD=wordpress
+      - WORDPRESS_DB_NAME=wordpress
+    volumes:
+      - html:/var/www/html
+    depends_on:
+      - db
+    restart: unless-stopped
+volumes:
+  db:
+  html:
+", "app", 80, Ico("wordpress"), new[] { new AppAction("Admin", "/wp-admin") }),
+
+        Compose("joomla", "Joomla", "CMS platform",
+            "A flexible open-source content management system, with its MariaDB database bundled in. The first visit runs Joomla's web installer to set up the site and admin account.",
+            "Web", @"services:
+  db:
+    image: mariadb:11
+    environment:
+      - MARIADB_ROOT_PASSWORD=joomla
+      - MARIADB_DATABASE=joomla
+      - MARIADB_USER=joomla
+      - MARIADB_PASSWORD=joomla
+    volumes:
+      - db:/var/lib/mysql
+    restart: unless-stopped
+  app:
+    image: joomla:latest
+    environment:
+      - JOOMLA_DB_HOST=db
+      - JOOMLA_DB_USER=joomla
+      - JOOMLA_DB_PASSWORD=joomla
+      - JOOMLA_DB_NAME=joomla
+    volumes:
+      - html:/var/www/html
+    depends_on:
+      - db
+    restart: unless-stopped
+volumes:
+  db:
+  html:
+", "app", 80, Ico("joomla")),
+
+        Compose("xwiki", "XWiki", "Advanced wiki",
+            "A powerful open-source wiki and app-development platform, with a PostgreSQL database bundled in. First start takes a minute while it initialises; then finish the setup wizard in the browser.",
+            "Productivity", @"services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=xwiki
+      - POSTGRES_PASSWORD=xwiki
+      - POSTGRES_DB=xwiki
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: unless-stopped
+  app:
+    image: xwiki:lts-postgres-tomcat
+    environment:
+      - DB_USER=xwiki
+      - DB_PASSWORD=xwiki
+      - DB_DATABASE=xwiki
+      - DB_HOST=db
+    volumes:
+      - data:/usr/local/xwiki
+    depends_on:
+      - db
+    restart: unless-stopped
+volumes:
+  db:
+  data:
+", "app", 8080, Ico("xwiki")),
+
         // ---- LinuxServer.io desktop apps in the browser (KasmVNC) ----
         Compose("brave", "Brave", "Brave browser in your browser",
             "The Brave web browser running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
