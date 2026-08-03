@@ -41,6 +41,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--mat-accent-2); }
+
+/* Scrollbars — subtle, themed to the window content (light + dark). */
+* { scrollbar-width: thin; scrollbar-color: var(--mat-border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--mat-border-strong); border-radius: 8px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--mat-text-muted); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
 .win-wrap { padding: 1.25rem 1.5rem 2.5rem; max-width: 1100px; margin: 0 auto; }
 .win-header { margin-bottom: 1.1rem; }
 .win-header h1 { margin: 0 0 0.2rem; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
