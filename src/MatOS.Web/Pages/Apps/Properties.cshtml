@@ -1,0 +1,265 @@
+@page "/apps/properties"
+@model MatOS.Web.Pages.Apps.PropertiesModel
+@{
+    ViewData["Title"] = "Properties";
+    Layout = "_WindowLayout";
+}
+
+<div id="pr">
+    <div class="pr-head">
+        <span class="pr-ico" id="pr-ico">📦</span>
+        <div style="flex:1 1 auto;min-width:0">
+            <h1 id="pr-name" style="margin:0;font-size:1.2rem">Loading…</h1>
+            <div class="mono fx-muted" id="pr-sub" style="font-size:0.8rem"></div>
+        </div>
+        <span id="pr-state" class="pill"></span>
+    </div>
+    <div id="pr-err" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
+    <div class="tabbar" id="pr-tabs"></div>
+    <div id="pr-panes"></div>
+</div>
+
+@section Head {
+<style>
+.pr-head { display:flex; align-items:center; gap:0.9rem; margin-bottom:1rem; }
+.pr-ico { width:56px; height:56px; border-radius:14px; display:grid; place-items:center; font-size:1.9rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
+.pr-ico img { width:100%; height:100%; object-fit:cover; }
+.tabbar { display:flex; gap:0.2rem; border-bottom:1px solid var(--mat-border); margin-bottom:1rem; flex-wrap:wrap; }
+.tab { border:none; background:transparent; padding:0.55rem 0.9rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
+.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+.pr-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1rem 1.1rem; margin-bottom:1rem; }
+.pr-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.pr-pub-in { display:flex; gap:0.4rem; align-items:center; } .pr-pub-in input { width:230px; }
+.kv { display:grid; grid-template-columns:170px 1fr; gap:0.4rem 1rem; } .kv dt { color:var(--mat-text-muted); font-size:0.85rem; } .kv dd { margin:0; }
+table.vt { width:100%; border-collapse:collapse; } table.vt th, table.vt td { text-align:left; padding:0.55rem 0.9rem; }
+table.vt thead th { color:var(--mat-text-muted); font-size:0.8rem; } table.vt tbody tr { border-top:1px solid var(--mat-border); }
+.logbox2 { background:#080b14; color:#d7def0; border:1px solid var(--mat-border); border-radius:10px; padding:0.8rem 0.9rem; height:320px; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.8rem; white-space:pre-wrap; line-height:1.45; }
+.linkbtn { background:none; border:none; color:var(--mat-accent); cursor:pointer; font:inherit; padding:0; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const q=new URLSearchParams(location.search);
+  const type=(q.get("type")||"container").toLowerCase();
+  const qid=q.get("id")||""; const qname=q.get("name")||"";
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const isImg=s=>/^(https?:|data:)/i.test(s||"");
+  const iconHtml=ic=>isImg(ic)?`<img src="${escA(ic)}">`:`<span>${esc(ic||"📦")}</span>`;
+  const fmtBytes=b=>{ if(b==null||b<0)return "—"; const u=["B","KB","MB","GB","TB"];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  const openWin=(url,title,key)=>window.parent.postMessage({type:"matos:open",url,title,key},location.origin);
+  const err=t=>{ const e=document.getElementById("pr-err"); e.style.display=""; e.textContent=t; };
+  const browseVolume=v=>window.parent.postMessage({type:"matos:open",url:"/apps/files?volume="+encodeURIComponent(v),title:"Files",key:"files"},location.origin);
+
+  const panes=document.getElementById("pr-panes");
+  const tabsEl=document.getElementById("pr-tabs");
+  let S={ type, stack:null, primaryId:qid, appId:"", def:null, routes:null, inspectCache:{} };
+  let logSrc=null; const stopLogs=()=>{ if(logSrc){ try{logSrc.close();}catch(_){}; logSrc=null; } };
+
+  async function jget(u){ const r=await fetch(u); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }
+  async function inspect(id){ if(S.inspectCache[id]) return S.inspectCache[id]; const d=await jget(`/api/v1/docker/containers/${id}/inspect`); S.inspectCache[id]=d; return d; }
+
+  const TAB_LABEL={ app:"App", stack:"Stack", container:"Container", volumes:"Volumes" };
+  function tabsFor(t){ return t==="app"?["app","stack","container","volumes"]:t==="stack"?["stack","container","volumes"]:["container","volumes"]; }
+
+  function selectTab(name){
+    stopLogs();
+    tabsEl.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+    panes.innerHTML="";
+    if(name==="app") renderApp();
+    else if(name==="stack") renderStack();
+    else if(name==="container") renderContainerTab();
+    else if(name==="volumes") renderVolumes();
+  }
+
+  async function boot(){
+    let stacks; try{ stacks=(await jget("/api/v1/docker/stacks")).stacks||[]; }catch(_){ document.getElementById("pr-name").textContent="Not found"; return; }
+    if(type==="stack") S.stack=stacks.find(s=>s.name===qname);
+    else S.stack=stacks.find(s=>(s.containers||[]).some(c=>c.id===qid));
+    if(!S.stack){ document.getElementById("pr-name").textContent="Not found"; return; }
+    const cs=S.stack.containers||[];
+    S.primaryId=qid && cs.some(c=>c.id===qid) ? qid : (cs.find(c=>c.hasWebUi)||cs[0]||{}).id;
+    const primary=cs.find(c=>c.id===S.primaryId)||cs[0]||{};
+    S.appId=primary.matosApp||"";
+
+    // Header
+    let def=null;
+    if(type==="app"){ try{ const cat=await jget("/api/v1/store/catalog"); def=(cat.apps||[]).find(a=>a.id===S.appId); }catch(_){}
+      try{ S.routes=await jget("/api/v1/docker/routes"); }catch(_){ S.routes={routes:[],baseDomain:"apps.localhost"}; } }
+    S.def=def;
+    const title = type==="stack"? S.stack.name : (primary.matosTitle||(def&&def.name)||primary.name||S.stack.name);
+    document.getElementById("pr-ico").innerHTML=iconHtml(def?def.icon:(type==="app"?"📦":type==="stack"?"🧱":"📦"));
+    document.getElementById("pr-name").textContent=title;
+    document.getElementById("pr-sub").textContent = type==="app" ? "Stack · "+(primary.image||"")
+      : type==="stack" ? ((S.stack.standalone?"Standalone container":"Compose stack")+(S.stack.matosManaged?" · managed by matOS":""))
+      : (primary.image||"");
+    const stt=document.getElementById("pr-state"); stt.textContent=`${S.stack.running}/${S.stack.total} running`; stt.className="pill "+(S.stack.anyRunning?"on":"off");
+    document.title=(TAB_LABEL[type]||"Properties")+" · "+title;
+
+    // Tabs
+    const tabs=tabsFor(type);
+    tabsEl.innerHTML=tabs.map((t,i)=>`<button class="tab${i===0?" active":""}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("");
+    tabsEl.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>selectTab(b.dataset.tab)));
+    selectTab(tabs[0]);
+  }
+
+  // ---------- App tab ----------
+  async function renderApp(){
+    const id=S.primaryId; let d;
+    try{ d=await inspect(id); }catch(_){ panes.innerHTML=`<div class="pr-card">Container not found.</div>`; return; }
+    const c=d.info; const def=S.def; const routes=S.routes||{routes:[],baseDomain:"apps.localhost"};
+    const route=(routes.routes||[]).find(r=>r.id===id)||{};
+    const base=routes.baseDomain||"apps.localhost";
+    const suggested=route.host||(S.appId?`${S.appId}.${base}`:`${c.name}.${base}`);
+    const running=c.running;
+    panes.innerHTML=`
+      <div class="pr-card"><div class="pr-row"><div><strong>Freigabe (external access)</strong><div class="fx-muted" style="font-size:0.8rem">Publish this app so it's reachable from outside matOS (reverse-proxy hostname).</div></div><div id="pr-pub"></div></div></div>
+      ${def&&def.actions&&def.actions.length?`<div class="pr-card"><strong>Actions</strong><div class="fx-muted" style="font-size:0.8rem;margin-bottom:0.5rem">The app's right-click actions.</div><div id="pr-actions" style="display:flex;flex-wrap:wrap;gap:0.4rem"></div></div>`:""}
+      <div class="pr-card"><strong>Lifecycle</strong><div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.5rem" id="pr-life"></div></div>
+      <div class="pr-card"><strong>Advanced</strong><div class="fx-muted" style="font-size:0.8rem;margin-bottom:0.5rem">Dig into the technical settings via the tabs above, or edit the app.</div><div style="display:flex;gap:0.4rem;flex-wrap:wrap" id="pr-adv"></div></div>
+      <div class="pr-card" style="border-color:rgba(244,80,107,0.35)"><strong style="color:#ffb3c0">Danger zone</strong><div style="display:flex;align-items:center;gap:0.8rem;margin-top:0.5rem;flex-wrap:wrap"><button class="ui-btn danger" id="pr-uninstall">Uninstall app</button><span class="fx-muted" style="font-size:0.82rem">Removes the app's container(s). You'll be asked about its data volumes.</span></div></div>`;
+    const pub=document.getElementById("pr-pub");
+    pub.innerHTML=route.published
+      ? `<div class="pr-pub-in"><a href="//${escA(route.host)}" target="_blank" rel="noopener" class="mono">${esc(route.host)}</a> <button class="ui-btn danger" id="pr-unpub">Unpublish</button></div>`
+      : `<div class="pr-pub-in"><input class="ui-input mono" id="pr-host" value="${escA(suggested)}"><button class="ui-btn primary" id="pr-pub-btn">Publish</button></div>`;
+    const pb=document.getElementById("pr-pub-btn"); if(pb) pb.addEventListener("click",()=>publish(true,document.getElementById("pr-host").value.trim(),pb));
+    const ub=document.getElementById("pr-unpub"); if(ub) ub.addEventListener("click",()=>publish(false,"",ub));
+    if(def&&def.actions&&def.actions.length){ document.getElementById("pr-actions").innerHTML=def.actions.map(a=>`<button class="ui-btn" data-a="${escA(a.url)}" data-l="${escA(a.label)}">${esc(a.label)}</button>`).join("");
+      document.querySelectorAll("#pr-actions [data-a]").forEach(b=>b.addEventListener("click",()=>{ let u=b.dataset.a; if(!/^https?:/i.test(u)&&!u.startsWith("//")){ if(!c.appUrl){ err("The app's web UI must be running for relative actions."); return; } u=c.appUrl.replace(/\/+$/,"")+(u.startsWith("/")?u:"/"+u); } openWin(u,S.stack.name+" · "+b.dataset.l,"act"); })); }
+    const life=document.getElementById("pr-life");
+    life.innerHTML=(running?`<button class="ui-btn" data-life="stop">Stop</button><button class="ui-btn" data-life="restart">Restart</button>`:`<button class="ui-btn primary" data-life="start">Start</button>`)+(c.appUrl?`<button class="ui-btn" id="pr-open">Open</button>`:"");
+    life.querySelectorAll("[data-life]").forEach(b=>b.addEventListener("click",()=>stackAction(b.dataset.life)));
+    const ob=document.getElementById("pr-open"); if(ob) ob.addEventListener("click",()=>window.open(c.appUrl,"_blank","noopener"));
+    const adv=document.getElementById("pr-adv");
+    adv.innerHTML=(def&&!def.builtIn)?`<button class="ui-btn" id="pr-edit">Edit definition in Store</button>`:`<span class="fx-muted" style="font-size:0.82rem">Built-in app.</span>`;
+    const eb=document.getElementById("pr-edit"); if(eb) eb.addEventListener("click",()=>openWin("/apps/store","Store","store"));
+    document.getElementById("pr-uninstall").addEventListener("click",uninstall);
+  }
+  async function publish(enabled,hostname,btn){ const o=btn.innerHTML; btn.disabled=true; btn.textContent=enabled?"Publishing…":"Updating…";
+    try{ const r=await fetch("/api/v1/store/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:S.primaryId,enabled,hostname})}); if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||r.status);} S.routes=null; setTimeout(()=>refresh("app"),2500);
+    }catch(e){ err("Publish failed: "+e.message); btn.disabled=false; btn.innerHTML=o; } }
+  async function uninstall(){
+    if(!await matDialog.confirm("Uninstall this app? Its container(s) will be removed.",{title:"Uninstall",danger:true,okLabel:"Uninstall"}))return;
+    const rmVol=await matDialog.confirm("Also delete this app's data volumes? This cannot be undone.",{title:"Delete data?",danger:true,okLabel:"Delete data",cancelLabel:"Keep data"});
+    try{ const r=await fetch("/api/v1/store/uninstall",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:S.primaryId,removeVolume:rmVol})}); if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||r.status);}
+      document.getElementById("pr-name").textContent="(uninstalled)"; window.parent.postMessage({type:"matos:refresh"},location.origin);
+    }catch(e){ err("Uninstall failed: "+e.message); }
+  }
+
+  // ---------- Stack tab ----------
+  function renderStack(){
+    const s=S.stack;
+    panes.innerHTML=`
+      <div class="pr-card"><dl class="kv">
+        <dt>Name</dt><dd class="mono">${esc(s.name)}</dd>
+        <dt>Type</dt><dd>${s.standalone?"Standalone container":"Compose stack"}${s.matosManaged?" · managed by matOS":""}</dd>
+        <dt>Containers</dt><dd>${s.running}/${s.total} running</dd>
+      </dl></div>
+      <div class="pr-card"><strong>Lifecycle</strong><div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.5rem">
+        <button class="ui-btn primary" data-sa="start">Start all</button>
+        <button class="ui-btn" data-sa="stop">Stop all</button>
+        <button class="ui-btn" data-sa="restart">Restart all</button>
+      </div><div class="fx-muted" style="font-size:0.8rem;margin-top:0.5rem">Manage individual containers in the Container tab.</div></div>`;
+    panes.querySelectorAll("[data-sa]").forEach(b=>b.addEventListener("click",()=>stackAction(b.dataset.sa)));
+  }
+
+  // ---------- Container tab (list -> detail) ----------
+  function renderContainerTab(){
+    const cs=S.stack.containers||[];
+    if(cs.length<=1){ renderContainerDetail((cs[0]||{}).id, false); return; }
+    const rows=cs.map(c=>{
+      const ports=(c.ports||[]).map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}`:`${p.privatePort}`).join(", ")||"—";
+      const ctl=c.running?`<button class="ui-btn" data-c="${c.id}" data-a="stop">Stop</button><button class="ui-btn" data-c="${c.id}" data-a="restart">Restart</button>`:`<button class="ui-btn primary" data-c="${c.id}" data-a="start">Start</button>`;
+      return `<tr>
+        <td>${c.running?'<span class="pill on">running</span>':'<span class="pill off">'+esc(c.state)+'</span>'}</td>
+        <td><strong>${esc(c.name)}</strong><div class="mono" style="color:var(--mat-text-muted);font-size:0.75rem">${esc(c.image)}</div></td>
+        <td class="mono">${esc(ports)}</td>
+        <td style="text-align:right;white-space:nowrap">${c.hasWebUi&&c.appUrl?`<button class="ui-btn" data-open="${esc(c.appUrl)}">Open</button>`:""}<button class="ui-btn" data-detail="${c.id}">Details</button>${ctl}</td></tr>`;
+    }).join("");
+    panes.innerHTML=`<div class="pr-card" style="padding:0;overflow:hidden"><table class="vt"><thead><tr><th>State</th><th>Container</th><th>Ports</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    panes.querySelectorAll("[data-a]").forEach(b=>b.addEventListener("click",()=>cAction(b.dataset.c,b.dataset.a)));
+    panes.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
+    panes.querySelectorAll("[data-detail]").forEach(b=>b.addEventListener("click",()=>renderContainerDetail(b.dataset.detail,true)));
+  }
+
+  async function renderContainerDetail(cid,withBack){
+    stopLogs();
+    if(!cid){ panes.innerHTML=`<div class="pr-card">No container.</div>`; return; }
+    panes.innerHTML=`${withBack?`<button class="linkbtn" id="pr-back" style="margin-bottom:0.8rem">← Back to containers</button>`:""}
+      <div class="pr-head" style="margin-bottom:0.8rem"><span class="pr-ico">📦</span><div style="flex:1"><h2 id="cd-name" style="margin:0;font-size:1.05rem">Loading…</h2><div class="mono fx-muted" id="cd-sub" style="font-size:0.78rem"></div></div><span id="cd-state" class="pill"></span></div>
+      <div class="tabbar" id="cd-tabs"><button class="tab active" data-ct="overview">Overview</button><button class="tab" data-ct="env">Environment</button><button class="tab" data-ct="logs">Logs</button></div>
+      <div id="cd-actions" style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem"></div>
+      <div id="cd-body"></div>`;
+    if(withBack) document.getElementById("pr-back").addEventListener("click",()=>renderContainerTab());
+    let d; try{ d=await inspect(cid); }catch(_){ document.getElementById("cd-name").textContent="Container not found"; return; }
+    const c=d.info;
+    document.getElementById("cd-name").textContent=c.name;
+    document.getElementById("cd-sub").textContent=c.image+"  ·  "+c.shortId;
+    const st=document.getElementById("cd-state"); st.textContent=c.status||c.state; st.className="pill "+(c.running?"on":"off");
+    const act=document.getElementById("cd-actions");
+    act.innerHTML=(c.running?`<button class="ui-btn" data-a="stop">Stop</button><button class="ui-btn" data-a="restart">Restart</button>`:`<button class="ui-btn primary" data-a="start">Start</button>`)+`<button class="ui-btn danger" data-a="remove">Remove</button>`;
+    act.querySelectorAll("[data-a]").forEach(b=>b.addEventListener("click",()=>cAction(cid,b.dataset.a,()=>renderContainerDetail(cid,withBack))));
+    const body=document.getElementById("cd-body");
+    const showCt=n=>{
+      stopLogs();
+      document.querySelectorAll("#cd-tabs .tab").forEach(x=>x.classList.toggle("active",x.dataset.ct===n));
+      if(n==="overview"){
+        const ports=(c.ports||[]).map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}/${p.type}`:`${p.privatePort}/${p.type}`).join(", ")||"—";
+        body.innerHTML=`<div class="pr-card"><dl class="kv">
+          <dt>Image</dt><dd class="mono">${esc(c.image)}</dd>
+          <dt>Container ID</dt><dd class="mono">${esc(c.shortId)}</dd>
+          <dt>State</dt><dd>${esc(c.status||c.state)}</dd>
+          <dt>Created</dt><dd>${esc((c.createdUtc||"").replace("T"," ").replace(/\..*/,""))}</dd>
+          <dt>Restart policy</dt><dd>${esc(d.restartPolicy)}</dd>
+          <dt>Stack (compose)</dt><dd>${d.composeProject?esc(d.composeProject)+(d.composeService?" · "+esc(d.composeService):""):"—"}</dd>
+          <dt>Networks</dt><dd class="mono">${(d.networks||[]).map(esc).join(", ")||"—"}</dd>
+          <dt>Ports</dt><dd class="mono">${esc(ports)}</dd>
+          <dt>Web URL</dt><dd>${c.appUrl?`<a href="${esc(c.appUrl)}" target="_blank" rel="noopener">${esc(c.appUrl)}</a>`:"—"}</dd>
+          <dt>Managed by matOS</dt><dd>${c.matosManaged?"Yes":"No"}</dd></dl></div>`;
+      } else if(n==="env"){
+        body.innerHTML=`<div class="pr-card mono" style="max-height:360px;overflow:auto;font-size:0.82rem">${(d.env||[]).map(esc).join("<br>")||'<span class="fx-muted">No environment variables.</span>'}</div>`;
+      } else {
+        body.innerHTML=`<div class="logbox2" id="cd-logs"></div>`;
+        const box=document.getElementById("cd-logs");
+        logSrc=new EventSource(`/api/v1/docker/containers/${cid}/logs/stream?tail=200`);
+        logSrc.addEventListener("log",e=>{ box.textContent+=e.data+"\n"; box.scrollTop=box.scrollHeight; });
+        logSrc.onerror=()=>{};
+      }
+    };
+    document.querySelectorAll("#cd-tabs .tab").forEach(t=>t.addEventListener("click",()=>showCt(t.dataset.ct)));
+    showCt("overview");
+  }
+
+  // ---------- Volumes tab ----------
+  async function renderVolumes(){
+    const names=new Set((S.stack.containers||[]).map(c=>c.name));
+    panes.innerHTML=`<div class="pr-card" style="padding:0;overflow:hidden"><table class="vt" id="pr-vols"><thead><tr><th>Volume</th><th>Size</th><th>Used by</th><th></th></tr></thead><tbody><tr><td colspan="4" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody></table></div>`;
+    let vols=[]; try{ const vd=await jget("/api/v1/docker/volumes"); vols=(vd.volumes||[]).filter(v=>(v.usedBy||[]).some(u=>names.has(u))); }catch(_){}
+    const body=vols.length?vols.map(v=>`<tr><td class="mono">${esc(v.name)}</td><td>${fmtBytes(v.sizeBytes)}</td><td class="mono" style="color:var(--mat-text-muted)">${(v.usedBy||[]).map(esc).join(", ")}</td><td style="text-align:right"><button class="ui-btn" data-vol="${esc(v.name)}">Browse files</button></td></tr>`).join("")
+      :`<tr><td colspan="4" style="padding:1rem;color:var(--mat-text-muted)">No named volumes.</td></tr>`;
+    panes.querySelector("#pr-vols tbody").innerHTML=body;
+    panes.querySelectorAll("[data-vol]").forEach(b=>b.addEventListener("click",()=>browseVolume(b.dataset.vol)));
+  }
+
+  // ---------- shared actions ----------
+  async function stackAction(a){ try{ await fetch(`/api/v1/docker/stacks/${encodeURIComponent(S.stack.name)}/${a}`,{method:"POST"}); }catch(_){ } setTimeout(()=>refresh(),700); }
+  async function cAction(id,a,then){ if(a==="remove"&&!await matDialog.confirm("Remove this container? This cannot be undone.",{title:"Remove container",danger:true,okLabel:"Remove"})) return; try{ await fetch(`/api/v1/docker/containers/${id}/${a==="remove"?"remove":a}`,{method:"POST"}); }catch(_){ } setTimeout(()=>then?then():refresh(),700); }
+
+  // Re-fetch the stacks list and re-render the active tab (keeps state fresh after actions).
+  async function refresh(force){
+    const active=(tabsEl.querySelector(".tab.active")||{}).dataset?.tab;
+    S.inspectCache={};
+    let stacks; try{ stacks=(await jget("/api/v1/docker/stacks")).stacks||[]; }catch(_){ return; }
+    S.stack = type==="stack" ? stacks.find(s=>s.name===S.stack.name) : stacks.find(s=>(s.containers||[]).some(c=>c.id===S.primaryId)) || S.stack;
+    if(!S.stack) return;
+    const stt=document.getElementById("pr-state"); stt.textContent=`${S.stack.running}/${S.stack.total} running`; stt.className="pill "+(S.stack.anyRunning?"on":"off");
+    if(active) selectTab(force||active);
+  }
+
+  boot();
+  setInterval(()=>{ const a=(tabsEl.querySelector(".tab.active")||{}).dataset?.tab; if(a&&a!=="container"&&a!=="volumes") refresh(); }, 6000);
+})();
+</script>
+}

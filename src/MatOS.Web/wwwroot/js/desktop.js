@@ -115,11 +115,13 @@
   // Custom label for any key (folder / system / stack); used by systemApps renderer too.
   function customLabel(key) { return labels[key] || null; }
 
+  // All properties (App/Stack/Container/Volumes) open in the one unified tabbed window.
   function stackSettingsUrl(s) {
-    const first = (s.containers || [])[0];
-    if (stackApp(s) && first) return "/apps/app/" + encodeURIComponent(first.id); // matOS app -> App settings
-    return (s.standalone && first) ? "/apps/container/" + encodeURIComponent(first.id)
-                                   : "/apps/stack/" + encodeURIComponent(s.name);
+    const cs = s.containers || [];
+    const appC = cs.find(c => c.matosApp);
+    if (appC) return "/apps/properties?type=app&id=" + encodeURIComponent(appC.id);
+    if (s.standalone && cs[0]) return "/apps/properties?type=container&id=" + encodeURIComponent(cs[0].id);
+    return "/apps/properties?type=stack&name=" + encodeURIComponent(s.name);
   }
   function stackOpenUrl(s) { const w = primaryWeb(s); return w ? w.appUrl : stackSettingsUrl(s); }
   function stackInner(s) {

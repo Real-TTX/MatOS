@@ -236,8 +236,8 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
     q("[data-act]").forEach(b=>b.addEventListener("click",()=>cAction(b.dataset.id,b.dataset.act)));
     q("[data-sa]").forEach(b=>b.addEventListener("click",()=>sAction(b.dataset.name,b.dataset.sa)));
     q("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
-    q("[data-set]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/container/"+encodeURIComponent(b.dataset.set),"Container · "+b.dataset.name,"container:"+b.dataset.set)));
-    q("[data-set-stack]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/stack/"+encodeURIComponent(b.dataset.setStack),"Stack · "+b.dataset.setStack,"set:"+b.dataset.setStack)));
+    q("[data-set]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/properties?type=container&id="+encodeURIComponent(b.dataset.set),"Container · "+b.dataset.name,"container:"+b.dataset.set)));
+    q("[data-set-stack]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/properties?type=stack&name="+encodeURIComponent(b.dataset.setStack),"Stack · "+b.dataset.setStack,"set:"+b.dataset.setStack)));
     q("[data-files]").forEach(b=>b.addEventListener("click",()=>openWin("/apps/files?volume="+encodeURIComponent(b.dataset.files),"Files","files")));
     q("[data-logs]").forEach(b=>b.addEventListener("click",()=>openLogs(b.dataset.logs,b.dataset.name)));
   }
