@@ -161,9 +161,15 @@
         ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
         : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">Install</button>`;
       const editDel = local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:'';
-      const meta = opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:`<span class="mono">${esc(a.kind==='compose'?(a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'):a.image)}</span>`;
+      // Built-in Store apps are just "Apps" — never surface the internal image-vs-compose
+      // packaging. The "compose" chip and the raw compose meta only make sense for a custom
+      // app the user themselves added as a Compose YAML.
+      const meta = opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`
+        : (a.kind==='compose'
+            ? (a.builtIn ? `<span class="chip">${esc(a.category||'App')}</span>` : `<span class="mono">${a.compose? a.compose.split(String.fromCharCode(10)).length+' lines' : 'compose'}</span>`)
+            : `<span class="mono">${esc(a.image)}</span>`);
       return `<div class="app-card">
-      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${badge}${a.kind==='compose'?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
+      <div class="top"><div class="app-ico">${iconHtml(a.icon)}</div><div><h3>${esc(a.name)} ${badge}${(a.kind==='compose' && !a.builtIn)?'<span class="chip compose">compose</span>':''}</h3><div class="tag">${esc(a.tagline)}</div></div></div>
       <p>${esc(a.description)}</p>
       <div class="foot">${installBtn}${editDel}<span class="spacer" style="flex:1"></span>${meta}</div>
     </div>`; }).join("");

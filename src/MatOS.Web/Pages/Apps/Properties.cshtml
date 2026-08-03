@@ -154,7 +154,7 @@ table.vt thead th { color:var(--mat-text-muted); font-size:0.8rem; } table.vt tb
     panes.innerHTML=`
       <div class="pr-card"><dl class="kv">
         <dt>Name</dt><dd class="mono">${esc(s.name)}</dd>
-        <dt>Type</dt><dd>${s.standalone?"Standalone container":"Compose stack"}${s.matosManaged?" · managed by matOS":""}</dd>
+        <dt>Type</dt><dd>${s.matosManaged?"App · managed by matOS":(s.standalone?"Standalone container":"Compose stack")}</dd>
         <dt>Containers</dt><dd>${s.running}/${s.total} running</dd>
       </dl></div>
       <div class="pr-card"><strong>Lifecycle</strong><div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.5rem">
