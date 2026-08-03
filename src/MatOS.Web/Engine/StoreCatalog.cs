@@ -9,8 +9,38 @@ public static class StoreCatalog
         new(id, name, tagline, desc, cat, image, uiPort, icon, vols, env, actions,
             "image", "", "", variables ?? Array.Empty<AppVariable>(), true, "", handlers);
 
+    private static AppDef Compose(string id, string name, string tagline, string desc, string cat,
+        string compose, string uiService, int uiPort, string icon, AppAction[]? actions = null) =>
+        new(id, name, tagline, desc, cat, "", uiPort, icon, Array.Empty<string>(),
+            new Dictionary<string, string>(), actions ?? Array.Empty<AppAction>(),
+            "compose", compose, uiService, Array.Empty<AppVariable>(), true, "", null);
+
     private static AppVariable V(string key, string label, string dflt = "", string type = "text", bool required = false)
         => new() { Key = key, Label = label, Default = dflt, Type = type, Required = required };
+
+    // Real app logos (full colour) via the community dashboard-icons set — the same icons
+    // self-hosted dashboards use, so every app shows its actual brand icon.
+    private static string Ico(string slug) => $"https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/{slug}.svg";
+
+    // LinuxServer.io GUI apps run a full Linux desktop app streamed to the browser (KasmVNC on
+    // port 3000). They need a larger /dev/shm and an unconfined seccomp profile for the browser
+    // sandbox, which only Compose can express — so these ship as one-service compose stacks.
+    private static string LsioGui(string image) => $@"services:
+  app:
+    image: {image}
+    security_opt:
+      - seccomp:unconfined
+    shm_size: ""1gb""
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - config:/config
+    restart: unless-stopped
+volumes:
+  config:
+";
 
     public static readonly IReadOnlyList<AppDef> BuiltIn = new[]
     {
@@ -22,7 +52,7 @@ public static class StoreCatalog
 
         Image("nginx", "Nginx", "Web server",
             "The nginx web server — serve static content or use as a reverse proxy. A public image, installs anywhere.",
-            "Web", "nginx:alpine", 80, "🌐", Array.Empty<string>(), new Dictionary<string, string>(),
+            "Web", "nginx:alpine", 80, Ico("nginx"), Array.Empty<string>(), new Dictionary<string, string>(),
             Array.Empty<AppAction>()),
 
         Image("whoami", "Whoami", "Request echo",
@@ -32,7 +62,7 @@ public static class StoreCatalog
 
         Image("n8n", "n8n", "Workflow automation",
             "Fair-code workflow automation — connect apps and APIs with a visual editor. First visit opens a setup wizard to create the owner account.",
-            "Automation", "docker.n8n.io/n8nio/n8n:latest", 5678, "🔗",
+            "Automation", "docker.n8n.io/n8nio/n8n:latest", 5678, Ico("n8n"),
             new[] { "/home/node/.n8n" },
             new Dictionary<string, string> { ["N8N_PROTOCOL"] = "https", ["N8N_PROXY_HOPS"] = "1" },
             new[] { new AppAction("Workflows", "/home/workflows"), new AppAction("Credentials", "/home/credentials"), new AppAction("Executions", "/home/executions") },
@@ -45,7 +75,7 @@ public static class StoreCatalog
 
         Image("gitea", "Gitea", "Self-hosted Git",
             "A painless self-hosted Git service with issues, PRs and a package registry. Uses the built-in SQLite database, so it stays a single container. First visit runs a short install wizard — just create the admin account.",
-            "Development", "gitea/gitea:1.27", 3000, "🍵",
+            "Development", "gitea/gitea:1.27", 3000, Ico("gitea"),
             new[] { "/data" },
             // DISABLE_FRAME_OPTIONS=true lets Gitea's UI load inside a matOS window (Gitea sends
             // X-Frame-Options: SAMEORIGIN by default, which blocks embedding under a different host).
@@ -60,7 +90,7 @@ public static class StoreCatalog
 
         Image("plex", "Plex Media Server", "Media streaming",
             "Organize and stream your movies, TV, music and photos. Best-effort bridged install — the web UI (at /web) works for setup and playback; DLNA and Plex's own remote-access/discovery want host networking. Paste a claim token from plex.tv/claim (valid ~4 min) to auto-link your account.",
-            "Media", "plexinc/pms-docker:latest", 32400, "🎬",
+            "Media", "plexinc/pms-docker:latest", 32400, Ico("plex"),
             new[] { "/config", "/transcode", "/data" },
             new Dictionary<string, string>(),
             new[] { new AppAction("Open Web App", "/web"), new AppAction("Server settings", "/web/index.html#!/settings/server/general") },
@@ -74,7 +104,7 @@ public static class StoreCatalog
 
         Image("sqlite-web", "SQLite Web", "SQLite database browser",
             "A web-based browser for SQLite databases. Not installed the usual way — right-click a .db / .sqlite / .sqlite3 file in the File Explorer and choose \"Open with SQLite Web\" to inspect and edit it. Each open runs a temporary container bound to that one file.",
-            "Database", "ghcr.io/coleifer/sqlite-web:0.7.2", 8080, "🗃️",
+            "Database", "ghcr.io/coleifer/sqlite-web:0.7.2", 8080, Ico("sqlite"),
             Array.Empty<string>(), new Dictionary<string, string>(), Array.Empty<AppAction>(),
             variables: null,
             handlers: new[]
@@ -87,5 +117,26 @@ public static class StoreCatalog
                     MountPath = "/data", Mechanism = "arg", ArgTemplate = "{file}", ReadOnly = false,
                 },
             }),
+
+        // ---- LinuxServer.io desktop apps in the browser (KasmVNC) ----
+        Compose("brave", "Brave", "Brave browser in your browser",
+            "The Brave web browser running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
+            "Browsers", LsioGui("lscr.io/linuxserver/brave:latest"), "app", 3000, Ico("brave")),
+
+        Compose("firefox", "Firefox", "Firefox in your browser",
+            "Mozilla Firefox running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
+            "Browsers", LsioGui("lscr.io/linuxserver/firefox:latest"), "app", 3000, Ico("firefox")),
+
+        Compose("chromium", "Chromium", "Chromium in your browser",
+            "Chromium (the open-source base of Google Chrome) running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
+            "Browsers", LsioGui("lscr.io/linuxserver/chromium:latest"), "app", 3000, Ico("chromium")),
+
+        Compose("msedge", "Microsoft Edge", "Edge in your browser",
+            "Microsoft Edge running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
+            "Browsers", LsioGui("lscr.io/linuxserver/msedge:latest"), "app", 3000, Ico("microsoft-edge")),
+
+        Compose("libreoffice", "LibreOffice", "Office suite in your browser",
+            "The LibreOffice suite (Writer, Calc, Impress and more) running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Documents in the /config volume persist between sessions.",
+            "Productivity", LsioGui("lscr.io/linuxserver/libreoffice:latest"), "app", 3000, Ico("libreoffice")),
     };
 }
