@@ -333,7 +333,7 @@ body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-conte
 }
 
 /* ---- iOS-style folders on the desktop ---- */
-.mat-app-icon.folder { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); padding: 6px; }
+.mat-app-icon.folder { background: color-mix(in srgb, var(--accent), transparent 84%); border-color: color-mix(in srgb, var(--accent), transparent 64%); padding: 6px; }
 .mat-folder-preview { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; width: 100%; height: 100%; }
 .mat-folder-mini { display: grid; place-items: center; border-radius: 8px; background: rgba(255,255,255,0.06); overflow: hidden; }
 .mat-folder-mini svg, .mat-folder-mini img { width: 18px; height: 18px; object-fit: cover; border-radius: 4px; }
