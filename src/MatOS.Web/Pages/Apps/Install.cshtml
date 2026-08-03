@@ -31,20 +31,22 @@
         <section class="wz-panel" id="p-install" hidden>
             <h3 id="install-title">Installing…</h3>
             <ul class="wz-prog" id="wz-prog"></ul>
+            <p class="wz-muted" id="wz-install-note" hidden style="margin-top:0.8rem">Large apps (e.g. browsers, office) download a lot of data — the first install can take a few minutes. You can leave this window open.</p>
             <div id="wz-error" class="wz-err" hidden></div>
         </section>
 
-        <section class="wz-panel" id="p-done" hidden>
+        <section class="wz-panel" id="p-actions" hidden>
             <div class="wz-done"><span class="wz-check">✓</span><div><h3 id="done-title">Installed</h3><p class="wz-muted" id="done-sub"></p></div></div>
+            <div id="wz-actions" class="wz-actions"></div>
         </section>
 
         <footer class="wz-foot">
             <button class="ui-btn" id="wz-back" hidden>Back</button>
             <span style="flex:1"></span>
             <button class="ui-btn" id="wz-cancel">Cancel</button>
-            <button class="ui-btn primary" id="wz-next">Next</button>
+            <button class="ui-btn primary" id="wz-next" hidden>Next</button>
             <button class="ui-btn primary" id="wz-go" hidden>Install</button>
-            <button class="ui-btn primary" id="wz-open" hidden>Open</button>
+            <button class="ui-btn primary" id="wz-continue" hidden>Continue</button>
             <button class="ui-btn" id="wz-close" hidden>Close</button>
         </footer>
     </div>
@@ -74,7 +76,9 @@
 .wz-spin { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.2); border-top-color:var(--mat-accent); display:inline-block; animation:wzsp .7s linear infinite; }
 @@keyframes wzsp { to { transform:rotate(360deg); } }
 .wz-err { margin-top:0.9rem; background:rgba(244,80,107,0.14); border:1px solid rgba(244,80,107,0.4); color:#ffb3c0; border-radius:10px; padding:0.7rem 0.9rem; font-size:0.85rem; white-space:pre-wrap; }
-.wz-done { display:flex; align-items:center; gap:0.8rem; }
+.wz-done { display:flex; align-items:center; gap:0.8rem; margin-bottom:1.1rem; }
+.wz-actions { display:flex; flex-direction:column; gap:0.5rem; }
+.wz-actions .wz-cta { font-size:1rem; min-height:52px; }
 .wz-check { width:40px; height:40px; border-radius:50%; background:rgba(52,211,153,0.2); color:#7ff0c4; display:grid; place-items:center; font-size:1.3rem; flex:0 0 auto; }
 .wz-foot { display:flex; align-items:center; gap:0.5rem; margin-top:1.4rem; padding-top:1rem; border-top:1px solid var(--mat-border); }
 .win-header { display:none; }
@@ -89,7 +93,7 @@
   const isImg=s=>/^(https?:|data:)/i.test(s||"");
   const $=id=>document.getElementById(id);
   const id=$("wz").dataset.id, wkey="install:"+id;
-  let app=null, opener=false, hasVars=false, steps=[], si=0, result=null, installError=false;
+  let app=null, opener=false, hasVars=false, steps=[], si=0, result=null, installError=false, installed=false;
 
   function close(){ try{ window.parent.postMessage({type:"matos:close",key:wkey}, location.origin); }catch(_){}}
   function refresh(){ try{ window.parent.postMessage({type:"matos:refresh"}, location.origin); }catch(_){}}
@@ -100,7 +104,7 @@
     if(!app){ $("wz-load").textContent="App not found."; return; }
     opener=!!(app.handles && app.handles.length);
     hasVars=!opener && !!(app.variables && app.variables.length);
-    steps = opener ? ["review","install","done"] : (hasVars ? ["params","review","install","done"] : ["review","install","done"]);
+    steps = hasVars ? ["params","review","install","actions"] : ["review","install","actions"];
 
     $("wz-ico").innerHTML = isImg(app.icon)?`<img src="${escA(app.icon)}" alt="">`:esc(app.icon||"📦");
     $("wz-name").textContent = (opener?"Install ":"Install ")+app.name;
@@ -117,7 +121,7 @@
   function collectVars(){ const o={}; document.querySelectorAll("#wz-fields [data-key]").forEach(i=>o[i.dataset.key]=i.value); return o; }
   function validateVars(){ let ok=true; document.querySelectorAll("#wz-fields [data-key]").forEach(i=>{ const v=app.variables.find(x=>x.key===i.dataset.key); if(v&&v.required&&!i.value.trim()){ ok=false; i.style.borderColor="#f4506b"; } else i.style.borderColor=""; }); return ok; }
 
-  const LABEL={params:"Parameters",review:"Review",install:opener?"Register":"Install",done:"Done"};
+  const LABEL={params:"Parameters",review:"Review",install:opener?"Register":"Install",actions:"Done"};
   function renderStepper(){ $("wz-stepper").innerHTML = steps.map((s,i)=>`<li class="${i===si?'active':(i<si?'done':'')}"><div class="bar"></div><span>${LABEL[s]}</span></li>`).join(""); }
 
   function renderReview(){
@@ -151,7 +155,8 @@
   let currentInstallId=null;
   async function doInstall(){
     const prog=startProgress();
-    // Tell the desktop to show an iOS-style placeholder icon while we install (not for openers).
+    $("wz-install-note").hidden = opener;   // "large apps take a while" hint for real installs
+    // Tell the desktop to show a placeholder icon (desktop + start menu) while we install.
     currentInstallId = "i" + Math.random().toString(36).slice(2,10);
     if(!opener){ try{ window.parent.postMessage({type:"matos:installing", installId: currentInstallId, appId: id, name: app.name, icon: app.icon}, location.origin); }catch(_){} }
     try{
@@ -160,49 +165,69 @@
       else { r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:hasVars?collectVars():{}})}); }
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||e.title||("HTTP "+r.status)); }
       result = await r.json().catch(()=>({}));
-      prog.done(true); refresh(); next(); // -> done
-    }catch(e){ prog.done(false); installError=true; $("wz-error").hidden=false; $("wz-error").textContent=(opener?"Install failed: ":"Install failed: ")+e.message; setButtons();
+      prog.done(true); installed=true; refresh();
+      // Stay on the install panel — the steps remain checkmarked, the title flips to done, and a
+      // "Continue" button reveals the app's actions. (See it finished -> Continue -> open.)
+      $("install-title").textContent = opener?"Registered ✓":(app.name+" installed ✓");
+      $("wz-install-note").hidden = true;
+      setButtons();
+    }catch(e){ prog.done(false); installError=true; $("wz-install-note").hidden=true; $("wz-error").hidden=false; $("wz-error").textContent="Install failed: "+e.message; setButtons();
       if(!opener){ try{ window.parent.postMessage({type:"matos:install-failed", installId: currentInstallId}, location.origin); }catch(_){} }
     }
   }
 
-  function renderDone(){
-    if(opener){ $("done-title").textContent="Registered"; $("done-sub").innerHTML=`You can now right-click ${esc(app.handles.join(", "))} files in the File Explorer and choose <em>Open with ${esc(app.name)}</em>.`; }
-    else { $("done-title").textContent=app.name+" installed"; $("done-sub").textContent = result&&result.hostPort?("Running — a local port ("+result.hostPort+") was assigned."):"Installed."; }
+  function renderActions(){
+    if(opener){ $("done-title").textContent="Registered"; $("done-sub").innerHTML=`You can now right-click ${esc(app.handles.join(", "))} files in the File Explorer and choose <em>Open with ${esc(app.name)}</em>.`; $("wz-actions").innerHTML=""; return; }
+    $("done-title").textContent=app.name+" is ready";
+    const base = result&&result.hostPort ? `${location.protocol}//${location.hostname}:${result.hostPort}` : null;
+    $("done-sub").textContent = "It's on your desktop and in the Start menu.";
+    let html="";
+    if(base){
+      html += `<button class="ui-btn primary wz-cta" id="wz-open-cta">Open ${esc(app.name)}</button>`;
+      for(const a of (app.actions||[])){
+        const rel=!(/^https?:/i.test(a.url)||a.url.startsWith("//"));
+        const u = rel ? base.replace(/\/+$/,"")+(a.url.startsWith("/")?a.url:"/"+a.url) : a.url;
+        html += `<button class="ui-btn wz-act" data-url="${escA(u)}" data-label="${escA(a.label)}">${esc(a.label)}</button>`;
+      }
+    }
+    $("wz-actions").innerHTML=html;
+    const o=$("wz-open-cta"); if(o) o.addEventListener("click",openApp);
+    $("wz-actions").querySelectorAll(".wz-act").forEach(b=>b.addEventListener("click",()=>{ try{ window.parent.postMessage({type:"matos:open",url:b.dataset.url,key:"act:"+id+":"+b.dataset.label,title:app.name+" · "+b.dataset.label,width:1040,height:680}, location.origin); }catch(_){} }));
   }
-  function openApp(){ if(!result||!result.hostPort)return; const url=`${location.protocol}//${location.hostname}:${result.hostPort}`;
+  function openApp(){ if(!result||!result.hostPort){ close(); return; } const url=`${location.protocol}//${location.hostname}:${result.hostPort}`;
     try{ window.parent.postMessage({type:"matos:open",url,key:"inst:"+id,title:app.name,width:1040,height:680}, location.origin); }catch(_){}
     close(); }
 
   // ---- step machinery ----
-  function panelFor(s){ return {params:"p-params",review:"p-review",install:"p-install",done:"p-done"}[s]; }
+  function panelFor(s){ return {params:"p-params",review:"p-review",install:"p-install",actions:"p-actions"}[s]; }
   function show(i){ si=i; const s=steps[i];
-    ["p-params","p-review","p-install","p-done"].forEach(p=>$(p).hidden=true); $(panelFor(s)).hidden=false;
+    ["p-params","p-review","p-install","p-actions"].forEach(p=>$(p).hidden=true); $(panelFor(s)).hidden=false;
     renderStepper();
     if(s==="review") renderReview();
-    if(s==="install"){ $("install-title").textContent = opener?"Registering…":"Installing…"; $("wz-error").hidden=true; installError=false; }
-    if(s==="done") renderDone();
+    if(s==="install"){ $("install-title").textContent = opener?"Registering…":"Installing…"; $("wz-error").hidden=true; $("wz-install-note").hidden=true; installError=false; installed=false; }
+    if(s==="actions") renderActions();
     setButtons();
     if(s==="install") doInstall();
   }
   function next(){ if(si<steps.length-1) show(si+1); }
-  function back(){ if(si>0 && steps[si]!=="install" && steps[si]!=="done") show(si-1); }
+  function back(){ if(si>0 && steps[si]!=="install" && steps[si]!=="actions") show(si-1); }
 
   function setButtons(){ const s=steps[si];
     const set=(el,on)=>{ $(el).hidden=!on; };
+    const installing = s==="install" && !installed && !installError;
     set("wz-back", (s==="review"||s==="params") && si>0);
-    set("wz-cancel", s!=="done");
+    set("wz-cancel", installing || s==="review" || s==="params");
     set("wz-next", s==="params");
     set("wz-go", s==="review" || (s==="install" && installError));
-    set("wz-open", s==="done" && !opener && result && result.hostPort);
-    set("wz-close", s==="done");
+    set("wz-continue", s==="install" && installed);
+    set("wz-close", s==="actions");
     $("wz-go").textContent = (s==="install" && installError) ? "Retry" : "Install";
   }
 
   $("wz-next").addEventListener("click",()=>{ if(steps[si]==="params" && !validateVars()) return; next(); });
   $("wz-back").addEventListener("click",back);
   $("wz-go").addEventListener("click",()=>show(steps.indexOf("install")));
-  $("wz-open").addEventListener("click",openApp);
+  $("wz-continue").addEventListener("click",()=>next());
   $("wz-close").addEventListener("click",close);
   $("wz-cancel").addEventListener("click",close);
 
