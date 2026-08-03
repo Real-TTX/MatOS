@@ -328,9 +328,10 @@
       <div class="g"><div class="nm">${esc(i.title)} ${i.compose?'<span class="chip compose">stack · '+i.count+'</span>':''}${updChip}</div>
         <div class="sub">${i.running?'<span class="pill on">running</span>':'<span class="pill off">stopped</span>'} · ${esc(i.name)}</div></div>
       ${updBtn}
-      ${i.appUrl?`<button class="ui-btn" data-open="${escA(i.appUrl)}">Open</button>`:""}
+      ${i.appUrl?`<button class="ui-btn" data-open="${escA(i.appUrl)}" data-title="${escA(i.title)}" data-key="inst:${escA(i.id)}">Open</button>`:""}
       <button class="ui-btn danger" data-uninstall="${escA(i.id)}" data-name="${escA(i.title)}">Uninstall</button></div>`; }).join("");
-    instEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>window.open(b.dataset.open,"_blank","noopener")));
+    // Open the installed app as a matOS window (fall back to a new tab if not embedded).
+    instEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{ try{ window.parent.postMessage({type:"matos:open",url:b.dataset.open,title:b.dataset.title||"App",key:b.dataset.key||"inst",width:1040,height:680},location.origin); }catch(_){ window.open(b.dataset.open,"_blank","noopener"); } }));
     instEl.querySelectorAll("[data-uninstall]").forEach(b=>b.addEventListener("click",()=>uninstall(b.dataset.uninstall,b.dataset.name)));
     instEl.querySelectorAll("[data-update]").forEach(b=>b.addEventListener("click",()=>applyUpdate(b.dataset.update,b.dataset.name,b)));
     document.getElementById("store-check-updates").addEventListener("click",checkUpdates);

@@ -54,6 +54,9 @@
 
 @section Head {
 <style>
+/* The footer buttons use .ui-btn (display:inline-flex), which otherwise overrides the [hidden]
+   attribute — so setButtons() couldn't actually hide them. Make [hidden] authoritative. */
+#wz [hidden] { display:none !important; }
 #wz { max-width:640px; margin:0 auto; }
 .wz-head { display:flex; align-items:center; gap:0.9rem; margin-bottom:1rem; }
 .wz-ico { width:52px; height:52px; border-radius:13px; display:grid; place-items:center; font-size:1.7rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
