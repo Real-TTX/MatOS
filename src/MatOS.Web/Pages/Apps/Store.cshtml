@@ -22,6 +22,7 @@
     <section class="store-main">
         <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
         <div id="store-catalog"></div>
+        <div id="store-detail" style="display:none"></div>
         <div id="store-installed" style="display:none"></div>
 
     <div id="store-sources" style="display:none">
@@ -128,7 +129,7 @@
 .store-sec-head h2 { margin:0; font-size:1.2rem; letter-spacing:-0.01em; }
 .store-sec-head .cnt { color:var(--mat-text-muted); font-size:0.82rem; }
 .store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:0.7rem; }
-.app-row { display:flex; align-items:center; gap:0.85rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:15px; padding:0.75rem 0.9rem; transition:border-color .12s, background .12s; }
+.app-row { display:flex; align-items:center; gap:0.85rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:15px; padding:0.75rem 0.9rem; transition:border-color .12s, background .12s; cursor:pointer; }
 .app-row:hover { border-color:var(--mat-border-strong); background:var(--mat-surface-2); }
 .app-row > .app-ico { width:58px; height:58px; border-radius:15px; font-size:1.9rem; }
 .app-row .g { flex:1 1 auto; min-width:0; }
@@ -137,6 +138,29 @@
 .app-row .acts { display:flex; align-items:center; gap:0.3rem; flex:0 0 auto; }
 .app-row .acts .ui-btn { border-radius:999px; padding:0.4rem 0.95rem; font-weight:750; }
 @@media (max-width:760px){ .store-shell { flex-direction:column; } .store-side { flex:none; width:100%; position:static; } }
+/* ---- App detail page ---- */
+.store-crumb { display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; font-size:0.85rem; color:var(--mat-text-muted); margin-bottom:1.1rem; }
+.store-crumb a { color:var(--mat-accent); cursor:pointer; }
+.store-crumb a:hover { text-decoration:underline; }
+.store-crumb .sep { opacity:0.5; }
+.store-crumb .cur { color:var(--mat-text); font-weight:600; }
+.store-detail-head { display:flex; align-items:center; gap:1.1rem; margin-bottom:1.4rem; flex-wrap:wrap; }
+.detail-ico { width:88px; height:88px; border-radius:22px; display:grid; place-items:center; font-size:3rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
+.detail-ico img { width:100%; height:100%; object-fit:cover; }
+.store-detail-head .g { flex:1 1 auto; min-width:200px; }
+.store-detail-head .g h1 { margin:0; font-size:1.7rem; letter-spacing:-0.02em; }
+.store-detail-head .g .tag { color:var(--mat-text-muted); font-size:0.95rem; margin-top:0.2rem; }
+.store-detail-head .g .chips { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.55rem; }
+.store-detail-head .acts { display:flex; gap:0.4rem; flex:0 0 auto; }
+.store-detail-head .acts .ui-btn { border-radius:999px; padding:0.55rem 1.4rem; font-weight:750; }
+.store-detail-body { display:grid; gap:1rem; }
+.store-detail-body .card h3 { margin:0 0 0.5rem; font-size:1.05rem; }
+.store-detail-body .card p { margin:0; color:var(--mat-text); line-height:1.6; white-space:pre-wrap; }
+.detail-meta { display:grid; grid-template-columns:150px 1fr; gap:0.5rem 1rem; font-size:0.9rem; }
+.detail-meta dt { color:var(--mat-text-muted); } .detail-meta dd { margin:0; }
+.detail-actions { display:flex; flex-direction:column; gap:0.4rem; }
+.detail-actions .da { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; border:1px solid var(--mat-border); border-radius:10px; background:var(--mat-surface-2); font-size:0.9rem; }
+.detail-actions .da .mono { color:var(--mat-text-muted); font-size:0.8rem; margin-left:auto; }
 .app-card { display:flex; flex-direction:column; gap:0.5rem; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1rem; }
 .app-card .top { display:flex; align-items:center; gap:0.7rem; }
 .app-ico { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:1.5rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); flex:0 0 auto; }
@@ -182,13 +206,13 @@
   const isImg=s=>/^(https?:|data:)/i.test(s||"");
   const iconHtml=ic=> isImg(ic) ? `<img src="${escA(ic)}" alt="">` : `<span>${esc(ic||"📦")}</span>`;
   const $=id=>document.getElementById(id);
-  const catEl=$("store-catalog"), instEl=$("store-installed"), addEl=$("store-add"), srcEl=$("store-sources"), msg=$("store-msg");
+  const catEl=$("store-catalog"), detEl=$("store-detail"), instEl=$("store-installed"), addEl=$("store-add"), srcEl=$("store-sources"), msg=$("store-msg");
   let catalog=[];
   function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",5000); }
 
   document.querySelectorAll("#store-nav .store-nav-btn").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll("#store-nav .store-nav-btn").forEach(x=>x.classList.toggle("active",x===t));
-    const tab=t.dataset.tab; catEl.style.display=tab==="catalog"?"":"none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none"; srcEl.style.display=tab==="sources"?"":"none";
+    const tab=t.dataset.tab; catEl.style.display=tab==="catalog"?"":"none"; detEl.style.display="none"; instEl.style.display=tab==="installed"?"":"none"; addEl.style.display=tab==="add"?"":"none"; srcEl.style.display=tab==="sources"?"":"none";
     document.querySelector(".store-cats-head").style.display=tab==="catalog"?"":"none"; document.getElementById("store-cats").style.display=tab==="catalog"?"":"none";
     if(tab==="installed") loadInstalls(); if(tab==="add" && !$("a-id").value) resetForm(); if(tab==="sources") loadSources();
   }));
@@ -210,7 +234,7 @@
       ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
       : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">${opener?'Get':'Install'}</button>`;
     const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}" title="Edit">✎</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}" title="Delete">🗑</button>`:'';
-    return `<div class="app-row"><div class="app-ico">${iconHtml(a.icon)}</div>
+    return `<div class="app-row" data-detail="${escA(a.id)}"><div class="app-ico">${iconHtml(a.icon)}</div>
       <div class="g"><h3>${esc(a.name)}${chips}</h3><div class="tag">${esc(a.tagline||a.description||'')}</div></div>
       <div class="acts">${editDel}${installBtn}</div></div>`;
   }
@@ -228,6 +252,49 @@
     catEl.querySelectorAll("[data-unreg]").forEach(b=>b.addEventListener("click",()=>unregister(b.dataset.unreg,b.dataset.name)));
     catEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     catEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
+    // Click the tile (not a button) → app detail page.
+    catEl.querySelectorAll(".app-row").forEach(row=>row.addEventListener("click",e=>{ if(e.target.closest(".acts")) return; openDetail(row.dataset.detail); }));
+  }
+
+  function wireDetailButtons(){
+    detEl.querySelectorAll("[data-install]").forEach(b=>b.addEventListener("click",()=>openInstall(b.dataset.install,b.dataset.name)));
+    detEl.querySelectorAll("[data-unreg]").forEach(b=>b.addEventListener("click",()=>unregister(b.dataset.unreg,b.dataset.name)));
+    detEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
+    detEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
+  }
+  function showCatalog(){ detEl.style.display="none"; catEl.style.display=""; document.querySelector(".store-cats-head").style.display=""; $("store-cats").style.display=""; renderCats(); renderCatalog(); }
+  function openDetail(id){
+    catEl.style.display="none"; instEl.style.display="none"; addEl.style.display="none"; srcEl.style.display="none";
+    document.querySelector(".store-cats-head").style.display="none"; $("store-cats").style.display="none";
+    detEl.style.display=""; renderDetail(id); detEl.scrollIntoView && detEl.scrollIntoView({block:"start"});
+  }
+  function renderDetail(id){
+    const a=catalog.find(x=>x.id===id); if(!a){ detEl.innerHTML='<div class="fx-muted" style="padding:1rem">App not found.</div>'; return; }
+    const opener=a.handles&&a.handles.length, local=!a.builtIn&&!a.source, cat=catOf(a);
+    const chips=`<span class="chip">${esc(cat)}</span>${a.source?`<span class="chip src">${esc(a.source)}</span>`:''}${local?'<span class="chip">custom</span>':''}${(a.kind==='compose'&&!a.builtIn)?'<span class="chip compose">compose</span>':''}${opener?`<span class="chip open">opens ${esc(a.handles.join(" "))}</span>`:''}`;
+    const installBtn=(opener&&a.registered)
+      ? `<button class="ui-btn" disabled>Installed ✓</button><button class="ui-btn danger" data-unreg="${escA(a.id)}" data-name="${escA(a.name)}">Uninstall</button>`
+      : `<button class="ui-btn primary" data-install="${escA(a.id)}" data-name="${escA(a.name)}">${opener?'Get':'Install'}</button>`;
+    const editDel=local?`<button class="ui-btn" data-edit="${escA(a.id)}">Edit</button><button class="ui-btn danger" data-del="${escA(a.id)}" data-name="${escA(a.name)}">Delete</button>`:'';
+    const actionsCard=(a.actions&&a.actions.length)?`<div class="card"><h3>Actions</h3><div class="detail-actions">${a.actions.map(x=>`<div class="da">${esc(x.label)}<span class="mono">${esc(x.url)}</span></div>`).join("")}</div></div>`:'';
+    const rows=[["Category",esc(cat)]];
+    if(opener) rows.push(["Opens files", esc(a.handles.join(", "))]);
+    else if(a.kind==='compose'){ if(!a.builtIn) rows.push(["Type","Compose stack"]); }
+    else if(a.image) rows.push(["Image", `<span class="mono">${esc(a.image)}</span>`]);
+    if(a.volumes&&a.volumes.length) rows.push(["Data volumes", esc(a.volumes.join(", "))]);
+    detEl.innerHTML=`
+      <nav class="store-crumb"><a data-crumb="home">Discover</a><span class="sep">›</span><a data-crumb="cat" data-cat="${escA(cat)}">${esc(cat)}</a><span class="sep">›</span><span class="cur">${esc(a.name)}</span></nav>
+      <div class="store-detail-head"><div class="app-ico detail-ico">${iconHtml(a.icon)}</div>
+        <div class="g"><h1>${esc(a.name)}</h1><div class="tag">${esc(a.tagline||'')}</div><div class="chips">${chips}</div></div>
+        <div class="acts">${installBtn}${editDel}</div></div>
+      <div class="store-detail-body">
+        <div class="card"><h3>About</h3><p>${esc(a.description||a.tagline||'No description.')}</p></div>
+        ${actionsCard}
+        <div class="card"><h3>Details</h3><dl class="detail-meta">${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl></div>
+      </div>`;
+    wireDetailButtons();
+    detEl.querySelector('[data-crumb="home"]').addEventListener("click",()=>{ activeCat="all"; search=""; const se=$("store-search"); if(se) se.value=""; showCatalog(); });
+    const cl=detEl.querySelector('[data-crumb="cat"]'); if(cl) cl.addEventListener("click",()=>{ activeCat=cl.dataset.cat; showCatalog(); });
   }
   async function loadCatalog(){
     try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
