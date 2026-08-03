@@ -16,6 +16,7 @@
     <div class="fx-split" id="fx-split" title="Drag to resize"></div>
 
     <section class="fx-main">
+        <div class="fx-tabs" id="fx-tabs"></div>
         <div class="fx-bar">
             <button class="fx-ico-btn" id="fx-up" title="Up one level">↑</button>
             <nav class="fx-crumb" id="fx-crumb"></nav>
@@ -146,6 +147,15 @@
 .fx-stackhead { font-size:0.7rem; font-weight:700; color:var(--mat-text-muted); padding:0.5rem 0.4rem 0.2rem; }
 
 .fx-main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; }
+.fx-tabs { display:flex; align-items:stretch; gap:0.2rem; padding:0.35rem 0.5rem 0; border-bottom:1px solid var(--mat-border); overflow-x:auto; scrollbar-width:thin; }
+.fx-tab { display:flex; align-items:center; gap:0.4rem; max-width:200px; padding:0.4rem 0.4rem 0.4rem 0.7rem; border:1px solid var(--mat-border); border-bottom:none; border-radius:9px 9px 0 0; background:var(--mat-surface-2); color:var(--mat-text-muted); cursor:pointer; white-space:nowrap; }
+.fx-tab.active { background:var(--mat-surface); color:var(--mat-text); border-color:var(--mat-accent); }
+.fx-tab-ico { flex:0 0 auto; }
+.fx-tab-lbl { overflow:hidden; text-overflow:ellipsis; font-size:0.85rem; font-weight:600; }
+.fx-tab-x { flex:0 0 auto; width:18px; height:18px; display:grid; place-items:center; border:none; background:transparent; color:inherit; border-radius:5px; cursor:pointer; font-size:0.95rem; line-height:1; }
+.fx-tab-x:hover { background:var(--mat-surface-3, rgba(255,255,255,0.12)); }
+.fx-tab-new { flex:0 0 auto; width:30px; border:none; background:transparent; color:var(--mat-text-muted); cursor:pointer; font-size:1.1rem; border-radius:8px; }
+.fx-tab-new:hover { background:var(--mat-surface-2); color:var(--mat-text); }
 .fx-bar { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.8rem; border-bottom:1px solid var(--mat-border); }
 .fx-ico-btn { width:30px; height:30px; border:1px solid var(--mat-border); border-radius:8px; background:var(--mat-surface); cursor:pointer; flex:0 0 auto; }
 .fx-ico-btn:hover { background:rgba(255,255,255,0.06); }
@@ -212,6 +222,8 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   const api=(v,op,q)=>`/api/v1/files/${encodeURIComponent(v)}/${op}`+(q?`?${q}`:"");
   const dl=document.getElementById("fx-dl");
   let cur={volume:null,path:""}, sel=null, clip=null, entries=[];
+  // Multi-tab: each tab holds one location. openFolder/showHome sync the active tab.
+  let tabs=[{home:true}], at=0;
   let view=localStorage.getItem("fx-view")||"details";
   let treeData=null;
   // Which accordion groups are open (persisted per user).
@@ -226,6 +238,22 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
 
   async function jget(url){ const r=await fetch(url); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||r.status);} return r.json(); }
   async function jpost(url,body){ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status);} return r.json(); }
+
+  // ---- tabs (each holds one location; openFolder/showHome sync the active tab) ----
+  const tabsEl=document.getElementById("fx-tabs");
+  function tabTitle(t){ if(t.home) return "This PC"; const leaf=(t.path||"").split("/").filter(Boolean).pop(); return leaf || t.volume; }
+  function renderTabs(){
+    tabsEl.innerHTML = tabs.map((t,i)=>`<div class="fx-tab${i===at?' active':''}" data-i="${i}"><span class="fx-tab-ico">${t.home?'🖥️':'🗄️'}</span><span class="fx-tab-lbl">${esc(tabTitle(t))}</span>${tabs.length>1?`<button class="fx-tab-x" data-close="${i}" title="Close tab">×</button>`:''}</div>`).join("")
+      + `<button class="fx-tab-new" id="fx-tab-new" title="New tab">＋</button>`;
+    tabsEl.querySelectorAll(".fx-tab").forEach(d=>d.addEventListener("click",e=>{ if(e.target.closest("[data-close]")) return; switchTab(+d.dataset.i); }));
+    tabsEl.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); closeTab(+b.dataset.close); }));
+    document.getElementById("fx-tab-new").addEventListener("click",()=>newTab());
+  }
+  function syncActiveTab(){ tabs[at] = cur.volume ? {home:false, volume:cur.volume, path:cur.path} : {home:true}; renderTabs(); }
+  function switchTab(i){ if(i<0||i>=tabs.length) return; at=i; const t=tabs[i]; if(t.home) showHome(); else openFolder(t.volume,t.path); }
+  function newTab(){ tabs.push({home:true}); at=tabs.length-1; showHome(); }
+  function openInNewTab(volume,path){ tabs.push({home:false,volume,path:path||""}); at=tabs.length-1; openFolder(volume,path); }
+  function closeTab(i){ if(tabs.length<=1) return; tabs.splice(i,1); if(at>i) at--; else if(at===i) at=Math.min(i, tabs.length-1); const t=tabs[at]; if(t.home) showHome(); else openFolder(t.volume,t.path); }
 
   // ---- tree (accordion: Dashboard / Volumes / Stacks / Backups) ----
   const treeEl=document.getElementById("fx-tree");
@@ -343,6 +371,7 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     homeEl.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openFolder(b.dataset.open,"")));
     document.getElementById("fx-home-new").addEventListener("click",()=>{ document.getElementById("fx-newvol").hidden=false; });
     document.getElementById("fx-home-refresh").addEventListener("click",async()=>{ treeData=null; await buildTree(); showHome(); });
+    syncActiveTab();
   }
 
   async function openFolder(volume,path){
@@ -351,8 +380,9 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     crumb(); highlightTree(); updateOps();
     const list=document.getElementById("fx-list"); list.innerHTML=`<div class="fx-muted" style="padding:1rem">Loading…</div>`;
     try{ const d=await jget(api(volume,"list",`path=${encodeURIComponent(cur.path)}`)); entries=d.entries; }
-    catch(e){ list.innerHTML=`<div class="fx-muted" style="padding:1rem">${esc(e.message)}</div>`; return; }
+    catch(e){ list.innerHTML=`<div class="fx-muted" style="padding:1rem">${esc(e.message)}</div>`; syncActiveTab(); return; }
     renderMain();
+    syncActiveTab();
   }
   function renderMain(){
     const list=document.getElementById("fx-list");
@@ -422,6 +452,7 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
       : [];
     const items = onItem ? [
       {label:"Open",fn:()=>{ if(sel.isDir)openFolder(cur.volume,sel.path); else openFile(sel.path); }},
+      {label:"Open in new tab",fn:()=>openInNewTab(cur.volume,sel.path),hide:!sel.isDir},
       {label:"Download",fn:()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(sel.path)}`); },hide:sel.isDir},
       ...openWithItems,
       {sep:true},{label:"Copy",fn:()=>{ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }},
