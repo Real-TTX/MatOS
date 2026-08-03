@@ -52,6 +52,10 @@ public static class Wallpapers
         new Wallpaper("spooky-manor", "Spooky Manor"),
         new Wallpaper("toon-town", "Toon Town"),
         new Wallpaper("monster-meadow", "Monster Meadow"),
+        // Photo-style scenes (layered gradients) in the same vein as Mountains / Big Sur.
+        new Wallpaper("earth", "Earth"),
+        new Wallpaper("yosemite", "Yosemite"),
+        new Wallpaper("galaxy", "Galaxy"),
     };
 
     public static bool IsValid(string key) => All.Any(w => w.Key == key);

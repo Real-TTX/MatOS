@@ -116,6 +116,9 @@ textarea.ui-input { resize: vertical; }
 .wp-spooky-manor   { background-color: #241b3a; background-image: url('/img/wallpapers/spooky-manor.svg'); }
 .wp-toon-town      { background-color: #5fb8f0; background-image: url('/img/wallpapers/toon-town.svg'); }
 .wp-monster-meadow { background-color: #7ad0ff; background-image: url('/img/wallpapers/monster-meadow.svg'); }
+.wp-earth      { background-color: #02030a; background-image: url('/img/wallpapers/earth.svg'); }
+.wp-yosemite   { background-color: #ff9e6b; background-image: url('/img/wallpapers/yosemite.svg'); }
+.wp-galaxy     { background-color: #04030d; background-image: url('/img/wallpapers/galaxy.svg'); }
 
 /* wallpaper-style sizing (mirror of desktop.css wps-*) — the picker always previews swatches
    in "fill" mode regardless of the user's chosen style, so photo wallpapers crop cleanly
