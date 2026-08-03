@@ -152,7 +152,9 @@ public static class StoreApi
         {
             var r = await svc.OpenWithAsync(b.AppId, b.Volume, b.Path, ct);
             if (!r.Ok) return Results.Problem(r.Error);
-            return Results.Ok(new { url = $"{req.Scheme}://{req.Host.Host}:{r.HostPort}", id = r.ContainerId, title = r.Title });
+            var baseUrl = $"{req.Scheme}://{req.Host.Host}:{r.HostPort}";
+            var url = string.IsNullOrEmpty(r.UrlPath) ? baseUrl : $"{baseUrl}/{r.UrlPath.TrimStart('/').Split('/').Select(Uri.EscapeDataString).Aggregate((a, c) => a + "/" + c)}";
+            return Results.Ok(new { url, id = r.ContainerId, title = r.Title });
         }).RequireAuthorization("Admin");
 
         g.MapPost("/close-ephemeral", async (CloseBody b, InstallService svc, CancellationToken ct) =>

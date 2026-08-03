@@ -26,6 +26,7 @@ public class AppHandler
     public string EnvKey { get; set; } = "";                 // mechanism=env
     public string ArgTemplate { get; set; } = "";            // mechanism=arg (supports {file})
     public bool ReadOnly { get; set; }
+    public string UrlPath { get; set; } = "";                // open at host:port/<this> instead of the root (supports {file})
 }
 
 /// <summary>Unified app definition — built-in, custom single-image, or a Compose stack.

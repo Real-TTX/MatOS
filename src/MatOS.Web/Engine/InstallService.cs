@@ -304,7 +304,7 @@ public class InstallService
     }
 
     // ---- "Open with" (file handlers): launch an on-demand container bound to a file ----
-    public record OpenResult(bool Ok, string? ContainerId, int HostPort, string? Error, string? Title);
+    public record OpenResult(bool Ok, string? ContainerId, int HostPort, string? Error, string? Title, string? UrlPath = null);
 
     /// <summary>Launch an ephemeral container that opens <paramref name="relPath"/> (inside
     /// <paramref name="volume"/>) with the handler app <paramref name="appId"/>. The file's volume is
@@ -372,7 +372,9 @@ public class InstallService
             // so the window's iframe doesn't load into a connection-refused blank page.
             await WaitForReadyAsync(name, app.UiPort, TimeSpan.FromSeconds(15), ct);
             _log.LogInformation("Opened {File} in {App} as ephemeral {Name}", relPosix, app.Id, name);
-            return new(true, id, port, null, title);
+            // Some apps (e.g. a plain file server) should open at the file's URL, not the container root.
+            var urlPath = string.IsNullOrEmpty(handler.UrlPath) ? null : handler.UrlPath.Replace("{file}", relPosix);
+            return new(true, id, port, null, title, urlPath);
         }
         catch (Exception ex) { _log.LogWarning(ex, "OpenWith {App} failed", app.Id); return new(false, null, port, ex.Message, null); }
     }

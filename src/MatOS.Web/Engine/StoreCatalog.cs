@@ -121,6 +121,22 @@ volumes:
                 },
             }),
 
+        Image("video-player", "Video Player", "Play videos in a window",
+            "Play video files right in a matOS window. Right-click a video in the File Explorer and choose \"Open with Video Player\" — it streams the file (with seeking) into your browser's built-in player. Works with common web formats (mp4, webm, ogg, m4v, mov); some containers/codecs (e.g. mkv) may not play in-browser.",
+            "Media", "nginx:alpine", 80, "🎬",
+            Array.Empty<string>(), new Dictionary<string, string>(), Array.Empty<AppAction>(),
+            variables: null,
+            handlers: new[]
+            {
+                // nginx serves the mounted file directly (with HTTP range requests, so seeking works);
+                // UrlPath opens the window at the file's URL, where the browser plays it.
+                new AppHandler
+                {
+                    Extensions = new() { ".mp4", ".webm", ".ogv", ".ogg", ".m4v", ".mov" },
+                    MountPath = "/usr/share/nginx/html", ReadOnly = true, UrlPath = "{file}",
+                },
+            }),
+
         // ---- LinuxServer.io desktop apps in the browser (KasmVNC) ----
         Compose("brave", "Brave", "Brave browser in your browser",
             "The Brave web browser running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
