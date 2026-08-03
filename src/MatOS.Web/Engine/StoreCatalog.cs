@@ -46,7 +46,10 @@ volumes:
     {
         Image("matcms", "MatCMS", "Self-hosted CMS",
             "A lightweight self-hosted content management system. Each install gets its own data volume and can run alongside others.",
-            "Productivity", "matcms:latest", 8080, "📝",
+            // MatCMS has no public logo icon (custom app), so this is a purpose-drawn square
+            // tile in the MatCMS brand blue (#2563eb) with an "M" monogram + content-block bar.
+            "Productivity", "matcms:latest", 8080,
+            "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJNYXRDTVMiPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0ibWMiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMzYjgyZjYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxZDRlZDgiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNSIgZmlsbD0idXJsKCNtYykiLz48cGF0aCBkPSJNMTcgNDVWMjJsMTUgMTUgMTUtMTV2MjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI2LjUiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxyZWN0IHg9IjE3IiB5PSI0OS41IiB3aWR0aD0iMzAiIGhlaWdodD0iNC41IiByeD0iMi4yNSIgZmlsbD0iI2JmZGJmZSIvPjwvc3ZnPgo=",
             new[] { "/app/appdata" }, new Dictionary<string, string> { ["ASPNETCORE_ENVIRONMENT"] = "Production" },
             new[] { new AppAction("Administration", "/admin") }),
 
