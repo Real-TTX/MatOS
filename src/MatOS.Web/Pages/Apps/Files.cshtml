@@ -17,32 +17,42 @@
 
     <section class="fx-main">
         <div class="fx-tabs" id="fx-tabs"></div>
-        <div class="fx-bar">
-            <button class="fx-ico-btn" id="fx-up" title="Up one level">↑</button>
-            <nav class="fx-crumb" id="fx-crumb"></nav>
+        <div class="fx-toolbar">
+            <div class="fx-tb-nav">
+                <button class="fx-tbtn" id="fx-back" title="Back" disabled>‹</button>
+                <button class="fx-tbtn" id="fx-fwd" title="Forward" disabled>›</button>
+                <button class="fx-tbtn" id="fx-up" title="Enclosing folder">↑</button>
+            </div>
+            <div class="fx-tb-title" id="fx-tb-title">This PC</div>
+            <span class="fx-tb-flex"></span>
+            <div class="fx-seg" id="fx-view">
+                <button data-view="grid" title="As Icons">▦</button>
+                <button data-view="list" title="As List">≣</button>
+                <button data-view="details" class="active" title="As Details">☰</button>
+            </div>
+            <button class="fx-tbtn" id="fx-sort-btn" title="Sort by">⇅</button>
+            <label class="fx-search"><input type="search" id="fx-search" placeholder="Search" autocomplete="off" /></label>
+            <button class="fx-tbtn" id="fx-action-btn" title="Actions">⋯</button>
         </div>
+        @* Legacy action buttons: hidden, kept for their existing wiring — surfaced via the ⋯ menu + right-click. *@
         <div class="fx-ribbon" id="fx-ribbon" hidden>
             <button class="fx-rb" id="fx-newfolder">📁 New folder</button>
             <button class="fx-rb" id="fx-upload">⬆ Upload</button>
-            <span class="fx-sep"></span>
             <button class="fx-rb" id="fx-copy" disabled>⧉ Copy</button>
             <button class="fx-rb" id="fx-cut" disabled>✂ Cut</button>
             <button class="fx-rb" id="fx-paste" disabled>📋 Paste</button>
-            <span class="fx-sep"></span>
             <button class="fx-rb" id="fx-rename" disabled>✎ Rename</button>
             <button class="fx-rb danger" id="fx-delete" disabled>🗑 Delete</button>
-            <span class="spacer" style="flex:1"></span>
-            <div class="fx-seg" id="fx-view">
-                <button data-view="grid" title="Grid">▦</button>
-                <button data-view="list" title="List">≣</button>
-                <button data-view="details" class="active" title="Details">☰</button>
-            </div>
-            <span class="fx-sep"></span>
             <button class="fx-rb" id="fx-export" title="Download whole volume">⤓ Export</button>
             <button class="fx-rb" id="fx-import" title="Import a .tar.gz">⤒ Import</button>
         </div>
         <div class="fx-list" id="fx-list"></div>
         <div class="fx-home" id="fx-home-view"></div>
+        <div class="fx-statusbar" id="fx-statusbar">
+            <nav class="fx-crumb" id="fx-crumb"></nav>
+            <span class="fx-tb-flex"></span>
+            <span class="fx-status" id="fx-status"></span>
+        </div>
     </section>
 
     <div class="fx-editor" id="fx-editor" hidden>
@@ -139,7 +149,7 @@
 .fx-subhead { padding:0.35rem 0.4rem 0.15rem; color:var(--mat-text-muted); font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
 .fx-row { display:flex; align-items:center; gap:0.25rem; padding:0.3rem 0.4rem; border-radius:7px; cursor:pointer; font-size:0.86rem; white-space:nowrap; }
 .fx-row:hover { background:rgba(255,255,255,0.06); }
-.fx-row.sel { background:var(--mat-accent); color:#fff; }
+.fx-row.sel { background:var(--mat-accent); color:#fff; box-shadow:0 1px 5px rgba(0,0,0,.22); }
 .fx-caret { width:15px; text-align:center; color:var(--mat-text-muted); font-size:0.65rem; flex:0 0 auto; }
 .fx-row.sel .fx-caret { color:#fff; }
 .fx-caret.leaf { visibility:hidden; }
@@ -156,16 +166,31 @@
 .fx-tab-x:hover { background:var(--mat-surface-3, rgba(255,255,255,0.12)); }
 .fx-tab-new { flex:0 0 auto; width:30px; border:none; background:transparent; color:var(--mat-text-muted); cursor:pointer; font-size:1.1rem; border-radius:8px; }
 .fx-tab-new:hover { background:var(--mat-surface-2); color:var(--mat-text); }
-.fx-bar { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.8rem; border-bottom:1px solid var(--mat-border); }
 .fx-ico-btn { width:30px; height:30px; border:1px solid var(--mat-border); border-radius:8px; background:var(--mat-surface); cursor:pointer; flex:0 0 auto; }
 .fx-ico-btn:hover { background:rgba(255,255,255,0.06); }
-.fx-crumb { display:flex; align-items:center; gap:0.2rem; font-size:0.9rem; flex-wrap:wrap; min-width:0; }
-.fx-crumb a { cursor:pointer; color:var(--mat-accent); padding:0.1rem 0.2rem; border-radius:5px; } .fx-crumb a:hover { background:rgba(139,92,246,0.15); }
-.fx-crumb span.sep { color:var(--mat-text-muted); }
-.fx-ribbon { display:flex; align-items:center; gap:0.3rem; padding:0.45rem 0.8rem; border-bottom:1px solid var(--mat-border); flex-wrap:wrap; background:rgba(255,255,255,0.02); }
-.fx-rb { display:inline-flex; align-items:center; gap:0.3rem; padding:0.35rem 0.6rem; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--mat-text); font:inherit; font-size:0.82rem; cursor:pointer; }
-.fx-rb:hover:not(:disabled) { background:rgba(255,255,255,0.06); } .fx-rb:disabled { opacity:0.4; cursor:default; } .fx-rb.danger:hover:not(:disabled){ background:rgba(244,80,107,0.16); color:#ffb3c0; }
-.fx-sep { width:1px; align-self:stretch; background:var(--mat-border); margin:0.1rem 0.2rem; }
+/* macOS-style unified toolbar */
+.fx-toolbar { display:flex; align-items:center; gap:0.5rem; padding:0.45rem 0.7rem; border-bottom:1px solid var(--mat-border); background:rgba(255,255,255,0.03); backdrop-filter:blur(18px) saturate(1.2); -webkit-backdrop-filter:blur(18px) saturate(1.2); }
+.fx-tb-nav { display:flex; gap:0.15rem; }
+.fx-tbtn { min-width:30px; height:30px; padding:0 0.5rem; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--mat-text); font:inherit; font-size:1.05rem; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.fx-tbtn:hover:not(:disabled) { background:rgba(255,255,255,0.08); }
+.fx-tbtn:disabled { opacity:0.35; cursor:default; }
+.fx-tb-title { font-size:0.92rem; font-weight:700; color:var(--mat-text); max-width:38%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:0.25rem; }
+.fx-tb-flex { flex:1 1 auto; min-width:0; }
+.fx-search { display:inline-flex; align-items:center; gap:0.35rem; background:rgba(255,255,255,0.07); border:1px solid var(--mat-border); border-radius:8px; padding:0 0.55rem; height:30px; width:150px; transition:width 0.15s ease, border-color 0.15s ease; }
+.fx-search::before { content:"🔍"; font-size:0.8rem; opacity:0.6; }
+.fx-search:focus-within { width:220px; border-color:var(--mat-accent); }
+.fx-search input { border:none; outline:none; background:transparent; color:var(--mat-text); font:inherit; font-size:0.85rem; width:100%; }
+.fx-search input::-webkit-search-cancel-button { filter:invert(0.6); }
+#fx-ribbon { display:none !important; }
+/* bottom path bar + status bar */
+.fx-statusbar { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.75rem; border-top:1px solid var(--mat-border); background:rgba(255,255,255,0.02); min-height:30px; flex:0 0 auto; }
+.fx-crumb { display:flex; align-items:center; gap:0.15rem; font-size:0.8rem; min-width:0; overflow:hidden; white-space:nowrap; }
+.fx-crumb a { cursor:pointer; color:var(--mat-text-muted); padding:0.1rem 0.28rem; border-radius:5px; } .fx-crumb a:hover { background:rgba(255,255,255,0.08); color:var(--mat-text); }
+.fx-crumb a:last-child { color:var(--mat-text); font-weight:600; }
+.fx-crumb span.sep { color:var(--mat-text-muted); opacity:0.6; }
+.fx-status { color:var(--mat-text-muted); font-size:0.78rem; white-space:nowrap; flex:0 0 auto; }
+.fx-sortcaret { font-size:0.6rem; margin-left:0.2rem; color:var(--mat-accent); }
+th.fx-sortable { cursor:pointer; user-select:none; } th.fx-sortable:hover { color:var(--mat-text); }
 
 .fx-list { flex:1 1 auto; overflow:auto; }
 /* details view */
@@ -191,8 +216,8 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
 .fx-editor[hidden] { display:none; }
 .fx-editor-head { display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); }
 #fx-text { flex:1 1 auto; border:none; outline:none; resize:none; padding:1rem; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85rem; line-height:1.5; background:#0b0f1a; color:#d7def0; }
-#fx-ctx { position:fixed; z-index:50; min-width:170px; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:0.3rem; }
-#fx-ctx[hidden]{ display:none; }
+#fx-ctx, #fx-pop { position:fixed; z-index:50; min-width:180px; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.28); padding:0.3rem; }
+#fx-ctx[hidden], #fx-pop[hidden]{ display:none; }
 .fx-ctx-item { display:block; width:100%; text-align:left; padding:0.45rem 0.6rem; border:none; background:transparent; border-radius:7px; cursor:pointer; font:inherit; font-size:0.85rem; color:var(--mat-text); }
 .fx-ctx-item:hover { background:rgba(255,255,255,0.06); } .fx-ctx-item.danger { color:#ffb3c0; } .fx-ctx-item:disabled { opacity:0.4; }
 .fx-ctx-sep { height:1px; background:var(--mat-border); margin:0.25rem 0.2rem; }
@@ -225,7 +250,10 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   // Multi-tab: each tab holds one location. openFolder/showHome sync the active tab.
   let tabs=[{home:true}], at=0;
   let view=localStorage.getItem("fx-view")||"details";
+  let sortKey=localStorage.getItem("fx-sortkey")||"name", sortDir=localStorage.getItem("fx-sortdir")||"asc", filter="";
+  let hist=[], hi=-1, navLock=false;   // back/forward history
   let treeData=null;
+  const byId=id=>document.getElementById(id);
   // Which accordion groups are open (persisted per user).
   const treeOpen = { volumes:true, stacks:false }; try{ const s=JSON.parse(localStorage.getItem("fx-tree-open")||"{}"); Object.assign(treeOpen,s); }catch(_){}
   const saveTreeOpen = () => { try{ localStorage.setItem("fx-tree-open", JSON.stringify(treeOpen)); }catch(_){}};
@@ -330,13 +358,25 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   function highlightTree(){ treeEl.querySelectorAll(".fx-row").forEach(r=>r.classList.toggle("sel", r.dataset.volume===cur.volume && r.dataset.path===cur.path)); }
 
   // ---- main pane ----
-  function crumb(){ const el=document.getElementById("fx-crumb"); el.innerHTML="";
-    if(!cur.volume){ el.innerHTML=`<span class="fx-muted">No volume selected</span>`; return; }
+  function setTitle(){ const el=byId("fx-tb-title"); if(!el)return;
+    if(!cur.volume){ el.textContent="This PC"; return; }
+    el.textContent=(cur.path||"").split("/").filter(Boolean).pop() || cur.volume; }
+  function crumb(){ setTitle(); const el=document.getElementById("fx-crumb"); el.innerHTML="";
+    if(!cur.volume){ el.innerHTML=`<a>🖥️ This PC</a>`; return; }
     const mk=(t,p)=>{ const a=document.createElement("a"); a.textContent=t; a.onclick=()=>openFolder(cur.volume,p); return a; };
     el.appendChild(mk("🗄️ "+cur.volume,"")); let acc="";
     for(const part of cur.path.split("/").filter(Boolean)){ acc=join(acc,part); const s=document.createElement("span"); s.className="sep"; s.textContent="›"; el.append(s,mk(part,acc)); }
   }
   document.getElementById("fx-up").addEventListener("click",()=>{ if(cur.volume) openFolder(cur.volume,parent(cur.path)); });
+
+  // ---- back / forward history ----
+  function histLoc(){ return cur.volume?{volume:cur.volume,path:cur.path}:{home:true}; }
+  function sameLoc(a,b){ return a&&b&&((a.home&&b.home)||(!a.home&&!b.home&&a.volume===b.volume&&a.path===b.path)); }
+  function pushHist(){ if(navLock)return; const loc=histLoc(); if(sameLoc(hist[hi],loc))return; hist=hist.slice(0,hi+1); hist.push(loc); hi=hist.length-1; updateNav(); }
+  function updateNav(){ const b=byId("fx-back"),f=byId("fx-fwd"); if(b)b.disabled=hi<=0; if(f)f.disabled=hi>=hist.length-1; }
+  function goHist(d){ const ni=hi+d; if(ni<0||ni>=hist.length)return; hi=ni; navLock=true; const l=hist[hi]; if(l.home)showHome(); else openFolder(l.volume,l.path); navLock=false; updateNav(); }
+  byId("fx-back").addEventListener("click",()=>goHist(-1));
+  byId("fx-fwd").addEventListener("click",()=>goHist(1));
 
   // ---- Home ("This PC") view ----
   const homeEl=document.getElementById("fx-home-view");
@@ -345,8 +385,9 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     document.getElementById("fx-editor").hidden=true;
     document.getElementById("fx-viewer").hidden=true;
     document.getElementById("fx-ribbon").hidden=true;
-    document.getElementById("fx-list").innerHTML="";
-    crumb(); highlightTree(); updateOps();
+    const lst=document.getElementById("fx-list"); lst.innerHTML=""; lst.style.display="none";
+    filter=""; const se0=byId("fx-search"); if(se0) se0.value="";
+    crumb(); highlightTree(); updateOps(); pushHist();
     homeEl.classList.add("active");
     const vols=(treeData&&treeData.volumes)||[];
     const isSmb = v => v.options && v.options.type === "cifs";
@@ -375,23 +416,52 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
   }
 
   async function openFolder(volume,path){
-    homeEl.classList.remove("active");
+    homeEl.classList.remove("active"); document.getElementById("fx-list").style.display="";
     cur={volume,path:path||""}; sel=null; document.getElementById("fx-editor").hidden=true; document.getElementById("fx-ribbon").hidden=false;
-    crumb(); highlightTree(); updateOps();
+    filter=""; const se1=byId("fx-search"); if(se1) se1.value="";
+    crumb(); highlightTree(); updateOps(); pushHist();
     const list=document.getElementById("fx-list"); list.innerHTML=`<div class="fx-muted" style="padding:1rem">Loading…</div>`;
     try{ const d=await jget(api(volume,"list",`path=${encodeURIComponent(cur.path)}`)); entries=d.entries; }
     catch(e){ list.innerHTML=`<div class="fx-muted" style="padding:1rem">${esc(e.message)}</div>`; syncActiveTab(); return; }
     renderMain();
     syncActiveTab();
   }
+  // ---- sort + filter ----
+  const kindOf=en=>en.isDir?"":(en.name.split(".").pop()||"").toLowerCase();
+  function sortedEntries(){
+    let arr=entries.slice();
+    if(filter){ const f=filter.toLowerCase(); arr=arr.filter(en=>en.name.toLowerCase().includes(f)); }
+    arr.sort((a,b)=>{
+      if(a.isDir!==b.isDir) return a.isDir?-1:1;   // folders always first
+      let r=0;
+      if(sortKey==="size") r=(a.size||0)-(b.size||0);
+      else if(sortKey==="date") r=String(a.modifiedUtc||"").localeCompare(String(b.modifiedUtc||""));
+      else if(sortKey==="kind") r=kindOf(a).localeCompare(kindOf(b));
+      if(r===0) r=a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"});
+      return sortDir==="desc"?-r:r;
+    });
+    return arr;
+  }
+  function setSort(k){ if(sortKey===k) sortDir=sortDir==="asc"?"desc":"asc"; else { sortKey=k; sortDir="asc"; }
+    localStorage.setItem("fx-sortkey",sortKey); localStorage.setItem("fx-sortdir",sortDir); renderMain(); markSel(); }
+  function updateStatus(){ const el=byId("fx-status"); if(!el)return;
+    if(!cur.volume){ const n=((treeData&&treeData.volumes)||[]).length; el.textContent=n?`${n} volume${n>1?"s":""}`:""; return; }
+    const arr=sortedEntries(); let s=`${arr.length} item${arr.length===1?"":"s"}`;
+    if(filter) s=`${arr.length} of ${entries.length} · “${esc(filter)}”`;
+    if(sel) s=`“${esc(sel.name)}” selected · `+s; el.textContent=s; }
+
   function renderMain(){
     const list=document.getElementById("fx-list");
+    const data=sortedEntries(); updateStatus();
     if(!entries.length){ list.innerHTML=`<div class="fx-muted" style="padding:1.2rem">Empty folder.</div>`; return; }
-    if(view==="details") list.innerHTML=`<table class="fx-tbl"><thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead><tbody>${
-      entries.map(en=>`<tr data-name="${escA(en.name)}" data-dir="${en.isDir}"><td><span class="fx-name"><span class="i">${fileIcon(en.name,en.isDir)}</span>${esc(en.name)}</span></td>
+    if(!data.length){ list.innerHTML=`<div class="fx-muted" style="padding:1.2rem">No items match “${esc(filter)}”.</div>`; return; }
+    const car=k=> sortKey===k?`<span class="fx-sortcaret">${sortDir==="asc"?"▲":"▼"}</span>`:"";
+    if(view==="details") list.innerHTML=`<table class="fx-tbl"><thead><tr><th class="fx-sortable" data-sort="name">Name${car("name")}</th><th class="fx-sortable" data-sort="size">Size${car("size")}</th><th class="fx-sortable" data-sort="date">Modified${car("date")}</th></tr></thead><tbody>${
+      data.map(en=>`<tr data-name="${escA(en.name)}" data-dir="${en.isDir}"><td><span class="fx-name"><span class="i">${fileIcon(en.name,en.isDir)}</span>${esc(en.name)}</span></td>
         <td class="fx-muted">${en.isDir?"":fmtBytes(en.size)}</td><td class="fx-muted">${(en.modifiedUtc||"").replace("T"," ").replace(/\..*/,"")}</td></tr>`).join("")}</tbody></table>`;
-    else if(view==="grid") list.innerHTML=`<div class="fx-grid">${entries.map(en=>`<div class="fx-tile" data-name="${escA(en.name)}" data-dir="${en.isDir}"><div class="i">${fileIcon(en.name,en.isDir)}</div><div class="n">${esc(en.name)}</div></div>`).join("")}</div>`;
-    else list.innerHTML=`<div class="fx-listv">${entries.map(en=>`<div class="fx-li" data-name="${escA(en.name)}" data-dir="${en.isDir}"><span class="i">${fileIcon(en.name,en.isDir)}</span><span>${esc(en.name)}</span></div>`).join("")}</div>`;
+    else if(view==="grid") list.innerHTML=`<div class="fx-grid">${data.map(en=>`<div class="fx-tile" data-name="${escA(en.name)}" data-dir="${en.isDir}"><div class="i">${fileIcon(en.name,en.isDir)}</div><div class="n">${esc(en.name)}</div></div>`).join("")}</div>`;
+    else list.innerHTML=`<div class="fx-listv">${data.map(en=>`<div class="fx-li" data-name="${escA(en.name)}" data-dir="${en.isDir}"><span class="i">${fileIcon(en.name,en.isDir)}</span><span>${esc(en.name)}</span></div>`).join("")}</div>`;
+    list.querySelectorAll("th[data-sort]").forEach(th=>th.addEventListener("click",()=>setSort(th.dataset.sort)));
     list.querySelectorAll("[data-name]").forEach(row=>{
       row.addEventListener("click",()=>select(row));
       row.addEventListener("dblclick",()=>{ const n=row.dataset.name, isDir=row.dataset.dir==="true"; if(isDir) openFolder(cur.volume,join(cur.path,n)); else openFile(join(cur.path,n)); });
@@ -422,7 +492,42 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     b.addEventListener("click",()=>{ view=b.dataset.view; localStorage.setItem("fx-view",view); document.querySelectorAll("#fx-view button").forEach(x=>x.classList.toggle("active",x===b)); renderMain(); markSel(); }); });
 
   // ---- ops ----
-  function updateOps(){ const has=!!sel; ["fx-copy","fx-cut","fx-rename","fx-delete"].forEach(id=>document.getElementById(id).disabled=!has); document.getElementById("fx-paste").disabled=!clip; }
+  function updateOps(){ const has=!!sel; ["fx-copy","fx-cut","fx-rename","fx-delete"].forEach(id=>document.getElementById(id).disabled=!has); document.getElementById("fx-paste").disabled=!clip; updateStatus(); }
+
+  // ---- toolbar: search + sort/action popovers ----
+  byId("fx-search").addEventListener("input",e=>{ filter=e.target.value.trim(); if(cur.volume) renderMain(); });
+  byId("fx-search").addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.target.value=""; filter=""; if(cur.volume) renderMain(); } });
+  const pop=document.createElement("div"); pop.id="fx-pop"; pop.hidden=true; document.body.appendChild(pop);
+  function hidePop(){ pop.hidden=true; }
+  function showPop(anchor,items){ pop.innerHTML="";
+    for(const it of items){ if(it.hide)continue; if(it.sep){ const s=document.createElement("div"); s.className="fx-ctx-sep"; pop.appendChild(s); continue; }
+      const b=document.createElement("button"); b.className="fx-ctx-item"+(it.danger?" danger":""); b.textContent=it.label; b.disabled=!!it.dis;
+      b.onclick=ev=>{ ev.stopPropagation(); hidePop(); it.fn(); }; pop.appendChild(b); }
+    pop.hidden=false; const r=anchor.getBoundingClientRect();
+    pop.style.left=Math.max(8,Math.min(r.right-pop.offsetWidth,window.innerWidth-pop.offsetWidth-8))+"px";
+    pop.style.top=(r.bottom+4)+"px";
+  }
+  function actionItems(){ const v=!!cur.volume; return [
+    {label:"New Folder",dis:!v,fn:()=>byId("fx-newfolder").click()},
+    {label:"Upload…",dis:!v,fn:()=>byId("fx-upload").click()},
+    {sep:true},
+    {label:"Copy",dis:!sel,fn:()=>byId("fx-copy").click()},
+    {label:"Cut",dis:!sel,fn:()=>byId("fx-cut").click()},
+    {label:"Paste",dis:!clip,fn:()=>byId("fx-paste").click()},
+    {label:"Rename…",dis:!sel,fn:()=>byId("fx-rename").click()},
+    {label:"Delete",dis:!sel,danger:true,fn:()=>byId("fx-delete").click()},
+    {sep:true},
+    {label:"Export volume…",dis:!v,fn:()=>byId("fx-export").click()},
+    {label:"Import archive…",dis:!v,fn:()=>byId("fx-import").click()},
+  ]; }
+  function sortItems(){ const mk=(k,l)=>({label:(sortKey===k?"✓  ":"    ")+l,fn:()=>setSort(k)});
+    return [ mk("name","Name"),mk("date","Date Modified"),mk("size","Size"),mk("kind","Kind"),{sep:true},
+      {label:(sortDir==="asc"?"✓  ":"    ")+"Ascending",fn:()=>{ if(sortDir!=="asc"){ sortDir="asc"; localStorage.setItem("fx-sortdir",sortDir); renderMain(); markSel(); } }},
+      {label:(sortDir==="desc"?"✓  ":"    ")+"Descending",fn:()=>{ if(sortDir!=="desc"){ sortDir="desc"; localStorage.setItem("fx-sortdir",sortDir); renderMain(); markSel(); } }} ]; }
+  byId("fx-action-btn").addEventListener("click",e=>{ e.stopPropagation(); if(!pop.hidden){hidePop();return;} showPop(e.currentTarget,actionItems()); });
+  byId("fx-sort-btn").addEventListener("click",e=>{ e.stopPropagation(); if(!pop.hidden){hidePop();return;} showPop(e.currentTarget,sortItems()); });
+  document.addEventListener("click",e=>{ if(!e.target.closest("#fx-pop")&&!e.target.closest("#fx-action-btn")&&!e.target.closest("#fx-sort-btn")) hidePop(); });
+  document.addEventListener("scroll",hidePop,true);
   document.getElementById("fx-newfolder").addEventListener("click",async()=>{ const n=await matDialog.prompt("New folder name:",{title:"New folder"}); if(!n)return; try{ await jpost(api(cur.volume,"mkdir"),{path:join(cur.path,n)}); openFolder(cur.volume,cur.path); }catch(e){ matDialog.alert(e.message); } });
   const fileInput=document.getElementById("fx-file");
   document.getElementById("fx-upload").addEventListener("click",()=>{ if(cur.volume) fileInput.click(); });
