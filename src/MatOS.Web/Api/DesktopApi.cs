@@ -1,5 +1,6 @@
 using MatOS.Web.Auth;
 using MatOS.Web.Config;
+using MatOS.Web.Docker;
 using MatOS.Web.Services;
 
 namespace MatOS.Web.Api;
@@ -133,7 +134,45 @@ public static class DesktopApi
             await svc.RemoveTaskbarPin(Uid(ctx), b.Key);
             return Results.Ok(new { ok = true });
         });
+        // ---- Hidden applications ----
+        // GET readable by any signed-in user so every desktop can filter; only admins change it.
+        // Default (first run) hides just matOS's own stack (matOS + Caddy + Matcad); fully editable.
+        g.MapGet("/hidden", async (JsonConfigService cfg, DockerService docker, CancellationToken ct) =>
+        {
+            var h = cfg.Get<HiddenConfig>("hidden");
+            var self = await docker.GetSelfStackAsync(ct);
+            if (!h.Initialized)
+            {
+                h.Stacks = self != null ? new List<string> { self } : new List<string>();
+                h.Initialized = true;
+                await cfg.SaveAsync("hidden", h);
+            }
+            var stacks = await docker.ListStacksAsync(ct);
+            return Results.Ok(new
+            {
+                hidden = h.Stacks,
+                self,
+                stacks = stacks.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => new
+                {
+                    name = s.Name,
+                    containers = s.Total,
+                    managed = s.Containers.Any(c => c.MatosManaged),
+                    system = self != null && s.Name.Equals(self, StringComparison.OrdinalIgnoreCase)
+                })
+            });
+        });
+
+        g.MapPost("/hidden", async (HiddenBody b, JsonConfigService cfg) =>
+        {
+            var h = cfg.Get<HiddenConfig>("hidden");
+            h.Stacks = (b.Stacks ?? new()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+            h.Initialized = true;
+            await cfg.SaveAsync("hidden", h);
+            return Results.Ok(new { ok = true, hidden = h.Stacks });
+        }).RequireAuthorization("Admin");
     }
+
+    public record HiddenBody(List<string>? Stacks);
 
     private static string Uid(HttpContext ctx) => ctx.User.GetUserId()?.ToString() ?? "0";
 }

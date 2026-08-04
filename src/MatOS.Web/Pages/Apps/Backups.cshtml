@@ -237,7 +237,9 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     if(!schedules.length){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">No schedules yet — click "New schedule".</td></tr>`; return; }
     $("bk-sched-rows").innerHTML=schedules.map((s,i)=>{
       const sources = (s.sourceVolumes && s.sourceVolumes.length) ? s.sourceVolumes : (s.sourceVolume?[s.sourceVolume]:[]);
-      const srcStr = sources.length===0 ? "<em>All volumes</em>" : (sources.length<=2 ? sources.map(esc).join(", ") : `${esc(sources[0])} + ${sources.length-1} more`);
+      const lbl=p=> p==="*" ? "All volumes" : (p.endsWith("/*") ? "🧱 "+p.slice(0,-2) : p);
+      const srcStr = (sources.length===0 || sources.includes("*")) ? "<em>All volumes</em>"
+        : (sources.length<=2 ? sources.map(x=>esc(lbl(x))).join(", ") : `${esc(lbl(sources[0]))} + ${sources.length-1} more`);
       return `<tr class="${s.enabled?'':'sched-off'}" data-i="${i}">
       <td><strong>${esc(s.name)}</strong>${s.lastError?'<div class="fx-muted" style="font-size:0.7rem;color:#ffb3c0">⚠ '+esc(s.lastError)+'</div>':''}</td>
       <td class="mono">${srcStr} → ${esc(s.targetVolume)}</td>
@@ -263,16 +265,21 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     pick.appendChild(allRow);
     const volRow=n=>{ const m=meta(n); const row=document.createElement("label"); row.className="bk-vol";
       row.innerHTML=`<input type="checkbox" data-src="${escA(n)}"> ${esc(n)}${m.isSmb?"  (SMB)":""}${m.size>0?"  · "+fmtB(m.size):""}`; return row; };
-    const group=(title,names)=>{ if(!names.length) return;
+    // A stack group with a "select whole stack" checkbox stores a pattern (stack/*) that also covers
+    // future volumes; when checked its individual volumes are shown checked+disabled (covered).
+    const group=(title,names,stackName)=>{ if(!names.length) return;
       const g=document.createElement("div"); g.className="bk-stackgrp";
       const head=document.createElement("label"); head.className="bk-stackgrp-head";
-      head.innerHTML=`<input type="checkbox" class="bk-stack-all"> ${esc(title)} <span class="fx-muted" style="font-weight:400">(${names.length})</span>`;
+      head.innerHTML = stackName
+        ? `<input type="checkbox" class="bk-stack-all" data-stackall="${escA(stackName)}"> ${esc(title)} <span class="fx-muted" style="font-weight:400">(${names.length}, incl. future)</span>`
+        : `<span>${esc(title)}</span>`;
       g.appendChild(head); for(const n of names) g.appendChild(volRow(n)); pick.appendChild(g);
-      head.querySelector(".bk-stack-all").addEventListener("change",e=>{ g.querySelectorAll("[data-src]").forEach(c=>{ if(!c.disabled) c.checked=e.target.checked; }); });
+      const sa=head.querySelector(".bk-stack-all");
+      if(sa) sa.addEventListener("change",e=>{ g.querySelectorAll("[data-src]").forEach(c=>{ c.checked=e.target.checked; c.disabled=e.target.checked; }); });
     };
     const srcNames=state.sourceVolumes.map(v=>v.name); const srcSet=new Set(srcNames); const claimed=new Set();
-    for(const grp of sv.groups){ const names=grp.vols.filter(n=>srcSet.has(n)); if(names.length){ group("🧱 "+grp.stack, names); names.forEach(n=>claimed.add(n)); } }
-    group("Other volumes", srcNames.filter(n=>!claimed.has(n)));
+    for(const grp of sv.groups){ const names=grp.vols.filter(n=>srcSet.has(n)); if(names.length){ group("🧱 "+grp.stack, names, grp.stack); names.forEach(n=>claimed.add(n)); } }
+    group("Other volumes", srcNames.filter(n=>!claimed.has(n)), null);
     const allCb=$("bk-sched-src-all");
     allCb.addEventListener("change",()=>{ pick.querySelectorAll("[data-src], .bk-stack-all").forEach(c=>{ c.disabled=allCb.checked; if(allCb.checked) c.checked=false; }); });
     // Target dropdown
@@ -281,8 +288,11 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     if(s){
       $("bk-sched-id").value=s.id; $("bk-sched-name").value=s.name; tgtSel.value=s.targetVolume;
       const list = (s.sourceVolumes && s.sourceVolumes.length) ? s.sourceVolumes : (s.sourceVolume?[s.sourceVolume]:[]);
-      if(!list.length){ allCb.checked=true; allCb.dispatchEvent(new Event("change")); }
-      else { for(const v of list){ const c=pick.querySelector(`[data-src="${CSS.escape(v)}"]`); if(c) c.checked=true; } }
+      if(!list.length || list.includes("*")){ allCb.checked=true; allCb.dispatchEvent(new Event("change")); }
+      else for(const p of list){
+        if(p.endsWith("/*")){ const c=pick.querySelector(`.bk-stack-all[data-stackall="${CSS.escape(p.slice(0,-2))}"]`); if(c){ c.checked=true; c.dispatchEvent(new Event("change")); } }
+        else { const c=pick.querySelector(`[data-src="${CSS.escape(p)}"]`); if(c) c.checked=true; }
+      }
       $("bk-sched-kind").value=s.kind; $("bk-sched-time").value=s.time; $("bk-sched-day").value=String(s.weekday);
       $("bk-sched-ret").value=s.retentionDays; $("bk-sched-en").checked=s.enabled;
     } else {
@@ -299,12 +309,19 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
   $("bk-sched-cancel").addEventListener("click",()=>{ $("bk-sched-dlg").hidden=true; });
   $("bk-sched-save").addEventListener("click",async()=>{
     const allCb=$("bk-sched-src-all"); const picks=$("bk-sched-srcs");
-    const sourceVolumes = allCb && allCb.checked ? [] : [...picks.querySelectorAll("[data-src]:checked")].map(c=>c.dataset.src);
+    // Build the source patterns: "*" for all, "<stack>/*" per whole-stack selection, plain names otherwise.
+    let sourceVolumes;
+    if(allCb && allCb.checked) sourceVolumes=["*"];
+    else {
+      sourceVolumes=[];
+      picks.querySelectorAll(".bk-stack-all:checked").forEach(c=>{ if(c.dataset.stackall) sourceVolumes.push(c.dataset.stackall+"/*"); });
+      picks.querySelectorAll("[data-src]:checked").forEach(c=>{ if(!c.disabled) sourceVolumes.push(c.dataset.src); });
+    }
     const body={ id:$("bk-sched-id").value, name:$("bk-sched-name").value.trim(),
       sourceVolumes, targetVolume:$("bk-sched-tgt").value,
       kind:$("bk-sched-kind").value, time:$("bk-sched-time").value, weekday:+$("bk-sched-day").value,
       retentionDays:+$("bk-sched-ret").value, enabled:$("bk-sched-en").checked };
-    if(!(allCb && allCb.checked) && sourceVolumes.length===0){ flash("Pick at least one source volume (or check 'All volumes').",false); return; }
+    if(sourceVolumes.length===0){ flash("Pick a volume, a whole stack, or 'All volumes'.",false); return; }
     if(sourceVolumes.includes(body.targetVolume)){ flash("A source volume can't equal the target.",false); return; }
     try{ const r=await fetch("/api/v1/backups/schedules/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }

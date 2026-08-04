@@ -356,12 +356,13 @@
   }
   function unpin(key) { pins.delete(key); reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : ""); fetch("/api/v1/desktop/unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(()=>{}); }
 
+  let hiddenSet = new Set(); // stacks hidden from the desktop (matOS's own stack by default; editable in Settings)
+  async function loadHidden() { try { const d = await (await fetch("/api/v1/desktop/hidden")).json(); hiddenSet = new Set(d.hidden || []); } catch (_) {} }
   async function load() {
     try {
       const res = await fetch("/api/v1/docker/stacks", { headers: { "Accept": "application/json" } });
       if (!res.ok) throw new Error(res.status);
-      // Hide matOS's own stack (matOS + Caddy + Matcad) from the desktop — it's infrastructure, not an app.
-      const data = await res.json(); stackData = (data.stacks || []).filter(s => !s.system);
+      const data = await res.json(); stackData = (data.stacks || []).filter(s => !hiddenSet.has(s.name));
     } catch (_) { stackData = []; }
     const needed = new Set();
     for (const s of stackData) for (const c of (s.containers || [])) if (c.matosApp) needed.add(c.matosApp);
@@ -1086,7 +1087,7 @@
     // Personal preferences (wallpaper/theme fallback + taskbar).
     try { const p = await (await fetch("/api/v1/desktop/prefs")).json(); applyTaskbarPrefs(p); } catch (_) {}
     await loadDefs();
-    buildSystem(); await load(); setInterval(load, 15000);
+    buildSystem(); await loadHidden(); await load(); setInterval(load, 15000);
     if (window.MatWM) { window.MatWM.setPinnedKeys([...taskbarPins]); window.MatWM.onChange(renderTaskbarPins); }
     renderTaskbarPins();
   }
@@ -1121,6 +1122,7 @@
     }
     if (m.type === "matos:close" && m.key) { window.MatWM.closeKey(m.key); }
     if (m.type === "matos:refresh") { burstReload(); broadcast({ type: "matos:reload" }); }
+    if (m.type === "matos:hidden-changed") { loadHidden().then(load); }
     // The install wizard fires this the moment the user clicks Install: show a
     // placeholder icon on the desktop immediately, iOS-style.
     if (m.type === "matos:installing" && m.appId) {

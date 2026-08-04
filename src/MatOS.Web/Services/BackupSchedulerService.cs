@@ -68,16 +68,9 @@ public class BackupSchedulerService : BackgroundService
             if (!s.Enabled) continue;
             if (!IsDue(s, now)) continue;
 
-            // Resolve source list: explicit list wins; empty list = ALL volumes minus targets +
-            // matos's own data volume; legacy SourceVolume falls back for old schedules.
-            List<string> sources;
-            if (s.SourceVolumes != null && s.SourceVolumes.Count > 0) sources = s.SourceVolumes.ToList();
-            else if (!string.IsNullOrWhiteSpace(s.SourceVolume)) sources = new() { s.SourceVolume };
-            else
-            {
-                var all = await docker.ListVolumesAsync(false, ct);
-                sources = all.Select(v => v.Name).Where(n => !targets.Contains(n) && n != "matos_matos-data").ToList();
-            }
+            // Resolve the source list by expanding the job's patterns against the CURRENT volumes,
+            // so a "whole stack" or "everything" job automatically picks up newly-created volumes.
+            var sources = await ExpandSourcesAsync(s, docker, targets, ct);
 
             var errors = new List<string>(); var totals = 0L; var successes = 0;
             foreach (var src in sources.Distinct())
@@ -97,6 +90,52 @@ public class BackupSchedulerService : BackgroundService
             if (s.RetentionDays > 0) await Prune(backups, s, ct, sources);
             await config.SaveAsync("backup-schedules", store);
         }
+    }
+
+    /// <summary>Expands a job's source patterns against the CURRENT volumes. Supported entries:
+    /// <c>*</c> = every volume; <c>&lt;stack&gt;/*</c> = every volume used by that stack; a plain
+    /// name = that one volume. Backup targets and matOS's own data volume are excluded from the
+    /// bulk patterns. Empty list / legacy single-source fall back sensibly for old schedules.</summary>
+    private static async Task<List<string>> ExpandSourcesAsync(BackupSchedule s,
+        MatOS.Web.Docker.DockerService docker, HashSet<string> targets, CancellationToken ct)
+    {
+        var patterns = (s.SourceVolumes != null && s.SourceVolumes.Count > 0) ? s.SourceVolumes.ToList()
+            : (!string.IsNullOrWhiteSpace(s.SourceVolume) ? new List<string> { s.SourceVolume } : new List<string> { "*" });
+
+        var all = await docker.ListVolumesAsync(false, ct);
+        var allNames = all.Select(v => v.Name).ToList();
+        bool Excluded(string n) => targets.Contains(n) || n == s.TargetVolume || n == "matos_matos-data";
+
+        Dictionary<string, HashSet<string>>? stackMap = null;
+        async Task<Dictionary<string, HashSet<string>>> StackMapAsync()
+        {
+            if (stackMap != null) return stackMap;
+            var stacks = await docker.ListStacksAsync(ct);
+            stackMap = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var st in stacks)
+            {
+                var cnames = st.Containers.Select(c => c.Name).ToHashSet();
+                stackMap[st.Name] = all.Where(v => v.UsedBy.Any(u => cnames.Contains(u)))
+                    .Select(v => v.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            }
+            return stackMap;
+        }
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in patterns)
+        {
+            var p = (raw ?? "").Trim();
+            if (p.Length == 0) continue;
+            if (p == "*") { foreach (var n in allNames) if (!Excluded(n)) result.Add(n); }
+            else if (p.EndsWith("/*"))
+            {
+                var stack = p[..^2];
+                var map = await StackMapAsync();
+                if (map.TryGetValue(stack, out var set)) foreach (var n in set) if (!Excluded(n)) result.Add(n);
+            }
+            else if (allNames.Contains(p) && p != s.TargetVolume) result.Add(p);
+        }
+        return result.ToList();
     }
 
     /// <summary>Delete this job's own backup files (from its source volumes → its target) older
