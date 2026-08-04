@@ -324,5 +324,176 @@ volumes:
         Compose("libreoffice", "LibreOffice", "Office suite in your browser",
             "The LibreOffice suite (Writer, Calc, Impress and more) running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Documents in the /config volume persist between sessions.",
             "Productivity", LsioGui("lscr.io/linuxserver/libreoffice:latest"), "app", 3000, Ico("libreoffice")),
+
+        // ---- Media (Servarr + downloaders + servers). LinuxServer.io images: PUID/PGID/TZ + /config. ----
+        Lsio("sonarr", "Sonarr", "TV series manager", 8989, "sonarr"),
+        Lsio("radarr", "Radarr", "Movie manager", 7878, "radarr"),
+        Lsio("lidarr", "Lidarr", "Music manager", 8686, "lidarr"),
+        Lsio("readarr", "Readarr", "Book & audiobook manager", 8787, "readarr"),
+        Lsio("prowlarr", "Prowlarr", "Indexer manager for the *arr apps", 9696, "prowlarr"),
+        Lsio("bazarr", "Bazarr", "Subtitle manager for Sonarr & Radarr", 6767, "bazarr"),
+        Lsio("sabnzbd", "SABnzbd", "Usenet (NZB) downloader", 8080, "sabnzbd"),
+        Lsio("jellyfin", "Jellyfin", "Free media server", 8096, "jellyfin"),
+        Lsio("emby", "Emby", "Personal media server", 8096, "emby"),
+
+        // ---- Databases, each bundled with a web admin UI (one Compose stack). Default password "matos". ----
+        Compose("mysql", "MySQL", "MySQL + phpMyAdmin",
+            "MySQL 8 database with a phpMyAdmin web UI in one stack. Default root password is 'matos' (change it after install). The database data lives in its own volume.",
+            "Databases", DbUi("mysql:8", "phpmyadmin:latest", "phpmyadmin",
+                "    environment:\n      MYSQL_ROOT_PASSWORD: matos\n      MYSQL_DATABASE: appdb\n    volumes:\n      - db:/var/lib/mysql",
+                "    environment:\n      PMA_HOST: db\n      UPLOAD_LIMIT: 256M", 80),
+            "phpmyadmin", 80, Ico("phpmyadmin")),
+        Compose("mariadb", "MariaDB", "MariaDB + phpMyAdmin",
+            "MariaDB 11 database with a phpMyAdmin web UI in one stack. Default root password is 'matos' (change it after install). The database data lives in its own volume.",
+            "Databases", DbUi("mariadb:11", "phpmyadmin:latest", "phpmyadmin",
+                "    environment:\n      MARIADB_ROOT_PASSWORD: matos\n      MARIADB_DATABASE: appdb\n    volumes:\n      - db:/var/lib/mysql",
+                "    environment:\n      PMA_HOST: db\n      UPLOAD_LIMIT: 256M", 80),
+            "phpmyadmin", 80, Ico("mariadb")),
+        Compose("mongodb", "MongoDB", "MongoDB + Mongo Express",
+            "MongoDB 7 database with the Mongo Express web UI in one stack. Default credentials root/matos (change them after install). The database data lives in its own volume.",
+            "Databases", DbUi("mongo:7", "mongo-express:latest", "mongo-express",
+                "    environment:\n      MONGO_INITDB_ROOT_USERNAME: root\n      MONGO_INITDB_ROOT_PASSWORD: matos\n    volumes:\n      - db:/data/db",
+                "    environment:\n      ME_CONFIG_MONGODB_ADMINUSERNAME: root\n      ME_CONFIG_MONGODB_ADMINPASSWORD: matos\n      ME_CONFIG_MONGODB_SERVER: db\n      ME_CONFIG_BASICAUTH: \"false\"", 8081),
+            "mongo-express", 8081, Ico("mongodb")),
+        Compose("postgres", "PostgreSQL", "PostgreSQL + pgAdmin",
+            "PostgreSQL 16 database with the pgAdmin 4 web UI in one stack. DB password 'matos'; pgAdmin login admin@matos.local / matos (change them after install). Data lives in its own volume.",
+            "Databases", @"services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: matos
+      POSTGRES_DB: appdb
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: unless-stopped
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@matos.local
+      PGADMIN_DEFAULT_PASSWORD: matos
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+    restart: unless-stopped
+volumes:
+  db:
+  pgadmin:
+", "pgadmin", 80, Ico("pgadmin")),
+
+        // ---- Network / self-hosting favourites ----
+        Image("uptime-kuma", "Uptime Kuma", "Self-hosted uptime monitor",
+            "Uptime Kuma — a slick self-hosted monitoring tool for websites, services and containers, with status pages and notifications. Data lives in an /app/data volume.",
+            "Monitoring", "louislam/uptime-kuma:1", 3001, Ico("uptime-kuma"),
+            new[] { "/app/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+        Compose("wg-easy", "WireGuard (wg-easy)", "WireGuard VPN with a web UI",
+            "wg-easy — the easiest way to run a WireGuard VPN plus a web UI to add/manage clients and show their QR codes. Needs NET_ADMIN; set your server's public host and a password in the web wizard on first run.",
+            "Network", @"services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:latest
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - config:/etc/wireguard
+    restart: unless-stopped
+volumes:
+  config:
+", "wg-easy", 51821, Ico("wireguard")),
+        Image("adguardhome", "AdGuard Home", "Network-wide ad & tracker blocker",
+            "AdGuard Home — a network-wide DNS ad/tracker blocker with a web dashboard. First visit runs a short setup wizard (admin account + which ports to use).",
+            "Network", "adguard/adguardhome:latest", 3000, Ico("adguard-home"),
+            new[] { "/opt/adguardhome/work", "/opt/adguardhome/conf" }, new Dictionary<string, string>(),
+            Array.Empty<AppAction>()),
+        Image("pihole", "Pi-hole", "Network-wide ad blocker & DNS",
+            "Pi-hole — a DNS sinkhole that blocks ads and trackers network-wide, with a web admin dashboard. Set a strong web password after install.",
+            "Network", "pihole/pihole:latest", 80, Ico("pi-hole"),
+            new[] { "/etc/pihole", "/etc/dnsmasq.d" }, new Dictionary<string, string> { ["TZ"] = "Etc/UTC" },
+            new[] { new AppAction("Admin", "/admin") }),
+        Image("vaultwarden", "Vaultwarden", "Bitwarden-compatible password manager",
+            "Vaultwarden — a lightweight, self-hosted Bitwarden-compatible password vault. Your vault data lives in a /data volume. Use it with the official Bitwarden apps/extensions.",
+            "Security", "vaultwarden/server:latest", 80, Ico("vaultwarden"),
+            new[] { "/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+        Compose("dozzle", "Dozzle", "Real-time Docker log viewer",
+            "Dozzle — a lightweight, real-time web log viewer for your Docker containers. It reads the Docker socket (read-only) to stream logs live; nothing is stored.",
+            "Monitoring", @"services:
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+", "dozzle", 8080, Ico("dozzle")),
+        Image("mealie", "Mealie", "Recipe manager & meal planner",
+            "Mealie — a self-hosted recipe manager, meal planner and shopping-list app with a friendly UI. Import recipes by URL. Uses its built-in SQLite database; data lives in an /app/data volume.",
+            "Productivity", "ghcr.io/mealie-recipes/mealie:latest", 9000, Ico("mealie"),
+            new[] { "/app/data" }, new Dictionary<string, string> { ["ALLOW_SIGNUP"] = "false", ["TZ"] = "Etc/UTC" },
+            Array.Empty<AppAction>()),
+        Compose("immich", "Immich", "Self-hosted photo & video backup",
+            "Immich — a high-performance self-hosted photos & videos backup (a Google-Photos alternative) with mobile apps. Runs as a stack: server + machine-learning + Redis + a vector Postgres. First start takes a minute; then create your admin account in the browser.",
+            "Media", @"services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    volumes:
+      - upload:/usr/src/app/upload
+    environment:
+      DB_HOSTNAME: database
+      DB_USERNAME: postgres
+      DB_PASSWORD: matos
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: redis
+    depends_on:
+      - redis
+      - database
+    restart: unless-stopped
+  redis:
+    image: docker.io/redis:6.2-alpine
+    restart: unless-stopped
+  database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0
+    environment:
+      POSTGRES_PASSWORD: matos
+      POSTGRES_USER: postgres
+      POSTGRES_DB: immich
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    volumes:
+      - model-cache:/cache
+    restart: unless-stopped
+volumes:
+  upload:
+  pgdata:
+  model-cache:
+", "immich-server", 2283, Ico("immich")),
     };
+
+    /// <summary>A LinuxServer.io app: a single labelled container with the standard PUID/PGID/TZ env
+    /// and a /config volume. Category "Media".</summary>
+    private static AppDef Lsio(string id, string name, string tagline, int uiPort, string iconSlug) =>
+        Image(id, name, tagline,
+            $"{name} running from the LinuxServer.io image, with its configuration in a /config volume. Add media/download volumes later via the app's settings if needed.",
+            "Media", $"lscr.io/linuxserver/{id}:latest", uiPort, Ico(iconSlug),
+            new[] { "/config" },
+            new Dictionary<string, string> { ["PUID"] = "1000", ["PGID"] = "1000", ["TZ"] = "Etc/UTC" },
+            Array.Empty<AppAction>());
+
+    /// <summary>A database + its web admin UI as one Compose stack (service names db + ui).</summary>
+    private static string DbUi(string dbImage, string uiImage, string uiService, string dbExtra, string uiExtra, int uiPort) =>
+        $@"services:
+  db:
+    image: {dbImage}
+{dbExtra}
+    restart: unless-stopped
+  {uiService}:
+    image: {uiImage}
+    depends_on:
+      - db
+{uiExtra}
+    restart: unless-stopped
+volumes:
+  db:
+";
 }
