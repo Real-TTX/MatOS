@@ -40,6 +40,29 @@ public partial class DockerService
     /// <summary>Exposed for other services (UpdateService) that need low-level Docker access.</summary>
     public DockerClient CreateRawClient() => CreateClient();
 
+    private string? _selfStack;
+    private bool _selfResolved;
+    /// <summary>The Compose project (stack name) that matOS itself runs in — i.e. the bundled
+    /// matOS + Caddy + Matcad stack — resolved by inspecting matOS's own container. Null when matOS
+    /// isn't part of a Compose stack (e.g. dev). The desktop hides this stack (it's infrastructure).</summary>
+    public async Task<string?> GetSelfStackAsync(CancellationToken ct = default)
+    {
+        if (_selfResolved) return _selfStack;
+        try
+        {
+            var host = System.Net.Dns.GetHostName(); // in Docker this is the container's short id by default
+            using var client = CreateClient();
+            var list = await client.Containers.ListContainersAsync(new global::Docker.DotNet.Models.ContainersListParameters { All = true }, ct);
+            var me = list.FirstOrDefault(c => (c.ID ?? "").StartsWith(host, StringComparison.OrdinalIgnoreCase))
+                  ?? list.FirstOrDefault(c => c.Names != null && c.Names.Any(n => n.TrimStart('/').Equals("matos", StringComparison.OrdinalIgnoreCase)));
+            if (me?.Labels != null && me.Labels.TryGetValue("com.docker.compose.project", out var proj) && !string.IsNullOrWhiteSpace(proj))
+                _selfStack = proj;
+        }
+        catch { _selfStack = null; }
+        _selfResolved = true;
+        return _selfStack;
+    }
+
     public async Task<bool> PingAsync(CancellationToken ct = default)
     {
         try

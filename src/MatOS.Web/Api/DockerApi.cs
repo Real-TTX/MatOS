@@ -54,7 +54,8 @@ public static class DockerApi
         g.MapGet("/stacks", async (DockerService docker, HttpRequest req, CancellationToken ct) =>
         {
             var stacks = await docker.ListStacksAsync(ct);
-            return Results.Ok(new { docker.LastError, stacks = stacks.Select(s => StackDto(s, req)) });
+            var self = await docker.GetSelfStackAsync(ct);
+            return Results.Ok(new { docker.LastError, stacks = stacks.Select(s => StackDto(s, req, self)) });
         });
 
         g.MapGet("/stacks/{name}", async (string name, DockerService docker, HttpRequest req, CancellationToken ct) =>
@@ -195,7 +196,7 @@ public static class DockerApi
         catch (Exception ex) { return Results.Problem(ex.Message); }
     }
 
-    private static object StackDto(StackInfo s, HttpRequest req) => new
+    private static object StackDto(StackInfo s, HttpRequest req, string? selfStack = null) => new
     {
         s.Name,
         s.Standalone,
@@ -204,6 +205,8 @@ public static class DockerApi
         s.AnyRunning,
         s.AllRunning,
         s.MatosManaged,
+        // matOS's own stack (matOS + Caddy + Matcad) — the desktop hides it as infrastructure.
+        system = selfStack != null && s.Name.Equals(selfStack, StringComparison.OrdinalIgnoreCase),
         containers = s.Containers.Select(c => ToDto(c, req))
     };
 

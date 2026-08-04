@@ -1,6 +1,5 @@
 using MatOS.Web.Auth;
 using MatOS.Web.Config;
-using MatOS.Web.Docker;
 using MatOS.Web.Services;
 
 namespace MatOS.Web.Api;
@@ -134,48 +133,7 @@ public static class DesktopApi
             await svc.RemoveTaskbarPin(Uid(ctx), b.Key);
             return Results.Ok(new { ok = true });
         });
-        // ---- Hidden applications (system-wide) ----
-        // GET is readable by any signed-in user so every desktop can filter; only admins change it.
-        g.MapGet("/hidden", async (JsonConfigService cfg, DockerService docker, CancellationToken ct) =>
-        {
-            var h = cfg.Get<HiddenConfig>("hidden");
-            var stacks = await docker.ListStacksAsync(ct);
-            if (!h.Initialized)
-            {
-                h.Stacks = stacks.Where(s => IsInfra(s.Name)).Select(s => s.Name).Distinct().ToList();
-                h.Initialized = true;
-                await cfg.SaveAsync("hidden", h);
-            }
-            return Results.Ok(new
-            {
-                hidden = h.Stacks,
-                stacks = stacks.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => new
-                {
-                    name = s.Name,
-                    containers = s.Total,
-                    managed = s.Containers.Any(c => c.MatosManaged)
-                })
-            });
-        });
-
-        g.MapPost("/hidden", async (HiddenBody b, JsonConfigService cfg) =>
-        {
-            var h = cfg.Get<HiddenConfig>("hidden");
-            h.Stacks = (b.Stacks ?? new()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
-            h.Initialized = true;
-            await cfg.SaveAsync("hidden", h);
-            return Results.Ok(new { ok = true, hidden = h.Stacks });
-        }).RequireAuthorization("Admin");
     }
-
-    public record HiddenBody(List<string>? Stacks);
-
-    // matOS's own infrastructure stack(s): the bundled "matos" project (matOS + Caddy + Matcad) and
-    // any standalone matcad/caddy stack — hidden from the desktop by default.
-    private static bool IsInfra(string name) =>
-        name.Equals("matos", StringComparison.OrdinalIgnoreCase)
-        || name.Contains("matcad", StringComparison.OrdinalIgnoreCase)
-        || name.Contains("caddy", StringComparison.OrdinalIgnoreCase);
 
     private static string Uid(HttpContext ctx) => ctx.User.GetUserId()?.ToString() ?? "0";
 }
