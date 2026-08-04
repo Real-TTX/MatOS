@@ -13,10 +13,6 @@
 
     <div class="nw-cards" id="nw-cards"></div>
 
-    <div class="card nw-proxy-card" id="nw-info">
-        <div id="nw-proxy" style="font-size:0.86rem">…</div>
-    </div>
-
     <div id="nw-error" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
 
     <div class="card" style="padding:0;overflow:hidden">
@@ -88,7 +84,7 @@ table.nwt tbody tr { border-top:1px solid var(--mat-border); } table.nwt tbody t
     let d; try{ d=await (await fetch("/api/v1/docker/routes")).json(); }catch(_){ rowsEl.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Docker not reachable.</td></tr>`; return; }
     if(!Object.keys(catalog).length){ try{ const cat=await (await fetch("/api/v1/store/catalog")).json(); for(const a of (cat.apps||[])) catalog[a.id]=a; }catch(_){} }
     baseDomain=d.baseDomain||"apps.localhost";
-    cards(d); renderProxy(d);
+    cards(d);
     const rs=d.routes||[];
     if(!rs.length){ rowsEl.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No matOS apps or proxy routes yet.</td></tr>`; return; }
     rowsEl.innerHTML=rs.map(r=>{
@@ -108,21 +104,6 @@ table.nwt tbody tr { border-top:1px solid var(--mat-border); } table.nwt tbody t
     }).join("");
     rowsEl.querySelectorAll("[data-pub]").forEach(b=>b.addEventListener("click",()=>{ const h=document.querySelector(`[data-host="${b.dataset.pub}"]`); doPublish(b.dataset.pub,true,h?h.value.trim():"",b); }));
     rowsEl.querySelectorAll("[data-unpub]").forEach(b=>b.addEventListener("click",()=>doPublish(b.dataset.unpub,false,"",b)));
-  }
-
-  function renderProxy(d){
-    const el=document.getElementById("nw-proxy"); const net=d.appNetwork||"matos"; const proxies=d.proxies||[];
-    const running=proxies.filter(p=>p.running);
-    if(d.proxyOnNetwork){
-      const on=running.filter(p=>(p.networks||[]).includes(net)).map(p=>p.name).join(", ");
-      el.innerHTML=`<span style="color:#7ff0c4">● Reverse proxy ready</span> <span class="fx-muted">— ${esc(on)} shares the app network <span class="mono">${esc(net)}</span>. Published apps are reachable once Matcad's Docker discovery is enabled and the base domain is set.</span>`;
-    } else {
-      const detected = running.length
-        ? `Detected proxy: ${running.map(p=>esc(p.name)+' <span class="fx-muted">('+(p.networks||[]).map(esc).join(", ")+')</span>').join(", ")}.`
-        : `No Caddy/Matcad container is running.`;
-      el.innerHTML=`<span style="color:#ffd27f">▲ No reverse proxy on the app network <span class="mono">${esc(net)}</span></span> — published apps won't be routable yet. ${detected}
-        <div class="fx-muted" style="margin-top:0.35rem">Fix: start matOS's bundled proxy (<span class="mono">docker compose up -d</span>), or set <strong>Docker network</strong> in Settings to the network your existing Caddy/Matcad runs on. matOS attaches apps to <span class="mono">${esc(net)}</span> and re-attaches them there on publish.</div>`;
-    }
   }
 
   async function doPublish(id,enabled,hostname,btn){

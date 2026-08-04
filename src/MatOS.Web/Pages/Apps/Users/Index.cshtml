@@ -2,18 +2,47 @@
 @model MatOS.Web.Pages.Apps.Users.IndexModel
 @{
     ViewData["Title"] = "Users";
-    ViewData["Description"] = "Local accounts and roles. Entra/AD login is planned for a later release.";
     Layout = "_WindowLayout";
+    var total = Model.Users.Count;
+    var admins = Model.Users.Count(u => u.Role == MatOS.Web.Entities.UserRole.Admin);
 }
 
-<div class="win-toolbar">
-    <a class="ui-btn primary" href="/apps/users/edit">+ New user</a>
+<div class="ua">
+    <div class="ua-head">
+        <div>
+            <h1 class="ua-h">Users</h1>
+            <p class="ua-sub">Local accounts and roles. Entra/AD login is planned for a later release.</p>
+        </div>
+        <a class="ui-btn primary" href="/apps/users/edit">+ New user</a>
+    </div>
+
+    <div class="ua-cards">
+        <div class="ua-card"><div class="ua-card-top"><span class="ua-card-ic" style="background:rgba(139,92,246,0.16);color:#8b5cf6">👥</span><span class="ua-card-k">Total users</span></div><div class="ua-card-v">@total</div></div>
+        <div class="ua-card"><div class="ua-card-top"><span class="ua-card-ic" style="background:rgba(52,211,153,0.16);color:#34d399">🛡️</span><span class="ua-card-k">Administrators</span></div><div class="ua-card-v">@admins</div></div>
+        <div class="ua-card"><div class="ua-card-top"><span class="ua-card-ic" style="background:rgba(34,184,255,0.16);color:#22b8ff">👤</span><span class="ua-card-k">Standard users</span></div><div class="ua-card-v">@(total - admins)</div></div>
+    </div>
+
+    <mat-table id="users" items="Model.Users" edit-page="/apps/users/edit"
+               search-placeholder="Search users…" empty-text="No users yet.">
+        <mat-column field="Username" title="Username" sortable="true" />
+        <mat-column field="Role" title="Role" template="badges" sortable="true" />
+        <mat-column field="CreateDate" title="Created" format="yyyy-MM-dd" sortable="true" />
+        <mat-column template="actions" title="" align="right" />
+    </mat-table>
 </div>
 
-<mat-table id="users" items="Model.Users" edit-page="/apps/users/edit"
-           search-placeholder="Search users…" empty-text="No users yet.">
-    <mat-column field="Username" title="Username" sortable="true" />
-    <mat-column field="Role" title="Role" template="badges" sortable="true" />
-    <mat-column field="CreateDate" title="Created" format="yyyy-MM-dd" sortable="true" />
-    <mat-column template="actions" title="" align="right" />
-</mat-table>
+@section Head {
+<style>
+.win-header { display:none; }
+.ua { max-width:1000px; }
+.ua-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+.ua-h { font-size:1.6rem; font-weight:800; letter-spacing:-0.02em; margin:0; }
+.ua-sub { margin:0.25rem 0 0; color:var(--mat-text-muted); font-size:0.9rem; }
+.ua-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0.8rem; margin-bottom:1.2rem; }
+.ua-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:0.9rem 1rem; }
+.ua-card-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+.ua-card-ic { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:1rem; flex:0 0 auto; }
+.ua-card-k { font-size:0.74rem; color:var(--mat-text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+.ua-card-v { font-size:1.9rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+</style>
+}

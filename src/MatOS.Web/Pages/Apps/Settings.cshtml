@@ -142,7 +142,8 @@
                 </div>
             </div>
 
-            <div class="mset-foot">
+            @* Only the General/Docker panels have POST fields; Appearance/Taskbar live-save and About is read-only. *@
+            <div class="mset-foot" id="mset-foot" style="display:none">
                 <button type="submit" class="ui-btn primary">Save changes</button>
                 <span id="mset-saved" class="pill on" style="@(Model.Saved ? "" : "display:none")">Saved ✓</span>
             </div>
@@ -229,10 +230,15 @@
 @section Scripts {
 <script>
 (function(){
+  const SAVE_PANELS=["general","docker"];
+  function syncFoot(panel){ const f=document.getElementById("mset-foot"); if(f) f.style.display=SAVE_PANELS.includes(panel)?"flex":"none"; }
   document.querySelectorAll(".mset-nav").forEach(n=>n.addEventListener("click",()=>{
     document.querySelectorAll(".mset-nav").forEach(x=>x.classList.toggle("active",x===n));
     document.querySelectorAll(".mset-panel").forEach(p=>p.classList.toggle("active",p.dataset.panel===n.dataset.p));
+    syncFoot(n.dataset.p);
   }));
+  // If a save just happened (or a save-panel is active on load), reveal the footer for that panel.
+  syncFoot((document.querySelector(".mset-nav.active")||{}).dataset ? document.querySelector(".mset-nav.active").dataset.p : "appearance");
   // docker inventory counts
   (async function(){ try{
     const [c,i,v]=await Promise.all([fetch("/api/v1/docker/containers").then(r=>r.json()),fetch("/api/v1/docker/images").then(r=>r.json()),fetch("/api/v1/docker/volumes").then(r=>r.json())]);
