@@ -19,4 +19,5 @@ public static class MatosLabels
     public const string Instance = "matos.instance"; // install instance id (M2)
     public const string Title = "matos.title";       // friendly display name
     public const string Icon = "matos.icon";         // icon hint / data URI (M2)
+    public const string OnDemand = "matos.ondemand";  // "true" = start on open, stop on window close
 }

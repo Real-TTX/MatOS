@@ -146,6 +146,7 @@ public class InstallService
         ["matos.app"] = app.Id,
         ["matos.instance"] = instance.ToString(),
         ["matos.title"] = InstanceTitle(app.Name, instance),
+        ["matos.ondemand"] = app.OnDemand ? "true" : "false",
         ["matcad.enable"] = "false",
         ["matcad.port"] = app.UiPort.ToString(),
     };
@@ -179,6 +180,7 @@ public class InstallService
             sb.AppendLine($"      matos.title: \"{YamlStr(InstanceTitle(app.Name, instance))}\"");
             if (s == ui)
             {
+                sb.AppendLine($"      matos.ondemand: \"{(app.OnDemand ? "true" : "false")}\"");
                 sb.AppendLine("      matcad.enable: \"false\"");
                 sb.AppendLine($"      matcad.port: \"{app.UiPort}\"");
                 sb.AppendLine("    ports:");

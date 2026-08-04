@@ -37,7 +37,7 @@ public record AppDef(
     string Image, int UiPort, string Icon, string[] Volumes,
     Dictionary<string, string> Env, AppAction[] Actions,
     string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn,
-    string Source = "", AppHandler[]? Handlers = null);
+    string Source = "", AppHandler[]? Handlers = null, bool OnDemand = false);
 
 // ---- Custom (user-defined) apps: mutable shapes persisted as customapps.json ----
 

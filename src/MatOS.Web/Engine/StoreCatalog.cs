@@ -415,6 +415,10 @@ volumes:
             "Vaultwarden — a lightweight, self-hosted Bitwarden-compatible password vault. Your vault data lives in a /data volume. Use it with the official Bitwarden apps/extensions.",
             "Security", "vaultwarden/server:latest", 80, Ico("vaultwarden"),
             new[] { "/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+        Image("mailrise", "Mailrise", "SMTP → push-notification gateway",
+            "Mailrise — a small SMTP server that turns e-mails your apps send into push notifications (via Apprise: Telegram, Discord, ntfy, and 80+ more). Point an app's SMTP at it on port 8025. Advanced: needs a mailrise.conf mounted at /etc.",
+            "Utilities", "yoryan/mailrise:latest", 8025, Ico("mailrise"),
+            new[] { "/etc/mailrise" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
         Compose("dozzle", "Dozzle", "Real-time Docker log viewer",
             "Dozzle — a lightweight, real-time web log viewer for your Docker containers. It reads the Docker socket (read-only) to stream logs live; nothing is stored.",
             "Monitoring", @"services:
@@ -424,6 +428,11 @@ volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 ", "dozzle", 8080, Ico("dozzle")),
+        Image("homer", "Homer", "Static self-hosted dashboard",
+            "Homer — a very fast, static homepage/dashboard to organise links to all your self-hosted services. Configure it via a YAML file in the /www/assets volume.",
+            "Productivity", "b4bz/homer:latest", 8080, Ico("homer"),
+            new[] { "/www/assets" }, new Dictionary<string, string> { ["INIT_ASSETS"] = "1" },
+            Array.Empty<AppAction>()),
         Image("mealie", "Mealie", "Recipe manager & meal planner",
             "Mealie — a self-hosted recipe manager, meal planner and shopping-list app with a friendly UI. Import recipes by URL. Uses its built-in SQLite database; data lives in an /app/data volume.",
             "Productivity", "ghcr.io/mealie-recipes/mealie:latest", 9000, Ico("mealie"),
