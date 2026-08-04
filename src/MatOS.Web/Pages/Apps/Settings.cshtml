@@ -14,6 +14,7 @@
         <div class="mset-side-head">System</div>
         <button class="mset-nav" data-p="general"><span class="i">⚙️</span> General</button>
         <button class="mset-nav" data-p="docker"><span class="i">🐳</span> Docker</button>
+        <button class="mset-nav" data-p="hidden"><span class="i">🙈</span> Hidden apps</button>
         <button class="mset-nav" data-p="about"><span class="i">ℹ️</span> About</button>
     </aside>
 
@@ -128,6 +129,15 @@
                 </div>
             </div>
 
+            <div class="mset-panel" data-panel="hidden">
+                <h2>Hidden Applications</h2>
+                <div class="mset-group pad">
+                    <div class="mset-grouphead">Hide stacks &amp; apps from the desktop</div>
+                    <p class="fx-muted" style="padding:0 1rem 0.4rem;font-size:0.84rem;margin:0">Hidden stacks keep running but don't appear as desktop icons or in the Start menu. matOS's own infrastructure (matOS, Matcad, Caddy) is hidden by default.</p>
+                    <div id="mset-hidden-list" style="padding:0.4rem 1rem 1rem"><div class="fx-muted">Loading…</div></div>
+                </div>
+            </div>
+
             <div class="mset-panel" data-panel="about">
                 <h2>About</h2>
                 <div class="mset-group pad">
@@ -186,6 +196,10 @@
 .mset-you { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:0.35rem; font-size:0.72rem; background:rgba(139,92,246,0.2); color:#c7b3ff; border-radius:50%; vertical-align:middle; }
 .mset-side-head { font-size:0.68rem; font-weight:700; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.06em; padding:0.7rem 0.75rem 0.3rem; }
 .mset-side-head:first-of-type { padding-top:0.4rem; }
+.mset-hrow { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.15rem; font-size:0.9rem; border-top:1px solid var(--mat-border); }
+.mset-hrow:first-of-type { border-top:0; }
+.mset-hrow .nm { font-weight:600; }
+.mset-hrow input { width:16px; height:16px; }
 /* Taskbar-panel controls */
 .tb-seg { display:inline-flex; background:rgba(255,255,255,0.06); border-radius:8px; padding:2px; }
 .tb-seg button { border:none; background:transparent; padding:0.35rem 0.7rem; font:inherit; font-size:0.85rem; border-radius:6px; cursor:pointer; color:var(--mat-text-muted); }
@@ -350,6 +364,32 @@
   function gotoPanel(name){ const nav=document.querySelector(`.mset-nav[data-p="${name}"]`); if(nav) nav.click(); }
   try{ const p=new URLSearchParams(location.search).get("panel"); if(p) gotoPanel(p); }catch(_){}
   window.addEventListener("message", e => { if(e.origin!==location.origin) return; const m=e.data; if(m && m.type==="matos:goto-panel" && m.panel) gotoPanel(m.panel); });
+
+  // ---- Hidden applications ----
+  (function(){
+    const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+    const box=document.getElementById("mset-hidden-list"); if(!box) return;
+    let hidden=new Set(), stacks=[], loaded=false;
+    function render(){
+      if(!stacks.length){ box.innerHTML='<div class="fx-muted">No stacks found.</div>'; return; }
+      box.innerHTML=stacks.map(s=>`<label class="mset-hrow"><input type="checkbox" data-hide="${escA(s.name)}" ${hidden.has(s.name)?"checked":""}> <span class="nm">${esc(s.name)}</span> <span class="fx-muted" style="font-size:0.78rem">${s.containers} container${s.containers===1?"":"s"}${s.managed?" · matOS app":""}</span></label>`).join("");
+      box.querySelectorAll("[data-hide]").forEach(c=>c.addEventListener("change",save));
+    }
+    async function loadH(){
+      try{ const d=await(await fetch("/api/v1/desktop/hidden")).json(); hidden=new Set(d.hidden||[]); stacks=d.stacks||[]; loaded=true; render(); }
+      catch(_){ box.innerHTML='<div class="fx-muted">Failed to load.</div>'; }
+    }
+    async function save(){
+      const list=[...box.querySelectorAll("[data-hide]:checked")].map(c=>c.dataset.hide);
+      hidden=new Set(list);
+      try{ await fetch("/api/v1/desktop/hidden",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({stacks:list})});
+        try{ window.parent.postMessage({type:"matos:hidden-changed"}, location.origin); }catch(_){}
+      }catch(_){}
+    }
+    const nav=document.querySelector('.mset-nav[data-p="hidden"]');
+    if(nav) nav.addEventListener("click",()=>{ if(!loaded) loadH(); });
+  })();
 })();
 </script>
 }

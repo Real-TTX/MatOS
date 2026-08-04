@@ -24,6 +24,14 @@ public class SystemConfig
     public string Network { get; set; } = "";
 }
 
+/// <summary>System-wide list of stacks hidden from the desktop (kept off the icon field + start menu).
+/// Seeded on first use with the matOS/Matcad infrastructure stacks; fully editable in Settings.</summary>
+public class HiddenConfig
+{
+    public bool Initialized { get; set; }
+    public List<string> Stacks { get; set; } = new();
+}
+
 /// <summary>Built-in wallpapers (CSS gradient classes wp-*). Used by the desktop + Settings picker.</summary>
 public static class Wallpapers
 {
