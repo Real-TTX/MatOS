@@ -31,6 +31,14 @@ public static class DockerApi
         g.MapPost("/containers/{id}/restart", (string id, DockerService docker, CancellationToken ct) =>
             Guard(() => docker.RestartAsync(id, ct)));
 
+        // On-demand: start the stack and wait until its UI is reachable (used by the desktop when
+        // opening an on-demand app), and stop it again (on window close).
+        g.MapPost("/stacks/{name}/wake", async (string name, DockerService docker, CancellationToken ct) =>
+        {
+            var ready = await docker.WakeStackAsync(name, ct);
+            return ready ? Results.Ok(new { ready }) : Results.NotFound();
+        });
+
         g.MapGet("/containers/{id}/inspect", async (string id, DockerService docker, HttpRequest req, CancellationToken ct) =>
         {
             var d = await docker.InspectDetailAsync(id, ct);
@@ -227,6 +235,7 @@ public static class DockerApi
             matosApp = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.App, out var mapp) ? mapp : null,
             matosInstance = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.Instance, out var minst) ? minst : null,
             matosTitle = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.Title, out var mtitle) ? mtitle : null,
+            onDemand = c.Labels.TryGetValue(MatOS.Web.Docker.MatosLabels.OnDemand, out var mod) && mod == "true",
             appUrl,
             hasWebUi = appUrl is not null,
             ports = c.Ports.Select(p => new { p.Type, p.PrivatePort, p.PublicPort }).ToArray()

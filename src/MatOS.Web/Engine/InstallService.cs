@@ -127,7 +127,10 @@ public class InstallService
                 }
             };
             await _docker.CreateAndStartAsync(p, ct);
-            Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed", $"Running on port {port}. Pin it from the Start menu to add it to your desktop.");
+            // On-demand apps sit idle until opened: stop right after creating so they consume nothing.
+            if (app.OnDemand) { try { await _docker.StopAsync(name, ct); } catch (Exception ex) { _log.LogWarning(ex, "Stopping on-demand {Name} after install failed", name); } }
+            Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed",
+                app.OnDemand ? "Installed as on-demand — it starts when you open it and stops when you close it." : $"Running on port {port}. Pin it from the Start menu to add it to your desktop.");
             return new(true, name, port, null);
         }
         catch (Exception ex) { _log.LogWarning(ex, "Install (image) of {App} failed", app.Id); Notify(MatOS.Web.Services.NotificationKind.Error, $"Install failed: {app.Name}", ex.Message); return new(false, name, port, ex.Message); }
@@ -202,8 +205,11 @@ public class InstallService
         var (code, _, err) = await RunCompose(dir,
             new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, env, ct);
         if (code != 0) return new(false, project, port, "compose up failed: " + Trim(err));
+        // On-demand: stop the freshly-started stack so it sits idle until opened.
+        if (app.OnDemand) { try { await RunCompose(dir, new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "stop" }, env, ct); } catch (Exception ex) { _log.LogWarning(ex, "Stopping on-demand stack {Project} after install failed", project); } }
         _log.LogInformation("Installed compose app {App} as project {Project}", app.Id, project);
-        Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed", $"Stack {project} is running on port {port}.");
+        Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed",
+            app.OnDemand ? "Installed as on-demand — it starts when you open it and stops when you close it." : $"Stack {project} is running on port {port}.");
         return new(true, project, port, null);
     }
 

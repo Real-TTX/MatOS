@@ -5,15 +5,15 @@ public static class StoreCatalog
 {
     private static AppDef Image(string id, string name, string tagline, string desc, string cat,
         string image, int uiPort, string icon, string[] vols, Dictionary<string, string> env, AppAction[] actions,
-        AppVariable[]? variables = null, AppHandler[]? handlers = null) =>
+        AppVariable[]? variables = null, AppHandler[]? handlers = null, bool onDemand = false) =>
         new(id, name, tagline, desc, cat, image, uiPort, icon, vols, env, actions,
-            "image", "", "", variables ?? Array.Empty<AppVariable>(), true, "", handlers);
+            "image", "", "", variables ?? Array.Empty<AppVariable>(), true, "", handlers, onDemand);
 
     private static AppDef Compose(string id, string name, string tagline, string desc, string cat,
-        string compose, string uiService, int uiPort, string icon, AppAction[]? actions = null) =>
+        string compose, string uiService, int uiPort, string icon, AppAction[]? actions = null, bool onDemand = false) =>
         new(id, name, tagline, desc, cat, "", uiPort, icon, Array.Empty<string>(),
             new Dictionary<string, string>(), actions ?? Array.Empty<AppAction>(),
-            "compose", compose, uiService, Array.Empty<AppVariable>(), true, "", null);
+            "compose", compose, uiService, Array.Empty<AppVariable>(), true, "", null, onDemand);
 
     private static AppVariable V(string key, string label, string dflt = "", string type = "text", bool required = false)
         => new() { Key = key, Label = label, Default = dflt, Type = type, Required = required };
@@ -307,23 +307,23 @@ volumes:
         // ---- LinuxServer.io desktop apps in the browser (KasmVNC) ----
         Compose("brave", "Brave", "Brave browser in your browser",
             "The Brave web browser running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
-            "Browsers", LsioGui("lscr.io/linuxserver/brave:latest"), "app", 3000, Ico("brave")),
+            "Browsers", LsioGui("lscr.io/linuxserver/brave:latest"), "app", 3000, Ico("brave"), onDemand: true),
 
         Compose("firefox", "Firefox", "Firefox in your browser",
             "Mozilla Firefox running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
-            "Browsers", LsioGui("lscr.io/linuxserver/firefox:latest"), "app", 3000, Ico("firefox")),
+            "Browsers", LsioGui("lscr.io/linuxserver/firefox:latest"), "app", 3000, Ico("firefox"), onDemand: true),
 
         Compose("chromium", "Chromium", "Chromium in your browser",
             "Chromium (the open-source base of Google Chrome) running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
-            "Browsers", LsioGui("lscr.io/linuxserver/chromium:latest"), "app", 3000, Ico("chromium")),
+            "Browsers", LsioGui("lscr.io/linuxserver/chromium:latest"), "app", 3000, Ico("chromium"), onDemand: true),
 
         Compose("msedge", "Microsoft Edge", "Edge in your browser",
             "Microsoft Edge running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Its profile lives in a /config volume so it persists between sessions.",
-            "Browsers", LsioGui("lscr.io/linuxserver/msedge:latest"), "app", 3000, Ico("microsoft-edge")),
+            "Browsers", LsioGui("lscr.io/linuxserver/msedge:latest"), "app", 3000, Ico("microsoft-edge"), onDemand: true),
 
         Compose("libreoffice", "LibreOffice", "Office suite in your browser",
             "The LibreOffice suite (Writer, Calc, Impress and more) running as a container, streamed to a matOS window (LinuxServer.io KasmVNC image). Documents in the /config volume persist between sessions.",
-            "Productivity", LsioGui("lscr.io/linuxserver/libreoffice:latest"), "app", 3000, Ico("libreoffice")),
+            "Productivity", LsioGui("lscr.io/linuxserver/libreoffice:latest"), "app", 3000, Ico("libreoffice"), onDemand: true),
 
         // ---- Media (Servarr + downloaders + servers). LinuxServer.io images: PUID/PGID/TZ + /config. ----
         Lsio("sonarr", "Sonarr", "TV series manager", 8989, "sonarr"),
@@ -335,6 +335,17 @@ volumes:
         Lsio("sabnzbd", "SABnzbd", "Usenet (NZB) downloader", 8080, "sabnzbd"),
         Lsio("jellyfin", "Jellyfin", "Free media server", 8096, "jellyfin"),
         Lsio("emby", "Emby", "Personal media server", 8096, "emby"),
+        Lsio("tautulli", "Tautulli", "Plex monitoring & stats", 8181, "tautulli"),
+        Image("shellngn", "ShellNGN", "Web SSH / SFTP / RDP / VNC client",
+            "ShellNGN — a browser-based client for SSH, SFTP, Telnet, RDP and VNC, so you can reach all your servers from one place. Sessions & keys live in a data volume.",
+            "Utilities", "shellngn/pro:latest", 8080, "🖥️",
+            new[] { "/home/node/shellngn/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+        Image("obsidian-livesync", "Obsidian LiveSync", "Self-hosted Obsidian sync (CouchDB)",
+            "A CouchDB backend for the Obsidian Self-hosted LiveSync plugin — sync your notes across devices without a third party. Default login admin/matos; use the Fauxton UI at /_utils to manage it.",
+            "Productivity", "couchdb:3", 5984, Ico("couchdb"),
+            new[] { "/opt/couchdb/data" },
+            new Dictionary<string, string> { ["COUCHDB_USER"] = "admin", ["COUCHDB_PASSWORD"] = "matos" },
+            new[] { new AppAction("Fauxton UI", "/_utils") }),
 
         // ---- Databases, each bundled with a web admin UI (one Compose stack). Default password "matos". ----
         Compose("mysql", "MySQL", "MySQL + phpMyAdmin",

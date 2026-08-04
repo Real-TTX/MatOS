@@ -63,6 +63,35 @@ public partial class DockerService
         return _selfStack;
     }
 
+    /// <summary>Starts an on-demand stack and waits until its UI port accepts a connection (so the
+    /// window can load the app instead of a connection error). Returns true when started; readiness
+    /// polling is best-effort with a timeout. matOS shares the app network, so it reaches the UI
+    /// container by name:internal-port.</summary>
+    public async Task<bool> WakeStackAsync(string name, CancellationToken ct = default)
+    {
+        var s = await GetStackAsync(name, ct);
+        if (s == null) return false;
+        await StackActionAsync(name, "start", ct);
+
+        var ui = s.Containers.FirstOrDefault(c => c.Labels.ContainsKey(MatcadLabels.Port));
+        if (ui == null || !ui.Labels.TryGetValue(MatcadLabels.Port, out var ps) || !int.TryParse(ps, out var port))
+            return true; // no known UI port — consider it started
+
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var tcp = new System.Net.Sockets.TcpClient();
+                var connect = tcp.ConnectAsync(ui.Name, port);
+                if (await Task.WhenAny(connect, Task.Delay(1500, ct)) == connect && tcp.Connected) return true;
+            }
+            catch { /* not up yet */ }
+            try { await Task.Delay(700, ct); } catch { break; }
+        }
+        return true;
+    }
+
     public async Task<bool> PingAsync(CancellationToken ct = default)
     {
         try

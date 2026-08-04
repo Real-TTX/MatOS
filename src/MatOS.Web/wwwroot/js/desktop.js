@@ -35,7 +35,23 @@
     const s = systemApps().find(a => a.key === key);
     return s ? s.iconHtml : null;
   }
-  function open(opts) { if (!opts.iconHtml && opts.key) opts.iconHtml = iconForKey(opts.key); window.MatWM.open(opts); }
+  const stackOnDemand = s => (s.containers || []).some(c => c.onDemand);
+  const stackRunning  = s => (s.containers || []).some(c => c.running);
+  // On-demand apps: start the container on open (via a "Starting…" page that wakes it, then loads
+  // the app) and stop it again when the window closes. Centralised here so every launch path is covered.
+  function open(opts) {
+    if (opts.key && opts.key.startsWith("stack:")) {
+      const s = stackData.find(x => x.name === opts.key.slice(6));
+      if (s && stackOnDemand(s)) {
+        const stop = () => { fetch(`/api/v1/docker/stacks/${encodeURIComponent(s.name)}/stop`, { method: "POST" }).catch(()=>{}); setTimeout(load, 1500); };
+        const prev = opts.onClose;
+        opts.onClose = () => { try { prev && prev(); } catch(_){} stop(); };
+        if (!stackRunning(s)) opts.url = `/apps/starting?stack=${encodeURIComponent(s.name)}&title=${encodeURIComponent(stackTitle(s))}`;
+      }
+    }
+    if (!opts.iconHtml && opts.key) opts.iconHtml = iconForKey(opts.key);
+    window.MatWM.open(opts);
+  }
   function launchEl(el) {
     if (el.dataset.folderId) { openFolderOverlay(el); return; }
     open({ key: el.dataset.key || el.dataset.url, title: el.dataset.title || "App", icon: el.dataset.icon || null,

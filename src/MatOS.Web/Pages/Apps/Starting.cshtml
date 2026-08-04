@@ -1,0 +1,47 @@
+@page "/apps/starting"
+@model MatOS.Web.Pages.Apps.StartingModel
+@{
+    ViewData["Title"] = "Starting…";
+    Layout = "_WindowLayout";
+}
+
+<div class="st">
+    <div class="st-spin"></div>
+    <div class="st-title" id="st-title">Starting application…</div>
+    <div class="st-sub" id="st-sub">Waking the container — this can take a moment.</div>
+    <div class="st-err" id="st-err" hidden></div>
+</div>
+
+@section Head {
+<style>
+.win-header { display:none; }
+.st { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; background:var(--mat-bg); padding:1rem; text-align:center; }
+.st-spin { width:46px; height:46px; border-radius:50%; border:4px solid rgba(255,255,255,.14); border-top-color:var(--mat-accent); animation:sts .8s linear infinite; }
+@@keyframes sts { to { transform:rotate(360deg); } }
+.st-title { font-size:1.2rem; font-weight:800; letter-spacing:-0.01em; }
+.st-sub { color:var(--mat-text-muted); font-size:0.86rem; }
+.st-err { color:#ffb3c0; font-size:0.85rem; max-width:60ch; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const q=new URLSearchParams(location.search);
+  const stack=q.get("stack")||"", title=q.get("title")||"application";
+  document.getElementById("st-title").textContent="Starting "+title+"…";
+  const fail=m=>{ document.getElementById("st-sub").hidden=true; const e=document.getElementById("st-err"); e.hidden=false; e.textContent=m; };
+  async function appUrl(){ // the running UI container's URL (only resolvable once it's up)
+    try{ const d=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}`)).json();
+      const c=(d.containers||[]).find(x=>x.running && x.hasWebUi && x.appUrl); return c?c.appUrl:null; }catch(_){ return null; }
+  }
+  (async function(){
+    try{ const r=await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/wake`,{method:"POST"}); if(!r.ok) throw new Error(); }
+    catch(_){ fail("Could not start the container. You can retry from the Task Manager."); return; }
+    // Poll for the app URL (the published port appears once the container is running), then load it.
+    for(let i=0;i<20;i++){ const u=await appUrl(); if(u){ location.href=u; return; } await new Promise(r=>setTimeout(r,700)); }
+    fail("Started, but no web UI was detected. Open it from the Task Manager.");
+  })();
+})();
+</script>
+}
