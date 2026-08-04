@@ -152,12 +152,25 @@ public static class DesktopApi
             {
                 hidden = h.Stacks,
                 self,
-                stacks = stacks.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => new
+                stacks = stacks.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s =>
                 {
-                    name = s.Name,
-                    containers = s.Total,
-                    managed = s.Containers.Any(c => c.MatosManaged),
-                    system = self != null && s.Name.Equals(self, StringComparison.OrdinalIgnoreCase)
+                    // Surface the app id + display title so the picker can show each entry with its
+                    // real icon/name — the same way it appears on the desktop / start menu.
+                    string? appId = null, titleLabel = null;
+                    foreach (var c in s.Containers)
+                    {
+                        if (appId == null && c.Labels.TryGetValue(MatosLabels.App, out var a) && !string.IsNullOrWhiteSpace(a)) appId = a;
+                        if (titleLabel == null && c.Labels.TryGetValue(MatosLabels.Title, out var t) && !string.IsNullOrWhiteSpace(t)) titleLabel = t;
+                    }
+                    return new
+                    {
+                        name = s.Name,
+                        title = titleLabel ?? appId ?? s.Name,
+                        app = appId ?? "",
+                        containers = s.Total,
+                        managed = s.Containers.Any(c => c.MatosManaged),
+                        system = self != null && s.Name.Equals(self, StringComparison.OrdinalIgnoreCase)
+                    };
                 })
             });
         });

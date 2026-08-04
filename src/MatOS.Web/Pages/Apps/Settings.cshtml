@@ -11,10 +11,11 @@
         <div class="mset-side-head">Personal <span class="mset-you" title="Only affects your account">👤</span></div>
         <button class="mset-nav active" data-p="appearance"><span class="i">🎨</span> Appearance</button>
         <button class="mset-nav" data-p="taskbar"><span class="i">📊</span> Taskbar</button>
+        <div class="mset-side-head">Apps</div>
+        <button class="mset-nav" data-p="hidden"><span class="i">🙈</span> Hidden</button>
         <div class="mset-side-head">System</div>
         <button class="mset-nav" data-p="general"><span class="i">⚙️</span> General</button>
         <button class="mset-nav" data-p="docker"><span class="i">🐳</span> Docker</button>
-        <button class="mset-nav" data-p="hidden"><span class="i">🙈</span> Hidden apps</button>
         <button class="mset-nav" data-p="about"><span class="i">ℹ️</span> About</button>
     </aside>
 
@@ -130,11 +131,14 @@
             </div>
 
             <div class="mset-panel" data-panel="hidden">
-                <h2>Hidden Applications</h2>
+                <h2>Hidden</h2>
                 <div class="mset-group pad">
-                    <div class="mset-grouphead">Hide stacks from the desktop</div>
-                    <p class="fx-muted" style="padding:0 1rem 0.4rem;font-size:0.84rem;margin:0">Hidden stacks keep running but don't appear as desktop icons or in the Start menu. matOS's own stack (matOS + Caddy + Matcad) is hidden by default — you can unhide it here.</p>
-                    <div id="mset-hidden-list" style="padding:0.4rem 1rem 1rem"><div class="fx-muted">Loading…</div></div>
+                    <div class="mset-grouphead" style="display:flex;align-items:center;justify-content:space-between">
+                        <span>Hidden from desktop &amp; start menu</span>
+                        <button type="button" class="ui-btn" id="mset-hidden-add" style="margin-right:0.6rem">＋ Add</button>
+                    </div>
+                    <p class="fx-muted" style="padding:0 1rem 0.5rem;font-size:0.84rem;margin:0">These apps, stacks and containers keep running but don't show as icons. matOS's own stack (matOS + Caddy + Matcad) is hidden by default.</p>
+                    <div id="mset-hidden-list" style="padding:0.2rem 1rem 1rem"><div class="fx-muted">Loading…</div></div>
                 </div>
             </div>
 
@@ -196,11 +200,17 @@
 .mset-you { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:0.35rem; font-size:0.72rem; background:rgba(139,92,246,0.2); color:#c7b3ff; border-radius:50%; vertical-align:middle; }
 .mset-side-head { font-size:0.68rem; font-weight:700; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.06em; padding:0.7rem 0.75rem 0.3rem; }
 .mset-side-head:first-of-type { padding-top:0.4rem; }
-.mset-hrow { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.15rem; font-size:0.9rem; border-top:1px solid var(--mat-border); }
+.mset-hrow { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.15rem; font-size:0.9rem; border-top:1px solid var(--mat-border); }
 .mset-hrow:first-of-type { border-top:0; }
 .mset-hrow .nm { font-weight:600; }
-.mset-hrow input { width:16px; height:16px; }
+.mset-hicon { width:30px; height:30px; border-radius:8px; display:inline-grid; place-items:center; overflow:hidden; flex:0 0 auto; background:var(--mat-surface-2); border:1px solid var(--mat-border); }
+.mset-hicon img { width:100%; height:100%; object-fit:cover; } .mset-hicon .emoji { font-size:1.05rem; line-height:1; }
 .mset-hrow .sys { font-size:0.7rem; font-weight:700; padding:0.05rem 0.4rem; border-radius:999px; background:rgba(139,92,246,0.2); color:#c7b3ff; }
+.mset-hrow .ui-btn { padding:0.25rem 0.6rem; font-size:0.8rem; }
+#mset-hidden-pop { position:fixed; z-index:60; min-width:240px; max-height:340px; overflow:auto; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.35); padding:0.3rem; }
+#mset-hidden-pop[hidden] { display:none; }
+.mset-popitem { display:flex; align-items:center; gap:0.55rem; width:100%; padding:0.4rem 0.5rem; border:none; background:transparent; color:var(--mat-text); border-radius:7px; cursor:pointer; font:inherit; font-size:0.88rem; text-align:left; }
+.mset-popitem:hover { background:var(--mat-surface-2); }
 /* Taskbar-panel controls */
 .tb-seg { display:inline-flex; background:rgba(255,255,255,0.06); border-radius:8px; padding:2px; }
 .tb-seg button { border:none; background:transparent; padding:0.35rem 0.7rem; font:inherit; font-size:0.85rem; border-radius:6px; cursor:pointer; color:var(--mat-text-muted); }
@@ -366,28 +376,58 @@
   try{ const p=new URLSearchParams(location.search).get("panel"); if(p) gotoPanel(p); }catch(_){}
   window.addEventListener("message", e => { if(e.origin!==location.origin) return; const m=e.data; if(m && m.type==="matos:goto-panel" && m.panel) gotoPanel(m.panel); });
 
-  // ---- Hidden applications ----
+  // ---- Hidden apps (icon list + Add picker; hides apps/stacks/containers shown on the desktop) ----
   (function(){
     const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
     const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
     const box=document.getElementById("mset-hidden-list"); if(!box) return;
-    let hidden=new Set(), stacks=[], loaded=false;
+    let hidden=new Set(), items=[], catalog={}, loaded=false;
+
+    function iconHtml(it){ const ic = it.app && catalog[it.app] ? catalog[it.app].icon : null;
+      if(ic){ return /^(https?:|data:)/i.test(ic) ? `<img src="${escA(ic)}" alt="">` : `<span class="emoji">${esc(ic)}</span>`; }
+      return `<span class="emoji">📦</span>`; }
+    const byName=n=>items.find(i=>i.name===n)||{name:n,title:n,app:""};
+
     function render(){
-      if(!stacks.length){ box.innerHTML='<div class="fx-muted">No stacks found.</div>'; return; }
-      box.innerHTML=stacks.map(s=>`<label class="mset-hrow"><input type="checkbox" data-hide="${escA(s.name)}" ${hidden.has(s.name)?"checked":""}> <span class="nm">${esc(s.name)}</span> ${s.system?'<span class="sys">matOS</span>':''} <span class="fx-muted" style="font-size:0.78rem">${s.containers} container${s.containers===1?"":"s"}${s.managed&&!s.system?" · app":""}</span></label>`).join("");
-      box.querySelectorAll("[data-hide]").forEach(c=>c.addEventListener("change",save));
+      const hiddenItems=[...hidden].map(byName);
+      box.innerHTML = hiddenItems.length
+        ? hiddenItems.map(i=>`<div class="mset-hrow"><span class="mset-hicon">${iconHtml(i)}</span><span class="nm">${esc(i.title||i.name)}</span>${i.system?'<span class="sys">matOS</span>':''}<span style="flex:1"></span><button type="button" class="ui-btn" data-unhide="${escA(i.name)}">Remove</button></div>`).join("")
+        : '<div class="fx-muted" style="padding:0.5rem 0">Nothing hidden.</div>';
+      box.querySelectorAll("[data-unhide]").forEach(b=>b.addEventListener("click",()=>{ hidden.delete(b.dataset.unhide); save(); render(); }));
     }
     async function loadH(){
-      try{ const d=await(await fetch("/api/v1/desktop/hidden")).json(); hidden=new Set(d.hidden||[]); stacks=d.stacks||[]; loaded=true; render(); }
-      catch(_){ box.innerHTML='<div class="fx-muted">Failed to load.</div>'; }
+      try{
+        const [d,cat]=await Promise.all([
+          fetch("/api/v1/desktop/hidden").then(r=>r.json()),
+          fetch("/api/v1/store/catalog").then(r=>r.json()).catch(()=>({apps:[]}))
+        ]);
+        hidden=new Set(d.hidden||[]); items=d.stacks||[]; catalog={}; for(const a of (cat.apps||[])) catalog[a.id]=a;
+        loaded=true; render();
+      }catch(_){ box.innerHTML='<div class="fx-muted">Failed to load.</div>'; }
     }
     async function save(){
-      const list=[...box.querySelectorAll("[data-hide]:checked")].map(c=>c.dataset.hide);
-      hidden=new Set(list);
-      try{ await fetch("/api/v1/desktop/hidden",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({stacks:list})});
+      try{ await fetch("/api/v1/desktop/hidden",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({stacks:[...hidden]})});
         try{ window.parent.postMessage({type:"matos:hidden-changed"}, location.origin); }catch(_){}
       }catch(_){}
     }
+
+    // Add picker: a popover of everything currently visible, each with its real icon + name.
+    const pop=document.createElement("div"); pop.id="mset-hidden-pop"; pop.hidden=true; document.body.appendChild(pop);
+    const hidePop=()=>{ pop.hidden=true; };
+    function showPop(anchor){
+      const visible=items.filter(i=>!hidden.has(i.name));
+      pop.innerHTML = visible.length
+        ? visible.map(i=>`<button type="button" class="mset-popitem" data-add="${escA(i.name)}"><span class="mset-hicon">${iconHtml(i)}</span><span class="nm">${esc(i.title||i.name)}</span>${i.system?'<span class="sys">matOS</span>':''}</button>`).join("")
+        : '<div class="fx-muted" style="padding:0.5rem 0.6rem">Everything is already hidden.</div>';
+      pop.querySelectorAll("[data-add]").forEach(b=>b.addEventListener("click",()=>{ hidden.add(b.dataset.add); save(); render(); hidePop(); }));
+      pop.hidden=false; const r=anchor.getBoundingClientRect();
+      pop.style.left=Math.max(8,Math.min(r.left, window.innerWidth-pop.offsetWidth-8))+"px";
+      pop.style.top=(r.bottom+4)+"px";
+    }
+    const addBtn=document.getElementById("mset-hidden-add");
+    if(addBtn) addBtn.addEventListener("click",e=>{ e.stopPropagation(); if(!pop.hidden){hidePop();return;} showPop(e.currentTarget); });
+    document.addEventListener("click",e=>{ if(!e.target.closest("#mset-hidden-pop")&&!e.target.closest("#mset-hidden-add")) hidePop(); });
+
     const nav=document.querySelector('.mset-nav[data-p="hidden"]');
     if(nav) nav.addEventListener("click",()=>{ if(!loaded) loadH(); });
   })();
