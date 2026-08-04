@@ -2,18 +2,19 @@
 @model MatOS.Web.Pages.Apps.ProxyModel
 @{
     ViewData["Title"] = "Proxy";
-    ViewData["Description"] = "Domains, routes, TLS certificates and DNS providers — powered by Matcad in the background.";
     Layout = "_WindowLayout";
 }
 
+<div class="px-wrap">
+<aside class="px-nav">
+    <div class="px-nav-title">Proxy</div>
+    <button class="px-nav-btn active" data-tab="domains"><span class="i">🌐</span> Domains &amp; Routes</button>
+    <button class="px-nav-btn" data-tab="certs"><span class="i">🔒</span> Certificates</button>
+    <button class="px-nav-btn" data-tab="providers"><span class="i">🔑</span> DNS Providers</button>
+    <button class="px-nav-btn" data-tab="settings"><span class="i">⚙️</span> Settings</button>
+</aside>
+<section class="px-main">
 <div id="px-banner" class="card" style="display:none;margin-bottom:0.8rem"></div>
-
-<div class="px-tabs" id="px-tabs">
-    <button class="px-tab active" data-tab="domains">Domains &amp; Routes</button>
-    <button class="px-tab" data-tab="certs">Certificates</button>
-    <button class="px-tab" data-tab="providers">DNS Providers</button>
-    <button class="px-tab" data-tab="settings">Settings</button>
-</div>
 
 <section class="px-panel" data-panel="domains">
     <div class="px-head">
@@ -63,13 +64,21 @@
         <div class="px-modal-body" id="px-modal-body"></div>
     </div>
 </div>
+</section>
+</div>
 
 @section Head {
 <style>
-.px-tabs { display:flex; gap:0.3rem; margin-bottom:1rem; border-bottom:1px solid var(--mat-border); }
-.px-tab { border:none; background:transparent; color:var(--mat-text-muted); font:inherit; font-weight:600; padding:0.55rem 0.9rem; border-bottom:2px solid transparent; cursor:pointer; margin-bottom:-1px; }
-.px-tab:hover { color:var(--mat-text); }
-.px-tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+/* full-bleed app shell with a Settings-style left nav; hide the generic window header */
+.win-header { display:none; }
+.px-wrap { position:absolute; inset:0; display:flex; background:var(--mat-bg); }
+.px-nav { width:210px; flex:0 0 auto; border-right:1px solid var(--mat-border); padding:1rem 0.6rem; background:rgba(0,0,0,0.18); display:flex; flex-direction:column; gap:0.1rem; overflow:auto; }
+.px-nav-title { font-weight:800; font-size:1.15rem; padding:0.2rem 0.6rem 0.9rem; }
+.px-nav-btn { display:flex; align-items:center; gap:0.55rem; width:100%; padding:0.55rem 0.6rem; border:none; background:transparent; color:var(--mat-text); border-radius:8px; cursor:pointer; font:inherit; font-size:0.9rem; text-align:left; }
+.px-nav-btn:hover { background:var(--mat-surface-2); }
+.px-nav-btn.active { background:var(--mat-accent); color:#fff; }
+.px-nav-btn .i { font-size:1.05rem; width:1.3rem; text-align:center; }
+.px-main { flex:1 1 auto; overflow:auto; padding:1.3rem 1.5rem 2rem; min-width:0; }
 .px-panel { }
 .px-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.8rem; }
 .px-head h2 { margin:0 0 0.2rem; font-size:1.15rem; }
@@ -93,7 +102,7 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
 .pf { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.75rem; } .pf > span { font-size:0.82rem; color:var(--mat-text-muted); font-weight:600; }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 0.8rem; }
 .px-check { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.7rem; font-size:0.88rem; }
-.px-modal { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:20; padding:1rem; }
+.px-modal { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:20; padding:1rem; }
 .px-modal[hidden] { display:none; }
 .px-modal-card { width:min(560px,96%); max-height:90%; display:flex; flex-direction:column; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; box-shadow:0 24px 70px rgba(0,0,0,.55); overflow:hidden; }
 .px-modal-head { display:flex; align-items:center; justify-content:space-between; padding:0.9rem 1.1rem; border-bottom:1px solid var(--mat-border); font-size:1.02rem; }
@@ -132,8 +141,8 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
     b.style.background=kind==="err"?"rgba(244,80,107,0.12)":""; b.style.color=kind==="err"?"#ffb3c0":""; b.innerHTML=msg; }
 
   // ---- tabs ----
-  document.querySelectorAll(".px-tab").forEach(t=>t.addEventListener("click",()=>{
-    document.querySelectorAll(".px-tab").forEach(x=>x.classList.toggle("active",x===t));
+  document.querySelectorAll(".px-nav-btn").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll(".px-nav-btn").forEach(x=>x.classList.toggle("active",x===t));
     const tab=t.dataset.tab;
     document.querySelectorAll(".px-panel").forEach(p=>p.hidden=p.dataset.panel!==tab);
     if(tab==="certs") loadCerts();

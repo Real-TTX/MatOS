@@ -121,6 +121,16 @@ public static class DockerApi
             });
         });
 
+        g.MapGet("/networks", async (DockerService docker, CancellationToken ct) =>
+        {
+            var nets = await docker.ListNetworksAsync(ct);
+            return Results.Ok(new
+            {
+                docker.LastError,
+                networks = nets.Select(n => new { n.Id, n.Name, n.Driver, n.Scope, n.Subnet, n.Gateway, n.Internal, n.Containers })
+            });
+        });
+
         g.MapGet("/images", async (DockerService docker, CancellationToken ct) =>
         {
             var imgs = await docker.ListImagesAsync(ct);

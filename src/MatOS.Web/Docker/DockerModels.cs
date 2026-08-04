@@ -78,3 +78,6 @@ public record VolumeInfo(string Name, string Driver, string Mountpoint, DateTime
 
 /// <summary>A Docker image.</summary>
 public record ImageInfo(string Id, string ShortId, string Repository, string Tag, long SizeBytes, DateTime CreatedUtc, bool Dangling);
+
+/// <summary>A Docker network.</summary>
+public record NetworkInfo(string Id, string Name, string Driver, string Scope, string Subnet, string Gateway, bool Internal, int Containers);

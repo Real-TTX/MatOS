@@ -2,80 +2,96 @@
 @model MatOS.Web.Pages.Apps.TaskManagerModel
 @{
     ViewData["Title"] = "Task Manager";
-    ViewData["Description"] = "Live view of containers, stacks, images and volumes on this Docker host.";
     Layout = "_WindowLayout";
 }
 
-<div id="tm" data-focus="@(Model.Focus ?? "")">
-    <div class="tm-tiles" id="tm-tiles"></div>
+<div class="tm-wrap" data-focus="@(Model.Focus ?? "")">
+    <aside class="tm-nav">
+        <div class="tm-nav-title">Task Manager</div>
+        <button class="tm-nav-btn active" data-p="general"><span class="i">📊</span> General</button>
+        <button class="tm-nav-btn" data-p="apps"><span class="i">🧩</span> Apps</button>
+        <button class="tm-nav-btn" data-p="stacks"><span class="i">🧱</span> Stacks</button>
+        <button class="tm-nav-btn" data-p="containers"><span class="i">📦</span> Containers</button>
+        <button class="tm-nav-btn" data-p="volumes"><span class="i">💾</span> Volumes</button>
+        <button class="tm-nav-btn" data-p="network"><span class="i">🌐</span> Network</button>
+        <div class="tm-nav-foot"><button id="tm-refresh" class="ui-btn" style="width:100%">↻ Refresh</button></div>
+    </aside>
 
-    <div class="win-toolbar">
-        <div class="tabbar" id="tm-tabs">
-            <button class="tab active" data-tab="containers">Containers</button>
-            <button class="tab" data-tab="performance">Performance</button>
-            <button class="tab" data-tab="stacks">Stacks</button>
-            <button class="tab" data-tab="images">Images</button>
-            <button class="tab" data-tab="volumes">Volumes</button>
+    <section class="tm-main">
+        <div class="tm-main-head">
+            <h1 class="tm-h" id="tm-h">General</h1>
+            <span style="flex:1"></span>
+            <input id="tm-filter" class="ui-input" type="search" placeholder="Filter…" hidden />
         </div>
-        <span class="spacer"></span>
-        <input id="tm-filter" class="ui-input" type="search" placeholder="Filter…" />
-        <button id="tm-refresh" class="ui-btn">Refresh</button>
-    </div>
+        <div id="tm-error" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
+        <div id="tm-pane"></div>
 
-    <div id="tm-error" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
-    <div class="card" style="padding:0;overflow:hidden"><div id="tm-pane"></div></div>
-
-    <div id="tm-logs" class="card" style="margin-top:1rem;display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
-            <strong id="tm-logs-title">Logs</strong>
-            <span id="tm-logs-stat" class="mono fx-muted" style="color:var(--mat-text-muted)"></span>
-            <span class="spacer" style="flex:1"></span>
-            <button id="tm-logs-close" class="ui-btn">Close</button>
+        <div id="tm-logs" class="card" style="margin-top:1rem;display:none">
+            <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
+                <strong id="tm-logs-title">Logs</strong>
+                <span id="tm-logs-stat" class="mono fx-muted" style="color:var(--mat-text-muted)"></span>
+                <span style="flex:1"></span>
+                <button id="tm-logs-close" class="ui-btn">Close</button>
+            </div>
+            <div id="tm-logbox" class="logbox"></div>
         </div>
-        <div id="tm-logbox" class="logbox"></div>
-    </div>
+    </section>
 </div>
 
 @section Head {
 <style>
-.tm-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.6rem; margin-bottom:1rem; }
-.tm-tile { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; padding:0.7rem 0.9rem; }
-.tm-tile .k { color:var(--mat-text-muted); font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
-.tm-tile .v { font-size:1.3rem; font-weight:800; font-variant-numeric:tabular-nums; }
-.tabbar { display:flex; gap:0.15rem; }
-.tab { border:none; background:transparent; padding:0.45rem 0.8rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
-.tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+/* full-bleed app shell with a Settings-style left nav; hide the generic window header */
+.win-header { display:none; }
+.tm-wrap { position:absolute; inset:0; display:flex; background:var(--mat-bg); }
+.tm-nav { width:200px; flex:0 0 auto; border-right:1px solid var(--mat-border); padding:1rem 0.6rem; background:rgba(0,0,0,0.18); display:flex; flex-direction:column; gap:0.1rem; overflow:auto; }
+.tm-nav-title { font-weight:800; font-size:1.15rem; padding:0.2rem 0.6rem 0.9rem; }
+.tm-nav-btn { display:flex; align-items:center; gap:0.55rem; width:100%; padding:0.55rem 0.6rem; border:none; background:transparent; color:var(--mat-text); border-radius:8px; cursor:pointer; font:inherit; font-size:0.92rem; text-align:left; }
+.tm-nav-btn:hover { background:var(--mat-surface-2); }
+.tm-nav-btn.active { background:var(--mat-accent); color:#fff; }
+.tm-nav-btn .i { font-size:1.05rem; width:1.3rem; text-align:center; }
+.tm-nav-foot { margin-top:auto; padding-top:0.6rem; }
+.tm-main { flex:1 1 auto; overflow:auto; padding:1.2rem 1.5rem 2rem; min-width:0; }
+.tm-main-head { display:flex; align-items:center; gap:0.8rem; margin-bottom:1rem; }
+.tm-h { font-size:1.5rem; font-weight:800; letter-spacing:-0.02em; margin:0; }
+.tm-main-head .ui-input { max-width:260px; }
+/* pills / bars */
+.pill { display:inline-block; font-size:0.7rem; font-weight:700; padding:0.1rem 0.5rem; border-radius:999px; }
+.pill.on { background:rgba(52,211,153,0.2); color:#7ff0c4; } .pill.off { background:rgba(244,80,107,0.16); color:#ffb3c0; }
+.bar { position:relative; height:6px; border-radius:999px; background:rgba(255,255,255,0.12); overflow:hidden; min-width:60px; } .bar > span { position:absolute; inset:0 auto 0 0; background:var(--mat-accent); }
+/* tables */
 table.tmt { width:100%; border-collapse:collapse; }
 table.tmt th, table.tmt td { padding:0.5rem 0.85rem; text-align:left; white-space:nowrap; }
 table.tmt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); cursor:pointer; user-select:none; }
 table.tmt thead th.num, table.tmt td.num { text-align:right; }
-table.tmt tbody tr { border-bottom:1px solid var(--mat-border); }
-table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
-.bar { position:relative; height:6px; border-radius:999px; background:rgba(255,255,255,0.12); overflow:hidden; min-width:60px; }
-.bar > span { position:absolute; inset:0 auto 0 0; background:var(--mat-accent); }
-/* Windows-style Performance tab: left sidebar of resources, right big graph + details */
-.perf { display:grid; grid-template-columns:240px 1fr; min-height:420px; }
-.perf-side { border-right:1px solid var(--mat-border); overflow-y:auto; padding:0.4rem 0; background:rgba(255,255,255,0.02); }
-.perf-item { display:grid; grid-template-columns:1fr auto; grid-template-rows:auto auto; column-gap:0.5rem; padding:0.55rem 0.9rem; cursor:pointer; border-left:3px solid transparent; }
-.perf-item:hover { background:rgba(255,255,255,0.05); }
-.perf-item.selected { background:rgba(139,92,246,0.14); border-left-color:var(--mat-accent); }
-.perf-item .lbl { font-size:0.82rem; font-weight:700; }
-.perf-item .val { font-size:0.82rem; color:var(--mat-text-muted); font-variant-numeric:tabular-nums; text-align:right; }
-.perf-item .spark { grid-column:1/-1; height:20px; margin-top:0.25rem; }
-.perf-item.head .lbl { color:var(--mat-text-muted); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; }
-.perf-item.head { cursor:default; padding-top:0.9rem; padding-bottom:0.2rem; }
-.perf-item.head:hover { background:transparent; }
-.perf-main { padding:1rem 1.2rem; display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
-.perf-h1 { font-size:1.05rem; font-weight:700; }
-.perf-h2 { color:var(--mat-text-muted); font-size:0.78rem; margin-bottom:0.4rem; }
-.perf-big { position:relative; height:220px; background:rgba(255,255,255,0.03); border:1px solid var(--mat-border); border-radius:8px; overflow:hidden; }
-.perf-big .pchart { width:100%; height:100%; display:block; }
-.perf-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.6rem; margin-top:0.6rem; }
-.perf-stat { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:10px; padding:0.6rem 0.8rem; }
-.perf-stat .k { font-size:0.7rem; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.05em; }
-.perf-stat .v { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; }
-.tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
-.tm-acts .ui-btn { padding:0.28rem 0.5rem; font-size:0.78rem; }
+table.tmt tbody tr { border-bottom:1px solid var(--mat-border); } table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
+.tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; } .tm-acts .ui-btn { padding:0.28rem 0.5rem; font-size:0.78rem; }
+/* General dashboard */
+.tm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.8rem; margin-bottom:1rem; }
+.tm-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:0.9rem 1rem; overflow:hidden; }
+.tm-card-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+.tm-card-ic { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:1rem; flex:0 0 auto; }
+.tm-card-k { font-size:0.74rem; color:var(--mat-text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+.tm-card-v { font-size:1.7rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+.tm-card-v small { font-size:0.9rem; color:var(--mat-text-muted); font-weight:600; }
+.tm-card-spark { height:34px; margin-top:0.5rem; }
+.tm-dash { display:grid; grid-template-columns:1fr 330px; gap:0.9rem; }
+@@media (max-width:860px){ .tm-dash { grid-template-columns:1fr; } }
+.tm-chartbox, .tm-top { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:0.9rem 1rem; }
+.tm-chart-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem; }
+.tm-chart-head strong { font-size:1rem; }
+.tm-seg { display:inline-flex; background:rgba(255,255,255,0.06); border-radius:8px; padding:2px; }
+.tm-seg button { border:none; background:transparent; padding:0.25rem 0.6rem; font:inherit; font-size:0.8rem; border-radius:6px; cursor:pointer; color:var(--mat-text-muted); }
+.tm-seg button.active { background:var(--mat-surface-2); color:var(--mat-text); }
+.tm-big { height:250px; background:rgba(255,255,255,0.03); border:1px solid var(--mat-border); border-radius:10px; overflow:hidden; }
+.tm-big .pchart { width:100%; height:100%; display:block; }
+.tm-top-head { font-size:0.76rem; color:var(--mat-text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.6rem; }
+.tm-toprow { display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; }
+.tm-appicon { width:26px; height:26px; border-radius:7px; display:inline-grid; place-items:center; overflow:hidden; flex:0 0 auto; background:var(--mat-surface-2); vertical-align:middle; }
+.tm-appicon img { width:100%; height:100%; object-fit:cover; } .tm-appicon .tm-emoji { font-size:1rem; }
+td .tm-appicon { margin-right:0.5rem; }
+.tm-topname { flex:1 1 auto; font-weight:600; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tm-topbar { width:70px; height:6px; border-radius:999px; background:rgba(255,255,255,0.1); overflow:hidden; flex:0 0 auto; } .tm-topbar > span { display:block; height:100%; background:var(--mat-accent); }
+.tm-topval { width:52px; text-align:right; font-variant-numeric:tabular-nums; font-size:0.82rem; color:var(--mat-text-muted); }
 </style>
 }
 
@@ -85,74 +101,143 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
   const fmtB=b=>{ if(b==null||b<0)return "—"; const u=["B","KB","MB","GB","TB"];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i]; };
+  const hexA=(hex,a)=>{ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; };
   const openWin=(url,title,key)=>window.parent.postMessage({type:"matos:open",url,title,key},location.origin);
+  function appIconHtml(icon){ if(!icon) return '<span class="tm-emoji">📦</span>'; if(/^(https?:|data:)/i.test(icon)) return `<img src="${escA(icon)}" alt="" draggable="false">`; return `<span class="tm-emoji">${esc(icon)}</span>`; }
+  function appIcon(id){ const d=catalog[id]; return appIconHtml(d&&d.icon); }
 
-  let tab="containers", filter="", sort={key:"name",dir:1};
-  let data={containers:[],stacks:[],images:[],volumes:[]};
+  const LABELS={general:"General",apps:"Apps",stacks:"Stacks",containers:"Containers",volumes:"Volumes",network:"Network"};
+  let section="general", filter="", sort={key:"name",dir:1}, genMetric="cpu";
+  let data={containers:[],stacks:[],images:[],volumes:[],networks:[]}, catalog={};
   const stats=new Map(); const statStreams=new Map();
-  // Per-resource history. "cpu" and "mem" are aggregates; "c:<id>" per container.
   const HISTORY=60; const hist=new Map(); hist.set("cpu",[]); hist.set("mem",[]);
-  let perfSel="cpu";  // which resource is selected in the perf sidebar
   const focusId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
+  const filterInput=document.getElementById("tm-filter");
 
-  function pushHist(key, v){ let h=hist.get(key); if(!h){ h=[]; hist.set(key,h);} h.push(v); if(h.length>HISTORY) h.shift(); }
+  function pushHist(key,v){ let h=hist.get(key); if(!h){ h=[]; hist.set(key,h);} h.push(v); if(h.length>HISTORY) h.shift(); }
+  const aggCpu=()=>{ let s=0; for(const [,v] of stats) s+=v.cpu||0; return s; };
+  const aggMem=()=>{ let s=0; for(const [,v] of stats) s+=v.mem||0; return s; };
 
-  document.querySelectorAll("#tm-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
-    document.querySelectorAll("#tm-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
-    tab=t.dataset.tab; sort={key:"name",dir:1}; render();
+  document.querySelectorAll(".tm-nav-btn").forEach(n=>n.addEventListener("click",()=>{
+    document.querySelectorAll(".tm-nav-btn").forEach(x=>x.classList.toggle("active",x===n));
+    section=n.dataset.p; document.getElementById("tm-h").textContent=LABELS[section]||section;
+    filterInput.value=""; filter=""; sort={key:"name",dir:1}; render();
   }));
-  document.getElementById("tm-filter").addEventListener("input",e=>{ filter=e.target.value.toLowerCase(); render(); });
+  filterInput.addEventListener("input",e=>{ filter=e.target.value.toLowerCase(); render(); });
   document.getElementById("tm-refresh").addEventListener("click",loadAll);
-
-  function stackNameOf(c){ return (c.name||""); } // display fallback
-  function projectOf(c){ return c._project||""; }
 
   async function loadAll(){
     try{
-      const [cs,ss,is,vs]=await Promise.all([
+      const [cs,ss,is,vs,ns,cat]=await Promise.all([
         fetch("/api/v1/docker/containers").then(r=>r.json()),
         fetch("/api/v1/docker/stacks").then(r=>r.json()),
         fetch("/api/v1/docker/images").then(r=>r.json()),
-        fetch("/api/v1/docker/volumes").then(r=>r.json())
+        fetch("/api/v1/docker/volumes").then(r=>r.json()),
+        fetch("/api/v1/docker/networks").then(r=>r.json()).catch(()=>({networks:[]})),
+        fetch("/api/v1/store/catalog").then(r=>r.json()).catch(()=>({apps:[]}))
       ]);
-      data.containers=cs.containers||[]; data.stacks=ss.stacks||[]; data.images=is.images||[]; data.volumes=vs.volumes||[];
-      // annotate containers with their stack/project name
+      data.containers=cs.containers||[]; data.stacks=ss.stacks||[]; data.images=is.images||[]; data.volumes=vs.volumes||[]; data.networks=ns.networks||[];
+      catalog={}; for(const a of (cat.apps||[])) catalog[a.id]=a;
       const proj={}; for(const s of data.stacks) for(const c of (s.containers||[])) proj[c.id]=s.name;
       for(const c of data.containers) c._project=proj[c.id]||"";
       const err=cs.lastError||ss.lastError; const e=document.getElementById("tm-error");
       if(err){ e.style.display=""; e.textContent="Docker: "+err; } else e.style.display="none";
-      tiles(); render(); syncStats();
+      render(); syncStats();
       if(focusId){ const c=data.containers.find(x=>x.id===focusId||x.shortId===focusId); if(c) openLogs(c.id,c.name); }
     }catch(_){ const e=document.getElementById("tm-error"); e.style.display=""; e.textContent="Docker is not reachable."; }
   }
 
-  function tiles(){
-    const running=data.containers.filter(c=>c.running).length;
-    const imgSize=data.images.reduce((a,i)=>a+(i.sizeBytes||0),0);
-    const volSize=data.volumes.reduce((a,v)=>a+(v.sizeBytes>0?v.sizeBytes:0),0);
-    document.getElementById("tm-tiles").innerHTML=`
-      <div class="tm-tile"><div class="k">Containers</div><div class="v">${running}<span style="font-size:0.9rem;color:var(--mat-text-muted)"> / ${data.containers.length}</span></div></div>
-      <div class="tm-tile"><div class="k">Stacks</div><div class="v">${data.stacks.length}</div></div>
-      <div class="tm-tile"><div class="k">Images</div><div class="v">${data.images.length} <span style="font-size:0.8rem;color:var(--mat-text-muted)">${fmtB(imgSize)}</span></div></div>
-      <div class="tm-tile"><div class="k">Volumes</div><div class="v">${data.volumes.length} <span style="font-size:0.8rem;color:var(--mat-text-muted)">${fmtB(volSize)}</span></div></div>`;
+  // ---- render dispatch ----
+  function render(){
+    const pane=document.getElementById("tm-pane");
+    filterInput.hidden = section==="general";
+    if(section==="general"){ pane.innerHTML=renderGeneral(); wireGeneral(); drawGeneral(); return; }
+    let html;
+    if(section==="apps") html=renderApps();
+    else if(section==="stacks") html=renderStacks();
+    else if(section==="containers") html=renderContainers();
+    else if(section==="volumes") html=renderVolumes();
+    else html=renderNetworks();
+    pane.innerHTML=`<div class="card" style="padding:0;overflow:hidden">${html}</div>`;
+    wireSort(); wireActions();
   }
 
   function sortHeader(label,key,num){ const arrow=sort.key===key?(sort.dir>0?" ▲":" ▼"):""; return `<th class="${num?'num':''}" data-sort="${key}">${label}${arrow}</th>`; }
-  function applySort(rows,accessors){
-    const a=accessors[sort.key]; if(!a) return rows;
-    return rows.slice().sort((x,y)=>{ const vx=a(x),vy=a(y); if(vx<vy)return -1*sort.dir; if(vx>vy)return 1*sort.dir; return 0; });
-  }
+  function applySort(rows,accessors){ const a=accessors[sort.key]; if(!a) return rows;
+    return rows.slice().sort((x,y)=>{ const vx=a(x),vy=a(y); if(vx<vy)return -1*sort.dir; if(vx>vy)return 1*sort.dir; return 0; }); }
   function wireSort(){ document.querySelectorAll("#tm-pane th[data-sort]").forEach(th=>th.addEventListener("click",()=>{
     const k=th.dataset.sort; sort = sort.key===k?{key:k,dir:-sort.dir}:{key:k,dir:1}; render(); })); }
+  function emptyRow(cols){ return `<tr><td colspan="${cols}" style="padding:1rem;color:var(--mat-text-muted)">Nothing here.</td></tr>`; }
 
-  function render(){
-    const pane=document.getElementById("tm-pane");
-    if(tab==="performance"){ pane.innerHTML=renderPerformance(); drawPerf(); return; }
-    if(tab==="containers") pane.innerHTML=renderContainers();
-    else if(tab==="stacks") pane.innerHTML=renderStacks();
-    else if(tab==="images") pane.innerHTML=renderImages();
-    else pane.innerHTML=renderVolumes();
-    wireSort(); wireActions();
+  // ---- General dashboard ----
+  function renderGeneral(){
+    const running=data.containers.filter(c=>c.running).length;
+    const imgSize=data.images.reduce((a,i)=>a+(i.sizeBytes||0),0);
+    const volSize=data.volumes.reduce((a,v)=>a+(v.sizeBytes>0?v.sizeBytes:0),0);
+    const cards=[
+      {k:"CPU",v:aggCpu().toFixed(1)+"%",hk:"cpu",color:"#8b5cf6",ic:"🧠"},
+      {k:"Memory",v:fmtB(aggMem()),hk:"mem",color:"#22b8ff",ic:"📈"},
+      {k:"Containers",v:`${running}<small>/${data.containers.length}</small>`,hk:"",color:"#34d399",ic:"📦"},
+      {k:"Storage",v:fmtB(imgSize+volSize),hk:"",color:"#fbbf24",ic:"💾"}
+    ];
+    return `<div class="tm-cards">${cards.map(c=>`
+      <div class="tm-card">
+        <div class="tm-card-top"><span class="tm-card-ic" style="background:${hexA(c.color,0.16)};color:${c.color}">${c.ic}</span><span class="tm-card-k">${c.k}</span></div>
+        <div class="tm-card-v">${c.v}</div>
+        <div class="tm-card-spark" data-gspark="${c.hk}"></div>
+      </div>`).join("")}</div>
+      <div class="tm-dash">
+        <div class="tm-chartbox">
+          <div class="tm-chart-head"><strong id="tm-gtitle">${genMetric==="cpu"?"CPU":"Memory"}</strong>
+            <div class="tm-seg" id="tm-gmetric"><button data-m="cpu" class="${genMetric==="cpu"?"active":""}">CPU</button><button data-m="mem" class="${genMetric==="mem"?"active":""}">Memory</button></div></div>
+          <div class="tm-big" id="tm-gbig"></div>
+        </div>
+        <div class="tm-top"><div class="tm-top-head">Top apps · CPU</div><div id="tm-topapps"></div></div>
+      </div>`;
+  }
+  function wireGeneral(){ document.querySelectorAll("#tm-gmetric button").forEach(b=>b.addEventListener("click",()=>{
+    genMetric=b.dataset.m; document.querySelectorAll("#tm-gmetric button").forEach(x=>x.classList.toggle("active",x===b));
+    document.getElementById("tm-gtitle").textContent=genMetric==="cpu"?"CPU":"Memory"; drawGeneral(); })); }
+  function drawGeneral(){
+    document.querySelectorAll("#tm-pane [data-gspark]").forEach(el=>{ const k=el.dataset.gspark; if(k) miniSpark(el,hist.get(k)||[],k==="cpu"?"#8b5cf6":"#22b8ff"); });
+    const h=hist.get(genMetric)||[]; const color=genMetric==="cpu"?"#8b5cf6":"#22b8ff";
+    const max=genMetric==="mem"?Math.max(1,...h):Math.max(100,...h);
+    const big=document.getElementById("tm-gbig"); if(big) areaChart(big,h,{max,color,id:"gmain"});
+    const groups=appGroups().map(g=>({g,cpu:g.containers.reduce((a,c)=>a+((stats.get(c.id)||{}).cpu||0),0)})).sort((a,b)=>b.cpu-a.cpu).slice(0,6);
+    const maxc=Math.max(1,...groups.map(x=>x.cpu));
+    const el=document.getElementById("tm-topapps"); if(!el) return;
+    el.innerHTML=groups.length?groups.map(({g,cpu})=>`<div class="tm-toprow"><span class="tm-appicon">${appIcon(g.app)}</span>
+      <span class="tm-topname">${esc(g.title)}</span><span class="tm-topbar"><span style="width:${Math.min(100,maxc?cpu/maxc*100:0)}%"></span></span>
+      <span class="tm-topval">${cpu.toFixed(1)}%</span></div>`).join(""):`<div class="fx-muted" style="padding:0.5rem 0">No matOS apps running.</div>`;
+  }
+
+  // ---- Apps (matOS-managed, grouped by app+instance, with icons) ----
+  function appGroups(){
+    const map=new Map();
+    for(const c of data.containers){ if(!c.matosApp) continue; const key=c.matosApp+"|"+(c.matosInstance||"");
+      let g=map.get(key); if(!g){ g={app:c.matosApp,instance:c.matosInstance,title:c.matosTitle||c.matosApp,stackName:c._project,containers:[]}; map.set(key,g);} g.containers.push(c); }
+    return [...map.values()];
+  }
+  function renderApps(){
+    let groups=appGroups().filter(g=>!filter||(g.title+g.app+(g.stackName||"")).toLowerCase().includes(filter));
+    groups.sort((a,b)=>a.title.toLowerCase()<b.title.toLowerCase()?-1:1);
+    const body=groups.map(g=>{
+      const run=g.containers.filter(c=>c.running).length, tot=g.containers.length;
+      const cpu=g.containers.reduce((a,c)=>a+((stats.get(c.id)||{}).cpu||0),0);
+      const mem=g.containers.reduce((a,c)=>a+((stats.get(c.id)||{}).mem||0),0);
+      const web=g.containers.find(c=>c.hasWebUi&&c.appUrl);
+      return `<tr>
+        <td><span class="tm-appicon">${appIcon(g.app)}</span><strong>${esc(g.title)}</strong><div class="fx-muted" style="font-size:0.72rem">${esc(g.stackName||g.app)}</div></td>
+        <td>${run?`<span class="pill on">${run}/${tot} running</span>`:`<span class="pill off">stopped</span>`}</td>
+        <td class="num">${run?cpu.toFixed(1)+"%":"—"}</td>
+        <td class="num">${run?fmtB(mem):"—"}</td>
+        <td><div class="tm-acts">
+          ${web?`<button class="ui-btn" data-open="${escA(web.appUrl)}">Open</button>`:""}
+          ${g.stackName?`<button class="ui-btn" data-set-stack="${escA(g.stackName)}">Settings</button>`:""}
+        </div></td></tr>`;
+    }).join("");
+    return `<table class="tmt"><thead><tr><th>App</th><th>Status</th><th class="num">CPU</th><th class="num">Mem</th><th></th></tr></thead>
+      <tbody>${body||emptyRow(5)}</tbody></table>`;
   }
 
   // ---- Containers ----
@@ -202,19 +287,6 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
       <tbody>${body||emptyRow(5)}</tbody></table>`;
   }
 
-  // ---- Images ----
-  function renderImages(){
-    let rows=data.images.filter(i=>!filter||(i.repository+i.tag).toLowerCase().includes(filter));
-    rows=applySort(rows,{ repository:i=>i.repository.toLowerCase(), tag:i=>i.tag.toLowerCase(), size:i=>i.sizeBytes, created:i=>i.createdUtc });
-    const body=rows.map(i=>`<tr>
-      <td class="mono">${esc(i.repository)}</td><td class="mono">${esc(i.tag)}</td>
-      <td class="mono fx-muted">${esc(i.shortId)}</td>
-      <td class="num">${fmtB(i.sizeBytes)}</td>
-      <td class="fx-muted">${(i.createdUtc||"").replace("T"," ").replace(/\..*/,"")}</td></tr>`).join("");
-    return `<table class="tmt"><thead><tr>${sortHeader("Repository","repository")}${sortHeader("Tag","tag")}<th>Image ID</th>${sortHeader("Size","size",true)}${sortHeader("Created","created")}</tr></thead>
-      <tbody>${body||emptyRow(5)}</tbody></table>`;
-  }
-
   // ---- Volumes ----
   function renderVolumes(){
     let rows=data.volumes.filter(v=>!filter||v.name.toLowerCase().includes(filter));
@@ -229,8 +301,22 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
       <tbody>${body||emptyRow(5)}</tbody></table>`;
   }
 
-  function emptyRow(cols){ return `<tr><td colspan="${cols}" style="padding:1rem;color:var(--mat-text-muted)">Nothing here.</td></tr>`; }
+  // ---- Network (docker networks) ----
+  function renderNetworks(){
+    let rows=(data.networks||[]).filter(n=>!filter||(n.name+n.driver+n.subnet).toLowerCase().includes(filter));
+    rows=applySort(rows,{ name:n=>n.name.toLowerCase(), driver:n=>(n.driver||"").toLowerCase(), containers:n=>n.containers });
+    const body=rows.map(n=>`<tr>
+      <td><strong>${esc(n.name)}</strong>${n.internal?' <span class="fx-muted" style="font-size:0.72rem">internal</span>':''}</td>
+      <td class="fx-muted">${esc(n.driver)}</td>
+      <td class="fx-muted">${esc(n.scope)}</td>
+      <td class="mono">${esc(n.subnet||"—")}</td>
+      <td class="mono fx-muted">${esc(n.gateway||"—")}</td>
+      <td class="num">${n.containers}</td></tr>`).join("");
+    return `<table class="tmt"><thead><tr>${sortHeader("Network","name")}${sortHeader("Driver","driver")}<th>Scope</th><th>Subnet</th><th>Gateway</th>${sortHeader("Containers","containers",true)}</tr></thead>
+      <tbody>${body||emptyRow(6)}</tbody></table>`;
+  }
 
+  // ---- actions ----
   function wireActions(){
     const q=s=>document.querySelectorAll("#tm-pane "+s);
     q("[data-act]").forEach(b=>b.addEventListener("click",()=>cAction(b.dataset.id,b.dataset.act)));
@@ -244,7 +330,7 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   async function cAction(id,a){ try{ await fetch(`/api/v1/docker/containers/${id}/${a}`,{method:"POST"});}catch(_){ } setTimeout(loadAll,700); }
   async function sAction(name,a){ try{ await fetch(`/api/v1/docker/stacks/${encodeURIComponent(name)}/${a}`,{method:"POST"});}catch(_){ } setTimeout(loadAll,700); }
 
-  // ---- live stats: one stream per running container, kept in sync with the data ----
+  // ---- live stats: one stream per running container ----
   function syncStats(){
     const running=new Set(data.containers.filter(c=>c.running).slice(0,60).map(c=>c.id));
     for(const [id,src] of statStreams){ if(!running.has(id)){ try{src.close();}catch(_){} statStreams.delete(id); stats.delete(id); hist.delete("c:"+id); } }
@@ -253,7 +339,6 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
       src.addEventListener("stat",e=>{ try{ const s=JSON.parse(e.data);
         const cpu=+s.cpuPercent||0, mem=+s.memoryBytes||0, lim=+s.memoryLimitBytes||0;
         stats.set(id,{cpu,mem,lim});
-        pushHist("c:"+id, cpu);
         const cc=document.querySelector(`#tm-pane [data-cpu="${id}"]`); const mc=document.querySelector(`#tm-pane [data-mem="${id}"]`);
         if(cc)cc.textContent=cpu.toFixed(1)+"%"; if(mc)mc.textContent=fmtB(mem);
       }catch(_){}} );
@@ -261,77 +346,25 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
     }
   }
 
-  // ---- Performance tab: Windows-style sidebar + detail view ----
-  function perfItems(){
-    const running=data.containers.filter(c=>c.running);
-    const items=[{id:"cpu",label:"CPU",kind:"overview",color:"#8b5cf6",unit:"%"},
-                 {id:"mem",label:"Memory",kind:"overview",color:"#22b8ff",unit:"B"}];
-    for(const c of running) items.push({id:"c:"+c.id,label:c.name,kind:"container",cid:c.id,color:"#34d399",unit:"%"});
-    return items;
-  }
-  function currentValue(it){
-    if(it.id==="cpu"){ let s=0; for(const [,v] of stats) s+=v.cpu||0; return s; }
-    if(it.id==="mem"){ let s=0; for(const [,v] of stats) s+=v.mem||0; return s; }
-    const st=stats.get(it.cid); return st?st.cpu||0:0;
-  }
-  function fmtVal(it,v){ return it.unit==="B"?fmtB(v):(v||0).toFixed(1)+"%"; }
-  function renderPerformance(){
-    const its=perfItems();
-    // Auto-select first item if the previously selected one is gone
-    if(!its.find(x=>x.id===perfSel)) perfSel=its[0]?.id||"cpu";
-    const side=its.map(it=>{
-      const cur=currentValue(it); const h=hist.get(it.id)||[]; const max=it.unit==="B"?Math.max(1,...h,cur):Math.max(100,...h,cur);
-      const group = (its[0]===it || (its[its.indexOf(it)-1]?.kind!==it.kind))
-        ? `<div class="perf-item head"><span class="lbl">${it.kind==="overview"?"Overview":"Containers"}</span></div>` : "";
-      return group+`<div class="perf-item ${it.id===perfSel?'selected':''}" data-perf="${escA(it.id)}">
-        <span class="lbl" style="overflow:hidden;text-overflow:ellipsis">${esc(it.label)}</span>
-        <span class="val">${fmtVal(it,cur)}</span>
-        <span class="spark" data-spark="${escA(it.id)}"></span></div>`;
-    }).join("");
-    return `<div class="perf">
-      <div class="perf-side" id="perf-side">${side}</div>
-      <div class="perf-main" id="perf-main"></div></div>`;
-  }
+  // ---- charts ----
   function areaChart(el,d,o){
     const W=600,H=200,n=d.length,max=o.max||1;
     const pad=[["M0",H],...(n?d.map((v,i)=>{const x=n>1?i*(W/(n-1)):W/2; const y=H-Math.min(1,(v||0)/max)*H; return ["L"+x.toFixed(1),y.toFixed(1)];}):[]),["L"+W,H]];
     const line=n>1 ? d.map((v,i)=>{const x=i*(W/(n-1)); const y=H-Math.min(1,(v||0)/max)*H; return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);}).join(" ") : "";
     const area=pad.map(p=>p.join(" ")).join(" ")+" Z";
     el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pchart">
-      <defs><linearGradient id="${o.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.color}" stop-opacity="0.35"/><stop offset="1" stop-color="${o.color}" stop-opacity="0"/></linearGradient></defs>
+      <defs><linearGradient id="${o.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.color}" stop-opacity="0.4"/><stop offset="1" stop-color="${o.color}" stop-opacity="0"/></linearGradient></defs>
       ${[0.25,0.5,0.75].map(f=>`<line x1="0" y1="${H*f}" x2="${W}" y2="${H*f}" stroke="rgba(255,255,255,0.06)"/>`).join("")}
       <path d="${area}" fill="url(#${o.id})"/>${line?`<path d="${line}" fill="none" stroke="${o.color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`:""}</svg>`;
   }
   function miniSpark(el,d,color){
-    const W=200,H=20,n=d.length; if(!n){ el.innerHTML=""; return; }
+    const W=200,H=34,n=d.length; if(!n){ el.innerHTML=""; return; }
     const max=Math.max(1,...d);
-    const line=d.map((v,i)=>{const x=n>1?i*(W/(n-1)):W/2; const y=H-Math.min(1,(v||0)/max)*(H-2)-1; return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);}).join(" ");
-    el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%"><path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
-  }
-  function drawPerf(){
-    const its=perfItems();
-    // update sparklines in the sidebar
-    for(const it of its){ const el=document.querySelector(`#perf-side [data-spark="${CSS.escape(it.id)}"]`); if(el) miniSpark(el, hist.get(it.id)||[], it.color); }
-    // update per-item live values in the sidebar
-    for(const it of its){ const row=document.querySelector(`#perf-side [data-perf="${CSS.escape(it.id)}"] .val`); if(row) row.textContent=fmtVal(it,currentValue(it)); }
-    // main pane for selected
-    const sel=its.find(x=>x.id===perfSel)||its[0]; if(!sel){ document.getElementById("perf-main").innerHTML=""; return; }
-    const h=hist.get(sel.id)||[]; const cur=currentValue(sel); const peak=h.length?Math.max(...h):cur; const avg=h.length?h.reduce((a,b)=>a+b,0)/h.length:cur;
-    const max = sel.unit==="B" ? Math.max(1, peak, cur) : Math.max(100, peak, cur);
-    const containersRunning=data.containers.filter(c=>c.running).length;
-    const details = sel.kind==="overview"
-      ? [ ["Current", fmtVal(sel,cur)], ["Peak", fmtVal(sel,peak)], ["Average", fmtVal(sel,avg)], ["Containers", containersRunning+" running"] ]
-      : (()=>{ const st=stats.get(sel.cid)||{}; const c=data.containers.find(x=>x.id===sel.cid);
-              const mem=st.mem||0, lim=st.lim||0;
-              return [ ["CPU", (st.cpu||0).toFixed(1)+"%"], ["Memory", fmtB(mem)+(lim?` / ${fmtB(lim)}`:"")], ["Peak CPU", peak.toFixed(1)+"%"], ["Image", c?c.image:"—"] ]; })();
-    document.getElementById("perf-main").innerHTML = `
-      <div class="perf-h1">${esc(sel.label)}</div>
-      <div class="perf-h2">${sel.kind==="overview"?"Aggregate across all running containers":"Container"} · last ${HISTORY} samples · 2s each</div>
-      <div class="perf-big" id="perf-big"></div>
-      <div class="perf-grid">${details.map(([k,v])=>`<div class="perf-stat"><div class="k">${esc(k)}</div><div class="v">${esc(String(v))}</div></div>`).join("")}</div>`;
-    const big=document.getElementById("perf-big"); if(big) areaChart(big,h,{max,color:sel.color,id:"gbig"});
-    // wire clicks
-    document.querySelectorAll("#perf-side [data-perf]").forEach(el=>el.addEventListener("click",()=>{ perfSel=el.dataset.perf; drawPerf(); document.querySelectorAll("#perf-side [data-perf]").forEach(x=>x.classList.toggle("selected",x.dataset.perf===perfSel)); }));
+    const line=d.map((v,i)=>{const x=n>1?i*(W/(n-1)):W/2; const y=H-Math.min(1,(v||0)/max)*(H-3)-1.5; return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1);}).join(" ");
+    const area=`M0 ${H} `+d.map((v,i)=>{const x=n>1?i*(W/(n-1)):W/2; const y=H-Math.min(1,(v||0)/max)*(H-3)-1.5; return "L"+x.toFixed(1)+" "+y.toFixed(1);}).join(" ")+` L${W} ${H} Z`;
+    el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%">
+      <defs><linearGradient id="sp${color.slice(1)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+      <path d="${area}" fill="url(#sp${color.slice(1)})"/><path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
   }
 
   // ---- logs drawer ----
@@ -349,9 +382,8 @@ table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
   }
   document.getElementById("tm-logs-close").addEventListener("click",()=>{ if(logSrc)logSrc.close(); if(statSrc)statSrc.close(); document.getElementById("tm-logs").style.display="none"; });
 
-  setInterval(()=>{ let tc=0,tm=0; for(const c of data.containers){ if(c.running){ const s=stats.get(c.id); if(s){ tc+=s.cpu||0; tm+=s.mem||0; } } }
-    pushHist("cpu",tc); pushHist("mem",tm);
-    if(tab==="performance") drawPerf(); }, 2000);
+  setInterval(()=>{ pushHist("cpu",aggCpu()); pushHist("mem",aggMem());
+    if(section==="general") drawGeneral(); }, 2000);
   loadAll(); setInterval(loadAll,10000);
 })();
 </script>

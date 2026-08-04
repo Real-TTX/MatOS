@@ -278,6 +278,36 @@ public partial class DockerService
         catch (Exception ex) { LastError = ex.Message; return Array.Empty<VolumeInfo>(); }
     }
 
+    /// <summary>Lists Docker networks with their subnet/driver and a live container count
+    /// (tallied from container network membership, since the list endpoint omits it).</summary>
+    public async Task<IReadOnlyList<NetworkInfo>> ListNetworksAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var client = CreateClient();
+            var nets = await client.Networks.ListNetworksAsync(new NetworksListParameters(), ct);
+            var containers = await client.Containers.ListContainersAsync(new ContainersListParameters { All = true }, ct);
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var c in containers)
+            {
+                var names = c.NetworkSettings?.Networks?.Keys;
+                if (names == null) continue;
+                foreach (var k in names) counts[k] = counts.GetValueOrDefault(k) + 1;
+            }
+            var list = new List<NetworkInfo>();
+            foreach (var n in nets)
+            {
+                var cfg = n.IPAM?.Config?.FirstOrDefault(c => !string.IsNullOrEmpty(c.Subnet));
+                counts.TryGetValue(n.Name ?? "", out var cnt);
+                list.Add(new NetworkInfo(n.ID ?? "", n.Name ?? "", n.Driver ?? "", n.Scope ?? "",
+                    cfg?.Subnet ?? "", cfg?.Gateway ?? "", n.Internal, cnt));
+            }
+            LastError = null;
+            return list.OrderBy(x => x.Name, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex) { LastError = ex.Message; return Array.Empty<NetworkInfo>(); }
+    }
+
     /// <summary>Best-effort on-disk size of a named volume via the bind-mounted volumes path.</summary>
     public long VolumeSize(string name)
     {
