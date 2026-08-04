@@ -55,6 +55,10 @@ services:
     image: ${MATCAD_IMAGE:-ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}}
     pull_policy: missing
     container_name: matos-matcad
+    # Exposes the raw backend UI for the Proxy app's "Advanced" button (guarded by Matcad's own login).
+    # Host 4436 -> container 4433 (4433 is a common default that may already be taken on the host).
+    ports:
+      - "${MATCAD_ADVANCED_PORT:-4436}:4433"
     environment:
       Matcad__DataDir: "/data"
       Matcad__ConfigDir: "/data/config"

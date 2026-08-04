@@ -48,12 +48,15 @@
     <div class="card" id="px-settings-card">
         <label class="pf"><span>Base domain</span><input class="ui-input mono" id="ps-base" placeholder="example.com" /></label>
         <label class="pf"><span>ACME e-mail <small class="fx-muted">(Let's Encrypt registration)</small></span><input class="ui-input" id="ps-email" placeholder="you@example.com" /></label>
-        <label class="pf"><span>Matcad host <small class="fx-muted">(optional — expose Matcad's own UI at this hostname)</small></span><input class="ui-input mono" id="ps-mhost" placeholder="matcad.example.com" /></label>
         <div class="grid2">
             <label class="pf"><span>DNS propagation delay (s) <small class="fx-muted">0 = default</small></span><input class="ui-input" id="ps-delay" type="number" min="0" /></label>
             <label class="pf"><span>DNS propagation timeout (s) <small class="fx-muted">0 = default, -1 = skip</small></span><input class="ui-input" id="ps-timeout" type="number" min="-1" /></label>
         </div>
         <div style="display:flex;gap:0.5rem;margin-top:0.4rem"><button class="ui-btn primary" id="ps-save">Save</button><span id="ps-flash" class="fx-muted" style="align-self:center"></span></div>
+    </div>
+    <div class="card" style="display:flex;align-items:center;gap:1rem;margin-top:0.9rem">
+        <div style="flex:1"><strong>Advanced</strong><div class="fx-muted" style="font-size:0.82rem">Open the raw proxy backend for expert configuration not covered here.</div></div>
+        <button class="ui-btn" id="ps-advanced">Advanced ↗</button>
     </div>
 </section>
 
@@ -321,21 +324,27 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
   // ================= Settings =================
   async function loadSettings(){
     let s; try{ s=await get("/settings"); }catch(e){ return; }
-    $("ps-base").value=s.baseDomain||""; $("ps-email").value=s.acmeEmail||""; $("ps-mhost").value=s.matcadHost||"";
+    $("ps-base").value=s.baseDomain||""; $("ps-email").value=s.acmeEmail||"";
     $("ps-delay").value=s.acmePropagationDelaySeconds||0; $("ps-timeout").value=s.acmePropagationTimeoutSeconds||0;
   }
   $("ps-save").addEventListener("click",async()=>{
     const flash=$("ps-flash"); flash.textContent="Saving…";
     try{ const r=await req("PUT","/settings",{ baseDomain:$("ps-base").value.trim(), acmeEmail:$("ps-email").value.trim(),
-      matcadHost:$("ps-mhost").value.trim(), acmePropagationDelaySeconds:+$("ps-delay").value||0, acmePropagationTimeoutSeconds:+$("ps-timeout").value||0 });
-      flash.textContent = r.ok===false ? ("Saved — Caddy: "+(r.error||"error")) : "Saved ✓"; }
+      acmePropagationDelaySeconds:+$("ps-delay").value||0, acmePropagationTimeoutSeconds:+$("ps-timeout").value||0 });
+      flash.textContent = r.ok===false ? ("Saved — apply error: "+(r.error||"error")) : "Saved ✓"; }
     catch(e){ flash.textContent=e.message; }
+  });
+  // Advanced: open the raw proxy backend UI in its own window (the only place the backend surfaces).
+  $("ps-advanced").addEventListener("click",()=>{
+    const url=`http://${location.hostname}:4436`;
+    try{ window.parent.postMessage({type:"matos:open",url,title:"Advanced · Proxy backend",key:"proxy-advanced",width:1200,height:780},location.origin); }
+    catch(_){ window.open(url,"_blank","noopener"); }
   });
 
   // ---- init ----
   (async()=>{
-    try{ const st=await get("/status"); banner(`Connected to Matcad · base domain <span class="mono">${esc(st.baseDomain||"(unset)")}</span> · ${st.counts.allRoutes} routes, ${st.counts.providers} providers`,"ok"); }
-    catch(e){ banner(`<strong>Matcad not reachable.</strong> ${esc(e.message)}<br><span class="fx-muted" style="font-size:0.82rem">Set a shared API key (MATCAD_API_KEY) on both the matos and matcad containers and make sure Matcad is running.</span>`,"err"); }
+    try{ const st=await get("/status"); banner(`Reverse proxy connected · base domain <span class="mono">${esc(st.baseDomain||"(unset)")}</span> · ${st.counts.allRoutes} routes, ${st.counts.providers} providers`,"ok"); }
+    catch(e){ banner(`<strong>Reverse proxy backend not reachable.</strong> ${esc(e.message)}<br><span class="fx-muted" style="font-size:0.82rem">Make sure the reverse-proxy service is running and configured.</span>`,"err"); }
     loadRoutes(); loadProviders(); loadSettings();
   })();
 })();

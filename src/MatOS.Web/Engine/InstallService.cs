@@ -28,13 +28,15 @@ public class InstallService
     private readonly StoreService _store;
     private readonly ILogger<InstallService> _log;
     private readonly MatOS.Web.Services.NotificationService _notes;
+    private readonly IConfiguration _cfg;
+    private readonly IHttpClientFactory _http;
     private readonly string _network;
     private readonly object _gate = new();
 
     public InstallService(DockerService docker, JsonConfigService config, StoreService store, IConfiguration cfg,
-        ILogger<InstallService> log, MatOS.Web.Services.NotificationService notes)
+        ILogger<InstallService> log, MatOS.Web.Services.NotificationService notes, IHttpClientFactory http)
     {
-        _docker = docker; _config = config; _store = store; _log = log; _notes = notes;
+        _docker = docker; _config = config; _store = store; _log = log; _notes = notes; _cfg = cfg; _http = http;
         _network = cfg["MatOS:Docker:Network"] ?? "matos";
     }
 
@@ -255,9 +257,71 @@ public class InstallService
                     catch (Exception ex) { _log.LogWarning(ex, "Attaching {Id} to proxy network {Net} failed", newId, ProxyNetwork); }
             }
 
+            // Also drive the route through the reverse-proxy backend's API, so publishing works even
+            // when label discovery is off and the app shows up as a managed route in the Proxy app.
+            string? upstream = null;
+            var appDef = _store.Find(appId);
+            if (appDef != null)
+            {
+                var all = await _docker.ListContainersAsync(true, ct);
+                var mine = all.Where(c => c.Labels.GetValueOrDefault(MatosLabels.App, "") == appId
+                                       && c.Labels.GetValueOrDefault(MatosLabels.Instance, "") == instance).ToList();
+                var uiC = mine.Count <= 1 ? mine.FirstOrDefault()
+                    : mine.FirstOrDefault(c => c.Labels.GetValueOrDefault(ComposeLabels.Service, "") == appDef.UiService) ?? mine.First();
+                if (uiC != null) upstream = $"http://{uiC.Name}:{appDef.UiPort}";
+            }
+            await SyncProxyRouteAsync(host, upstream, enabled, ct);
+
             return new(true, enabled ? host : null, 0, null);
         }
         catch (Exception ex) { _log.LogWarning(ex, "Publish of {Id} failed", id); return new(false, null, 0, ex.Message); }
+    }
+
+    /// <summary>Creates (publish) or removes (unpublish) an explicit route in the reverse-proxy backend
+    /// via its REST API. No-op when the API isn't configured — label-based discovery still applies. Best
+    /// effort: failures are logged, never fatal to the publish itself.</summary>
+    private async Task SyncProxyRouteAsync(string host, string? upstream, bool enabled, CancellationToken ct)
+    {
+        var baseUrl = (_cfg["MatOS:Matcad:ApiUrl"] ?? "http://matcad:4433").TrimEnd('/');
+        var key = _cfg["MatOS:Matcad:ApiKey"] ?? "";
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(host)) return;
+        if (enabled && string.IsNullOrWhiteSpace(upstream)) return;
+        try
+        {
+            var http = _http.CreateClient(); http.Timeout = TimeSpan.FromSeconds(15);
+            if (enabled)
+            {
+                var body = System.Text.Json.JsonSerializer.Serialize(new { host, wildcard = false, target = "proxy", upstream, enabled = true });
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/routes")
+                { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+                req.Headers.Add("X-Api-Key", key);
+                await http.SendAsync(req, ct);
+            }
+            else
+            {
+                using var listReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/v1/routes/manual");
+                listReq.Headers.Add("X-Api-Key", key);
+                var resp = await http.SendAsync(listReq, ct);
+                if (!resp.IsSuccessStatusCode) return;
+                using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+                foreach (var r in doc.RootElement.EnumerateArray())
+                {
+                    // Match on upstream (the container — reliable) or host (the derived default). Either
+                    // identifies the route this app created, even if it was published under a custom host.
+                    var rHost = r.TryGetProperty("host", out var h) ? h.GetString() : null;
+                    var rUp = r.TryGetProperty("upstream", out var u) ? u.GetString() : null;
+                    var match = (!string.IsNullOrWhiteSpace(upstream) && string.Equals(rUp, upstream, StringComparison.OrdinalIgnoreCase))
+                             || string.Equals(rHost, host, StringComparison.OrdinalIgnoreCase);
+                    if (match && r.TryGetProperty("id", out var idEl))
+                    {
+                        using var delReq = new HttpRequestMessage(HttpMethod.Delete, $"{baseUrl}/api/v1/routes/{idEl.GetInt64()}");
+                        delReq.Headers.Add("X-Api-Key", key);
+                        await http.SendAsync(delReq, ct);
+                    }
+                }
+            }
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "Proxy route sync for {Host} failed", host); }
     }
 
     private async Task PublishComposeAsync(string appId, string project, bool enabled, string host, CancellationToken ct)
