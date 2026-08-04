@@ -64,6 +64,7 @@ builder.Services.AddRazorPages(o =>
     o.Conventions.AuthorizePage("/Apps/Files", "Admin");
     o.Conventions.AuthorizePage("/Apps/Network", "Admin");
     o.Conventions.AuthorizePage("/Apps/Backups", "Admin");
+    o.Conventions.AuthorizePage("/Apps/Proxy", "Admin");
 });
 builder.Services.Configure<RouteOptions>(o => o.LowercaseUrls = true);
 builder.Services.AddProblemDetails();
@@ -99,5 +100,6 @@ api.MapStoreApi();
 api.MapBackupsApi();
 api.MapNotificationsApi();
 api.MapUpdatesApi();
+api.MapMatcadApi();
 
 app.Run();

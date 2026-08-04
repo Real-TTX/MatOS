@@ -1,0 +1,334 @@
+@page "/apps/proxy"
+@model MatOS.Web.Pages.Apps.ProxyModel
+@{
+    ViewData["Title"] = "Proxy";
+    ViewData["Description"] = "Domains, routes, TLS certificates and DNS providers — powered by Matcad in the background.";
+    Layout = "_WindowLayout";
+}
+
+<div id="px-banner" class="card" style="display:none;margin-bottom:0.8rem"></div>
+
+<div class="px-tabs" id="px-tabs">
+    <button class="px-tab active" data-tab="domains">Domains &amp; Routes</button>
+    <button class="px-tab" data-tab="certs">Certificates</button>
+    <button class="px-tab" data-tab="providers">DNS Providers</button>
+    <button class="px-tab" data-tab="settings">Settings</button>
+</div>
+
+<section class="px-panel" data-panel="domains">
+    <div class="px-head">
+        <div><h2>Domains &amp; Routes</h2><p class="fx-muted">Every hostname Caddy serves. Add your main domain and extra domains; point them at an app (reverse proxy) or redirect them.</p></div>
+        <button class="ui-btn primary" id="px-add-route">＋ Add domain</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+        <table class="pxt"><thead><tr><th>Host</th><th>Target</th><th>Certificate</th><th>Auth</th><th>Source</th><th></th></tr></thead>
+            <tbody id="px-routes"><tr><td colspan="6" class="px-empty">Loading…</td></tr></tbody></table>
+    </div>
+</section>
+
+<section class="px-panel" data-panel="certs" hidden>
+    <div class="px-head"><div><h2>Certificates</h2><p class="fx-muted">What Caddy will issue &amp; auto-renew for your routes. Wildcards use a DNS provider (DNS-01); single hosts get individual certs; localhost/IP use Caddy's internal CA.</p></div></div>
+    <div id="px-certs"><div class="px-empty">Loading…</div></div>
+</section>
+
+<section class="px-panel" data-panel="providers" hidden>
+    <div class="px-head">
+        <div><h2>DNS Providers</h2><p class="fx-muted">Credentials for wildcard certificates (DNS-01). e.g. <strong>netcup</strong>: customer number, API key, API password.</p></div>
+        <button class="ui-btn primary" id="px-add-provider">＋ Add provider</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+        <table class="pxt"><thead><tr><th>Name</th><th>Type (Caddy module)</th><th>Used by</th><th></th></tr></thead>
+            <tbody id="px-providers"><tr><td colspan="4" class="px-empty">Loading…</td></tr></tbody></table>
+    </div>
+</section>
+
+<section class="px-panel" data-panel="settings" hidden>
+    <div class="px-head"><div><h2>Settings</h2><p class="fx-muted">Shared proxy settings. The base domain is what your published apps hang off of.</p></div></div>
+    <div class="card" id="px-settings-card">
+        <label class="pf"><span>Base domain</span><input class="ui-input mono" id="ps-base" placeholder="example.com" /></label>
+        <label class="pf"><span>ACME e-mail <small class="fx-muted">(Let's Encrypt registration)</small></span><input class="ui-input" id="ps-email" placeholder="you@example.com" /></label>
+        <label class="pf"><span>Matcad host <small class="fx-muted">(optional — expose Matcad's own UI at this hostname)</small></span><input class="ui-input mono" id="ps-mhost" placeholder="matcad.example.com" /></label>
+        <div class="grid2">
+            <label class="pf"><span>DNS propagation delay (s) <small class="fx-muted">0 = default</small></span><input class="ui-input" id="ps-delay" type="number" min="0" /></label>
+            <label class="pf"><span>DNS propagation timeout (s) <small class="fx-muted">0 = default, -1 = skip</small></span><input class="ui-input" id="ps-timeout" type="number" min="-1" /></label>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-top:0.4rem"><button class="ui-btn primary" id="ps-save">Save</button><span id="ps-flash" class="fx-muted" style="align-self:center"></span></div>
+    </div>
+</section>
+
+@* Modal for add/edit forms *@
+<div class="px-modal" id="px-modal" hidden>
+    <div class="px-modal-card">
+        <div class="px-modal-head"><strong id="px-modal-title">…</strong><button class="px-x" id="px-modal-close" title="Close">✕</button></div>
+        <div class="px-modal-body" id="px-modal-body"></div>
+    </div>
+</div>
+
+@section Head {
+<style>
+.px-tabs { display:flex; gap:0.3rem; margin-bottom:1rem; border-bottom:1px solid var(--mat-border); }
+.px-tab { border:none; background:transparent; color:var(--mat-text-muted); font:inherit; font-weight:600; padding:0.55rem 0.9rem; border-bottom:2px solid transparent; cursor:pointer; margin-bottom:-1px; }
+.px-tab:hover { color:var(--mat-text); }
+.px-tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
+.px-panel { }
+.px-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.8rem; }
+.px-head h2 { margin:0 0 0.2rem; font-size:1.15rem; }
+.px-head p { margin:0; font-size:0.84rem; max-width:60ch; }
+table.pxt { width:100%; border-collapse:collapse; }
+table.pxt th, table.pxt td { padding:0.55rem 0.9rem; text-align:left; vertical-align:middle; }
+table.pxt thead th { font-size:0.76rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); }
+table.pxt tbody tr { border-top:1px solid var(--mat-border); }
+.px-empty { padding:1rem; color:var(--mat-text-muted); }
+.pill { display:inline-block; font-size:0.7rem; font-weight:700; padding:0.1rem 0.5rem; border-radius:999px; }
+.pill.wild { background:rgba(139,92,246,0.22); color:#c7b3ff; }
+.pill.cover { background:rgba(52,211,153,0.2); color:#7ff0c4; }
+.pill.indiv { background:rgba(250,204,21,0.18); color:#fde68a; }
+.pill.intern { background:rgba(255,255,255,0.12); color:var(--mat-text-muted); }
+.pill.src { background:rgba(255,255,255,0.08); color:var(--mat-text-muted); font-weight:600; }
+.pill.off { background:rgba(244,80,107,0.16); color:#ffb3c0; }
+.px-rowbtns { display:flex; gap:0.35rem; justify-content:flex-end; }
+.px-cert-block { margin-bottom:1rem; }
+.px-cert-block h3 { margin:0 0 0.4rem; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--mat-text-muted); }
+.px-cert-item { padding:0.6rem 0.9rem; border:1px solid var(--mat-border); border-radius:10px; margin-bottom:0.5rem; }
+.pf { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.75rem; } .pf > span { font-size:0.82rem; color:var(--mat-text-muted); font-weight:600; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 0.8rem; }
+.px-check { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.7rem; font-size:0.88rem; }
+.px-modal { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:20; padding:1rem; }
+.px-modal[hidden] { display:none; }
+.px-modal-card { width:min(560px,96%); max-height:90%; display:flex; flex-direction:column; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; box-shadow:0 24px 70px rgba(0,0,0,.55); overflow:hidden; }
+.px-modal-head { display:flex; align-items:center; justify-content:space-between; padding:0.9rem 1.1rem; border-bottom:1px solid var(--mat-border); font-size:1.02rem; }
+.px-x { background:none; border:none; color:var(--mat-text-muted); font-size:1rem; cursor:pointer; }
+.px-x:hover { color:var(--mat-text); }
+.px-modal-body { padding:1.1rem; overflow:auto; }
+.px-hint { font-size:0.8rem; color:var(--mat-text-muted); margin:-0.3rem 0 0.8rem; }
+.px-err { background:rgba(244,80,107,0.14); border:1px solid rgba(244,80,107,0.4); color:#ffb3c0; border-radius:8px; padding:0.5rem 0.7rem; font-size:0.84rem; margin-bottom:0.7rem; }
+.px-ok { background:rgba(52,211,153,0.14); border:1px solid rgba(52,211,153,0.4); color:#7ff0c4; border-radius:8px; padding:0.5rem 0.7rem; font-size:0.84rem; margin-bottom:0.7rem; }
+</style>
+}
+
+@section Scripts {
+<script>
+(function(){
+  const API="/api/v1/matcad";
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const $=id=>document.getElementById(id);
+
+  async function req(method,path,body){
+    const o={method,headers:{}};
+    if(body!==undefined){ o.headers["Content-Type"]="application/json"; o.body=JSON.stringify(body); }
+    const r=await fetch(API+path,o);
+    const txt=await r.text(); let d={}; try{ d=txt?JSON.parse(txt):{}; }catch(_){}
+    if(!r.ok) throw new Error(d.error||d.detail||d.title||("HTTP "+r.status));
+    return d;
+  }
+  const get=p=>req("GET",p);
+
+  // ---- state ----
+  let providerTypes=[], providers=[], routes=[], auths=[], certs=null;
+
+  function banner(msg,kind){ const b=$("px-banner"); if(!msg){ b.style.display="none"; return; }
+    b.style.display=""; b.className="card"; b.style.border=kind==="err"?"1px solid rgba(244,80,107,0.4)":"1px solid var(--mat-border)";
+    b.style.background=kind==="err"?"rgba(244,80,107,0.12)":""; b.style.color=kind==="err"?"#ffb3c0":""; b.innerHTML=msg; }
+
+  // ---- tabs ----
+  document.querySelectorAll(".px-tab").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll(".px-tab").forEach(x=>x.classList.toggle("active",x===t));
+    const tab=t.dataset.tab;
+    document.querySelectorAll(".px-panel").forEach(p=>p.hidden=p.dataset.panel!==tab);
+    if(tab==="certs") loadCerts();
+  }));
+
+  // ---- modal ----
+  const modal=$("px-modal");
+  function openModal(title,html){ $("px-modal-title").textContent=title; $("px-modal-body").innerHTML=html; modal.hidden=false; }
+  function closeModal(){ modal.hidden=true; $("px-modal-body").innerHTML=""; }
+  $("px-modal-close").addEventListener("click",closeModal);
+  modal.addEventListener("click",e=>{ if(e.target===modal) closeModal(); });
+
+  // ================= Providers =================
+  async function loadProviders(){
+    const tb=$("px-providers");
+    try{ if(!providerTypes.length) providerTypes=await get("/provider-types"); providers=await get("/providers"); routes=await get("/routes"); }
+    catch(e){ tb.innerHTML=`<tr><td colspan="4" class="px-empty">${esc(e.message)}</td></tr>`; return; }
+    const usedBy=id=>routes.filter(r=>r.providerId===id).length;
+    if(!providers.length){ tb.innerHTML=`<tr><td colspan="4" class="px-empty">No DNS providers yet. Add netcup (or another) to issue wildcard certificates.</td></tr>`; return; }
+    tb.innerHTML=providers.map(p=>{ const n=usedBy(p.id); return `<tr>
+      <td><strong>${esc(p.name)}</strong></td>
+      <td class="mono">${esc(p.type)}</td>
+      <td class="fx-muted">${n?`${n} route${n>1?"s":""}`:"—"}</td>
+      <td><div class="px-rowbtns"><button class="ui-btn" data-pedit="${p.id}">Edit</button><button class="ui-btn danger" data-pdel="${p.id}"${n?" disabled title='In use by a route'":""}>Delete</button></div></td></tr>`; }).join("");
+    tb.querySelectorAll("[data-pedit]").forEach(b=>b.addEventListener("click",()=>providerForm(providers.find(p=>p.id==b.dataset.pedit))));
+    tb.querySelectorAll("[data-pdel]").forEach(b=>b.addEventListener("click",()=>delProvider(+b.dataset.pdel)));
+  }
+  function providerForm(p){
+    const editing=!!p;
+    const opts=providerTypes.map(t=>`<option value="${t.id}"${p&&p.type===t.caddyModule?" selected":""}>${esc(t.displayName)}</option>`).join("")+`<option value="__custom">Other (custom module)…</option>`;
+    openModal(editing?"Edit provider":"Add DNS provider",`
+      <div id="pf-err"></div>
+      <label class="pf"><span>Name</span><input class="ui-input" id="pf-name" value="${p?escA(p.name):""}" placeholder="netcup"></label>
+      <label class="pf"><span>Type</span><select class="ui-select" id="pf-type">${opts}</select></label>
+      <input class="ui-input mono" id="pf-custom" placeholder="Caddy DNS module name" style="display:none;margin-bottom:0.75rem">
+      <div id="pf-fields"></div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
+        <button class="ui-btn primary" id="pf-save">${editing?"Save":"Add"}</button>
+        <button class="ui-btn" id="pf-test">Test credentials</button>
+        <span style="flex:1"></span>
+        ${editing?`<button class="ui-btn danger" id="pf-del">Delete</button>`:""}
+      </div>`);
+    const sel=$("pf-type"), custom=$("pf-custom");
+    const existingCreds = (p&&p.credentials)||{};
+    function renderFields(){
+      let modType=sel.value;
+      custom.style.display = modType==="__custom" ? "" : "none";
+      if(modType==="__custom"){ if(p&&!providerTypes.some(t=>t.caddyModule===p.type)) custom.value=custom.value||p.type; $("pf-fields").innerHTML=""; return; }
+      const t=providerTypes.find(x=>x.id===modType);
+      $("pf-fields").innerHTML=(t.fields||[]).map(f=>`<label class="pf"><span>${esc(f.label)}</span><input class="ui-input${f.secret?"":" mono"}" data-ck="${escA(f.key)}" type="${f.secret?"password":"text"}" value="${escA(existingCreds[f.key]||"")}" autocomplete="off"></label>`).join("");
+    }
+    // preselect custom when editing an unknown module
+    if(p&&!providerTypes.some(t=>t.caddyModule===p.type)){ sel.value="__custom"; custom.value=p.type; }
+    sel.addEventListener("change",renderFields); renderFields();
+    function collect(){
+      const type = sel.value==="__custom" ? custom.value.trim() : (providerTypes.find(x=>x.id===sel.value)||{}).caddyModule;
+      const creds={}; $("pf-fields").querySelectorAll("[data-ck]").forEach(i=>creds[i.dataset.ck]=i.value);
+      return {type,creds};
+    }
+    $("pf-save").addEventListener("click",async()=>{
+      const {type,creds}=collect(); const name=$("pf-name").value.trim();
+      $("pf-err").innerHTML="";
+      try{ await req("POST","/providers",{id:p?p.id:null,name,type,credentials:creds}); closeModal(); loadProviders(); }
+      catch(e){ $("pf-err").innerHTML=`<div class="px-err">${esc(e.message)}</div>`; }
+    });
+    $("pf-test").addEventListener("click",async()=>{
+      const {type,creds}=collect(); $("pf-err").innerHTML="";
+      try{ const r=await req("POST","/providers/test",{type,credentials:creds});
+        $("pf-err").innerHTML = r.ok===false ? `<div class="px-err">${esc(r.message)}</div>` : `<div class="px-ok">${esc(r.message||"OK")}</div>`; }
+      catch(e){ $("pf-err").innerHTML=`<div class="px-err">${esc(e.message)}</div>`; }
+    });
+    if(editing) $("pf-del").addEventListener("click",()=>{ closeModal(); delProvider(p.id); });
+  }
+  async function delProvider(id){
+    if(!await matDialog.confirm("Delete this DNS provider?",{title:"Delete provider",danger:true,okLabel:"Delete"})) return;
+    try{ await req("DELETE","/providers/"+id); loadProviders(); }catch(e){ matDialog.alert(e.message,{title:"Delete provider"}); }
+  }
+  $("px-add-provider").addEventListener("click",()=>{ if(!providerTypes.length){ loadProviders().then(()=>providerForm(null)); } else providerForm(null); });
+
+  // ================= Domains / Routes =================
+  async function loadRoutes(){
+    const tb=$("px-routes");
+    try{ routes=await get("/routes"); auths=await get("/authentications"); providers=await get("/providers"); }
+    catch(e){ tb.innerHTML=`<tr><td colspan="6" class="px-empty">${esc(e.message)}</td></tr>`; return; }
+    if(!routes.length){ tb.innerHTML=`<tr><td colspan="6" class="px-empty">No routes yet. Add your first domain.</td></tr>`; return; }
+    const authName=id=>{ const a=auths.find(x=>x.id===id); return a?a.name:null; };
+    const certPill=r=>{ const k=(r.certKind||"").toLowerCase();
+      if(r.wildcard) return `<span class="pill wild">wildcard</span>`;
+      if(k==="covered") return `<span class="pill cover">covered</span>`;
+      if(k==="individual") return `<span class="pill indiv">individual</span>`;
+      if(k==="internal") return `<span class="pill intern">internal</span>`;
+      return `<span class="pill intern">${esc(r.certKind||"?")}</span>`; };
+    tb.innerHTML=routes.map(r=>{
+      const target = r.upstream ? `<span class="mono">${esc(r.upstream)}</span>` : (r.fallbackUrl?`<span class="fx-muted">→ ${esc(r.fallbackUrl)}</span>`:`<span class="fx-muted">—</span>`);
+      const auth = authName(r.authenticationId); const authCell = auth?`<span class="pill src">${esc(auth)}</span>`:`<span class="fx-muted">—</span>`;
+      const en = r.enabled?"":` <span class="pill off">disabled</span>`;
+      const src = r.source==="manual"?`<span class="pill src">manual</span>`:`<span class="pill src">${esc(r.source)}</span>`;
+      const btns = r.editable
+        ? `<div class="px-rowbtns"><button class="ui-btn" data-redit="${r.id}">Edit</button><button class="ui-btn danger" data-rdel="${r.id}">Delete</button></div>`
+        : `<span class="fx-muted" style="font-size:0.75rem">read-only</span>`;
+      return `<tr>
+        <td><strong class="mono">${esc(r.host)}</strong>${en}<div class="fx-muted" style="font-size:0.72rem">${esc(r.name||"")}</div></td>
+        <td>${target}</td><td>${certPill(r)}</td><td>${authCell}</td><td>${src}</td><td>${btns}</td></tr>`;
+    }).join("");
+    tb.querySelectorAll("[data-redit]").forEach(b=>b.addEventListener("click",()=>routeForm(routes.find(r=>r.id==b.dataset.redit))));
+    tb.querySelectorAll("[data-rdel]").forEach(b=>b.addEventListener("click",()=>delRoute(+b.dataset.rdel)));
+  }
+  function routeForm(r){
+    const editing=!!r;
+    const provOpts=`<option value="">— none —</option>`+providers.map(p=>`<option value="${p.id}"${r&&r.providerId===p.id?" selected":""}>${esc(p.name)}</option>`).join("");
+    const authOpts=`<option value="">— none —</option>`+auths.map(a=>`<option value="${a.id}"${r&&r.authenticationId===a.id?" selected":""}>${esc(a.name)} (${esc(a.type)})</option>`).join("");
+    const isWild=r&&r.wildcard; const isRedirect=r&&!r.upstream&&r.fallbackUrl;
+    openModal(editing?"Edit domain":"Add domain",`
+      <div id="rf-err"></div>
+      <label class="pf"><span>Host</span><input class="ui-input mono" id="rf-host" value="${r?escA(r.host):""}" placeholder="app.example.com"></label>
+      <div class="grid2">
+        <label class="pf"><span>Type</span><select class="ui-select" id="rf-type"><option value="single"${isWild?"":" selected"}>Single host</option><option value="wildcard"${isWild?" selected":""}>Wildcard (*.domain)</option></select></label>
+        <label class="pf"><span>Target</span><select class="ui-select" id="rf-target"><option value="proxy"${isRedirect?"":" selected"}>Reverse proxy</option><option value="redirect"${isRedirect?" selected":""}>Redirect</option></select></label>
+      </div>
+      <label class="pf" id="rf-up-wrap"><span>Upstream <small class="fx-muted">(http://container:port)</small></span><input class="ui-input mono" id="rf-upstream" value="${r&&r.upstream?escA(r.upstream):""}" placeholder="http://myapp:8080"></label>
+      <label class="pf" id="rf-fb-wrap" style="display:none"><span>Redirect to (URL)</span><input class="ui-input mono" id="rf-fallback" value="${r&&r.fallbackUrl?escA(r.fallbackUrl):""}" placeholder="https://example.com"></label>
+      <label class="pf" id="rf-prov-wrap" style="display:none"><span>DNS provider <small class="fx-muted">(required for wildcard, DNS-01)</small></span><select class="ui-select" id="rf-provider">${provOpts}</select></label>
+      <label class="pf"><span>Authentication <small class="fx-muted">(optional)</small></span><select class="ui-select" id="rf-auth">${authOpts}</select></label>
+      <label class="px-check"><input type="checkbox" id="rf-insecure"${r&&r.insecureSkipVerify?" checked":""}> Skip upstream TLS verification (self-signed backends)</label>
+      <label class="px-check"><input type="checkbox" id="rf-enabled"${!r||r.enabled?" checked":""}> Enabled</label>
+      <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
+        <button class="ui-btn primary" id="rf-save">${editing?"Save":"Add"}</button>
+        ${editing?`<span style="flex:1"></span><button class="ui-btn danger" id="rf-del">Delete</button>`:""}
+      </div>`);
+    const type=$("rf-type"), target=$("rf-target");
+    function sync(){
+      const wild=type.value==="wildcard", redir=target.value==="redirect";
+      $("rf-prov-wrap").style.display=wild?"":"none";
+      $("rf-up-wrap").style.display=redir?"none":"";
+      $("rf-fb-wrap").style.display=redir?"":"none";
+    }
+    type.addEventListener("change",sync); target.addEventListener("change",sync); sync();
+    $("rf-save").addEventListener("click",async()=>{
+      $("rf-err").innerHTML="";
+      const body={ id:r?r.id:null, host:$("rf-host").value.trim(), wildcard:type.value==="wildcard",
+        target:target.value, upstream:$("rf-upstream").value.trim(), fallbackUrl:$("rf-fallback").value.trim(),
+        insecureSkipVerify:$("rf-insecure").checked, redirectPermanent:false,
+        authenticationId:$("rf-auth").value?+$("rf-auth").value:null, providerId:$("rf-provider").value?+$("rf-provider").value:null,
+        acmeEmail:null, enabled:$("rf-enabled").checked, name:"" };
+      try{ const res=await req("POST","/routes",body); closeModal(); loadRoutes();
+        if(res.applied&&res.applied.ok===false) matDialog.alert("Saved, but Caddy rejected the config: "+(res.applied.error||""),{title:"Caddy"});
+      }catch(e){ $("rf-err").innerHTML=`<div class="px-err">${esc(e.message)}</div>`; }
+    });
+    if(editing) $("rf-del").addEventListener("click",()=>{ closeModal(); delRoute(r.id); });
+  }
+  async function delRoute(id){
+    if(!await matDialog.confirm("Delete this route?",{title:"Delete route",danger:true,okLabel:"Delete"})) return;
+    try{ await req("DELETE","/routes/"+id); loadRoutes(); }catch(e){ matDialog.alert(e.message,{title:"Delete route"}); }
+  }
+  $("px-add-route").addEventListener("click",()=>{
+    // ensure providers+auths are loaded for the dropdowns
+    Promise.all([providers.length?null:get("/providers").then(d=>providers=d), get("/authentications").then(d=>auths=d)]).then(()=>routeForm(null)).catch(()=>routeForm(null));
+  });
+
+  // ================= Certificates =================
+  async function loadCerts(){
+    const el=$("px-certs"); el.innerHTML=`<div class="px-empty">Loading…</div>`;
+    let c; try{ c=await get("/certificates"); }catch(e){ el.innerHTML=`<div class="px-empty">${esc(e.message)}</div>`; return; }
+    const parts=[];
+    if(c.wildcards&&c.wildcards.length) parts.push(`<div class="px-cert-block"><h3>Wildcard certificates (DNS-01)</h3>${
+      c.wildcards.map(w=>`<div class="px-cert-item"><strong class="mono">${esc(w.host)}</strong> <span class="pill wild">${esc(w.provider)}</span>
+        <div class="fx-muted" style="font-size:0.8rem;margin-top:0.2rem">Subjects: <span class="mono">${esc(w.subjects)}</span></div>
+        ${w.coveredHosts&&w.coveredHosts.length?`<div class="fx-muted" style="font-size:0.78rem;margin-top:0.2rem">Covers: ${w.coveredHosts.map(h=>`<span class="mono">${esc(h)}</span>`).join(", ")}</div>`:""}</div>`).join("")}</div>`);
+    if(c.individual&&c.individual.length) parts.push(`<div class="px-cert-block"><h3>Individual certificates</h3>${
+      c.individual.map(h=>`<div class="px-cert-item"><span class="mono">${esc(h)}</span> <span class="pill indiv">individual</span></div>`).join("")}</div>`);
+    if(c.internalHosts&&c.internalHosts.length) parts.push(`<div class="px-cert-block"><h3>Internal (Caddy CA — localhost / IP)</h3>${
+      c.internalHosts.map(h=>`<div class="px-cert-item"><span class="mono">${esc(h)}</span> <span class="pill intern">internal</span></div>`).join("")}</div>`);
+    el.innerHTML = parts.length?parts.join(""):`<div class="px-empty">No certificates yet — add a route with a real hostname.</div>`;
+  }
+
+  // ================= Settings =================
+  async function loadSettings(){
+    let s; try{ s=await get("/settings"); }catch(e){ return; }
+    $("ps-base").value=s.baseDomain||""; $("ps-email").value=s.acmeEmail||""; $("ps-mhost").value=s.matcadHost||"";
+    $("ps-delay").value=s.acmePropagationDelaySeconds||0; $("ps-timeout").value=s.acmePropagationTimeoutSeconds||0;
+  }
+  $("ps-save").addEventListener("click",async()=>{
+    const flash=$("ps-flash"); flash.textContent="Saving…";
+    try{ const r=await req("PUT","/settings",{ baseDomain:$("ps-base").value.trim(), acmeEmail:$("ps-email").value.trim(),
+      matcadHost:$("ps-mhost").value.trim(), acmePropagationDelaySeconds:+$("ps-delay").value||0, acmePropagationTimeoutSeconds:+$("ps-timeout").value||0 });
+      flash.textContent = r.ok===false ? ("Saved — Caddy: "+(r.error||"error")) : "Saved ✓"; }
+    catch(e){ flash.textContent=e.message; }
+  });
+
+  // ---- init ----
+  (async()=>{
+    try{ const st=await get("/status"); banner(`Connected to Matcad · base domain <span class="mono">${esc(st.baseDomain||"(unset)")}</span> · ${st.counts.allRoutes} routes, ${st.counts.providers} providers`,"ok"); }
+    catch(e){ banner(`<strong>Matcad not reachable.</strong> ${esc(e.message)}<br><span class="fx-muted" style="font-size:0.82rem">Set a shared API key (MATCAD_API_KEY) on both the matos and matcad containers and make sure Matcad is running.</span>`,"err"); }
+    loadRoutes(); loadProviders(); loadSettings();
+  })();
+})();
+</script>
+}

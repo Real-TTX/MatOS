@@ -19,6 +19,9 @@ services:
       MATOS_VERSION: ${MATOS_VERSION:-latest}
       MATOS_DATA_DIR: "/app/data"
       MatOS__Docker__Endpoint: "unix:///var/run/docker.sock"
+      # Set MATCAD_API_KEY (same value on matcad below) to enable the Proxy app.
+      MatOS__Matcad__ApiUrl: "http://matcad:4433"
+      MatOS__Matcad__ApiKey: "${MATCAD_API_KEY:-}"
     volumes:
       - matos-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -48,6 +51,8 @@ services:
       Matcad__DataDir: "/data"
       Matcad__ConfigDir: "/data/config"
       Matcad__Caddy__AdminUrl: "http://caddy:2019"
+      # Enables Matcad's REST API for matOS. Empty = disabled. Must match matOS's key.
+      Matcad__ApiKey: "${MATCAD_API_KEY:-}"
     volumes:
       - matcad-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

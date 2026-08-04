@@ -24,6 +24,9 @@ services:
       MATOS_VERSION: ${MATOS_VERSION:-local}
       MATOS_DATA_DIR: "/app/data"
       MatOS__Docker__Endpoint: "unix:///var/run/docker.sock"
+      # Talk to the sibling Matcad's REST API (the Proxy app). Key must match matcad's Matcad__ApiKey.
+      MatOS__Matcad__ApiUrl: "http://matcad:4433"
+      MatOS__Matcad__ApiKey: "${MATCAD_API_KEY:-}"
     volumes:
       - matos-data:/app/data
       # matOS is a control panel for Docker -> it needs the engine socket (read+write).
@@ -49,13 +52,15 @@ services:
     restart: unless-stopped
 
   matcad:
-    image: ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}
+    image: ${MATCAD_IMAGE:-ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}}
     pull_policy: missing
     container_name: matos-matcad
     environment:
       Matcad__DataDir: "/data"
       Matcad__ConfigDir: "/data/config"
       Matcad__Caddy__AdminUrl: "http://caddy:2019"
+      # Enables Matcad's REST API for matOS. Empty = API disabled. Must match matOS's key.
+      Matcad__ApiKey: "${MATCAD_API_KEY:-}"
     volumes:
       - matcad-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
