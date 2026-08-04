@@ -2,7 +2,6 @@
 @model MatOS.Web.Pages.Apps.StoreModel
 @{
     ViewData["Title"] = "App Store";
-    ViewData["Description"] = "Install apps as containers or Compose stacks. Add your own with an icon, actions and a setup wizard.";
     Layout = "_WindowLayout";
 }
 
@@ -101,6 +100,9 @@
 
 @section Head {
 <style>
+/* The store has its own sidebar brand ("🏬 App Store"), so the generic window header
+   (title + description) is redundant — hide it for this app only. */
+.win-header { display:none; }
 /* ---- Apple-App-Store-style layout: sidebar (search + nav + categories) | main (hero + rows) ---- */
 .store-shell { display:flex; gap:1.4rem; align-items:flex-start; }
 .store-side { flex:0 0 210px; position:sticky; top:0; display:flex; flex-direction:column; gap:0.4rem; }
