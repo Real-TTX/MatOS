@@ -31,6 +31,10 @@
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .mat-window.maximized .mat-resize { display: none; }  /* no resizing when maximized */
+/* Taskbar on top: a maximized window must start below the 52px bar (not slide under it) and fill
+   down to the bottom edge. height stays calc(100vh - 52px), so top:52px puts the gap where the
+   taskbar actually is instead of leaving a dead strip at the bottom. */
+body.tb-top .mat-window.maximized { top: 52px !important; }
 .mat-window.minimized { display: none; }
 
 .mat-titlebar {
