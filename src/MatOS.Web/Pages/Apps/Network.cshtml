@@ -2,35 +2,58 @@
 @model MatOS.Web.Pages.Apps.NetworkModel
 @{
     ViewData["Title"] = "Network";
-    ViewData["Description"] = "Reverse-proxy routes. Publish an app to make it reachable from outside matOS.";
     Layout = "_WindowLayout";
 }
 
-<div class="card" id="nw-info" style="margin-bottom:1rem">
-    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
-        <strong>Base domain</strong> <span class="mono" id="nw-base">…</span>
-        <span class="fx-muted" style="font-size:0.82rem">— published apps get <span class="mono">&lt;app&gt;.&lt;base domain&gt;</span> (change it in Settings).</span>
+<div class="nw">
+    <div class="nw-head">
+        <h1 class="nw-h">Network</h1>
+        <p class="nw-sub">Publish your matOS apps through the reverse proxy and see how they're routed.</p>
     </div>
-    <div id="nw-proxy" style="margin-top:0.6rem;font-size:0.84rem"></div>
-</div>
 
-<div id="nw-error" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
+    <div class="nw-cards" id="nw-cards"></div>
 
-<div class="card" style="padding:0;overflow:hidden">
-    <table class="nwt">
-        <thead><tr><th>App</th><th>Status</th><th>Exposure</th><th>Hostname / upstream</th><th></th></tr></thead>
-        <tbody id="nw-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
-    </table>
+    <div class="card nw-proxy-card" id="nw-info">
+        <div id="nw-proxy" style="font-size:0.86rem">…</div>
+    </div>
+
+    <div id="nw-error" class="card" style="display:none;border-color:rgba(244,80,107,0.4);background:rgba(244,80,107,0.14);color:#ffb3c0;margin-bottom:0.8rem"></div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+        <table class="nwt">
+            <thead><tr><th>App</th><th>Status</th><th>Exposure</th><th>Hostname / upstream</th><th></th></tr></thead>
+            <tbody id="nw-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+        </table>
+    </div>
 </div>
 
 @section Head {
 <style>
+/* bolder, dashboard-style Network app; hide the generic window header */
+.win-header { display:none; }
+.nw { max-width:1100px; }
+.nw-head { margin-bottom:1rem; }
+.nw-h { font-size:1.6rem; font-weight:800; letter-spacing:-0.02em; margin:0; }
+.nw-sub { margin:0.25rem 0 0; color:var(--mat-text-muted); font-size:0.9rem; }
+.nw-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.8rem; margin-bottom:1rem; }
+.nw-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:0.9rem 1rem; }
+.nw-card-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+.nw-card-ic { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:1rem; flex:0 0 auto; }
+.nw-card-k { font-size:0.74rem; color:var(--mat-text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+.nw-card-v { font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1; overflow:hidden; text-overflow:ellipsis; }
+.nw-card-v.mono { font-size:1.05rem; font-weight:700; }
+.nw-proxy-card { margin-bottom:1rem; }
 table.nwt { width:100%; border-collapse:collapse; }
-table.nwt th, table.nwt td { padding:0.55rem 0.9rem; text-align:left; vertical-align:middle; }
+table.nwt th, table.nwt td { padding:0.6rem 0.9rem; text-align:left; vertical-align:middle; }
 table.nwt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); }
-table.nwt tbody tr { border-top:1px solid var(--mat-border); }
+table.nwt tbody tr { border-top:1px solid var(--mat-border); } table.nwt tbody tr:hover { background:rgba(255,255,255,0.04); }
+.nw-app { display:flex; align-items:center; gap:0.6rem; }
+.nw-appicon { width:30px; height:30px; border-radius:8px; display:inline-grid; place-items:center; overflow:hidden; flex:0 0 auto; background:var(--mat-surface-2); }
+.nw-appicon img { width:100%; height:100%; object-fit:cover; } .nw-appicon .nw-emoji { font-size:1.1rem; }
 .nw-pub { display:flex; gap:0.4rem; align-items:center; justify-content:flex-end; }
 .nw-pub input { width:220px; }
+.pill { display:inline-block; font-size:0.7rem; font-weight:700; padding:0.1rem 0.5rem; border-radius:999px; }
+.pill.on { background:rgba(52,211,153,0.2); color:#7ff0c4; } .pill.off { background:rgba(244,80,107,0.16); color:#ffb3c0; }
 </style>
 }
 
@@ -39,13 +62,33 @@ table.nwt tbody tr { border-top:1px solid var(--mat-border); }
 (function(){
   const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const escA=s=>String(s==null?"":s).replace(/"/g,"&quot;");
+  const hexA=(hex,a)=>{ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; };
+  function appIconHtml(icon){ if(!icon) return '<span class="nw-emoji">📦</span>'; if(/^(https?:|data:)/i.test(icon)) return `<img src="${escA(icon)}" alt="" draggable="false">`; return `<span class="nw-emoji">${esc(icon)}</span>`; }
+  const appIcon=id=>{ const d=catalog[id]; return appIconHtml(d&&d.icon); };
   const rowsEl=document.getElementById("nw-rows"), errEl=document.getElementById("nw-error");
-  let baseDomain="apps.localhost";
+  let baseDomain="apps.localhost", catalog={};
+
+  function cards(d){
+    const rs=d.routes||[];
+    const published=rs.filter(r=>r.published).length;
+    const internal=rs.filter(r=>r.matosManaged&&!r.published).length;
+    const ready=!!d.proxyOnNetwork;
+    const defs=[
+      {k:"Base domain",v:esc(baseDomain),mono:true,ic:"🌐",color:"#8b5cf6"},
+      {k:"Published",v:published,ic:"🚀",color:"#34d399"},
+      {k:"Internal only",v:internal,ic:"🔒",color:"#22b8ff"},
+      {k:"Reverse proxy",v:ready?"Ready":"Not ready",ic:ready?"✅":"▲",color:ready?"#34d399":"#fbbf24"}
+    ];
+    document.getElementById("nw-cards").innerHTML=defs.map(c=>`
+      <div class="nw-card"><div class="nw-card-top"><span class="nw-card-ic" style="background:${hexA(c.color,0.16)};color:${c.color}">${c.ic}</span><span class="nw-card-k">${c.k}</span></div>
+      <div class="nw-card-v${c.mono?' mono':''}">${c.v}</div></div>`).join("");
+  }
 
   async function load(){
     let d; try{ d=await (await fetch("/api/v1/docker/routes")).json(); }catch(_){ rowsEl.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Docker not reachable.</td></tr>`; return; }
-    baseDomain=d.baseDomain||"apps.localhost"; document.getElementById("nw-base").textContent=baseDomain;
-    renderProxy(d);
+    if(!Object.keys(catalog).length){ try{ const cat=await (await fetch("/api/v1/store/catalog")).json(); for(const a of (cat.apps||[])) catalog[a.id]=a; }catch(_){} }
+    baseDomain=d.baseDomain||"apps.localhost";
+    cards(d); renderProxy(d);
     const rs=d.routes||[];
     if(!rs.length){ rowsEl.innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No matOS apps or proxy routes yet.</td></tr>`; return; }
     rowsEl.innerHTML=rs.map(r=>{
@@ -57,7 +100,7 @@ table.nwt tbody tr { border-top:1px solid var(--mat-border); }
           : `<div class="nw-pub"><input class="ui-input mono" value="${escA(suggested)}" data-host="${r.id}"><button class="ui-btn primary" data-pub="${r.id}">Publish</button></div>`)
         : '';
       return `<tr>
-        <td><strong>${esc(r.title)}</strong><div class="mono fx-muted" style="font-size:0.72rem">${esc(r.name)}</div></td>
+        <td><div class="nw-app"><span class="nw-appicon">${appIcon(r.app)}</span><div><strong>${esc(r.title)}</strong><div class="mono fx-muted" style="font-size:0.72rem">${esc(r.name)}</div></div></div></td>
         <td>${r.running?'<span class="pill on">running</span>':'<span class="pill off">stopped</span>'}</td>
         <td>${exposure}</td>
         <td>${hostCell}</td>
