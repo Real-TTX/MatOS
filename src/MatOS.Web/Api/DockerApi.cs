@@ -121,6 +121,24 @@ public static class DockerApi
             });
         });
 
+        g.MapGet("/disk", (DockerService docker) =>
+        {
+            // Free/used space of the disk that actually holds the Docker volumes. In-container "/" is
+            // the overlay fs, so pick the mount whose root is the longest prefix of the volumes path
+            // (that's the host bind-mount), not the container root.
+            try
+            {
+                var path = docker.VolumesPath;
+                var drive = DriveInfo.GetDrives()
+                    .Where(d => d.IsReady && path.StartsWith(d.RootDirectory.FullName, StringComparison.Ordinal))
+                    .OrderByDescending(d => d.RootDirectory.FullName.Length)
+                    .FirstOrDefault() ?? DriveInfo.GetDrives().FirstOrDefault(d => d.IsReady);
+                if (drive == null) return Results.Ok(new { total = 0L, free = 0L, used = 0L });
+                return Results.Ok(new { total = drive.TotalSize, free = drive.AvailableFreeSpace, used = drive.TotalSize - drive.AvailableFreeSpace });
+            }
+            catch (Exception ex) { return Results.Ok(new { total = 0L, free = 0L, used = 0L, error = ex.Message }); }
+        });
+
         g.MapGet("/networks", async (DockerService docker, CancellationToken ct) =>
         {
             var nets = await docker.ListNetworksAsync(ct);

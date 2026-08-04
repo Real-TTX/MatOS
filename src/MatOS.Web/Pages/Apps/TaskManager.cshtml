@@ -108,7 +108,7 @@ td .tm-appicon { margin-right:0.5rem; }
 
   const LABELS={general:"General",apps:"Apps",stacks:"Stacks",containers:"Containers",volumes:"Volumes",network:"Network"};
   let section="general", filter="", sort={key:"name",dir:1}, genMetric="cpu";
-  let data={containers:[],stacks:[],images:[],volumes:[],networks:[]}, catalog={};
+  let data={containers:[],stacks:[],images:[],volumes:[],networks:[],disk:{}}, catalog={};
   const stats=new Map(); const statStreams=new Map();
   const HISTORY=60; const hist=new Map(); hist.set("cpu",[]); hist.set("mem",[]);
   const focusId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Focus));
@@ -128,15 +128,16 @@ td .tm-appicon { margin-right:0.5rem; }
 
   async function loadAll(){
     try{
-      const [cs,ss,is,vs,ns,cat]=await Promise.all([
+      const [cs,ss,is,vs,ns,cat,dk]=await Promise.all([
         fetch("/api/v1/docker/containers").then(r=>r.json()),
         fetch("/api/v1/docker/stacks").then(r=>r.json()),
         fetch("/api/v1/docker/images").then(r=>r.json()),
         fetch("/api/v1/docker/volumes").then(r=>r.json()),
         fetch("/api/v1/docker/networks").then(r=>r.json()).catch(()=>({networks:[]})),
-        fetch("/api/v1/store/catalog").then(r=>r.json()).catch(()=>({apps:[]}))
+        fetch("/api/v1/store/catalog").then(r=>r.json()).catch(()=>({apps:[]})),
+        fetch("/api/v1/docker/disk").then(r=>r.json()).catch(()=>({total:0,free:0,used:0}))
       ]);
-      data.containers=cs.containers||[]; data.stacks=ss.stacks||[]; data.images=is.images||[]; data.volumes=vs.volumes||[]; data.networks=ns.networks||[];
+      data.containers=cs.containers||[]; data.stacks=ss.stacks||[]; data.images=is.images||[]; data.volumes=vs.volumes||[]; data.networks=ns.networks||[]; data.disk=dk||{};
       catalog={}; for(const a of (cat.apps||[])) catalog[a.id]=a;
       const proj={}; for(const s of data.stacks) for(const c of (s.containers||[])) proj[c.id]=s.name;
       for(const c of data.containers) c._project=proj[c.id]||"";
@@ -174,9 +175,11 @@ td .tm-appicon { margin-right:0.5rem; }
     const running=data.containers.filter(c=>c.running).length;
     const imgSize=data.images.reduce((a,i)=>a+(i.sizeBytes||0),0);
     const volSize=data.volumes.reduce((a,v)=>a+(v.sizeBytes>0?v.sizeBytes:0),0);
+    const disk=data.disk||{};
     const cards=[
       {k:"CPU",v:aggCpu().toFixed(1)+"%",hk:"cpu",color:"#8b5cf6",ic:"🧠"},
       {k:"Memory",v:fmtB(aggMem()),hk:"mem",color:"#22b8ff",ic:"📈"},
+      {k:"Free space",v:disk.total?`${fmtB(disk.free)}<small> / ${fmtB(disk.total)}</small>`:"—",hk:"",color:"#f472b6",ic:"🗄️"},
       {k:"Containers",v:`${running}<small>/${data.containers.length}</small>`,hk:"",color:"#34d399",ic:"📦"},
       {k:"Storage",v:fmtB(imgSize+volSize),hk:"",color:"#fbbf24",ic:"💾"}
     ];
