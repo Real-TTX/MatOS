@@ -39,6 +39,13 @@ public static class DockerApi
             return ready ? Results.Ok(new { ready }) : Results.NotFound();
         });
 
+        // Can this app be embedded in a matOS window, or does it block framing (X-Frame-Options/CSP)?
+        g.MapGet("/stacks/{name}/framecheck", async (string name, DockerService docker, CancellationToken ct) =>
+        {
+            var (embeddable, reason) = await docker.CheckFramingAsync(name, ct);
+            return Results.Ok(new { embeddable, reason });
+        });
+
         g.MapGet("/containers/{id}/inspect", async (string id, DockerService docker, HttpRequest req, CancellationToken ct) =>
         {
             var d = await docker.InspectDetailAsync(id, ct);

@@ -69,27 +69,72 @@ public partial class DockerService
     /// container by name:internal-port.</summary>
     public async Task<bool> WakeStackAsync(string name, CancellationToken ct = default)
     {
-        var s = await GetStackAsync(name, ct);
-        if (s == null) return false;
+        var s0 = await GetStackAsync(name, ct);
+        if (s0 == null) return false;
         await StackActionAsync(name, "start", ct);
 
+        // Re-fetch so the now-running UI container reports its published host port, then poll it via
+        // host.docker.internal (reachable for both image and compose apps).
+        var s = await GetStackAsync(name, ct) ?? s0;
         var ui = s.Containers.FirstOrDefault(c => c.Labels.ContainsKey(MatcadLabels.Port));
-        if (ui == null || !ui.Labels.TryGetValue(MatcadLabels.Port, out var ps) || !int.TryParse(ps, out var port))
-            return true; // no known UI port — consider it started
+        if (ui == null || !int.TryParse(ui.Labels.GetValueOrDefault(MatcadLabels.Port), out var internalPort))
+            return true;
+        var pub = ui.Ports.FirstOrDefault(p => p.PublicPort is > 0 && p.PrivatePort == internalPort)?.PublicPort
+               ?? ui.Ports.FirstOrDefault(p => p.PublicPort is > 0)?.PublicPort;
+        if (pub is not > 0) return true;
 
-        var deadline = DateTime.UtcNow.AddSeconds(45);
+        var deadline = DateTime.UtcNow.AddSeconds(25);
         while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
         {
             try
             {
                 using var tcp = new System.Net.Sockets.TcpClient();
-                var connect = tcp.ConnectAsync(ui.Name, port);
-                if (await Task.WhenAny(connect, Task.Delay(1500, ct)) == connect && tcp.Connected) return true;
+                var connect = tcp.ConnectAsync("host.docker.internal", pub.Value);
+                if (await Task.WhenAny(connect, Task.Delay(1200, ct)) == connect && tcp.Connected) return true;
             }
             catch { /* not up yet */ }
-            try { await Task.Delay(700, ct); } catch { break; }
+            try { await Task.Delay(500, ct); } catch { break; }
         }
         return true;
+    }
+
+    private static readonly HttpClient _frameHttp = new() { Timeout = TimeSpan.FromSeconds(6) };
+    /// <summary>Checks whether a stack's UI can be embedded in a matOS window by reading the app's
+    /// framing headers (X-Frame-Options / CSP frame-ancestors) directly from the container. Returns
+    /// (embeddable, reason). matOS shares the app network, so it reaches the container by name.</summary>
+    public async Task<(bool Embeddable, string? Reason)> CheckFramingAsync(string name, CancellationToken ct = default)
+    {
+        var s = await GetStackAsync(name, ct);
+        if (s == null) return (true, null);
+        var ui = s.Containers.FirstOrDefault(c => c.Labels.ContainsKey(MatcadLabels.Port));
+        if (ui == null || !int.TryParse(ui.Labels.GetValueOrDefault(MatcadLabels.Port), out var internalPort))
+            return (true, null);
+        // Reach the app via its published host port through host.docker.internal — works for both
+        // image apps (on the matOS network) and compose apps (on their own project network).
+        var pub = ui.Ports.FirstOrDefault(p => p.PublicPort is > 0 && p.PrivatePort == internalPort)?.PublicPort
+               ?? ui.Ports.FirstOrDefault(p => p.PublicPort is > 0)?.PublicPort;
+        if (pub is not > 0) return (true, null);
+        try
+        {
+            using var resp = await _frameHttp.GetAsync($"http://host.docker.internal:{pub}/", HttpCompletionOption.ResponseHeadersRead, ct);
+            if (resp.Headers.TryGetValues("X-Frame-Options", out var xfo))
+            {
+                var v = string.Join(",", xfo).ToLowerInvariant();
+                if (v.Contains("deny")) return (false, "X-Frame-Options: DENY");
+                if (v.Contains("sameorigin")) return (false, "X-Frame-Options: SAMEORIGIN");
+            }
+            IEnumerable<string>? csp = null;
+            if (resp.Headers.TryGetValues("Content-Security-Policy", out var c1)) csp = c1;
+            else if (resp.Content.Headers.TryGetValues("Content-Security-Policy", out var c2)) csp = c2;
+            if (csp != null)
+            {
+                var v = string.Join(";", csp).ToLowerInvariant();
+                var i = v.IndexOf("frame-ancestors", StringComparison.Ordinal);
+                if (i >= 0 && v[i..].Contains("'none'")) return (false, "CSP frame-ancestors 'none'");
+            }
+            return (true, null);
+        }
+        catch { return (true, null); } // couldn't check — let the window try to load it
     }
 
     public async Task<bool> PingAsync(CancellationToken ct = default)

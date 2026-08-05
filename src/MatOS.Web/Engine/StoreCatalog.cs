@@ -350,11 +350,15 @@ volumes:
         // ---- Databases, each bundled with a web admin UI (one Compose stack). Default password "matos". ----
         Compose("mysql", "MySQL", "MySQL + phpMyAdmin",
             "MySQL 8 database with a phpMyAdmin web UI in one stack. Default root password is 'matos' (change it after install). The database data lives in its own volume.",
-            "Databases", PhpMyAdminStack("mysql:8", "MYSQL_ROOT_PASSWORD"),
+            "Databases", DbUi("mysql:8", "phpmyadmin:latest", "phpmyadmin",
+                "    environment:\n      MYSQL_ROOT_PASSWORD: matos\n      MYSQL_DATABASE: appdb\n    volumes:\n      - db:/var/lib/mysql",
+                "    environment:\n      PMA_HOST: db\n      UPLOAD_LIMIT: 256M", 80),
             "phpmyadmin", 80, Ico("phpmyadmin")),
         Compose("mariadb", "MariaDB", "MariaDB + phpMyAdmin",
             "MariaDB 11 database with a phpMyAdmin web UI in one stack. Default root password is 'matos' (change it after install). The database data lives in its own volume.",
-            "Databases", PhpMyAdminStack("mariadb:11", "MARIADB_ROOT_PASSWORD"),
+            "Databases", DbUi("mariadb:11", "phpmyadmin:latest", "phpmyadmin",
+                "    environment:\n      MARIADB_ROOT_PASSWORD: matos\n      MARIADB_DATABASE: appdb\n    volumes:\n      - db:/var/lib/mysql",
+                "    environment:\n      PMA_HOST: db\n      UPLOAD_LIMIT: 256M", 80),
             "phpmyadmin", 80, Ico("mariadb")),
         Compose("mongodb", "MongoDB", "MongoDB + Mongo Express",
             "MongoDB 7 database with the Mongo Express web UI in one stack. Default credentials root/matos (change them after install). The database data lives in its own volume.",
@@ -378,8 +382,6 @@ volumes:
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@matos.local
       PGADMIN_DEFAULT_PASSWORD: matos
-      PGADMIN_CONFIG_X_FRAME_OPTIONS: '""'
-      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'False'
     volumes:
       - pgadmin:/var/lib/pgadmin
     restart: unless-stopped
@@ -515,35 +517,4 @@ volumes:
   db:
 ";
 
-    /// <summary>A MySQL/MariaDB + phpMyAdmin stack. phpMyAdmin sends X-Frame-Options: DENY by default,
-    /// which stops it embedding in a matOS window — a config.user.inc.php with AllowThirdPartyFraming
-    /// turns that off so it opens in-window.</summary>
-    private static string PhpMyAdminStack(string dbImage, string rootPwEnv) => $@"services:
-  db:
-    image: {dbImage}
-    environment:
-      {rootPwEnv}: matos
-      MYSQL_DATABASE: appdb
-    volumes:
-      - db:/var/lib/mysql
-    restart: unless-stopped
-  phpmyadmin:
-    image: phpmyadmin:latest
-    depends_on:
-      - db
-    environment:
-      PMA_HOST: db
-      UPLOAD_LIMIT: 256M
-    configs:
-      - source: pma_frame
-        target: /etc/phpmyadmin/config.user.inc.php
-    restart: unless-stopped
-configs:
-  pma_frame:
-    content: |
-      <?php
-      $cfg['AllowThirdPartyFraming'] = true;
-volumes:
-  db:
-";
 }

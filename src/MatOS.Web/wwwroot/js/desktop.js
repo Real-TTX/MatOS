@@ -42,11 +42,16 @@
   function open(opts) {
     if (opts.key && opts.key.startsWith("stack:")) {
       const s = stackData.find(x => x.name === opts.key.slice(6));
-      if (s && stackOnDemand(s)) {
-        const stop = () => { fetch(`/api/v1/docker/stacks/${encodeURIComponent(s.name)}/stop`, { method: "POST" }).catch(()=>{}); setTimeout(load, 1500); };
-        const prev = opts.onClose;
-        opts.onClose = () => { try { prev && prev(); } catch(_){} stop(); };
-        if (!stackRunning(s)) opts.url = `/apps/starting?stack=${encodeURIComponent(s.name)}&title=${encodeURIComponent(stackTitle(s))}`;
+      // matOS store apps open through a loader page: it shows a spinner, starts the app if needed,
+      // waits until it's up, then either embeds it or (if the app blocks framing) shows our own
+      // "open in new tab" message instead of the browser's error. On-demand apps also stop on close.
+      if (s && stackApp(s)) {
+        if (stackOnDemand(s)) {
+          const stop = () => { fetch(`/api/v1/docker/stacks/${encodeURIComponent(s.name)}/stop`, { method: "POST" }).catch(()=>{}); setTimeout(load, 1500); };
+          const prev = opts.onClose;
+          opts.onClose = () => { try { prev && prev(); } catch(_){} stop(); };
+        }
+        opts.url = `/apps/starting?stack=${encodeURIComponent(s.name)}&title=${encodeURIComponent(stackTitle(s))}`;
       }
     }
     if (!opts.iconHtml && opts.key) opts.iconHtml = iconForKey(opts.key);

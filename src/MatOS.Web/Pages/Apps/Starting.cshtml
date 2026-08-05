@@ -1,26 +1,38 @@
 @page "/apps/starting"
 @model MatOS.Web.Pages.Apps.StartingModel
 @{
-    ViewData["Title"] = "Starting…";
+    ViewData["Title"] = "Opening…";
     Layout = "_WindowLayout";
 }
 
-<div class="st">
+<div class="st" id="st-load">
     <div class="st-spin"></div>
-    <div class="st-title" id="st-title">Starting application…</div>
-    <div class="st-sub" id="st-sub">Waking the container — this can take a moment.</div>
-    <div class="st-err" id="st-err" hidden></div>
+    <div class="st-title" id="st-title">Opening…</div>
+    <div class="st-sub" id="st-sub">Getting the app ready — this can take a moment.</div>
+</div>
+
+<div class="st" id="st-error" hidden>
+    <div class="st-emoji" id="st-eico">🚫</div>
+    <div class="st-title" id="st-etitle">This app can't be shown in a window</div>
+    <div class="st-sub" id="st-emsg"></div>
+    <div class="st-actions">
+        <button class="ui-btn primary" id="st-newtab">Open in new tab ↗</button>
+        <button class="ui-btn" id="st-retry">Retry</button>
+    </div>
 </div>
 
 @section Head {
 <style>
 .win-header { display:none; }
-.st { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; background:var(--mat-bg); padding:1rem; text-align:center; }
+.st { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; background:var(--mat-bg); padding:1.4rem; text-align:center; }
+.st[hidden] { display:none; }
 .st-spin { width:46px; height:46px; border-radius:50%; border:4px solid rgba(255,255,255,.14); border-top-color:var(--mat-accent); animation:sts .8s linear infinite; }
 @@keyframes sts { to { transform:rotate(360deg); } }
+.st-emoji { font-size:2.6rem; }
 .st-title { font-size:1.2rem; font-weight:800; letter-spacing:-0.01em; }
-.st-sub { color:var(--mat-text-muted); font-size:0.86rem; }
-.st-err { color:#ffb3c0; font-size:0.85rem; max-width:60ch; }
+.st-sub { color:var(--mat-text-muted); font-size:0.88rem; max-width:52ch; }
+.st-sub .mono { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.82rem; }
+.st-actions { display:flex; gap:0.5rem; margin-top:0.4rem; }
 </style>
 }
 
@@ -28,19 +40,38 @@
 <script>
 (function(){
   const q=new URLSearchParams(location.search);
-  const stack=q.get("stack")||"", title=q.get("title")||"application";
-  document.getElementById("st-title").textContent="Starting "+title+"…";
-  const fail=m=>{ document.getElementById("st-sub").hidden=true; const e=document.getElementById("st-err"); e.hidden=false; e.textContent=m; };
-  async function appUrl(){ // the running UI container's URL (only resolvable once it's up)
+  const stack=q.get("stack")||"", title=q.get("title")||"app";
+  const $=id=>document.getElementById(id);
+  $("st-title").textContent="Opening "+title+"…";
+  let appUrl=null;
+
+  function showError(msg, reason){
+    $("st-load").hidden=true;
+    const e=$("st-error"); e.hidden=false;
+    $("st-emsg").innerHTML=msg + (reason?` <span class="mono">(${reason})</span>`:"");
+    $("st-newtab").style.display = appUrl ? "" : "none";
+  }
+  $("st-newtab").addEventListener("click",()=>{ if(appUrl) window.open(appUrl,"_blank","noopener"); });
+  $("st-retry").addEventListener("click",()=>location.reload());
+
+  async function resolveUrl(){
     try{ const d=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}`)).json();
       const c=(d.containers||[]).find(x=>x.running && x.hasWebUi && x.appUrl); return c?c.appUrl:null; }catch(_){ return null; }
   }
+
   (async function(){
-    try{ const r=await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/wake`,{method:"POST"}); if(!r.ok) throw new Error(); }
-    catch(_){ fail("Could not start the container. You can retry from the Task Manager."); return; }
-    // Poll for the app URL (the published port appears once the container is running), then load it.
-    for(let i=0;i<20;i++){ const u=await appUrl(); if(u){ location.href=u; return; } await new Promise(r=>setTimeout(r,700)); }
-    fail("Started, but no web UI was detected. Open it from the Task Manager.");
+    // Start the app (idempotent for already-running apps) and wait until its port answers.
+    try{ const r=await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/wake`,{method:"POST"}); if(!r.ok) throw 0; }
+    catch(_){ showError("Couldn't start this app. Try again, or check it in the Task Manager."); return; }
+
+    for(let i=0;i<25 && !appUrl;i++){ appUrl=await resolveUrl(); if(!appUrl) await new Promise(r=>setTimeout(r,700)); }
+    if(!appUrl){ showError("This app started but doesn't expose a web page to open."); return; }
+
+    // Ask matOS (server-side) whether the app allows being embedded in a window.
+    let fc={embeddable:true};
+    try{ fc=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/framecheck`)).json(); }catch(_){}
+    if(fc.embeddable){ location.href=appUrl; }
+    else { $("st-eico").textContent="↗"; showError(`<strong>${title}</strong> refuses to be embedded in a window for security. Open it in a new browser tab instead.`, fc.reason); }
   })();
 })();
 </script>

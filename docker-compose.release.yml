@@ -27,6 +27,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes
     networks: [ matnet ]
+    # Lets matOS reach apps' published ports on the host (used to check if an app allows embedding).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   caddy:
