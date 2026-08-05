@@ -16,6 +16,14 @@ public partial class DockerService
             await client.Networks.CreateNetworkAsync(new NetworksCreateParameters { Name = name }, ct);
     }
 
+    /// <summary>Removes unused Docker networks — frees the address pool when it's exhausted
+    /// (each compose app creates its own network; orphans accumulate). Best effort.</summary>
+    public async Task PruneNetworksAsync(CancellationToken ct = default)
+    {
+        try { using var client = CreateClient(); await client.Networks.PruneNetworksAsync(new NetworksDeleteUnusedParameters(), ct); }
+        catch { /* best effort */ }
+    }
+
     /// <summary>Pulls an image; failures are non-fatal (the image may already exist locally).</summary>
     public async Task PullImageBestEffortAsync(string image, CancellationToken ct = default)
     {

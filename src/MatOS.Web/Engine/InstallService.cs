@@ -202,8 +202,16 @@ public class InstallService
 
         try { await _docker.EnsureNetworkAsync(ProxyNetwork, ct); } catch { }
 
-        var (code, _, err) = await RunCompose(dir,
-            new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, env, ct);
+        var upArgs = new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" };
+        var (code, _, err) = await RunCompose(dir, upArgs, env, ct);
+        // Self-heal: Docker's address pool fills up as compose apps each create a network. If we hit
+        // that, prune unused networks (safe — only removes ones no container uses) and retry once.
+        if (code != 0 && (err.Contains("address pool", StringComparison.OrdinalIgnoreCase) || err.Contains("subnetted", StringComparison.OrdinalIgnoreCase)))
+        {
+            _log.LogWarning("compose up hit network address-pool exhaustion for {Project}; pruning unused networks and retrying", project);
+            await _docker.PruneNetworksAsync(ct);
+            (code, _, err) = await RunCompose(dir, upArgs, env, ct);
+        }
         if (code != 0) return new(false, project, port, "compose up failed: " + Trim(err));
         // On-demand: stop the freshly-started stack so it sits idle until opened.
         if (app.OnDemand) { try { await RunCompose(dir, new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "stop" }, env, ct); } catch (Exception ex) { _log.LogWarning(ex, "Stopping on-demand stack {Project} after install failed", project); } }
