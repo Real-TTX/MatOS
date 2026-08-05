@@ -24,9 +24,27 @@ public class SystemConfig
     public string Network { get; set; } = "";
 
     /// <summary>Compatibility mode (on by default): when opening an app, route it through the bundled
-    /// Caddy at an internal hostname with framing headers stripped ("Allow embedding"), so every app
-    /// opens inside a matOS window. Turn it off to use direct host ports (e.g. no bundled Caddy).</summary>
+    /// Caddy with framing headers stripped ("Allow embedding") so every app opens inside a matOS window.
+    /// Caddy listens on a dedicated host port per app and the app embeds as http://&lt;access-host&gt;:&lt;port&gt;,
+    /// which works DNS-free over a bare hostname/IP (unlike a *.apps.localhost domain). Turn it off to use
+    /// the app's own direct host port (no bundled Caddy / no header stripping).</summary>
     public bool CompatibilityMode { get; set; } = true;
+
+    /// <summary>First host port used for compatibility-mode embedding. Caddy publishes the range
+    /// [EmbedPortStart, EmbedPortStart+EmbedPortCount); this MUST match the port range published on the
+    /// bundled Caddy container in docker-compose.yml.</summary>
+    public int EmbedPortStart { get; set; } = 21000;
+
+    /// <summary>How many consecutive host ports are reserved for embedding (see <see cref="EmbedPortStart"/>).</summary>
+    public int EmbedPortCount { get; set; } = 50;
+}
+
+/// <summary>Stable host-port assignment per stack for compatibility-mode embedding. Each opened app keeps
+/// its port across restarts so Caddy's per-port listener and the embed URL stay consistent. Persisted as
+/// embedports.json.</summary>
+public class EmbedPortsConfig
+{
+    public Dictionary<string, int> Ports { get; set; } = new();
 }
 
 /// <summary>System-wide list of stacks hidden from the desktop (icon field + start menu). Seeded on

@@ -48,6 +48,10 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+      # Compatibility-mode embedding: Caddy serves each app on a dedicated port here (framing headers
+      # stripped) so apps embed as http://<host>:<port> without wildcard DNS. Must match matOS's
+      # SystemConfig.EmbedPortStart/EmbedPortCount (default 21000 + 50 = 21000-21049).
+      - "${MATOS_EMBED_PORTS:-21000-21049}:${MATOS_EMBED_PORTS:-21000-21049}"
     volumes:
       - caddy-data:/data
       - caddy-config:/config

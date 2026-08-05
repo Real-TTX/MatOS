@@ -341,11 +341,12 @@ public class InstallService
         catch (Exception ex) { _log.LogWarning(ex, "Proxy route sync for {Host} failed", host); }
     }
 
-    /// <summary>Compatibility mode: ensure an app is reachable through the bundled Caddy at an internal
-    /// hostname with framing headers stripped, so it can be embedded in a matOS window. Attaches the UI
-    /// container to the proxy network and creates (idempotently) a Matcad route with AllowEmbedding.
-    /// Returns the protocol-relative Caddy URL to open, or null (mode off / not configured / failed).</summary>
-    public async Task<string?> EnsureEmbedRouteAsync(string stackName, CancellationToken ct = default)
+    /// <summary>Compatibility mode: ensure an app is reachable through the bundled Caddy on a dedicated
+    /// host PORT with framing headers stripped, so it embeds in a matOS window over a bare hostname/IP
+    /// (no wildcard DNS needed). Assigns a stable port, attaches the UI container to the proxy network and
+    /// creates (idempotently) a Matcad port-bound route with AllowEmbedding.
+    /// Returns the host port to open as http://&lt;access-host&gt;:&lt;port&gt;, or null (mode off / not configured / failed).</summary>
+    public async Task<int?> EnsureEmbedRouteAsync(string stackName, CancellationToken ct = default)
     {
         if (!_config.Get<SystemConfig>("system").CompatibilityMode) return null;
         var baseUrl = (_cfg["MatOS:Matcad:ApiUrl"] ?? "http://matcad:4433").TrimEnd('/');
@@ -355,12 +356,9 @@ public class InstallService
         var s = await _docker.GetStackAsync(stackName, ct);
         var ui = s?.Containers.FirstOrDefault(c => c.Labels.ContainsKey(MatcadLabels.Port));
         if (ui == null || !int.TryParse(ui.Labels.GetValueOrDefault(MatcadLabels.Port), out var uiPort)) return null;
-        var appId = ui.Labels.GetValueOrDefault(MatosLabels.App, "");
-        if (string.IsNullOrEmpty(appId)) return null;
-        var instance = ui.Labels.GetValueOrDefault(MatosLabels.Instance, "");
-        var baseDomain = _config.Get<SystemConfig>("system").BaseDomain;
-        if (string.IsNullOrWhiteSpace(baseDomain)) baseDomain = "apps.localhost";
-        var host = $"{Slug(appId)}{(string.IsNullOrEmpty(instance) ? "" : "-" + instance)}.{baseDomain}";
+
+        var port = await AssignEmbedPortAsync(stackName, ct);
+        if (port is null) { _log.LogWarning("Embed port range exhausted; cannot embed {Stack}", stackName); return null; }
 
         // Attach the UI container to the proxy network so Caddy can reach it by name (idempotent).
         try { await _docker.EnsureNetworkAsync(ProxyNetwork, ct); await _docker.ConnectNetworkAsync(ui.Id, ProxyNetwork, ct); } catch { /* already attached */ }
@@ -368,7 +366,7 @@ public class InstallService
         try
         {
             var http = _http.CreateClient(); http.Timeout = TimeSpan.FromSeconds(15);
-            // Skip if a route for this host already exists (idempotent across repeated opens).
+            // Skip if a port-bound route for this port already exists (idempotent across repeated opens).
             using (var listReq = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/v1/routes/manual"))
             {
                 listReq.Headers.Add("X-Api-Key", key);
@@ -377,17 +375,35 @@ public class InstallService
                 {
                     using var doc = System.Text.Json.JsonDocument.Parse(await listResp.Content.ReadAsStringAsync(ct));
                     foreach (var r in doc.RootElement.EnumerateArray())
-                        if (r.TryGetProperty("host", out var h) && string.Equals(h.GetString(), host, StringComparison.OrdinalIgnoreCase))
-                            return $"//{host}";
+                        if (r.TryGetProperty("listenPort", out var lp) && lp.ValueKind == System.Text.Json.JsonValueKind.Number && lp.GetInt32() == port)
+                            return port;
                 }
             }
-            var body = System.Text.Json.JsonSerializer.Serialize(new { host, wildcard = false, target = "proxy", upstream = $"http://{ui.Name}:{uiPort}", enabled = true, allowEmbedding = true });
+            var body = System.Text.Json.JsonSerializer.Serialize(new { name = stackName, host = "", listenPort = port, upstream = $"http://{ui.Name}:{uiPort}", enabled = true, allowEmbedding = true });
             using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/routes") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
             req.Headers.Add("X-Api-Key", key);
             var resp = await http.SendAsync(req, ct);
-            return resp.IsSuccessStatusCode ? $"//{host}" : null;
+            return resp.IsSuccessStatusCode ? port : null;
         }
-        catch (Exception ex) { _log.LogWarning(ex, "Ensuring embed route {Host} failed", host); return null; }
+        catch (Exception ex) { _log.LogWarning(ex, "Ensuring embed route on port {Port} failed", port); return null; }
+    }
+
+    /// <summary>Return the stable embedding port for a stack, assigning the lowest free one from the
+    /// configured range on first use (persisted so Caddy's listener and the embed URL stay consistent).</summary>
+    private async Task<int?> AssignEmbedPortAsync(string stackName, CancellationToken ct)
+    {
+        var sys = _config.Get<SystemConfig>("system");
+        var map = _config.Get<EmbedPortsConfig>("embedports");
+        if (map.Ports.TryGetValue(stackName, out var existing)) return existing;
+        var used = new HashSet<int>(map.Ports.Values);
+        for (int p = sys.EmbedPortStart; p < sys.EmbedPortStart + sys.EmbedPortCount; p++)
+        {
+            if (used.Contains(p)) continue;
+            map.Ports[stackName] = p;
+            await _config.SaveAsync("embedports", map);
+            return p;
+        }
+        return null; // range exhausted
     }
 
     private async Task PublishComposeAsync(string appId, string project, bool enabled, string host, CancellationToken ct)
