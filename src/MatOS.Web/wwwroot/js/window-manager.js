@@ -16,6 +16,19 @@
     syncDock();
   }
 
+  // A click inside an app's iframe doesn't bubble a pointerdown to the window (the iframe swallows
+  // it), so clicking the content wouldn't raise the window — only the title bar/chrome would. When
+  // focus moves into an iframe the parent window blurs and document.activeElement becomes that
+  // iframe, so raise whichever window owns it.
+  window.addEventListener("blur", () => {
+    setTimeout(() => {
+      const ae = document.activeElement;
+      if (!ae || ae.tagName !== "IFRAME") return;
+      for (const w of wins.values())
+        if (w.el.querySelector(".mat-frame") === ae && !w.minimized) { bringToFront(w); break; }
+    }, 0);
+  });
+
   function nextPosition() {
     const n = wins.size % 8;
     const baseX = Math.max(24, (window.innerWidth - 900) / 2);
