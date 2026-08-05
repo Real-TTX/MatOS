@@ -40,8 +40,17 @@ public static class DockerApi
         });
 
         // Can this app be embedded in a matOS window, or does it block framing (X-Frame-Options/CSP)?
-        g.MapGet("/stacks/{name}/framecheck", async (string name, DockerService docker, CancellationToken ct) =>
+        // In compatibility mode a published app is served through Caddy with the framing headers
+        // stripped (Matcad "Allow embedding"), so it's embeddable regardless of the app's own headers.
+        g.MapGet("/stacks/{name}/framecheck", async (string name, DockerService docker, MatOS.Web.Services.JsonConfigService config, CancellationToken ct) =>
         {
+            if (config.Get<MatOS.Web.Config.SystemConfig>("system").CompatibilityMode)
+            {
+                var s = await docker.GetStackAsync(name, ct);
+                var ui = s?.Containers.FirstOrDefault(c => c.Labels.ContainsKey(MatOS.Web.Docker.MatcadLabels.Port));
+                if (ui != null && ui.Labels.ContainsKey(MatOS.Web.Docker.MatcadLabels.Host))
+                    return Results.Ok(new { embeddable = true, reason = (string?)null });
+            }
             var (embeddable, reason) = await docker.CheckFramingAsync(name, ct);
             return Results.Ok(new { embeddable, reason });
         });

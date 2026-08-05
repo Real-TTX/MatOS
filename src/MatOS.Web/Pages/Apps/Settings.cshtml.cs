@@ -33,6 +33,7 @@ public class SettingsModel : PageModel
     [BindProperty] public string InstanceName { get; set; } = "matOS";
     [BindProperty] public string BaseDomain { get; set; } = "apps.localhost";
     [BindProperty] public string Network { get; set; } = "";
+    [BindProperty] public bool CompatibilityMode { get; set; }
 
     public IReadOnlyList<Wallpapers.Wallpaper> AllWallpapers => Wallpapers.All;
     public IReadOnlyList<string> DefaultWallpapers => Wallpapers.Defaults;
@@ -63,6 +64,7 @@ public class SettingsModel : PageModel
         InstanceName = s.InstanceName;
         BaseDomain = s.BaseDomain;
         Network = s.Network;
+        CompatibilityMode = s.CompatibilityMode;
     }
 
     // System settings only — personal Appearance/Taskbar choices save instantly via
@@ -73,6 +75,7 @@ public class SettingsModel : PageModel
         s.InstanceName = string.IsNullOrWhiteSpace(InstanceName) ? "matOS" : InstanceName.Trim();
         s.BaseDomain = string.IsNullOrWhiteSpace(BaseDomain) ? "apps.localhost" : BaseDomain.Trim();
         s.Network = (Network ?? "").Trim();
+        s.CompatibilityMode = CompatibilityMode;
         await _config.SaveAsync("system", s);
 
         return RedirectToPage(new { saved = true });

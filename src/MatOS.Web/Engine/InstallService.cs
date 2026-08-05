@@ -307,7 +307,8 @@ public class InstallService
             var http = _http.CreateClient(); http.Timeout = TimeSpan.FromSeconds(15);
             if (enabled)
             {
-                var body = System.Text.Json.JsonSerializer.Serialize(new { host, wildcard = false, target = "proxy", upstream, enabled = true });
+                var allowEmbedding = _config.Get<SystemConfig>("system").CompatibilityMode;
+                var body = System.Text.Json.JsonSerializer.Serialize(new { host, wildcard = false, target = "proxy", upstream, enabled = true, allowEmbedding });
                 using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/routes")
                 { Content = new StringContent(body, Encoding.UTF8, "application/json") };
                 req.Headers.Add("X-Api-Key", key);

@@ -114,6 +114,10 @@
                         <div class="mset-label">App base domain<small>Installed apps get a subdomain here (proxied by Caddy/Matcad). <span class="mono">apps.localhost</span> works locally.</small></div>
                         <input class="ui-input" name="BaseDomain" value="@Model.BaseDomain" />
                     </div>
+                    <div class="mset-row">
+                        <div class="mset-label">Compatibility mode<small>When an app blocks being shown in a window (X-Frame-Options), route it through Caddy with those headers stripped so it opens in-window instead of only a new tab.</small></div>
+                        <label class="tb-switch"><input type="checkbox" name="CompatibilityMode" value="true" @(Model.CompatibilityMode ? "checked" : "") /><span></span></label>
+                    </div>
                 </div>
             </div>
 

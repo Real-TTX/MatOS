@@ -22,6 +22,11 @@ public class SystemConfig
     /// reach them by name. Empty = the built-in default ("matos"). Set this to the network your
     /// existing Caddy/Matcad runs on if you don't use matOS's bundled proxy.</summary>
     public string Network { get; set; } = "";
+
+    /// <summary>Compatibility mode: when an app would block being embedded in a window
+    /// (X-Frame-Options / CSP), publish it through Caddy with those framing headers stripped
+    /// (Matcad "Allow embedding") so it opens in-window instead of only in a new tab.</summary>
+    public bool CompatibilityMode { get; set; }
 }
 
 /// <summary>System-wide list of stacks hidden from the desktop (icon field + start menu). Seeded on
