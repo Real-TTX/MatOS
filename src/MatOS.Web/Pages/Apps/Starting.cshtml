@@ -64,10 +64,13 @@
     try{ const r=await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/wake`,{method:"POST"}); if(!r.ok) throw 0; }
     catch(_){ showError("Couldn't start this app. Try again, or check it in the Task Manager."); return; }
 
+    // Compatibility mode: route through Caddy (framing headers stripped) so it always embeds in-window.
+    try{ const e=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/embed`,{method:"POST"})).json();
+      if(e && e.url){ location.href=e.url; return; } }catch(_){}
+
+    // Otherwise embed the app's own (direct) URL, unless it blocks framing.
     for(let i=0;i<25 && !appUrl;i++){ appUrl=await resolveUrl(); if(!appUrl) await new Promise(r=>setTimeout(r,700)); }
     if(!appUrl){ showError("This app started but doesn't expose a web page to open."); return; }
-
-    // Ask matOS (server-side) whether the app allows being embedded in a window.
     let fc={embeddable:true};
     try{ fc=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/framecheck`)).json(); }catch(_){}
     if(fc.embeddable){ location.href=appUrl; }

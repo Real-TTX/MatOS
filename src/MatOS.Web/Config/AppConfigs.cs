@@ -23,10 +23,10 @@ public class SystemConfig
     /// existing Caddy/Matcad runs on if you don't use matOS's bundled proxy.</summary>
     public string Network { get; set; } = "";
 
-    /// <summary>Compatibility mode: when an app would block being embedded in a window
-    /// (X-Frame-Options / CSP), publish it through Caddy with those framing headers stripped
-    /// (Matcad "Allow embedding") so it opens in-window instead of only in a new tab.</summary>
-    public bool CompatibilityMode { get; set; }
+    /// <summary>Compatibility mode (on by default): when opening an app, route it through the bundled
+    /// Caddy at an internal hostname with framing headers stripped ("Allow embedding"), so every app
+    /// opens inside a matOS window. Turn it off to use direct host ports (e.g. no bundled Caddy).</summary>
+    public bool CompatibilityMode { get; set; } = true;
 }
 
 /// <summary>System-wide list of stacks hidden from the desktop (icon field + start menu). Seeded on

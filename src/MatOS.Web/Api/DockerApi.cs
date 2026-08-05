@@ -39,6 +39,14 @@ public static class DockerApi
             return ready ? Results.Ok(new { ready }) : Results.NotFound();
         });
 
+        // Compatibility mode: ensure the app is reachable through Caddy (framing headers stripped) and
+        // return the Caddy URL to embed, so it always opens in-window. Null when the mode is off.
+        g.MapPost("/stacks/{name}/embed", async (string name, MatOS.Web.Engine.InstallService install, CancellationToken ct) =>
+        {
+            var url = await install.EnsureEmbedRouteAsync(name, ct);
+            return Results.Ok(new { url });
+        });
+
         // Can this app be embedded in a matOS window, or does it block framing (X-Frame-Options/CSP)?
         // In compatibility mode a published app is served through Caddy with the framing headers
         // stripped (Matcad "Allow embedding"), so it's embeddable regardless of the app's own headers.
