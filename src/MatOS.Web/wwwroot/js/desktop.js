@@ -191,7 +191,19 @@
     return { x: Math.max(0, MARGIN + Math.round((c.x - MARGIN) / CELL_W) * CELL_W),
              y: Math.max(0, MARGIN + Math.round((c.y - MARGIN) / CELL_H) * CELL_H) };
   }
-  function applyPos(el, key) { const p = layout[key] || slotToXY(defaultIndex++); const c = clampXY(p.x, p.y); el.style.left = c.x + "px"; el.style.top = c.y + "px"; }
+  // First grid slot not already taken by a saved position or an on-screen icon — so a newly
+  // installed app never lands on top of another icon.
+  function freeSlot() {
+    const taken = [];
+    for (const p of Object.values(layout)) if (p) taken.push(p);
+    for (const el of iconEls.values()) taken.push({ x: parseFloat(el.style.left) || 0, y: parseFloat(el.style.top) || 0 });
+    for (let i = 0; i < 500; i++) {
+      const s = slotToXY(i);
+      if (!taken.some(p => Math.abs(p.x - s.x) < CELL_W && Math.abs(p.y - s.y) < CELL_H)) return s;
+    }
+    return slotToXY(defaultIndex++);
+  }
+  function applyPos(el, key) { const p = layout[key] || freeSlot(); const c = clampXY(p.x, p.y); el.style.left = c.x + "px"; el.style.top = c.y + "px"; }
 
   async function saveIcon(key, x, y) {
     try { await fetch("/api/v1/desktop/icon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, x, y }) }); } catch (_) {}
@@ -1150,7 +1162,7 @@
       pendingInstalls.set(m.installId, { appId: m.appId, name: m.name || m.appId, icon: m.icon || "" });
       // A rough placement near the top-left free area, so the user sees it right away.
       const key = "pending:" + m.installId;
-      layout[key] = slotToXY(defaultIndex++);
+      layout[key] = freeSlot();
       reconcileDesktop(); renderStartMenu(startSearch ? startSearch.value : "");
     }
     if (m.type === "matos:install-failed" && m.installId) {
