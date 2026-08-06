@@ -313,6 +313,17 @@
     }
   }
 
+  // Forget an app's remembered geometry and, if it's open, snap it back to the default position/size.
+  function resetGeometry(key) {
+    try { localStorage.removeItem(GEOM_PREFIX + key); } catch (_) {}
+    const w = wins.get(key); if (!w) return;
+    if (w.maximized) { w.maximized = false; w.el.classList.remove("maximized"); }
+    w.rect = null;
+    const g = defaultGeom(w.opts);
+    Object.assign(w.el.style, { left: g.x + "px", top: g.y + "px", width: g.w + "px", height: g.h + "px" });
+    restore(w); bringToFront(w);
+  }
+
   // Reset an app: reload its iframe (works for internal and external/cross-origin apps).
   function reset(key) {
     const w = wins.get(key); if (!w) return;
@@ -324,5 +335,5 @@
     restore(w); bringToFront(w);
   }
 
-  window.MatWM = { open, close, closeKey, reset, showDesktop, setPinnedKeys, isOpen, getState, toggleFocusOrMinimize, onChange };
+  window.MatWM = { open, close, closeKey, reset, resetGeometry, showDesktop, setPinnedKeys, isOpen, getState, toggleFocusOrMinimize, onChange };
 })();

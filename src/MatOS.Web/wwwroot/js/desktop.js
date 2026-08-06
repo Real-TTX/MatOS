@@ -676,6 +676,8 @@
     } else if (isOpen) {
       items.push({ label: "Reset app", action: () => window.MatWM.reset(key) });
     }
+    // Forget this app's remembered window size/position and snap it back to the default (if open).
+    items.push({ label: "Reset window position", action: () => { if (window.MatWM) window.MatWM.resetGeometry(key); } });
     items.push({ sep: true }, { label: "Rename", action: () => renameIcon(key) });
     if (where.inFolder) {
       items.push({ label: "Remove from folder", danger: true, action: where.onRemoveFromFolder });
