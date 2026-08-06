@@ -36,13 +36,51 @@
     return { x: baseX + n * 32, y: baseY + n * 28 };
   }
 
+  // ---- Per-app window geometry memory (size / position / maximized), kept in localStorage so it
+  //      survives restarts. It's device-local on purpose: geometry only makes sense for the screen
+  //      it was saved on, so a saved rect that no longer fits (smaller screen, off-screen) is dropped
+  //      and the default cascade position is used instead. ----
+  const GEOM_PREFIX = "matos.win.";
+  function loadGeom(key) { if (!key) return null; try { return JSON.parse(localStorage.getItem(GEOM_PREFIX + key) || "null"); } catch (_) { return null; } }
+  function storeGeom(key, g) { if (!key) return; try { localStorage.setItem(GEOM_PREFIX + key, JSON.stringify(g)); } catch (_) {} }
+  function geomFits(g) {
+    if (!g || ![g.x, g.y, g.w, g.h].every(n => typeof n === "number" && isFinite(n))) return false;
+    if (g.w < MIN_W || g.h < MIN_H) return false;
+    if (g.w > window.innerWidth || g.h > window.innerHeight) return false;   // bigger than this screen
+    if (g.x < -g.w + 120 || g.x > window.innerWidth - 80) return false;      // off-screen horizontally
+    if (g.y < 0 || g.y > window.innerHeight - 40) return false;              // off-screen vertically
+    return true;
+  }
+  function defaultGeom(opts) {
+    const pos = nextPosition();
+    return { x: pos.x, y: pos.y, w: Math.min(opts.width || 960, window.innerWidth - 48), h: Math.min(opts.height || 620, window.innerHeight - 96) };
+  }
+  // The size/position/maximized state to open a window with: last saved (if it still fits) else default.
+  function initialGeom(opts) {
+    const saved = loadGeom(opts.key);
+    if (saved && saved.max) {
+      // Maximized fills the screen regardless; only the underlying "restore" rect must still fit.
+      return { rect: geomFits(saved) ? { x: saved.x, y: saved.y, w: saved.w, h: saved.h } : defaultGeom(opts), max: true };
+    }
+    if (saved && geomFits(saved)) return { rect: { x: saved.x, y: saved.y, w: saved.w, h: saved.h }, max: false };
+    return { rect: defaultGeom(opts), max: false };
+  }
+  function saveGeom(w) {
+    if (!w.persist) return;
+    // When maximized, remember the pre-maximize rect (so it restores there) plus the maximized flag.
+    const r = (w.maximized && w.rect)
+      ? { x: parseFloat(w.rect.left), y: parseFloat(w.rect.top), w: parseFloat(w.rect.width), h: parseFloat(w.rect.height), max: true }
+      : { x: parseFloat(w.el.style.left), y: parseFloat(w.el.style.top), w: parseFloat(w.el.style.width), h: parseFloat(w.el.style.height), max: false };
+    if (![r.x, r.y, r.w, r.h].every(isFinite)) return;
+    storeGeom(w.persist, r);
+  }
+
   function open(opts) {
     const key = opts.key || ("w" + (++seq));
     if (wins.has(key)) { const w = wins.get(key); restore(w); bringToFront(w); return w; }
 
-    const pos = nextPosition();
-    const width = Math.min(opts.width || 960, window.innerWidth - 48);
-    const height = Math.min(opts.height || 620, window.innerHeight - 96);
+    const initial = initialGeom(opts);
+    const g = initial.rect;
     // External web apps (a container's own origin) may block iframe embedding
     // (X-Frame-Options / CSP frame-ancestors) -> give them an address bar with
     // a reliable "open in new tab". Internal matOS pages ("/apps/...") embed fine.
@@ -50,10 +88,10 @@
 
     const el = document.createElement("section");
     el.className = "mat-window";
-    el.style.left = pos.x + "px";
-    el.style.top = pos.y + "px";
-    el.style.width = width + "px";
-    el.style.height = height + "px";
+    el.style.left = g.x + "px";
+    el.style.top = g.y + "px";
+    el.style.width = g.w + "px";
+    el.style.height = g.h + "px";
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-label", opts.title || "Window");
 
@@ -92,8 +130,15 @@
 
     layer().appendChild(el);
 
-    const w = { key, el, opts, maximized: false, minimized: false, rect: null };
+    const w = { key, el, opts, maximized: false, minimized: false, rect: null, persist: opts.key || null };
     wins.set(key, w);
+
+    // Reopen maximized if it was closed maximized (the rect above is its restore geometry).
+    if (initial.max) {
+      w.rect = { left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height };
+      w.maximized = true;
+      el.classList.add("maximized");
+    }
 
     // frame load handling
     const frame = el.querySelector(".mat-frame");
@@ -128,6 +173,7 @@
   }
 
   function close(w) {
+    saveGeom(w);
     w.el.remove();
     wins.delete(w.key);
     if (typeof w.opts.onClose === "function") { try { w.opts.onClose(); } catch (_) {} }
@@ -155,6 +201,7 @@
       w.maximized = true;
       w.el.classList.add("maximized");
     }
+    saveGeom(w);
   }
 
   function shield(on) { for (const w of wins.values()) w.el.querySelector(".mat-frame-shield").hidden = !on; }
@@ -176,7 +223,7 @@
       ny = Math.min(Math.max(ny, 0), window.innerHeight - 40);
       w.el.style.left = nx + "px"; w.el.style.top = ny + "px";
     });
-    const end = (e) => { if (dragging) { dragging = false; shield(false); try { bar.releasePointerCapture(e.pointerId); } catch (_) {} } };
+    const end = (e) => { if (dragging) { dragging = false; shield(false); saveGeom(w); try { bar.releasePointerCapture(e.pointerId); } catch (_) {} } };
     bar.addEventListener("pointerup", end);
     bar.addEventListener("pointercancel", end);
   }
@@ -201,7 +248,7 @@
         if (dir.includes("w")) { const nw = Math.max(MIN_W, sw - dx); w.el.style.width = nw + "px"; w.el.style.left = (sl + (sw - nw)) + "px"; }
         if (dir.includes("n")) { const nh = Math.max(MIN_H, sh - dy); w.el.style.height = nh + "px"; w.el.style.top = (st + (sh - nh)) + "px"; }
       });
-      const end = (e) => { if (active) { active = false; shield(false); try { h.releasePointerCapture(e.pointerId); } catch (_) {} } };
+      const end = (e) => { if (active) { active = false; shield(false); saveGeom(w); try { h.releasePointerCapture(e.pointerId); } catch (_) {} } };
       h.addEventListener("pointerup", end);
       h.addEventListener("pointercancel", end);
     });
