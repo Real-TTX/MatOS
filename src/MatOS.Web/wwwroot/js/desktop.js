@@ -218,6 +218,14 @@
   function clearSelection() { for (const k of [...selectedKeys]) setSelected(k, false); }
   function selectionList() { return [...selectedKeys].map(k => ({ key: k, el: iconEls.get(k) })).filter(x => x.el); }
 
+  // True when (x,y) is over the taskbar strip — used to pin an icon by dragging it there.
+  function overTaskbar(x, y) {
+    const tb = document.getElementById("mat-taskbar");
+    if (!tb) return false;
+    const r = tb.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
   function enableDrag(el, key) {
     let sx, sy, ox, oy, moved = false, active = false, groupStart = null;
     el.addEventListener("pointerdown", (e) => {
@@ -239,9 +247,13 @@
       if (moved) {
         el.style.left = (ox + dx) + "px"; el.style.top = (oy + dy) + "px";
         for (const g of groupStart) { g.el.style.left = (g.ox + dx) + "px"; g.el.style.top = (g.oy + dy) + "px"; }
-        // Highlight any icon we'd merge into on drop (only when dragging a single icon).
+        // Highlight the taskbar when hovering it — dropping there pins the app (Windows-style).
+        const overTb = overTaskbar(e.clientX, e.clientY);
+        const tb = document.getElementById("mat-taskbar");
+        if (tb) tb.classList.toggle("drag-pin-target", overTb);
+        // Highlight any icon we'd merge into on drop (only when dragging a single icon, not over the taskbar).
         document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
-        if (!groupStart.length) {
+        if (!groupStart.length && !overTb) {
           const t = dropTargetAt(e.clientX, e.clientY, el);
           if (t) t.classList.add("drop-target");
         }
@@ -253,7 +265,22 @@
       if (moved) {
         el.classList.remove("dragging"); for (const g of groupStart) g.el.classList.remove("dragging");
         document.querySelectorAll(".mat-app.drop-target").forEach(x => x.classList.remove("drop-target"));
+        const tb = document.getElementById("mat-taskbar"); if (tb) tb.classList.remove("drag-pin-target");
         dragging = false;
+
+        // Dropped on the taskbar: pin the app(s) there and snap the icon(s) back — the desktop icon stays.
+        if (overTaskbar(e.clientX, e.clientY)) {
+          const items = [{ key, el, ox, oy }, ...groupStart];
+          for (const it of items) {
+            if (it.el.dataset.folderId) continue; // folders can't be pinned to the taskbar
+            pinToTaskbar(it.key);
+            it.el.style.left = it.ox + "px"; it.el.style.top = it.oy + "px"; // revert to its slot
+          }
+          clearSelection();
+          setTimeout(() => { dragging = false; }, 60);
+          return;
+        }
+
         // Group drop into a folder: if any icon of the group lands on a folder, move ALL of them there.
         if (groupStart.length) {
           const t = dropTargetAt(e.clientX, e.clientY, el);
