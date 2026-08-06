@@ -107,7 +107,7 @@ volumes:
 
         Image("sqlite-web", "SQLite Web", "SQLite database browser",
             "A web-based browser for SQLite databases. Not installed the usual way — right-click a .db / .sqlite / .sqlite3 file in the File Explorer and choose \"Open with SQLite Web\" to inspect and edit it. Each open runs a temporary container bound to that one file.",
-            "Database", "ghcr.io/coleifer/sqlite-web:0.7.2", 8080, Ico("sqlite"),
+            "Databases", "ghcr.io/coleifer/sqlite-web:0.7.2", 8080, Ico("sqlite"),
             Array.Empty<string>(), new Dictionary<string, string>(), Array.Empty<AppAction>(),
             variables: null,
             handlers: new[]
