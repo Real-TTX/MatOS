@@ -6,17 +6,20 @@
 }
 
 <div id="store" class="store-shell">
-    <header class="store-top">
+    <aside class="store-side">
         <div class="store-brand"><span class="bmark" aria-hidden="true">🏬</span> App Store</div>
         <div class="store-search-wrap"><span aria-hidden="true">🔎</span><input id="store-search" type="search" placeholder="Search apps…" autocomplete="off" aria-label="Search apps" /></div>
-    </header>
-    <nav class="store-tabs" id="store-nav" role="tablist">
-        <button class="store-tab active" data-tab="catalog"><span class="i" aria-hidden="true">✨</span> Discover</button>
-        <button class="store-tab" data-tab="installed"><span class="i" aria-hidden="true">📥</span> Installed <span id="store-count" class="store-nav-count"></span></button>
-        <button class="store-tab" data-tab="add"><span class="i" aria-hidden="true">＋</span> Add app</button>
-        <button class="store-tab" data-tab="sources"><span class="i" aria-hidden="true">🔗</span> Sources</button>
-    </nav>
-    <nav class="store-catbar" id="store-cats" aria-label="Categories"></nav>
+        <nav class="store-nav" id="store-nav" role="tablist">
+            <button class="store-nav-btn active" data-tab="catalog"><span class="i" aria-hidden="true">✨</span> Discover</button>
+            <button class="store-nav-btn" data-tab="installed"><span class="i" aria-hidden="true">📥</span> Installed <span id="store-count" class="store-nav-count"></span></button>
+            <button class="store-nav-btn" data-tab="add"><span class="i" aria-hidden="true">＋</span> Add app</button>
+            <button class="store-nav-btn" data-tab="sources"><span class="i" aria-hidden="true">🔗</span> Sources</button>
+        </nav>
+        <div class="store-cats-wrap" id="store-cats-wrap">
+            <div class="store-cats-head">Categories</div>
+            <nav class="store-cats" id="store-cats" aria-label="Categories"></nav>
+        </div>
+    </aside>
     <section class="store-main">
         <div id="store-msg" class="card" style="display:none;margin-bottom:1rem"></div>
         <div id="store-catalog"></div>
@@ -103,27 +106,27 @@
    (title + description) is redundant — hide it for this app only. */
 .win-header { display:none; }
 /* ---- Apple-App-Store-style layout: sidebar (search + nav + categories) | main (hero + rows) ---- */
-.store-shell { display:flex; flex-direction:column; gap:0.9rem; }
-.store-top { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
-.store-brand { display:flex; align-items:center; gap:0.5rem; font-weight:850; font-size:1.35rem; letter-spacing:-0.02em; }
-.store-brand .bmark { font-size:1.5rem; }
-.store-search-wrap { display:flex; align-items:center; gap:0.5rem; margin-left:auto; flex:1 1 240px; max-width:360px; background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:12px; padding:0.5rem 0.75rem; }
+/* Two-column layout: left sidebar (brand · search · nav · categories) | main content.
+   The sidebar is a real side column and scrolls INTERNALLY, so a long category list can never
+   push the app grid off-screen (the old bug came from stacking it on top on narrow windows). */
+.store-shell { display:flex; gap:1.4rem; align-items:flex-start; }
+.store-side { flex:0 0 212px; position:sticky; top:0; align-self:flex-start; max-height:calc(100vh - 1.5rem); overflow-y:auto; display:flex; flex-direction:column; gap:0.4rem; scrollbar-width:thin; }
+.store-brand { display:flex; align-items:center; gap:0.5rem; font-weight:850; font-size:1.2rem; letter-spacing:-0.02em; padding:0.1rem 0.4rem 0.4rem; }
+.store-brand .bmark { font-size:1.35rem; }
+.store-search-wrap { display:flex; align-items:center; gap:0.4rem; background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:11px; padding:0.45rem 0.65rem; }
 .store-search-wrap input { flex:1; min-width:0; border:none; background:transparent; color:var(--mat-text); font:inherit; outline:none; }
-/* Segmented tab bar — horizontal, scrolls instead of stacking on narrow windows */
-.store-tabs { display:flex; gap:0.25rem; padding:0.3rem; background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:14px; overflow-x:auto; scrollbar-width:none; }
-.store-tabs::-webkit-scrollbar { display:none; }
-.store-tab { display:inline-flex; align-items:center; gap:0.45rem; white-space:nowrap; border:none; background:transparent; color:var(--mat-text-muted); font:inherit; font-weight:700; font-size:0.92rem; padding:0.5rem 1rem; border-radius:10px; cursor:pointer; transition:background .12s,color .12s; }
-.store-tab .i { font-size:1rem; }
-.store-tab:hover { color:var(--mat-text); }
-.store-tab.active { background:var(--mat-accent); color:#fff; box-shadow:0 4px 14px color-mix(in srgb, var(--mat-accent), transparent 60%); }
-.store-nav-count { opacity:0.85; font-size:0.8rem; }
-/* Category chips — horizontal, scrollable (Discover only) */
-.store-catbar { display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.25rem; scrollbar-width:thin; }
-.store-catbar::-webkit-scrollbar { height:6px; } .store-catbar::-webkit-scrollbar-thumb { background:var(--mat-border-strong); border-radius:999px; }
-.store-cat-btn { white-space:nowrap; border:1px solid var(--mat-border); background:var(--mat-surface); color:var(--mat-text-muted); font:inherit; font-weight:650; font-size:0.85rem; padding:0.35rem 0.85rem; border-radius:999px; cursor:pointer; transition:.12s; }
-.store-cat-btn:hover { color:var(--mat-text); border-color:var(--mat-border-strong); }
-.store-cat-btn.active { background:var(--mat-accent); border-color:transparent; color:#fff; font-weight:750; }
-.store-main { min-width:0; }
+.store-nav { display:flex; flex-direction:column; gap:0.14rem; margin-top:0.6rem; }
+.store-nav-btn { display:flex; align-items:center; gap:0.55rem; border:none; background:transparent; color:var(--mat-text-muted); font:inherit; font-weight:700; text-align:left; padding:0.55rem 0.7rem; border-radius:10px; cursor:pointer; transition:background .12s,color .12s; }
+.store-nav-btn .i { width:1.2rem; text-align:center; }
+.store-nav-btn:hover { background:var(--mat-surface-2); color:var(--mat-text); }
+.store-nav-btn.active { background:var(--mat-accent); color:#fff; box-shadow:0 4px 14px color-mix(in srgb, var(--mat-accent), transparent 60%); }
+.store-nav-count { margin-left:auto; font-size:0.78rem; opacity:0.85; }
+.store-cats-head { margin-top:1rem; padding:0 0.7rem 0.25rem; font-size:0.68rem; font-weight:850; text-transform:uppercase; letter-spacing:0.08em; color:var(--mat-text-muted); }
+.store-cats { display:flex; flex-direction:column; gap:0.05rem; }
+.store-cat-btn { display:flex; align-items:center; gap:0.5rem; border:none; background:transparent; color:var(--mat-text-muted); font:inherit; text-align:left; padding:0.42rem 0.7rem; border-radius:10px; cursor:pointer; font-size:0.9rem; width:100%; }
+.store-cat-btn:hover { background:var(--mat-surface-2); color:var(--mat-text); }
+.store-cat-btn.active { color:#fff; font-weight:750; background:var(--mat-accent); }
+.store-main { flex:1 1 auto; min-width:0; }
 /* Hero — big, bold, gradient */
 .store-hero { position:relative; overflow:hidden; border-radius:22px; padding:2.1rem 2.2rem; margin-bottom:1.6rem; background:linear-gradient(120deg, var(--mat-accent) 0%, #c026d3 100%); color:#fff; box-shadow:0 18px 46px color-mix(in srgb, var(--mat-accent), transparent 60%); }
 .store-hero .eyebrow { text-transform:uppercase; letter-spacing:0.16em; font-size:0.72rem; font-weight:850; opacity:0.9; }
@@ -146,7 +149,16 @@
 .app-row .g .tag { color:var(--mat-text-muted); font-size:0.83rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:0.1rem; }
 .app-row .acts { display:flex; align-items:center; gap:0.3rem; flex:0 0 auto; }
 .app-row .acts .ui-btn { border-radius:999px; padding:0.45rem 1.1rem; font-weight:750; }
-@@media (max-width:520px){ .store-search-wrap { max-width:none; } }
+/* Only very narrow windows collapse to one column — and then the nav + categories become short
+   horizontal scrollers, never the tall stacked column that used to hide the app grid. */
+@@media (max-width:520px){
+  .store-shell { flex-direction:column; }
+  .store-side { flex:none; width:100%; position:static; max-height:none; overflow:visible; }
+  .store-nav { flex-direction:row; flex-wrap:wrap; margin-top:0.3rem; }
+  .store-cats-head { display:none; }
+  .store-cats { flex-direction:row; overflow-x:auto; gap:0.35rem; padding-bottom:0.25rem; scrollbar-width:thin; }
+  .store-cat-btn { width:auto; white-space:nowrap; border:1px solid var(--mat-border); border-radius:999px; padding:0.3rem 0.75rem; font-size:0.82rem; }
+}
 /* ---- App detail page ---- */
 .store-crumb { display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; font-size:0.85rem; color:var(--mat-text-muted); margin-bottom:1.1rem; }
 .store-crumb a { color:var(--mat-accent); cursor:pointer; }
@@ -215,14 +227,14 @@
   const isImg=s=>/^(https?:|data:)/i.test(s||"");
   const iconHtml=ic=> isImg(ic) ? `<img src="${escA(ic)}" alt="">` : `<span>${esc(ic||"📦")}</span>`;
   const $=id=>document.getElementById(id);
-  const catEl=$("store-catalog"), detEl=$("store-detail"), instEl=$("store-installed"), addEl=$("store-add"), srcEl=$("store-sources"), msg=$("store-msg"), catsEl=$("store-cats");
+  const catEl=$("store-catalog"), detEl=$("store-detail"), instEl=$("store-installed"), addEl=$("store-add"), srcEl=$("store-sources"), msg=$("store-msg"), catsEl=$("store-cats-wrap");
   let catalog=[];
   function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",5000); }
 
   // Single source of truth for which panel is visible. Every panel (and the category chip bar)
   // is driven from here, so the tabs can't desync with the detail/category sub-state.
   function showTab(tab){
-    document.querySelectorAll("#store-nav .store-tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
+    document.querySelectorAll("#store-nav .store-nav-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
     detEl.style.display="none";
     catEl.style.display=tab==="catalog"?"":"none";
     instEl.style.display=tab==="installed"?"":"none";
@@ -234,7 +246,7 @@
     if(tab==="add" && !$("a-id").value) resetForm();
     if(tab==="sources") loadSources();
   }
-  document.querySelectorAll("#store-nav .store-tab").forEach(t=>t.addEventListener("click",()=>showTab(t.dataset.tab)));
+  document.querySelectorAll("#store-nav .store-nav-btn").forEach(t=>t.addEventListener("click",()=>showTab(t.dataset.tab)));
 
   let search="", activeCat="all";
   const catOf=a=>a.category||"Other";
@@ -277,7 +289,7 @@
     detEl.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editApp(b.dataset.edit)));
     detEl.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delApp(b.dataset.del,b.dataset.name)));
   }
-  function showCatalog(){ document.querySelectorAll("#store-nav .store-tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="catalog"));
+  function showCatalog(){ document.querySelectorAll("#store-nav .store-nav-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab==="catalog"));
     detEl.style.display="none"; instEl.style.display="none"; addEl.style.display="none"; srcEl.style.display="none";
     catEl.style.display=""; catsEl.style.display=""; renderCats(); renderCatalog(); }
   function openDetail(id){
