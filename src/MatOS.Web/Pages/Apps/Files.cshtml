@@ -63,7 +63,10 @@
             <button class="ui-btn primary" id="fx-save">Save</button>
             <button class="ui-btn" id="fx-close">Close</button>
         </div>
-        <textarea id="fx-text" spellcheck="false"></textarea>
+        <div class="fx-code" id="fx-code">
+            <pre class="fx-hl" id="fx-hl" aria-hidden="true"><code></code></pre>
+            <textarea id="fx-text" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        </div>
     </div>
 
     <div class="fx-viewer" id="fx-viewer" hidden>
@@ -215,7 +218,22 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
 .fx-editor { position:absolute; inset:0; background:var(--mat-bg); display:flex; flex-direction:column; z-index:5; }
 .fx-editor[hidden] { display:none; }
 .fx-editor-head { display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); }
-#fx-text { flex:1 1 auto; border:none; outline:none; resize:none; padding:1rem; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85rem; line-height:1.5; background:#0b0f1a; color:#d7def0; }
+/* Code editor: a transparent <textarea> overlaid on a syntax-highlighted <pre> backdrop.
+   Both share IDENTICAL box metrics so the caret/selection line up with the coloured text. */
+.fx-code { position:relative; flex:1 1 auto; overflow:hidden; background:#0b0f1a; }
+.fx-hl, #fx-text {
+  position:absolute; inset:0; margin:0; border:0; padding:1rem;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85rem; line-height:1.5;
+  tab-size:4; white-space:pre; overflow-wrap:normal; word-break:normal;
+}
+.fx-hl { overflow:hidden; color:#d7def0; pointer-events:none; z-index:0; }
+.fx-hl code { font:inherit; display:block; }
+#fx-text { overflow:auto; z-index:1; resize:none; outline:none; background:transparent; color:transparent; caret-color:#e6ebff; }
+#fx-text::selection { background:rgba(139,92,246,0.4); }
+/* Token palette (Tokyo-Night-ish, tuned for the dark editor bg) */
+.tk-com{color:#5c6a82;font-style:italic} .tk-str{color:#9ece6a} .tk-num{color:#ff9e64}
+.tk-key{color:#bb9af7} .tk-lit{color:#ff9e64} .tk-fn{color:#7aa2f7} .tk-prop{color:#7dcfff}
+.tk-tag{color:#f7768e} .tk-attr{color:#e0af68} .tk-punct{color:#89ddff}
 #fx-ctx, #fx-pop { position:fixed; z-index:50; min-width:180px; background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.28); padding:0.3rem; }
 #fx-ctx[hidden], #fx-pop[hidden]{ display:none; }
 .fx-ctx-item { display:block; width:100%; text-align:left; padding:0.45rem 0.6rem; border:none; background:transparent; border-radius:7px; cursor:pointer; font:inherit; font-size:0.85rem; color:var(--mat-text); }
@@ -591,13 +609,107 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
     document.getElementById("fx-viewer").hidden=false; }
   document.getElementById("fx-viewer-close").addEventListener("click",()=>{ document.getElementById("fx-viewer").hidden=true; document.getElementById("fx-viewer-body").innerHTML=""; });
 
+  // ---- syntax highlighting (self-contained, no external lib) ----
+  // A compact tokenizer: strings / comments / numbers / keywords / properties for code & config,
+  // plus a markup mode for html/xml. Unknown types fall back to plain (escaped) text.
+  function hlEsc(s){ return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+  const HL_KW = {
+    js:"var let const function return if else for while do switch case default break continue new delete typeof instanceof in of this class extends super import export from try catch finally throw async await yield void with static get set",
+    ts:"var let const function return if else for while do switch case default break continue new delete typeof instanceof in of this class extends super import export from try catch finally throw async await yield void with static get set interface type enum implements private public protected readonly namespace declare as keyof abstract",
+    cs:"using namespace class struct interface enum record public private protected internal static void var new return if else for foreach while do switch case default break continue try catch finally throw async await get set this base string int bool double float long object readonly override virtual abstract sealed partial params ref out is as nameof",
+    py:"def class return if elif else for while break continue import from as try except finally raise with lambda yield global nonlocal pass and or not in is del assert async await self",
+    go:"func package import var const type struct interface map chan go defer return if else for range switch case default break continue select fallthrough",
+    sh:"if then else elif fi for while until do done case esac function in return export local readonly echo cd exit source set unset trap",
+    sql:"select from where insert update delete into values create table drop alter add primary key foreign references join left right inner outer full on group order by having limit offset as and or not null distinct union all index view database begin commit rollback",
+    rust:"fn let mut const static struct enum union impl trait pub use mod match if else for while loop return break continue where async await move ref as dyn crate self super type unsafe",
+    java:"package import public private protected class interface enum extends implements static final void return if else for while do switch case default break continue try catch finally throw throws new this super abstract synchronized volatile int long double float boolean char byte instanceof",
+    clike:"auto break case char const continue default do double else enum extern float for goto if inline int long register return short signed sizeof static struct switch typedef union unsigned void volatile while include define",
+    php:"function return if else elseif for foreach while do switch case default break continue class interface trait extends implements public private protected static final abstract new echo print try catch finally throw use namespace as instanceof",
+    yaml:"", ini:"", json:"", css:""
+  };
+  const HL_PROF = {
+    generic:(kw)=>({mode:"g",line:["//","#"],block:[["/*","*/"]],str:['"',"'","`"],kw:kwset(kw)}),
+    js:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"',"'","`"],kw:kwset(HL_KW.js)},
+    ts:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"',"'","`"],kw:kwset(HL_KW.ts)},
+    cs:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"',"'"],kw:kwset(HL_KW.cs)},
+    py:{mode:"g",line:["#"],block:[['"""','"""'],["'''","'''"]],str:['"',"'"],kw:kwset(HL_KW.py)},
+    go:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"',"'","`"],kw:kwset(HL_KW.go)},
+    sh:{mode:"g",line:["#"],block:[],str:['"',"'"],kw:kwset(HL_KW.sh)},
+    sql:{mode:"g",line:["--"],block:[["/*","*/"]],str:["'","\""],kw:kwset(HL_KW.sql),ci:true},
+    rust:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"'],kw:kwset(HL_KW.rust)},
+    java:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"',"'"],kw:kwset(HL_KW.java)},
+    clike:{mode:"g",line:["//"],block:[["/*","*/"]],str:['"',"'"],kw:kwset(HL_KW.clike)},
+    php:{mode:"g",line:["//","#"],block:[["/*","*/"]],str:['"',"'"],kw:kwset(HL_KW.php)},
+    css:{mode:"g",line:[],block:[["/*","*/"]],str:['"',"'"],kw:kwset("")},
+    yaml:{mode:"g",line:["#"],block:[],str:['"',"'"],kw:kwset("")},
+    ini:{mode:"g",line:["#",";"],block:[],str:['"',"'"],kw:kwset("")},
+    json:{mode:"g",line:[],block:[],str:['"'],kw:kwset("")},
+    markup:{mode:"m"}
+  };
+  const HL_LIT = new Set(["true","false","null","undefined","none","nil","nan","yes","no","on","off"]);
+  function kwset(s){ return new Set(s.split(" ").filter(Boolean)); }
+  function langOf(path){
+    const base=(path.split(/[\\/]/).pop()||"").toLowerCase(), e=base.includes(".")?base.split(".").pop():base;
+    if(base==="dockerfile"||base.startsWith("dockerfile.")) return HL_PROF.generic("FROM RUN CMD LABEL EXPOSE ENV ADD COPY ENTRYPOINT VOLUME USER WORKDIR ARG ONBUILD STOPSIGNAL HEALTHCHECK SHELL as");
+    const m={js:"js",mjs:"js",cjs:"js",jsx:"js",ts:"ts",tsx:"ts",json:"json",json5:"json",map:"json",
+      cs:"cs",csx:"cs",py:"py",pyw:"py",go:"go",rs:"rust",java:"java",php:"php",
+      c:"clike",h:"clike",cpp:"clike",cc:"clike",cxx:"clike",hpp:"clike",hh:"clike",
+      sh:"sh",bash:"sh",zsh:"sh",ksh:"sh",sql:"sql",
+      css:"css",scss:"css",sass:"css",less:"css",
+      yml:"yaml",yaml:"yaml",env:"ini",ini:"ini",conf:"ini",cfg:"ini",toml:"ini",properties:"ini",
+      html:"markup",htm:"markup",xml:"markup",xhtml:"markup",svg:"markup",vue:"markup",xaml:"markup",rss:"markup"};
+    return HL_PROF[m[e]] || null;
+  }
+  function hlTag(tag){ let out="",i=0,n=tag.length,seen=false;
+    const push=(cls,txt)=>{ out+=cls?`<span class="${cls}">${hlEsc(txt)}</span>`:hlEsc(txt); };
+    while(i<n){ const ch=tag[i];
+      if(ch==='"'||ch==="'"){ let j=i+1; while(j<n&&tag[j]!==ch)j++; j=Math.min(j+1,n); push("tk-str",tag.slice(i,j)); i=j; continue; }
+      if(ch==='<'||ch==='>'||ch==='/'||ch==='!'||ch==='?'||ch==='='){ push("tk-punct",ch); i++; continue; }
+      if(/[A-Za-z_:]/.test(ch)){ let j=i; while(j<n&&/[\w:.-]/.test(tag[j]))j++; const w=tag.slice(i,j); push(seen?"tk-attr":"tk-tag",w); seen=true; i=j; continue; }
+      push("",ch); i++; }
+    return out; }
+  function hlMarkup(code){ let out="",i=0,n=code.length;
+    const push=(cls,txt)=>{ out+=cls?`<span class="${cls}">${hlEsc(txt)}</span>`:hlEsc(txt); };
+    while(i<n){
+      if(code.startsWith("<!--",i)){ let e=code.indexOf("-->",i); e=e<0?n:e+3; push("tk-com",code.slice(i,e)); i=e; continue; }
+      if(code[i]==="<"){ let e=code.indexOf(">",i); e=e<0?n:e+1; out+=hlTag(code.slice(i,e)); i=e; continue; }
+      let e=code.indexOf("<",i); e=e<0?n:e; push("",code.slice(i,e)); i=e; }
+    return out; }
+  function hlGeneric(code,prof){ let out="",i=0,n=code.length;
+    const push=(cls,txt)=>{ out+=cls?`<span class="${cls}">${hlEsc(txt)}</span>`:hlEsc(txt); };
+    while(i<n){ let done=false;
+      for(const [o,c] of prof.block){ if(code.startsWith(o,i)){ let e=code.indexOf(c,i+o.length); e=e<0?n:e+c.length; push("tk-com",code.slice(i,e)); i=e; done=true; break; } }
+      if(done)continue;
+      for(const lc of prof.line){ if(code.startsWith(lc,i)){ let e=code.indexOf("\n",i); e=e<0?n:e; push("tk-com",code.slice(i,e)); i=e; done=true; break; } }
+      if(done)continue;
+      const ch=code[i];
+      if(prof.str.includes(ch)){ let j=i+1; while(j<n){ if(code[j]==="\\"){ j+=2; continue; } if(code[j]===ch){ j++; break; } j++; } push("tk-str",code.slice(i,j)); i=j; continue; }
+      if(/[0-9]/.test(ch) && !/[A-Za-z0-9_$]/.test(code[i-1]||"")){ let j=i; while(j<n&&/[0-9a-fA-FxXob._]/.test(code[j]))j++; push("tk-num",code.slice(i,j)); i=j; continue; }
+      if(/[A-Za-z_$@@]/.test(ch)){ let j=i; while(j<n&&/[A-Za-z0-9_$@@]/.test(code[j]))j++; const w=code.slice(i,j);
+        let k=j; while(k<n&&(code[k]===" "||code[k]==="\t"))k++; const nx=code[k];
+        const key=prof.ci?w.toUpperCase():w;
+        let cls=""; if(prof.kw.has(key)||prof.kw.has(w)) cls="tk-key"; else if(HL_LIT.has(w.toLowerCase())) cls="tk-lit"; else if(nx==="(") cls="tk-fn"; else if(nx===":"||nx==="=") cls="tk-prop";
+        push(cls,w); i=j; continue; }
+      if("{}()[].,;:+-*/%=<>!&|^~?".includes(ch)){ push("tk-punct",ch); i++; continue; }
+      push("",ch); i++; }
+    return out; }
+  function highlight(code,prof){ if(!prof) return hlEsc(code); return prof.mode==="m"?hlMarkup(code):hlGeneric(code,prof); }
+
   // ---- editor ----
-  let editing=null;
+  let editing=null, editLang=null;
+  const fxText=document.getElementById("fx-text"), fxHl=document.getElementById("fx-hl"), fxHlCode=fxHl.firstElementChild;
+  function renderHL(){ const v=fxText.value;
+    // Skip highlighting very large files to keep typing snappy — plain text still edits fine.
+    fxHlCode.innerHTML = v.length>200000 ? hlEsc(v) : highlight(v,editLang);
+    fxHl.scrollTop=fxText.scrollTop; fxHl.scrollLeft=fxText.scrollLeft; }
+  fxText.addEventListener("input",renderHL);
+  fxText.addEventListener("scroll",()=>{ fxHl.scrollTop=fxText.scrollTop; fxHl.scrollLeft=fxText.scrollLeft; });
   async function openFile(path){ const vk=viewerKind(path); if(vk){ showViewer(path,vk); return; }
     let d; try{ d=await jget(api(cur.volume,"read",`path=${encodeURIComponent(path)}`)); }catch(e){ matDialog.alert(e.message); return; }
     if(d.binary){ if(await matDialog.confirm("Binary file. Download instead?",{title:"Binary file",okLabel:"Download"})) dl.src=api(cur.volume,"download",`path=${encodeURIComponent(path)}`); return; }
-    editing=path; document.getElementById("fx-editor-name").textContent=path; document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated) ":"")+fmtBytes(d.size);
-    document.getElementById("fx-text").value=d.text||""; document.getElementById("fx-editor").hidden=false; }
+    editing=path; editLang=langOf(path);
+    document.getElementById("fx-editor-name").textContent=path; document.getElementById("fx-editor-info").textContent=(d.truncated?"(truncated) ":"")+fmtBytes(d.size);
+    fxText.value=d.text||""; renderHL(); fxText.scrollTop=0; document.getElementById("fx-editor").hidden=false; }
   document.getElementById("fx-close").addEventListener("click",()=>{ document.getElementById("fx-editor").hidden=true; editing=null; });
   document.getElementById("fx-save").addEventListener("click",async()=>{ if(editing==null)return; try{ await jpost(api(cur.volume,"write"),{path:editing,content:document.getElementById("fx-text").value});
     document.getElementById("fx-editor-info").textContent="Saved ✓"; }catch(e){ matDialog.alert("Save failed: "+e.message, {title:"Save"}); } });
