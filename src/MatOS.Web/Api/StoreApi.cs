@@ -25,11 +25,12 @@ public static class StoreApi
             apps = store.AllApps().Select(a => new
             {
                 a.Id, a.Name, a.Tagline, a.Description, a.Category, a.Icon, a.Image, a.UiPort, a.BuiltIn,
-                a.Kind, a.Compose, a.UiService, a.Source,
+                a.Kind, a.Compose, a.UiService, a.Source, a.ProjectUrl,
                 volumes = a.Volumes,
                 env = a.Env,
                 actions = a.Actions.Select(x => new { x.Label, x.Url }),
                 variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required }),
+                widgets = (a.Widgets ?? Array.Empty<AppWidgetDef>()).Select(w => new { w.Id, w.Name, w.Surface, w.Kind, w.Size, w.Url, w.Icon, w.RefreshSeconds }),
                 handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>()
             })
         }));

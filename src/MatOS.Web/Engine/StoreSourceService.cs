@@ -152,6 +152,7 @@ public class StoreSourceService
         if (Str(e, "category") is { Length: > 0 } c) app.Category = c;
         if (Str(e, "tagline") is { Length: > 0 } t) app.Tagline = t;
         if (Str(e, "description") is { Length: > 0 } d) app.Description = d;
+        if (Str(e, "projectUrl") is { Length: > 0 } pu) app.ProjectUrl = pu;
     }
 
     /// <summary>If the icon is a relative image file, fetch it and inline as a data: URI so the

@@ -5,15 +5,17 @@ public static class StoreCatalog
 {
     private static AppDef Image(string id, string name, string tagline, string desc, string cat,
         string image, int uiPort, string icon, string[] vols, Dictionary<string, string> env, AppAction[] actions,
-        AppVariable[]? variables = null, AppHandler[]? handlers = null, bool onDemand = false) =>
+        AppVariable[]? variables = null, AppHandler[]? handlers = null, bool onDemand = false,
+        string projectUrl = "", AppWidgetDef[]? widgets = null) =>
         new(id, name, tagline, desc, cat, image, uiPort, icon, vols, env, actions,
-            "image", "", "", variables ?? Array.Empty<AppVariable>(), true, "", handlers, onDemand);
+            "image", "", "", variables ?? Array.Empty<AppVariable>(), true, "", handlers, onDemand, projectUrl, widgets);
 
     private static AppDef Compose(string id, string name, string tagline, string desc, string cat,
-        string compose, string uiService, int uiPort, string icon, AppAction[]? actions = null, bool onDemand = false) =>
+        string compose, string uiService, int uiPort, string icon, AppAction[]? actions = null, bool onDemand = false,
+        string projectUrl = "", AppWidgetDef[]? widgets = null) =>
         new(id, name, tagline, desc, cat, "", uiPort, icon, Array.Empty<string>(),
             new Dictionary<string, string>(), actions ?? Array.Empty<AppAction>(),
-            "compose", compose, uiService, Array.Empty<AppVariable>(), true, "", null, onDemand);
+            "compose", compose, uiService, Array.Empty<AppVariable>(), true, "", null, onDemand, projectUrl, widgets);
 
     private static AppVariable V(string key, string label, string dflt = "", string type = "text", bool required = false)
         => new() { Key = key, Label = label, Default = dflt, Type = type, Required = required };
@@ -89,7 +91,7 @@ volumes:
                 V("GITEA__server__ROOT_URL", "Public URL (set to this app's https URL once published)"),
                 V("GITEA__server__DISABLE_SSH", "Disable SSH server (true/false)", "true"),
                 V("GITEA__service__DISABLE_REGISTRATION", "Disable open registration (true/false)", "true"),
-            }),
+            }, projectUrl: "https://github.com/go-gitea/gitea"),
 
         Image("plex", "Plex Media Server", "Media streaming",
             "Organize and stream your movies, TV, music and photos. Best-effort bridged install — the web UI (at /web) works for setup and playback; DLNA and Plex's own remote-access/discovery want host networking. Paste a claim token from plex.tv/claim (valid ~4 min) to auto-link your account.",
@@ -416,7 +418,15 @@ volumes:
         Image("uptime-kuma", "Uptime Kuma", "Self-hosted uptime monitor",
             "Uptime Kuma — a slick self-hosted monitoring tool for websites, services and containers, with status pages and notifications. Data lives in an /app/data volume.",
             "Monitoring", "louislam/uptime-kuma:1", 3001, Ico("uptime-kuma"),
-            new[] { "/app/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+            new[] { "/app/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>(),
+            projectUrl: "https://github.com/louislam/uptime-kuma",
+            widgets: new[]
+            {
+                new AppWidgetDef { Id = "status", Name = "Status", Surface = "desktop", Kind = "status", Size = "small" },
+                new AppWidgetDef { Id = "open", Name = "Open Uptime Kuma", Surface = "desktop", Kind = "launcher", Size = "small" },
+                new AppWidgetDef { Id = "dash", Name = "Dashboard", Surface = "desktop", Kind = "iframe", Size = "large", Url = "/dashboard", RefreshSeconds = 60 },
+                new AppWidgetDef { Id = "tray", Name = "Uptime Kuma", Surface = "taskbar", Kind = "status" }
+            }),
         Compose("wg-easy", "WireGuard (wg-easy)", "WireGuard VPN with a web UI",
             "wg-easy — the easiest way to run a WireGuard VPN plus a web UI to add/manage clients and show their QR codes. Needs NET_ADMIN; set your server's public host and a password in the web wizard on first run.",
             "Network", @"services:
@@ -447,7 +457,8 @@ volumes:
         Image("vaultwarden", "Vaultwarden", "Bitwarden-compatible password manager",
             "Vaultwarden — a lightweight, self-hosted Bitwarden-compatible password vault. Your vault data lives in a /data volume. Use it with the official Bitwarden apps/extensions.",
             "Security", "vaultwarden/server:latest", 80, Ico("vaultwarden"),
-            new[] { "/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+            new[] { "/data" }, new Dictionary<string, string>(), Array.Empty<AppAction>(),
+            projectUrl: "https://github.com/dani-garcia/vaultwarden"),
         Image("mailrise", "Mailrise", "SMTP → push-notification gateway",
             "Mailrise — a small SMTP server that turns e-mails your apps send into push notifications (via Apprise: Telegram, Discord, ntfy, and 80+ more). Point an app's SMTP at it on port 8025. Advanced: needs a mailrise.conf mounted at /etc.",
             "Utilities", "yoryan/mailrise:latest", 8025, Ico("mailrise"),

@@ -104,6 +104,19 @@ public class StoreService
                     ArgTemplate = Str(Get(m!, "argTemplate")),
                     ReadOnly = string.Equals(Str(Get(m!, "readOnly")), "true", StringComparison.OrdinalIgnoreCase)
                 }).ToList();
+            if (string.IsNullOrWhiteSpace(app.ProjectUrl)) app.ProjectUrl = Str(Get(x, "projectUrl"));
+            if ((app.Widgets == null || app.Widgets.Count == 0) && AsList(Get(x, "widgets")) is { } widgets)
+                app.Widgets = widgets.Select(AsMap).Where(m => m != null).Select(m => new AppWidgetDef
+                {
+                    Id = Str(Get(m!, "id")),
+                    Name = Str(Get(m!, "name")) is { Length: > 0 } wn ? wn : Str(Get(m!, "id")),
+                    Surface = Str(Get(m!, "surface")) is { Length: > 0 } su ? su : "desktop",
+                    Kind = Str(Get(m!, "kind")) is { Length: > 0 } wk ? wk : "status",
+                    Size = Str(Get(m!, "size")) is { Length: > 0 } sz ? sz : "small",
+                    Url = Str(Get(m!, "url")),
+                    Icon = Str(Get(m!, "icon")),
+                    RefreshSeconds = int.TryParse(Str(Get(m!, "refreshSeconds")), out var rs) ? rs : 0
+                }).Where(w => w.Id.Length > 0).ToList();
         }
         catch { /* best effort */ }
     }
@@ -111,7 +124,8 @@ public class StoreService
     private static AppDef ToDef(CustomApp c) => new(
         c.Id, c.Name, c.Tagline, c.Description, c.Category, c.Image, c.UiPort, c.Icon,
         c.Volumes.ToArray(), c.Env, c.Actions.Select(a => new AppAction(a.Label, a.Url)).ToArray(),
-        c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source, c.Handlers.ToArray());
+        c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source, c.Handlers.ToArray(),
+        OnDemand: false, ProjectUrl: c.ProjectUrl, Widgets: c.Widgets.ToArray());
 
     private string UniqueId(string baseId)
     {

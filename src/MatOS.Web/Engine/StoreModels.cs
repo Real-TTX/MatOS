@@ -29,6 +29,21 @@ public class AppHandler
     public string UrlPath { get; set; } = "";                // open at host:port/<this> instead of the root (supports {file})
 }
 
+/// <summary>A widget an app offers that the user can add to the desktop or the taskbar.
+/// Kind "status"/"launcher"/"info" are rendered by matOS itself (work for any app, no cooperation);
+/// "iframe" embeds a small widget page the app serves at <see cref="Url"/>.</summary>
+public class AppWidgetDef
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Surface { get; set; } = "desktop";    // "desktop" | "taskbar"
+    public string Kind { get; set; } = "status";         // "status" | "launcher" | "info" | "iframe"
+    public string Size { get; set; } = "small";          // "small" | "medium" | "large"
+    public string Url { get; set; } = "";                // iframe: path relative to the app UI, or absolute
+    public string Icon { get; set; } = "";               // optional icon override (emoji / URL / data URI)
+    public int RefreshSeconds { get; set; }              // info/iframe auto-refresh (0 = none)
+}
+
 /// <summary>Unified app definition — built-in, custom single-image, or a Compose stack.
 /// Kind is "image" or "compose". Icon may be an emoji, an image URL, or a data: URI.
 /// Source is the name of the remote catalog it came from ("" = built-in or local custom).</summary>
@@ -37,7 +52,8 @@ public record AppDef(
     string Image, int UiPort, string Icon, string[] Volumes,
     Dictionary<string, string> Env, AppAction[] Actions,
     string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn,
-    string Source = "", AppHandler[]? Handlers = null, bool OnDemand = false);
+    string Source = "", AppHandler[]? Handlers = null, bool OnDemand = false,
+    string ProjectUrl = "", AppWidgetDef[]? Widgets = null);
 
 // ---- Custom (user-defined) apps: mutable shapes persisted as customapps.json ----
 
@@ -65,6 +81,8 @@ public class CustomApp
     public List<AppActionDef> Actions { get; set; } = new();
     public List<AppVariable> Variables { get; set; } = new();
     public List<AppHandler> Handlers { get; set; } = new(); // file types this app can "open with"
+    public string ProjectUrl { get; set; } = "";          // project / repo / docs home page
+    public List<AppWidgetDef> Widgets { get; set; } = new(); // widgets this app offers
     public string Source { get; set; } = "";              // remote catalog name ("" = local)
 }
 
