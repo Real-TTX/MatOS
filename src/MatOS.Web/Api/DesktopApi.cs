@@ -35,6 +35,7 @@ public static class DesktopApi
                 labels = svc.GetLabels(uid),
                 taskbarPins = svc.GetTaskbarPins(uid),
                 taskbarWidgets = svc.GetTaskbarWidgets(uid),
+                startFolders = svc.GetStartFolders(uid),
             });
         });
 
@@ -111,6 +112,18 @@ public static class DesktopApi
 
         g.MapPost("/folders/remove", async (FolderItemBody b, DesktopLayoutService svc, HttpContext ctx) =>
         { await svc.RemoveFromFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
+
+        // ---- Start-menu folders ----
+        g.MapPost("/startmenu/folders/create", async (NameBody b, DesktopLayoutService svc, HttpContext ctx) =>
+            Results.Ok(new { folder = await svc.CreateStartFolder(Uid(ctx), b.Name) }));
+        g.MapPost("/startmenu/folders/rename", async (IdNameBody b, DesktopLayoutService svc, HttpContext ctx) =>
+            Results.Ok(new { ok = await svc.RenameStartFolder(Uid(ctx), b.Id, b.Name) }));
+        g.MapPost("/startmenu/folders/delete", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.DeleteStartFolder(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
+        g.MapPost("/startmenu/folders/add", async (FolderItemBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.AddToStartFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
+        g.MapPost("/startmenu/folders/remove", async (FolderItemBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.RemoveFromStartFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
 
         // ---- Widgets ----
         g.MapPost("/widgets/add", async (AddWidgetBody b, DesktopLayoutService svc, HttpContext ctx) =>

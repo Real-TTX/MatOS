@@ -82,6 +82,20 @@ public class DesktopFoldersStore
     public Dictionary<string, List<DesktopFolder>> Users { get; set; } = new();
 }
 
+/// <summary>A collapsible folder in the Start menu grouping app keys (mirrors <see cref="DesktopFolder"/>
+/// but for the Start menu instead of the desktop). An app lives in at most one Start-menu folder.</summary>
+public class StartFolder
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "Folder";
+    public List<string> Keys { get; set; } = new();
+}
+
+public class StartFoldersStore
+{
+    public Dictionary<string, List<StartFolder>> Users { get; set; } = new();
+}
+
 /// <summary>A desktop widget the user has placed on their desktop. Type identifies the widget
 /// implementation on the client (e.g. "clock", "cpu", "memory", "containers"); Config carries
 /// arbitrary widget-specific settings; W/H are size buckets (1..3, small/medium/large).</summary>

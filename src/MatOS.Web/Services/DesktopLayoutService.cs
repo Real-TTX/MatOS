@@ -122,6 +122,60 @@ public class DesktopLayoutService
         await _config.SaveAsync("desktop-folders", FolderStore);
     }
 
+    // ---- Start-menu folders (collapsible groups in the Start menu) ----
+    private StartFoldersStore StartFolderStore => _config.Get<StartFoldersStore>("startmenu-folders");
+
+    public List<StartFolder> GetStartFolders(string userId)
+    {
+        lock (_gate) return StartFolderStore.Users.TryGetValue(userId, out var l)
+            ? l.Select(f => new StartFolder { Id = f.Id, Name = f.Name, Keys = new List<string>(f.Keys) }).ToList()
+            : new List<StartFolder>();
+    }
+
+    public async Task<StartFolder> CreateStartFolder(string userId, string name)
+    {
+        var f = new StartFolder { Id = "sf" + Guid.NewGuid().ToString("N")[..8], Name = string.IsNullOrWhiteSpace(name) ? "New Folder" : name.Trim() };
+        lock (_gate)
+        {
+            if (!StartFolderStore.Users.TryGetValue(userId, out var l)) { l = new List<StartFolder>(); StartFolderStore.Users[userId] = l; }
+            l.Add(f);
+        }
+        await _config.SaveAsync("startmenu-folders", StartFolderStore);
+        return f;
+    }
+
+    public async Task<bool> RenameStartFolder(string userId, string id, string name)
+    {
+        bool ok;
+        lock (_gate) { ok = StartFolderStore.Users.TryGetValue(userId, out var l) && l.FirstOrDefault(x => x.Id == id) is { } f && (f.Name = string.IsNullOrWhiteSpace(name) ? f.Name : name.Trim()) != null; }
+        if (ok) await _config.SaveAsync("startmenu-folders", StartFolderStore);
+        return ok;
+    }
+
+    public async Task DeleteStartFolder(string userId, string id)
+    {
+        lock (_gate) { if (StartFolderStore.Users.TryGetValue(userId, out var l)) l.RemoveAll(f => f.Id == id); }
+        await _config.SaveAsync("startmenu-folders", StartFolderStore);
+    }
+
+    public async Task AddToStartFolder(string userId, string id, string key)
+    {
+        lock (_gate)
+        {
+            if (!StartFolderStore.Users.TryGetValue(userId, out var l)) return;
+            foreach (var f in l) f.Keys.RemoveAll(k => k == key);   // at most one folder
+            var target = l.FirstOrDefault(f => f.Id == id);
+            if (target != null && !target.Keys.Contains(key)) target.Keys.Add(key);
+        }
+        await _config.SaveAsync("startmenu-folders", StartFolderStore);
+    }
+
+    public async Task RemoveFromStartFolder(string userId, string id, string key)
+    {
+        lock (_gate) { if (StartFolderStore.Users.TryGetValue(userId, out var l) && l.FirstOrDefault(f => f.Id == id) is { } f) f.Keys.Remove(key); }
+        await _config.SaveAsync("startmenu-folders", StartFolderStore);
+    }
+
     // ---- Desktop widgets ----
     private DesktopWidgetsStore WidgetStore => _config.Get<DesktopWidgetsStore>("desktop-widgets");
 

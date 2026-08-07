@@ -87,6 +87,8 @@
   let folders = [];   // [{id,name,keys:[...]}]
   let widgets = [];   // [{id,type,x,y,w,h,config}]
   let taskbarWidgets = []; // tray widgets [{id,type,order,config}]
+  let startFolders = []; // start-menu folders [{id,name,keys:[...]}]
+  const startFoldersCollapsed = new Set();
   let labels = {};    // key -> custom display name (per user)
   let taskbarPins = new Set(); // app keys pinned to the taskbar (Windows-11 style — always shown)
   const pendingInstalls = new Map(); // installId -> { appId, name, icon }
@@ -462,25 +464,66 @@
     return `<button class="sm-item" data-key="${escAttr(a.key)}" data-title="${escAttr(a.title)}" data-url="${escAttr(a.url)}" data-w="${a.w}" data-h="${a.h}">
       <span class="sm-ico ${iconClass}">${inner}${pinned ? '<span class="sm-pin" title="On desktop">✓</span>' : ''}</span><span class="sm-label">${esc(a.title)}</span></button>`;
   }
+  // Resolve a Start-menu item object (system app or "stack:<name>") for a folder member key.
+  function startItemFor(key) {
+    if (key && key.startsWith("stack:")) { const s = stackData.find(x => stackKey(x) === key); return s ? { key, title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) } : null; }
+    const sa = systemApps().find(a => a.key === key);
+    return sa ? { key, title: sa.title, url: sa.url, w: sa.w, h: sa.h, iconHtml: sa.iconHtml, sys: true } : null;
+  }
+  function startFolderHtml(f, q) {
+    const members = (f.keys || []).map(startItemFor).filter(Boolean).filter(a => !q || (a.title || "").toLowerCase().includes(q));
+    if (q && !members.length) return "";
+    const collapsed = startFoldersCollapsed.has(f.id);
+    const items = members.map(a => smItem(a, a.sys ? "sys" : "", a.sys ? a.iconHtml : a.inner, pins.has(a.key))).join("");
+    return `<div class="sm-folder${collapsed ? ' collapsed' : ''}" data-sfid="${escAttr(f.id)}">
+      <button class="sm-folder-head"><span class="sm-folder-chev">▸</span><span class="sm-folder-name">${esc(f.name)}</span><span class="sm-folder-count">${members.length}</span></button>
+      <div class="sm-folder-items">${items}</div></div>`;
+  }
   function renderStartMenu(filter) {
     if (!startMenu) return;
     const q = (filter || "").trim().toLowerCase();
     const match = t => !q || (t || "").toLowerCase().includes(q);
-    const sys = systemApps().filter(a => match(a.title));
+    const inFolder = new Set(); for (const f of startFolders) for (const k of (f.keys || [])) inFolder.add(k);
+    const sys = systemApps().filter(a => match(a.title) && !inFolder.has(a.key));
     smSystem.innerHTML = sys.map(a => smItem(a, "sys", a.iconHtml, pins.has(a.key))).join("");
     if (smSystemTitle) smSystemTitle.style.display = sys.length ? "" : "none";
     // matOS-managed store apps vs plain Docker containers/stacks
     const toItem = s => ({ key: stackKey(s), title: stackTitle(s), url: stackOpenUrl(s), w: "1024", h: "680", inner: stackInner(s) });
-    const apps = stackData.filter(s => stackApp(s) && match(stackTitle(s))).map(toItem);
-    const cons = stackData.filter(s => !stackApp(s) && match(stackTitle(s))).map(toItem);
-    // Show apps that are still installing as placeholders in the Start menu too (not just the desktop).
+    const apps = stackData.filter(s => stackApp(s) && match(stackTitle(s)) && !inFolder.has(stackKey(s))).map(toItem);
+    const cons = stackData.filter(s => !stackApp(s) && match(stackTitle(s)) && !inFolder.has(stackKey(s))).map(toItem);
     const pend = [...pendingInstalls.values()].filter(p => match(p.name));
     const pendHtml = pend.map(p => `<div class="sm-item sm-installing"><span class="sm-ico">${appIconHtml(p.icon) || CUBE}</span><span class="sm-label">${esc(p.name)}</span><span class="sm-inst-badge">Installing…</span></div>`).join("");
-    smApps.innerHTML = pendHtml + apps.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
+    const folderHtml = startFolders.map(f => startFolderHtml(f, q)).join("");
+    const foldersShown = folderHtml.trim().length > 0;
+    smApps.innerHTML = folderHtml + pendHtml + apps.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
     smContainers.innerHTML = cons.map(a => smItem(a, "", a.inner, pins.has(a.key))).join("");
-    if (smAppsTitle) smAppsTitle.style.display = (apps.length + pend.length) ? "" : "none";
+    if (smAppsTitle) smAppsTitle.style.display = (apps.length + pend.length || foldersShown) ? "" : "none";
     if (smContainersTitle) smContainersTitle.style.display = cons.length ? "" : "none";
-    smEmpty.hidden = (sys.length + apps.length + cons.length + pend.length) > 0;
+    smEmpty.hidden = (sys.length + apps.length + cons.length + pend.length) > 0 || foldersShown;
+  }
+  const smRerender = () => renderStartMenu(startSearch ? startSearch.value : "");
+  const sfPost = (op, body) => fetch("/api/v1/desktop/startmenu/folders/" + op, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
+  async function createStartFolderWith(key) {
+    const name = window.prompt("Folder name:", "Folder"); if (name === null) return;
+    try { const r = await (await fetch("/api/v1/desktop/startmenu/folders/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() || "Folder" }) })).json();
+      startFolders.push(r.folder); addToStartFolder(key, r.folder.id); } catch (_) {}
+  }
+  function addToStartFolder(key, folderId) {
+    for (const f of startFolders) f.keys = (f.keys || []).filter(k => k !== key);
+    const f = startFolders.find(x => x.id === folderId); if (f && !f.keys.includes(key)) f.keys.push(key);
+    smRerender(); sfPost("add", { id: folderId, key });
+  }
+  function removeFromStartFolder(key) {
+    let fid = null; for (const f of startFolders) if ((f.keys || []).includes(key)) { fid = f.id; f.keys = f.keys.filter(k => k !== key); }
+    smRerender(); if (fid) sfPost("remove", { id: fid, key });
+  }
+  function renameStartFolder(id) {
+    const f = startFolders.find(x => x.id === id); if (!f) return;
+    const name = window.prompt("Rename folder:", f.name); if (name === null || !name.trim()) return;
+    f.name = name.trim(); smRerender(); sfPost("rename", { id, name: f.name });
+  }
+  function deleteStartFolder(id) {
+    startFolders = startFolders.filter(f => f.id !== id); smRerender(); sfPost("delete", { id });
   }
   // Position a taskbar popup (start menu / notification panel) relative to its anchor button,
   // so it stays correctly attached regardless of taskbar position (top/bottom) or icon
@@ -632,7 +675,11 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeStart(); hideCtx(); } });
     startSearch.addEventListener("input", () => renderStartMenu(startSearch.value));
     startSearch.addEventListener("keydown", (e) => { if (e.key === "Enter") { const f = startMenu.querySelector(".sm-item"); if (f) { e.preventDefault(); f.click(); } } });
-    startMenu.addEventListener("click", (e) => { const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); if (tbSearch) tbSearch.value = ""; } if (it) delete it.dataset.suppressClick; });
+    startMenu.addEventListener("click", (e) => {
+      const head = e.target.closest(".sm-folder-head");
+      if (head) { const fid = head.closest(".sm-folder").dataset.sfid; if (startFoldersCollapsed.has(fid)) startFoldersCollapsed.delete(fid); else startFoldersCollapsed.add(fid); renderStartMenu(startSearch ? startSearch.value : ""); return; }
+      const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); if (tbSearch) tbSearch.value = ""; } if (it) delete it.dataset.suppressClick;
+    });
     // Drag a start-menu item onto the desktop to pin it there (with a chosen position).
     startMenu.addEventListener("pointerdown", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
@@ -668,12 +715,26 @@
       };
       window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true });
     });
-    // Full context menu on start-menu items — same shape as right-clicking a desktop icon.
+    // Full context menu on start-menu items — same shape as right-clicking a desktop icon,
+    // plus Start-menu folder options (add to / remove from / new folder; rename/delete on a header).
     startMenu.addEventListener("contextmenu", (e) => {
+      const head = e.target.closest(".sm-folder-head");
+      if (head) {
+        e.preventDefault(); const fid = head.closest(".sm-folder").dataset.sfid;
+        showCtx(e.clientX, e.clientY, [
+          { label: "Rename folder", action: () => renameStartFolder(fid) },
+          { label: "Delete folder", danger: true, action: () => deleteStartFolder(fid) }
+        ]); return;
+      }
       const it = e.target.closest(".sm-item"); if (!it) return;
       const key = it.dataset.key; if (!key) return;
       e.preventDefault();
-      showCtx(e.clientX, e.clientY, appMenuItems(key, { after: closeStart }));
+      const items = appMenuItems(key, { after: closeStart });
+      const inF = startFolders.find(f => (f.keys || []).includes(key));
+      items.push({ sep: true });
+      if (inF) items.push({ label: "Remove from folder", action: () => removeFromStartFolder(key) });
+      else { for (const f of startFolders) items.push({ label: `Add to “${f.name}”`, action: () => addToStartFolder(key, f.id) }); items.push({ label: "New folder…", action: () => createStartFolderWith(key) }); }
+      showCtx(e.clientX, e.clientY, items);
     });
   }
 
@@ -1294,7 +1355,7 @@
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); taskbarWidgets = d.taskbarWidgets || []; } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); taskbarWidgets = d.taskbarWidgets || []; startFolders = d.startFolders || []; } }
     catch (_) { layout = {}; }
     // Personal preferences (wallpaper/theme fallback + taskbar).
     try { const p = await (await fetch("/api/v1/desktop/prefs")).json(); applyTaskbarPrefs(p); } catch (_) {}
