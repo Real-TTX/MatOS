@@ -77,6 +77,7 @@
 
             <label class="fl"><span>Tagline</span><input id="a-tag" class="ui-input" placeholder="Short one-liner" /></label>
             <label class="fl"><span>Description</span><textarea id="a-desc" class="ui-input" rows="2"></textarea></label>
+            <label class="fl"><span>Project URL <span class="fx-muted">(home / repo — a GitHub URL enables the README tab)</span></span><input id="a-proj" class="ui-input" placeholder="https://github.com/user/repo" /></label>
             <div class="fl">
                 <span>Icon <span class="fx-muted">(emoji, image URL, or upload → base64)</span></span>
                 <div style="display:flex;align-items:center;gap:0.6rem">
@@ -177,6 +178,22 @@
 .store-detail-body { display:grid; gap:1rem; }
 .store-detail-body .card h3 { margin:0 0 0.5rem; font-size:1.05rem; }
 .store-detail-body .card p { margin:0; color:var(--mat-text); line-height:1.6; white-space:pre-wrap; }
+/* Detail tabs (Overview / Versions / Project) */
+.dtabs { display:flex; gap:0.3rem; margin:1.2rem 0 1rem; border-bottom:1px solid var(--mat-border); }
+.dtab { border:none; background:transparent; color:var(--mat-text-muted); font:inherit; font-weight:700; font-size:0.92rem; padding:0.5rem 0.9rem; border-radius:9px 9px 0 0; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.dtab:hover { color:var(--mat-text); }
+.dtab.active { color:var(--mat-accent); border-bottom-color:var(--mat-accent); }
+.dpanel[hidden] { display:none; }
+.dv-list { display:flex; flex-direction:column; }
+.dv-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.4rem 0; border-bottom:1px solid var(--mat-border); font-size:0.9rem; }
+.dv-row:last-child { border-bottom:none; }
+/* Rendered README */
+.md { color:var(--mat-text); line-height:1.6; font-size:0.9rem; overflow-wrap:anywhere; }
+.md h2 { font-size:1.3rem; margin:1.1rem 0 0.5rem; } .md h3 { font-size:1.1rem; margin:1rem 0 0.4rem; } .md h4,.md h5 { font-size:0.98rem; margin:0.9rem 0 0.3rem; }
+.md p { margin:0 0 0.7rem; } .md ul { margin:0 0 0.7rem 1.1rem; } .md li { margin:0.15rem 0; }
+.md a { color:var(--mat-accent); } .md code { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85em; background:var(--mat-surface-2); padding:0.1rem 0.3rem; border-radius:5px; }
+.md pre { background:#0b0f1a; border:1px solid var(--mat-border); border-radius:10px; padding:0.8rem; overflow:auto; } .md pre code { background:none; padding:0; }
+.md hr { border:none; border-top:1px solid var(--mat-border); margin:1rem 0; }
 .detail-meta { display:grid; grid-template-columns:150px 1fr; gap:0.5rem 1rem; font-size:0.9rem; }
 .detail-meta dt { color:var(--mat-text-muted); } .detail-meta dd { margin:0; }
 .detail-actions { display:flex; flex-direction:column; gap:0.4rem; }
@@ -308,19 +325,79 @@
     else if(a.kind==='compose'){ if(!a.builtIn) rows.push(["Type","Compose stack"]); }
     else if(a.image) rows.push(["Image", `<span class="mono">${esc(a.image)}</span>`]);
     if(a.volumes&&a.volumes.length) rows.push(["Data volumes", esc(a.volumes.join(", "))]);
+    if(a.projectUrl) rows.push(["Project", `<a href="${escA(a.projectUrl)}" target="_blank" rel="noopener">${esc(a.projectUrl)} ↗</a>`]);
+    const hasImage = a.kind!=='compose' && !!a.image;
+    const showProject = !!(a.projectUrl || hasImage);
     detEl.innerHTML=`
       <nav class="store-crumb"><a data-crumb="home">Discover</a><span class="sep">›</span><a data-crumb="cat" data-cat="${escA(cat)}">${esc(cat)}</a><span class="sep">›</span><span class="cur">${esc(a.name)}</span></nav>
       <div class="store-detail-head"><div class="app-ico detail-ico">${iconHtml(a.icon)}</div>
         <div class="g"><h1>${esc(a.name)}</h1><div class="tag">${esc(a.tagline||'')}</div><div class="chips">${chips}</div></div>
         <div class="acts">${installBtn}${editDel}</div></div>
-      <div class="store-detail-body">
-        <div class="card"><h3>About</h3><p>${esc(a.description||a.tagline||'No description.')}</p></div>
-        ${actionsCard}
-        <div class="card"><h3>Details</h3><dl class="detail-meta">${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl></div>
-      </div>`;
+      <div class="dtabs" role="tablist">
+        <button class="dtab active" data-dtab="overview">Overview</button>
+        ${hasImage?`<button class="dtab" data-dtab="versions">Versions</button>`:''}
+        ${showProject?`<button class="dtab" data-dtab="project">Project</button>`:''}
+      </div>
+      <div class="dpanel" data-panel="overview">
+        <div class="store-detail-body">
+          <div class="card"><h3>About</h3><p>${esc(a.description||a.tagline||'No description.')}</p></div>
+          ${actionsCard}
+          <div class="card"><h3>Details</h3><dl class="detail-meta">${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl></div>
+        </div>
+      </div>
+      ${hasImage?`<div class="dpanel" data-panel="versions" hidden><div class="card"><h3>Available versions <span class="fx-muted" style="font-weight:400;font-size:0.8rem">· latest tags from the registry</span></h3><div id="dv-versions" class="dv-list"><div class="fx-muted">Loading…</div></div></div></div>`:''}
+      ${showProject?`<div class="dpanel" data-panel="project" hidden><div class="card" id="dv-project"><div class="fx-muted">Loading…</div></div></div>`:''}`;
     wireDetailButtons();
     detEl.querySelector('[data-crumb="home"]').addEventListener("click",()=>{ activeCat="all"; search=""; const se=$("store-search"); if(se) se.value=""; showCatalog(); });
     const cl=detEl.querySelector('[data-crumb="cat"]'); if(cl) cl.addEventListener("click",()=>{ activeCat=cl.dataset.cat; showCatalog(); });
+    let vLoaded=false, pLoaded=false;
+    detEl.querySelectorAll(".dtab").forEach(t=>t.addEventListener("click",()=>{
+      const tab=t.dataset.dtab;
+      detEl.querySelectorAll(".dtab").forEach(x=>x.classList.toggle("active",x===t));
+      detEl.querySelectorAll(".dpanel").forEach(p=>p.hidden = p.dataset.panel!==tab);
+      if(tab==="versions" && !vLoaded){ vLoaded=true; loadVersions(a.image); }
+      if(tab==="project" && !pLoaded){ pLoaded=true; loadProject(a.image, a.projectUrl); }
+    }));
+  }
+  const fmtDate=s=>{ try{ const d=new Date(s); return isNaN(d)?"":d.toLocaleDateString(); }catch(_){ return ""; } };
+  async function loadVersions(image){
+    const el=$("dv-versions"); if(!el) return;
+    try{ const d=await (await fetch(`/api/v1/store/image-info?image=${encodeURIComponent(image||"")}`)).json();
+      if(d.source!=="dockerhub"){ el.innerHTML=`<div class="fx-muted">Version listing is available for Docker Hub images. This image lives on <span class="mono">${esc(d.registry||"another registry")}</span>.</div>`; return; }
+      if(!d.tags||!d.tags.length){ el.innerHTML=`<div class="fx-muted">No tags found.</div>`; return; }
+      el.innerHTML=d.tags.map(t=>`<div class="dv-row"><span class="mono">${esc(t.name)}</span><span class="fx-muted">${fmtDate(t.updated)}</span></div>`).join("");
+    }catch(_){ el.innerHTML=`<div class="fx-muted">Couldn't load versions.</div>`; }
+  }
+  async function loadProject(image, project){
+    const el=$("dv-project"); if(!el) return;
+    try{ const d=await (await fetch(`/api/v1/store/readme?image=${encodeURIComponent(image||"")}&project=${encodeURIComponent(project||"")}`)).json();
+      if(d.markdown){ el.innerHTML=`<div class="md">${mdRender(d.markdown)}</div>`+(d.url?`<p style="margin-top:1rem"><a href="${escA(d.url)}" target="_blank" rel="noopener">View on GitHub ↗</a></p>`:''); }
+      else if(d.url||project){ el.innerHTML=`<h3>Project</h3><p><a href="${escA(d.url||project)}" target="_blank" rel="noopener">${esc(d.url||project)} ↗</a></p><p class="fx-muted" style="font-size:0.85rem">No README could be loaded for this project.</p>`; }
+      else { el.innerHTML=`<div class="fx-muted">No project information available.</div>`; }
+    }catch(_){ el.innerHTML=`<div class="fx-muted">Couldn't load project info.</div>`; }
+  }
+  // Minimal, safe Markdown → HTML (raw HTML tags are stripped; links limited to http(s)).
+  function mdRender(md){
+    md=String(md||"").replace(/\r/g,"");
+    const blocks=[]; md=md.replace(/```[\s\S]*?```/g,m=>{ blocks.push(m.replace(/^```[^\n]*\n?/,"").replace(/```\s*$/,"")); return `${blocks.length-1}`; });
+    md=md.replace(/<[^>]+>/g,"");
+    const e2=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    const inline=s=>e2(s)
+      .replace(/`([^`]+)`/g,(_,c)=>`<code>${c}</code>`)
+      .replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g,"<em>$1</em>")
+      .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g,(_,t,u)=>/^https?:\/\//.test(u)?`<a href="${u.replace(/"/g,"")}" target="_blank" rel="noopener">${t}</a>`:t);
+    let html="", inList=false; const closeList=()=>{ if(inList){ html+="</ul>"; inList=false; } };
+    for(const raw of md.split("\n")){
+      const ph=raw.match(/^(\d+)$/); if(ph){ closeList(); html+=`<pre><code>${e2(blocks[+ph[1]]||"")}</code></pre>`; continue; }
+      const line=raw.trimEnd(); if(!line.trim()){ closeList(); continue; }
+      let m;
+      if(m=line.match(/^(#{1,4})\s+(.*)$/)){ closeList(); const n=Math.min(m[1].length+1,5); html+=`<h${n}>${inline(m[2])}</h${n}>`; continue; }
+      if(/^\s*[-*]\s+/.test(line)){ if(!inList){ html+="<ul>"; inList=true; } html+=`<li>${inline(line.replace(/^\s*[-*]\s+/,""))}</li>`; continue; }
+      if(/^\s*([-*_])\1{2,}\s*$/.test(line)){ closeList(); html+="<hr>"; continue; }
+      closeList(); html+=`<p>${inline(line)}</p>`;
+    }
+    closeList(); return html;
   }
   async function loadCatalog(){
     try{ const d=await (await fetch("/api/v1/store/catalog")).json(); catalog=d.apps; }catch(_){ catEl.innerHTML="Failed to load catalog."; return; }
@@ -405,10 +482,10 @@
     d.querySelector("select").value=v.type||"text"; d.querySelector("button").addEventListener("click",()=>d.remove()); return d; }
   $("a-add-var").addEventListener("click",()=>$("a-vars").appendChild(varRow()));
 
-  function resetForm(){ $("add-title").textContent="Add an app"; ["a-id","a-name","a-image","a-tag","a-desc","a-cat","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value="");
+  function resetForm(){ $("add-title").textContent="Add an app"; ["a-id","a-name","a-image","a-tag","a-desc","a-proj","a-cat","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value="");
     $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-vars").innerHTML=""; $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); }
   function editApp(id){ const a=catalog.find(x=>x.id===id); if(!a)return; showTab("add");
-    $("add-title").textContent="Edit "+a.name; $("a-id").value=a.id; $("a-name").value=a.name; $("a-cat").value=a.category; $("a-tag").value=a.tagline; $("a-desc").value=a.description; iconInput.value=a.icon; iconPrev.innerHTML=iconHtml(a.icon);
+    $("add-title").textContent="Edit "+a.name; $("a-id").value=a.id; $("a-name").value=a.name; $("a-cat").value=a.category; $("a-tag").value=a.tagline; $("a-desc").value=a.description; $("a-proj").value=a.projectUrl||""; iconInput.value=a.icon; iconPrev.innerHTML=iconHtml(a.icon);
     $("a-kind").value=a.kind||"image"; $("a-kind").dispatchEvent(new Event("change"));
     $("a-image").value=a.image||""; $("a-port").value=a.uiPort||80; $("a-vols").value=(a.volumes||[]).join("\n"); $("a-env").value=Object.entries(a.env||{}).map(([k,v])=>k+"="+v).join("\n");
     $("a-compose").value=a.compose||""; $("a-uisvc").value=a.uiService||""; $("a-cport").value=a.uiPort||80;
@@ -421,7 +498,7 @@
     const actions=[...$("a-actions").querySelectorAll(".act-row")].map(r=>({label:r.children[0].value.trim(),url:r.children[1].value.trim()})).filter(a=>a.label&&a.url);
     const variables=[...$("a-vars").querySelectorAll(".var-row")].map(r=>({key:r.children[0].value.trim(),label:r.children[1].value.trim(),type:r.children[2].value,default:r.children[3].value,required:r.children[4].querySelector("input").checked})).filter(v=>v.key);
     const env={}; $("a-env").value.split("\n").map(s=>s.trim()).filter(Boolean).forEach(l=>{ const i=l.indexOf("="); if(i>0) env[l.slice(0,i)]=l.slice(i+1); });
-    const app={ id:$("a-id").value||"", kind, name:$("a-name").value.trim(), category:$("a-cat").value.trim()||"Custom", tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(),
+    const app={ id:$("a-id").value||"", kind, name:$("a-name").value.trim(), category:$("a-cat").value.trim()||"Custom", tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(), projectUrl:$("a-proj").value.trim(),
       icon:iconInput.value.trim()||"📦", actions,
       image:$("a-image").value.trim(), uiPort:parseInt((kind==="compose"?$("a-cport"):$("a-port")).value||"80",10), volumes:$("a-vols").value.split("\n").map(s=>s.trim()).filter(Boolean), env,
       compose:$("a-compose").value, uiService:$("a-uisvc").value.trim(), variables };

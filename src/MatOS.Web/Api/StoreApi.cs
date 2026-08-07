@@ -35,6 +35,24 @@ public static class StoreApi
             })
         }));
 
+        // Available versions/tags for an image (Docker Hub) — lazy-loaded by the store detail page.
+        g.MapGet("/image-info", async (string image, RegistryInfoService reg, CancellationToken ct) =>
+        {
+            var r = RegistryInfoService.ParseImage(image ?? "");
+            var tags = await reg.GetDockerHubTagsAsync(r, ct);
+            return Results.Ok(new { source = r.Source, registry = r.Registry, ns = r.Namespace, repo = r.Repo, tag = r.Tag,
+                tags = tags.Select(t => new { t.Name, t.Updated }) });
+        });
+
+        // Project README (GitHub) for ghcr.io images or a github.com project URL; else just the link.
+        g.MapGet("/readme", async (string image, string? project, RegistryInfoService reg, CancellationToken ct) =>
+        {
+            var gh = RegistryInfoService.GitHubRepo(image ?? "", project ?? "");
+            if (gh == null) return Results.Ok(new { markdown = (string?)null, url = project });
+            var md = await reg.GetReadmeAsync(gh.Value.Owner, gh.Value.Repo, ct);
+            return Results.Ok(new { markdown = md, url = $"https://github.com/{gh.Value.Owner}/{gh.Value.Repo}" });
+        });
+
         g.MapGet("/installs", async (DockerService docker, HttpRequest req, CancellationToken ct) =>
         {
             var mine = (await docker.ListContainersAsync(true, ct))
