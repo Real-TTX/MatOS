@@ -507,7 +507,9 @@
   const tbSearchWrap = document.getElementById("mat-tb-search");
   if (tbSearch) {
     const setDriven = on => { startMenu.classList.toggle("tb-driven", !!on); };
-    const openWithQuery = q => { if (startMenu.hidden) { startMenu.hidden = false; startBtn.classList.add("active"); } setDriven(true); renderStartMenu(q); };
+    // Opening via the taskbar search must also anchor the menu — otherwise, before the Start button
+    // has ever been clicked (which is what sets the inline position), it pops up at its default spot.
+    const openWithQuery = q => { if (startMenu.hidden) { startMenu.hidden = false; positionNearAnchor(startMenu, startBtn); startBtn.classList.add("active"); } setDriven(true); renderStartMenu(q); };
     tbSearch.addEventListener("focus", () => { if (startMenu.hidden) { openWithQuery(tbSearch.value || ""); } else setDriven(true); });
     tbSearch.addEventListener("input", () => openWithQuery(tbSearch.value));
     tbSearch.addEventListener("keydown", (e) => {
