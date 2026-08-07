@@ -347,6 +347,32 @@ volumes:
             new Dictionary<string, string> { ["COUCHDB_USER"] = "admin", ["COUCHDB_PASSWORD"] = "matos" },
             new[] { new AppAction("Fauxton UI", "/_utils") }),
 
+        // ---- More LinuxServer.io / self-hosted apps ----
+        Lsio("freshrss", "FreshRSS", "Self-hosted RSS aggregator", 80, "freshrss", "Productivity"),
+        Lsio("heimdall", "Heimdall", "Application dashboard & link manager", 80, "heimdall", "Utilities"),
+        Lsio("code-server", "VS Code", "VS Code in your browser", 8443, "vscode", "Development"),
+        Image("syncthing", "Syncthing", "Continuous file synchronization",
+            "Peer-to-peer continuous file synchronization. The web UI manages folders and devices; synced data lives in the /data volume and config in /config.",
+            "Utilities", "lscr.io/linuxserver/syncthing:latest", 8384, Ico("syncthing"),
+            new[] { "/config", "/data" },
+            new Dictionary<string, string> { ["PUID"] = "1000", ["PGID"] = "1000", ["TZ"] = "Etc/UTC" },
+            Array.Empty<AppAction>()),
+        Image("metube", "MeTube", "Download videos with yt-dlp",
+            "A web UI for youtube-dl / yt-dlp — paste a video or playlist URL and it downloads to the /downloads volume.",
+            "Media", "ghcr.io/alexta69/metube:latest", 8081, Ico("metube"),
+            new[] { "/downloads" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+        Image("speedtest-tracker", "Speedtest Tracker", "Track your internet speed over time",
+            "Runs periodic internet speed tests and charts the results over time, using a built-in SQLite database in the /config volume. Laravel needs an APP_KEY; a working default is provided — you can replace it with your own (\"php artisan key:generate --show\").",
+            "Monitoring", "lscr.io/linuxserver/speedtest-tracker:latest", 80, Ico("speedtest-tracker"),
+            new[] { "/config" },
+            new Dictionary<string, string>
+            {
+                ["PUID"] = "1000", ["PGID"] = "1000", ["TZ"] = "Etc/UTC",
+                ["DB_CONNECTION"] = "sqlite",
+                ["APP_KEY"] = "base64:aGVsbG93b3JsZGhlbGxvd29ybGRoZWxsb3dvcmxkMTI="
+            },
+            Array.Empty<AppAction>()),
+
         // ---- Databases, each bundled with a web admin UI (one Compose stack). Default password "matos". ----
         Compose("mysql", "MySQL", "MySQL + phpMyAdmin",
             "MySQL 8 database with a phpMyAdmin web UI in one stack. Default root password is 'matos' (change it after install). The database data lives in its own volume.",
@@ -488,10 +514,10 @@ volumes:
 
     /// <summary>A LinuxServer.io app: a single labelled container with the standard PUID/PGID/TZ env
     /// and a /config volume. Category "Media".</summary>
-    private static AppDef Lsio(string id, string name, string tagline, int uiPort, string iconSlug) =>
+    private static AppDef Lsio(string id, string name, string tagline, int uiPort, string iconSlug, string cat = "Media") =>
         Image(id, name, tagline,
-            $"{name} running from the LinuxServer.io image, with its configuration in a /config volume. Add media/download volumes later via the app's settings if needed.",
-            "Media", $"lscr.io/linuxserver/{id}:latest", uiPort, Ico(iconSlug),
+            $"{name} running from the LinuxServer.io image, with its configuration in a /config volume. Add extra volumes later via the app's settings if needed.",
+            cat, $"lscr.io/linuxserver/{id}:latest", uiPort, Ico(iconSlug),
             new[] { "/config" },
             new Dictionary<string, string> { ["PUID"] = "1000", ["PGID"] = "1000", ["TZ"] = "Etc/UTC" },
             Array.Empty<AppAction>());
