@@ -86,6 +86,7 @@
   let pins = new Set(); // app keys pinned to the desktop (nothing shows by default; user pins from Start menu)
   let folders = [];   // [{id,name,keys:[...]}]
   let widgets = [];   // [{id,type,x,y,w,h,config}]
+  let taskbarWidgets = []; // tray widgets [{id,type,order,config}]
   let labels = {};    // key -> custom display name (per user)
   let taskbarPins = new Set(); // app keys pinned to the taskbar (Windows-11 style — always shown)
   const pendingInstalls = new Map(); // installId -> { appId, name, icon }
@@ -439,6 +440,7 @@
     }
     reconcileDesktop();
     renderStartMenu(startSearch ? startSearch.value : "");
+    renderTaskbarWidgets();
   }
   // Poll a few times right after an install so the placeholder resolves quickly.
   function burstReload(){ [200, 700, 1500, 3000, 6000].forEach(t => setTimeout(load, t)); }
@@ -558,6 +560,38 @@
     taskbarPins.delete(key); renderTaskbarPins(); if (window.MatWM) window.MatWM.setPinnedKeys([...taskbarPins]);
     fetch("/api/v1/desktop/taskbar-unpin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }).catch(() => {});
   }
+
+  // ---- Taskbar (tray) widgets — small app status/launcher chips next to the clock ----
+  const trayWidgetsEl = document.getElementById("mat-tray-widgets");
+  function renderTaskbarWidgets() {
+    if (!trayWidgetsEl) return;
+    trayWidgetsEl.innerHTML = "";
+    for (const tw of taskbarWidgets) {
+      const a = appWidgetDef(tw.type); if (!a || !a.def) continue;
+      const running = a.s ? (a.s.running || 0) > 0 : false;
+      const icon = iconHtmlOf((a.wdef && a.wdef.icon) ? a.wdef.icon : a.def.icon);
+      const b = document.createElement("button");
+      b.className = "mat-tray-widget" + (running ? " on" : "");
+      b.title = a.def.name || a.stack; b.dataset.id = tw.id;
+      b.innerHTML = `<span class="tw-ico">${icon}</span><span class="tw-dot"></span>`;
+      b.addEventListener("click", () => launchByKey("stack:" + a.stack));
+      b.addEventListener("contextmenu", (e) => { e.preventDefault(); showCtx(e.clientX, e.clientY, [
+        { label: "Remove from taskbar", danger: true, action: () => removeTaskbarWidget(tw.id) }]); });
+      trayWidgetsEl.appendChild(b);
+    }
+  }
+  async function addTaskbarWidget(type) {
+    const r = await (await fetch("/api/v1/desktop/taskbar-widgets/add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type }) })).json();
+    taskbarWidgets.push(r.widget); renderTaskbarWidgets();
+  }
+  function removeTaskbarWidget(id) {
+    taskbarWidgets = taskbarWidgets.filter(w => w.id !== id); renderTaskbarWidgets();
+    fetch("/api/v1/desktop/taskbar-widgets/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
+  }
+  function showAddTaskbarWidgetMenu(x, y) {
+    const items = availableAppWidgets("taskbar").map(it => ({ label: it.label, action: () => addTaskbarWidget(it.type) }));
+    showCtx(x, y, items.length ? items : [{ label: "No taskbar widgets available", action: () => {} }]);
+  }
   // Open Settings and drop the user into a specific panel (creates a new window with a query,
   // or navigates the existing window's iframe to the same URL).
   function openSettingsPanel(name) {
@@ -579,6 +613,7 @@
     if (sys.find(a => a.key === "network")) items.push({ label: "Network", action: () => jump("network") });
     if (sys.find(a => a.key === "backups")) items.push({ label: "Backups", action: () => jump("backups") });
     items.push({ sep: true });
+    items.push({ label: "Add taskbar widget…", action: () => setTimeout(() => showAddTaskbarWidgetMenu(x, y), 0) });
     items.push({ label: "Taskbar settings", action: () => openSettingsPanel("taskbar") });
     if (sys.find(a => a.key === "settings")) items.push({ label: "Settings", action: () => jump("settings") });
     items.push({ label: "Show desktop", action: () => window.MatWM && window.MatWM.showDesktop && window.MatWM.showDesktop() });
@@ -718,6 +753,7 @@
       } else {
         showCtx(e.clientX, e.clientY, [
           { label: "New folder", action: () => createFolderAt(e.clientX, e.clientY) },
+          { label: "Add widget…", action: () => setTimeout(() => showAddWidgetMenu(e.clientX, e.clientY), 0) },
           { sep: true }, { label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }
         ]);
       }
@@ -1003,6 +1039,37 @@
     memory:      { title: "Memory load",        w: 3, h: 2 },
     containers:  { title: "Containers status",  w: 2, h: 2 },
   };
+  // App‑registered widgets: type "app:<stack>:<widgetId>". Size buckets → grid cells.
+  const WG_SIZES = { small: { w: 3, h: 2 }, medium: { w: 4, h: 3 }, large: { w: 6, h: 4 } };
+  function iconHtmlOf(ic) { return !ic ? CUBE : (/^(https?:|data:)/i.test(ic) ? `<img src="${escAttr(ic)}" alt="">` : `<span>${esc(ic)}</span>`); }
+  function appWidgetDef(type) {
+    if (!type || !type.startsWith("app:")) return null;
+    const i1 = type.indexOf(":"), i2 = type.indexOf(":", i1 + 1); if (i2 < 0) return null;
+    const stack = type.slice(i1 + 1, i2), wid = type.slice(i2 + 1);
+    const s = stackData.find(x => x.name === stack); const appId = s ? stackApp(s) : null;
+    const def = appId ? appDefs[appId] : null;
+    const wdef = def && def.widgets ? def.widgets.find(w => w.id === wid) : null;
+    return { stack, wid, s, appId, def, wdef };
+  }
+  function widgetSpec(type) {
+    if (WIDGET_TYPES[type]) return WIDGET_TYPES[type];
+    const a = appWidgetDef(type);
+    if (a && a.wdef) { const sz = WG_SIZES[a.wdef.size] || WG_SIZES.small; return { title: a.wdef.name, w: sz.w, h: sz.h }; }
+    return { w: 2, h: 2 };
+  }
+  // All widgets an installed app offers for a given surface ("desktop"|"taskbar").
+  function availableAppWidgets(surface) {
+    const out = [];
+    for (const s of stackData) {
+      const appId = stackApp(s); if (!appId) continue;
+      const def = appDefs[appId]; if (!def || !def.widgets) continue;
+      for (const w of def.widgets) {
+        if ((w.surface || "desktop") !== surface) continue;
+        out.push({ type: `app:${s.name}:${w.id}`, label: `${stackTitle(s)} – ${w.name}` });
+      }
+    }
+    return out;
+  }
   // Rolling history for the resource-monitor widget (aggregate across all running containers).
   const wgCpuHist = [], wgMemHist = []; const WG_HIST = 40;
   const wgStreams = new Map();  // containerId -> EventSource
@@ -1040,7 +1107,7 @@
     for (const w of widgets) {
       let el = widgetEls.get(w.id);
       if (!el) { el = buildWidget(w); widgetEls.set(w.id, el); layer.appendChild(el); }
-      const size = WIDGET_TYPES[w.type] || { w: 2, h: 2 };
+      const size = widgetSpec(w.type);
       el.style.width  = (size.w * CELL_W) + "px";
       el.style.height = (size.h * CELL_H - 8) + "px";
       el.style.left = (w.x || MARGIN) + "px"; el.style.top = (w.y || MARGIN) + "px";
@@ -1048,9 +1115,22 @@
     widgetTick();
   }
   function buildWidget(w){
-    const el = document.createElement("div"); el.className = "mat-widget mat-widget-" + w.type; el.dataset.id = w.id;
+    const el = document.createElement("div"); el.dataset.id = w.id;
+    const a = appWidgetDef(w.type);
+    const kind = a && a.wdef ? a.wdef.kind : "";
+    el.className = "mat-widget " + (a ? ("mat-widget-app mat-widget-" + (kind || "status")) : ("mat-widget-" + w.type));
     el.innerHTML = `<div class="mat-widget-body" data-body></div>`;
     enableWidgetDrag(el, w);
+    // iframe app widgets (and info widgets with a URL) embed the app once — not re-rendered each tick.
+    if (a && a.wdef && a.wdef.url && (kind === "iframe" || kind === "info")) {
+      el.querySelector("[data-body]").innerHTML =
+        `<iframe class="wg-frame" src="/apps/starting?stack=${encodeURIComponent(a.stack)}&path=${encodeURIComponent(a.wdef.url)}" referrerpolicy="no-referrer"></iframe>`;
+    }
+    // Declarative app widgets (status/launcher) open the app on click.
+    if (a && a.wdef && (kind === "status" || kind === "launcher")) {
+      el.style.cursor = "pointer";
+      el.addEventListener("click", (e) => { if (e.target.closest("button,a")) return; if (!el.classList.contains("dragging")) launchByKey("stack:" + a.stack); });
+    }
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       showCtx(e.clientX, e.clientY, [
@@ -1115,6 +1195,22 @@
         const a = wgAggregate();
         body.innerHTML = `<div class="wg-num">${fmtB(a.mem)}</div><div class="wg-lbl">Memory</div>
           <div style="height:38px;margin-top:0.3rem">${wgAreaSvg(wgMemHist,"#22b8ff",Math.max(1,...wgMemHist))}</div>`;
+      } else if (w.type.startsWith("app:")) {
+        const a = appWidgetDef(w.type);
+        if (!a || !a.def) { body.innerHTML = `<div class="wg-lbl">App not installed</div>`; continue; }
+        const kind = a.wdef ? a.wdef.kind : "status";
+        if (a.wdef && a.wdef.url && (kind === "iframe" || kind === "info")) continue; // iframe built in buildWidget
+        const running = a.s ? (a.s.running || 0) : 0, total = a.s ? (a.s.total || 0) : 0;
+        const icon = iconHtmlOf((a.wdef && a.wdef.icon) ? a.wdef.icon : a.def.icon);
+        const title = a.def.name || a.stack;
+        if (kind === "launcher") {
+          body.innerHTML = `<div class="wg-launch"><span class="wg-ico">${icon}</span><span class="wg-name">${esc(title)}</span></div>`;
+        } else {
+          const on = running > 0;
+          body.innerHTML = `<div class="wg-status"><span class="wg-ico">${icon}</span>
+            <div class="wg-st-txt"><span class="wg-name">${esc(title)}</span>
+              <span class="wg-pill ${on ? 'on' : 'off'}">${on ? 'running' : 'stopped'}${total > 1 ? ` · ${running}/${total}` : ''}</span></div></div>`;
+        }
       }
     }
   }
@@ -1132,7 +1228,7 @@
   setInterval(widgetTick, 30000);
   setInterval(() => { const cw = widgetEls; for (const [id, el] of cw) { const w = widgets.find(x => x.id === id); if (w && w.type === "clock") widgetTick(); break; } }, 15000);
   async function addWidget(type){
-    const spec = WIDGET_TYPES[type] || { w:2, h:2 };
+    const spec = widgetSpec(type);
     // Place it near the top-right corner of the layer, but never off-screen
     const lw = (layer && layer.clientWidth) || window.innerWidth;
     const x = Math.max(MARGIN, lw - spec.w*CELL_W - MARGIN);
@@ -1141,19 +1237,22 @@
     widgets.push(r.widget); reconcileDesktop();
   }
   function showAddWidgetMenu(x, y){
-    showCtx(x, y, Object.entries(WIDGET_TYPES).map(([k, v]) => ({ label: v.title, action: () => addWidget(k) })));
+    const items = Object.entries(WIDGET_TYPES).map(([k, v]) => ({ label: v.title, action: () => addWidget(k) }));
+    const appWidgets = availableAppWidgets("desktop");
+    if (appWidgets.length) { items.push({ sep: true }); for (const it of appWidgets) items.push({ label: it.label, action: () => addWidget(it.type) }); }
+    showCtx(x, y, items);
   }
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); taskbarWidgets = d.taskbarWidgets || []; } }
     catch (_) { layout = {}; }
     // Personal preferences (wallpaper/theme fallback + taskbar).
     try { const p = await (await fetch("/api/v1/desktop/prefs")).json(); applyTaskbarPrefs(p); } catch (_) {}
     await loadDefs();
     buildSystem(); await loadHidden(); await load(); setInterval(load, 15000);
     if (window.MatWM) { window.MatWM.setPinnedKeys([...taskbarPins]); window.MatWM.onChange(renderTaskbarPins); }
-    renderTaskbarPins();
+    renderTaskbarPins(); renderTaskbarWidgets();
   }
   init();
 

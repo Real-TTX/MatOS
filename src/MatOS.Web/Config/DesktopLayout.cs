@@ -100,3 +100,19 @@ public class DesktopWidgetsStore
 {
     public Dictionary<string, List<DesktopWidget>> Users { get; set; } = new();
 }
+
+/// <summary>A widget the user has added to the taskbar tray (like the clock). Type identifies the
+/// client renderer (e.g. "app:&lt;stack&gt;:&lt;widgetId&gt;"); Config carries widget-specific settings;
+/// Order sorts them within the tray.</summary>
+public class TaskbarWidget
+{
+    public string Id { get; set; } = "";
+    public string Type { get; set; } = "";
+    public int Order { get; set; }
+    public Dictionary<string, string> Config { get; set; } = new();
+}
+
+public class TaskbarWidgetsStore
+{
+    public Dictionary<string, List<TaskbarWidget>> Users { get; set; } = new();
+}

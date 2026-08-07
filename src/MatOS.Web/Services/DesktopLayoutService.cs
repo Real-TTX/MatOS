@@ -156,6 +156,35 @@ public class DesktopLayoutService
         await _config.SaveAsync("desktop-widgets", WidgetStore);
     }
 
+    // ---- Taskbar widgets (tray, ordered) ----
+    private TaskbarWidgetsStore TaskbarWidgetStore => _config.Get<TaskbarWidgetsStore>("taskbar-widgets");
+
+    public List<TaskbarWidget> GetTaskbarWidgets(string userId)
+    {
+        lock (_gate) return TaskbarWidgetStore.Users.TryGetValue(userId, out var l)
+            ? l.OrderBy(w => w.Order).Select(w => new TaskbarWidget { Id = w.Id, Type = w.Type, Order = w.Order, Config = new Dictionary<string, string>(w.Config) }).ToList()
+            : new List<TaskbarWidget>();
+    }
+
+    public async Task<TaskbarWidget> AddTaskbarWidget(string userId, string type)
+    {
+        var wid = new TaskbarWidget { Id = "tw" + Guid.NewGuid().ToString("N")[..8], Type = type };
+        lock (_gate)
+        {
+            if (!TaskbarWidgetStore.Users.TryGetValue(userId, out var l)) { l = new List<TaskbarWidget>(); TaskbarWidgetStore.Users[userId] = l; }
+            wid.Order = l.Count;
+            l.Add(wid);
+        }
+        await _config.SaveAsync("taskbar-widgets", TaskbarWidgetStore);
+        return wid;
+    }
+
+    public async Task RemoveTaskbarWidget(string userId, string id)
+    {
+        lock (_gate) { if (TaskbarWidgetStore.Users.TryGetValue(userId, out var l)) l.RemoveAll(w => w.Id == id); }
+        await _config.SaveAsync("taskbar-widgets", TaskbarWidgetStore);
+    }
+
     // ---- Per-user icon labels (rename) ----
     private DesktopLabelsStore LabelStore => _config.Get<DesktopLabelsStore>("desktop-labels");
 

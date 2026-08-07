@@ -362,7 +362,15 @@ volumes:
         Image("metube", "MeTube", "Download videos with yt-dlp",
             "A web UI for youtube-dl / yt-dlp — paste a video or playlist URL and it downloads to the /downloads volume.",
             "Media", "ghcr.io/alexta69/metube:latest", 8081, Ico("metube"),
-            new[] { "/downloads" }, new Dictionary<string, string>(), Array.Empty<AppAction>()),
+            new[] { "/downloads" }, new Dictionary<string, string>(), Array.Empty<AppAction>(),
+            projectUrl: "https://github.com/alexta69/metube",
+            widgets: new[]
+            {
+                new AppWidgetDef { Id = "status", Name = "Status", Surface = "desktop", Kind = "status", Size = "small" },
+                new AppWidgetDef { Id = "open", Name = "Open MeTube", Surface = "desktop", Kind = "launcher", Size = "small" },
+                new AppWidgetDef { Id = "panel", Name = "MeTube", Surface = "desktop", Kind = "iframe", Size = "large", Url = "/" },
+                new AppWidgetDef { Id = "tray", Name = "MeTube", Surface = "taskbar", Kind = "status" }
+            }),
         Image("speedtest-tracker", "Speedtest Tracker", "Track your internet speed over time",
             "Runs periodic internet speed tests and charts the results over time, using a built-in SQLite database in the /config volume. Laravel needs an APP_KEY; a working default is provided — you can replace it with your own (\"php artisan key:generate --show\").",
             "Monitoring", "lscr.io/linuxserver/speedtest-tracker:latest", 80, Ico("speedtest-tracker"),

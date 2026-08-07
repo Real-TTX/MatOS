@@ -16,6 +16,7 @@ public static class DesktopApi
     public record IdBody(string Id);
     public record AddWidgetBody(string Type, int X, int Y, int W, int H);
     public record MoveWidgetBody(string Id, int X, int Y);
+    public record TypeBody(string Type);
     public record RenameBody(string Key, string Label);
 
     public static void MapDesktopApi(this IEndpointRouteBuilder api)
@@ -33,6 +34,7 @@ public static class DesktopApi
                 widgets = svc.GetWidgets(uid),
                 labels = svc.GetLabels(uid),
                 taskbarPins = svc.GetTaskbarPins(uid),
+                taskbarWidgets = svc.GetTaskbarWidgets(uid),
             });
         });
 
@@ -119,6 +121,13 @@ public static class DesktopApi
 
         g.MapPost("/widgets/remove", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
         { await svc.RemoveWidget(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
+
+        // ---- Taskbar widgets (tray) ----
+        g.MapPost("/taskbar-widgets/add", async (TypeBody b, DesktopLayoutService svc, HttpContext ctx) =>
+            Results.Ok(new { widget = await svc.AddTaskbarWidget(Uid(ctx), b.Type) }));
+
+        g.MapPost("/taskbar-widgets/remove", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.RemoveTaskbarWidget(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
 
         // ---- Taskbar pins (Windows-11 style) ----
         g.MapPost("/taskbar-pin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>

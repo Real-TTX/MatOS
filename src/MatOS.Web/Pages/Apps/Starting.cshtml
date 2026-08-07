@@ -41,6 +41,9 @@
 (function(){
   const q=new URLSearchParams(location.search);
   const stack=q.get("stack")||"", title=q.get("title")||"app";
+  // Optional sub-path to open inside the app (used by iframe widgets that point at a widget page).
+  let subPath=q.get("path")||""; if(subPath && !subPath.startsWith("/")) subPath="/"+subPath;
+  const withPath=u=> subPath ? u.replace(/\/$/,"")+subPath : u;
   const $=id=>document.getElementById(id);
   $("st-title").textContent="Opening "+title+"…";
   let appUrl=null;
@@ -68,14 +71,14 @@
     // always embeds in-window. Build the URL from the host WE reached matOS on, so it resolves over a bare
     // hostname/IP without wildcard DNS. Skipped over HTTPS (the port serves plain HTTP → mixed content).
     try{ const e=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/embed`,{method:"POST"})).json();
-      if(e && e.port && location.protocol!=="https:"){ location.href=`http://${location.hostname}:${e.port}/`; return; } }catch(_){}
+      if(e && e.port && location.protocol!=="https:"){ location.href=withPath(`http://${location.hostname}:${e.port}/`); return; } }catch(_){}
 
     // Otherwise embed the app's own (direct) URL, unless it blocks framing.
     for(let i=0;i<25 && !appUrl;i++){ appUrl=await resolveUrl(); if(!appUrl) await new Promise(r=>setTimeout(r,700)); }
     if(!appUrl){ showError("This app started but doesn't expose a web page to open."); return; }
     let fc={embeddable:true};
     try{ fc=await (await fetch(`/api/v1/docker/stacks/${encodeURIComponent(stack)}/framecheck`)).json(); }catch(_){}
-    if(fc.embeddable){ location.href=appUrl; }
+    if(fc.embeddable){ location.href=withPath(appUrl); }
     else { $("st-eico").textContent="↗"; showError(`<strong>${title}</strong> refuses to be embedded in a window for security. Open it in a new browser tab instead.`, fc.reason); }
   })();
 })();

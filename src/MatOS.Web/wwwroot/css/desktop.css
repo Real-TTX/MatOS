@@ -423,6 +423,31 @@ body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-conte
 .wg-sub { font-size: 0.82rem; color: var(--muted); margin-top: 0.25rem; }
 .wg-hint { font-size: 0.7rem; color: var(--muted); opacity: 0.7; margin-top: 0.4rem; }
 
+/* App-registered widgets (status / launcher / iframe) */
+.mat-widget-app.mat-widget-iframe, .mat-widget-app.mat-widget-info { padding: 0; }
+.wg-frame { width: 100%; height: 100%; border: 0; border-radius: 17px; background: #0b0f1a; display: block; }
+.wg-status { display: flex; align-items: center; gap: 0.7rem; height: 100%; }
+.wg-status .wg-ico, .wg-launch .wg-ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 1.5rem; background: rgba(255,255,255,0.07); flex: 0 0 auto; overflow: hidden; }
+.wg-status .wg-ico img, .wg-launch .wg-ico img { width: 100%; height: 100%; object-fit: cover; }
+.wg-st-txt { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.wg-name { font-weight: 750; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wg-pill { font-size: 0.72rem; font-weight: 700; align-self: flex-start; padding: 0.08rem 0.5rem; border-radius: 999px; }
+.wg-pill.on { background: rgba(52,211,153,0.22); color: #7ff0c4; }
+.wg-pill.off { background: rgba(148,163,184,0.2); color: #cbd5e1; }
+.wg-launch { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; height: 100%; text-align: center; }
+.wg-launch .wg-ico { width: 54px; height: 54px; border-radius: 15px; font-size: 2rem; }
+.mat-widget-app.mat-widget-status, .mat-widget-app.mat-widget-launcher { cursor: pointer; }
+.mat-widget-app.mat-widget-status:hover, .mat-widget-app.mat-widget-launcher:hover { border-color: var(--accent); }
+
+/* Taskbar (tray) widgets */
+#mat-tray-widgets { display: flex; align-items: center; gap: 0.15rem; }
+.mat-tray-widget { position: relative; display: inline-grid; place-items: center; width: 34px; height: 34px; border: none; background: transparent; border-radius: 9px; cursor: pointer; color: #fff; }
+.mat-tray-widget:hover { background: rgba(255,255,255,0.1); }
+.mat-tray-widget .tw-ico { width: 20px; height: 20px; display: grid; place-items: center; font-size: 1.1rem; overflow: hidden; }
+.mat-tray-widget .tw-ico img { width: 100%; height: 100%; object-fit: contain; }
+.mat-tray-widget .tw-dot { position: absolute; right: 5px; bottom: 5px; width: 7px; height: 7px; border-radius: 50%; background: #64748b; border: 1.5px solid var(--taskbar-bg, #0b0f1a); }
+.mat-tray-widget.on .tw-dot { background: #34d399; }
+
 /* Resource-monitor widget rows */
 .wg-mon-head { display: flex; align-items: center; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.4rem; }
 .wg-mon-row { display: grid; grid-template-columns: 44px 70px 1fr; align-items: center; gap: 0.5rem; padding: 0.28rem 0; }
