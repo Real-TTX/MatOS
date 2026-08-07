@@ -447,6 +447,36 @@ body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-conte
 .mat-tray-widget .tw-ico img { width: 100%; height: 100%; object-fit: contain; }
 .mat-tray-widget .tw-dot { position: absolute; right: 5px; bottom: 5px; width: 7px; height: 7px; border-radius: 50%; background: #64748b; border: 1.5px solid var(--taskbar-bg, #0b0f1a); }
 .mat-tray-widget.on .tw-dot { background: #34d399; }
+.mat-tray-widget .tw-x { position: absolute; top: -3px; right: -3px; width: 15px; height: 15px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 9px; line-height: 15px; text-align: center; opacity: 0; transition: opacity .12s; }
+.mat-tray-widget:hover .tw-x { opacity: 1; }
+
+/* Widget remove button (appears on hover) */
+.mat-widget-x { position: absolute; top: 6px; right: 6px; z-index: 3; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(10,12,20,0.78); color: #fff; font-size: 0.78rem; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s, background .12s; display: grid; place-items: center; }
+.mat-widget:hover .mat-widget-x { opacity: 1; }
+.mat-widget-x:hover { background: var(--danger); }
+
+/* ---- "Add a widget" gallery modal ---- */
+.wgp-back { position: fixed; inset: 0; z-index: 1000; background: rgba(4,6,12,0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; padding: 1.2rem; opacity: 0; transition: opacity .16s; }
+.wgp-back.open { opacity: 1; }
+.wgp-card-wrap { width: min(720px, 96vw); max-height: 86vh; overflow: auto; background: var(--bg-grad-1); border: 1px solid var(--border); border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,0.6); transform: translateY(10px) scale(0.98); transition: transform .18s; }
+.wgp-back.open .wgp-card-wrap { transform: none; }
+.wgp-head { display: flex; align-items: flex-start; gap: 1rem; padding: 1.5rem 1.6rem 1.2rem; background: var(--accent-grad); color: #fff; }
+.wgp-head h2 { margin: 0.25rem 0 0.45rem; font-size: 1.6rem; font-weight: 850; letter-spacing: -0.02em; }
+.wgp-eyebrow { text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.68rem; font-weight: 850; opacity: 0.9; }
+.wgp-hint { margin: 0; font-size: 0.85rem; opacity: 0.95; max-width: 54ch; line-height: 1.45; }
+.wgp-x { margin-left: auto; flex: 0 0 auto; width: 32px; height: 32px; border: none; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; font-size: 0.85rem; cursor: pointer; }
+.wgp-x:hover { background: rgba(255,255,255,0.34); }
+.wgp-body { padding: 1.1rem 1.6rem 1.7rem; }
+.wgp-sec { font-size: 0.7rem; font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 1.1rem 0 0.6rem; }
+.wgp-sec:first-child { margin-top: 0; }
+.wgp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 0.6rem; }
+.wgp-card { display: flex; align-items: center; gap: 0.75rem; text-align: left; padding: 0.8rem 0.9rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); cursor: pointer; transition: transform .12s, border-color .12s, background .12s; }
+.wgp-card:hover { transform: translateY(-2px); border-color: var(--accent); background: var(--surface-2); }
+.wgp-ico { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 12px; display: grid; place-items: center; font-size: 1.5rem; background: var(--surface-2); overflow: hidden; }
+.wgp-ico img { width: 100%; height: 100%; object-fit: cover; }
+.wgp-tt { display: flex; flex-direction: column; min-width: 0; }
+.wgp-name { font-weight: 750; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wgp-sub { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Resource-monitor widget rows */
 .wg-mon-head { display: flex; align-items: center; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.4rem; }

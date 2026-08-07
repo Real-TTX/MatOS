@@ -573,8 +573,9 @@
       const b = document.createElement("button");
       b.className = "mat-tray-widget" + (running ? " on" : "");
       b.title = a.def.name || a.stack; b.dataset.id = tw.id;
-      b.innerHTML = `<span class="tw-ico">${icon}</span><span class="tw-dot"></span>`;
+      b.innerHTML = `<span class="tw-ico">${icon}</span><span class="tw-dot"></span><span class="tw-x" title="Remove">✕</span>`;
       b.addEventListener("click", () => launchByKey("stack:" + a.stack));
+      b.querySelector(".tw-x").addEventListener("click", (e) => { e.stopPropagation(); removeTaskbarWidget(tw.id); });
       b.addEventListener("contextmenu", (e) => { e.preventDefault(); showCtx(e.clientX, e.clientY, [
         { label: "Remove from taskbar", danger: true, action: () => removeTaskbarWidget(tw.id) }]); });
       trayWidgetsEl.appendChild(b);
@@ -613,7 +614,7 @@
     if (sys.find(a => a.key === "network")) items.push({ label: "Network", action: () => jump("network") });
     if (sys.find(a => a.key === "backups")) items.push({ label: "Backups", action: () => jump("backups") });
     items.push({ sep: true });
-    items.push({ label: "Add taskbar widget…", action: () => setTimeout(() => showAddTaskbarWidgetMenu(x, y), 0) });
+    items.push({ label: "Add taskbar widget…", action: openWidgetPicker });
     items.push({ label: "Taskbar settings", action: () => openSettingsPanel("taskbar") });
     if (sys.find(a => a.key === "settings")) items.push({ label: "Settings", action: () => jump("settings") });
     items.push({ label: "Show desktop", action: () => window.MatWM && window.MatWM.showDesktop && window.MatWM.showDesktop() });
@@ -753,7 +754,7 @@
       } else {
         showCtx(e.clientX, e.clientY, [
           { label: "New folder", action: () => createFolderAt(e.clientX, e.clientY) },
-          { label: "Add widget…", action: () => setTimeout(() => showAddWidgetMenu(e.clientX, e.clientY), 0) },
+          { label: "Add widget…", action: openWidgetPicker },
           { sep: true }, { label: "Auto-arrange icons", action: autoArrange }, { label: "Refresh", action: load }
         ]);
       }
@@ -1070,6 +1071,54 @@
     }
     return out;
   }
+  const WIDGET_META = {
+    clock:      { icon: "🕐", desc: "Time & date" },
+    resources:  { icon: "📊", desc: "CPU + memory graph" },
+    cpu:        { icon: "🧮", desc: "CPU load" },
+    memory:     { icon: "💾", desc: "Memory load" },
+    containers: { icon: "📦", desc: "Running containers" },
+  };
+  const KIND_LABEL = { status: "Status", launcher: "Launcher", info: "Live panel", iframe: "Live panel" };
+  function appWidgetCard(it) {
+    const a = appWidgetDef(it.type);
+    const icon = iconHtmlOf(a && a.wdef && a.wdef.icon ? a.wdef.icon : (a && a.def ? a.def.icon : ""));
+    const kind = a && a.wdef ? (KIND_LABEL[a.wdef.kind] || a.wdef.kind) : "";
+    const appName = a && a.def ? a.def.name : "";
+    return { type: it.type, icon, name: (a && a.wdef ? a.wdef.name : it.label), sub: appName + (kind ? " · " + kind : "") };
+  }
+  // A bold modal gallery of every widget the user can add (built‑ins + each installed app's widgets).
+  function openWidgetPicker() {
+    document.querySelector(".wgp-back")?.remove();
+    const back = document.createElement("div"); back.className = "wgp-back";
+    back.innerHTML = `<div class="wgp-card-wrap" role="dialog" aria-label="Add a widget">
+        <div class="wgp-head"><div><div class="wgp-eyebrow">Personalise</div><h2>Add a widget</h2>
+          <p class="wgp-hint">Place a widget on your desktop or in the taskbar. Remove one anytime with the ✕ on its corner (or right‑click it).</p></div>
+          <button class="wgp-x" aria-label="Close">✕</button></div>
+        <div class="wgp-body"></div></div>`;
+    const body = back.querySelector(".wgp-body");
+    const close = () => back.remove();
+    back.querySelector(".wgp-x").addEventListener("click", close);
+    back.addEventListener("click", (e) => { if (e.target === back) close(); });
+    const onEsc = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onEsc); } };
+    document.addEventListener("keydown", onEsc);
+    const section = (label, cards, onPick) => {
+      if (!cards.length) return;
+      const h = document.createElement("div"); h.className = "wgp-sec"; h.textContent = label; body.appendChild(h);
+      const grid = document.createElement("div"); grid.className = "wgp-grid";
+      for (const c of cards) {
+        const b = document.createElement("button"); b.className = "wgp-card";
+        b.innerHTML = `<span class="wgp-ico">${c.icon}</span><span class="wgp-tt"><span class="wgp-name">${esc(c.name)}</span>${c.sub ? `<span class="wgp-sub">${esc(c.sub)}</span>` : ""}</span>`;
+        b.addEventListener("click", () => { onPick(c.type); close(); });
+        grid.appendChild(b);
+      }
+      body.appendChild(grid);
+    };
+    const builtins = Object.entries(WIDGET_TYPES).map(([k, v]) => ({ type: k, icon: (WIDGET_META[k] || {}).icon || "🔧", name: v.title, sub: (WIDGET_META[k] || {}).desc || "System widget" }));
+    section("Desktop", builtins.concat(availableAppWidgets("desktop").map(appWidgetCard)), addWidget);
+    section("Taskbar", availableAppWidgets("taskbar").map(appWidgetCard), addTaskbarWidget);
+    document.body.appendChild(back);
+    requestAnimationFrame(() => back.classList.add("open"));
+  }
   // Rolling history for the resource-monitor widget (aggregate across all running containers).
   const wgCpuHist = [], wgMemHist = []; const WG_HIST = 40;
   const wgStreams = new Map();  // containerId -> EventSource
@@ -1119,7 +1168,8 @@
     const a = appWidgetDef(w.type);
     const kind = a && a.wdef ? a.wdef.kind : "";
     el.className = "mat-widget " + (a ? ("mat-widget-app mat-widget-" + (kind || "status")) : ("mat-widget-" + w.type));
-    el.innerHTML = `<div class="mat-widget-body" data-body></div>`;
+    el.innerHTML = `<button class="mat-widget-x" title="Remove widget" aria-label="Remove widget">✕</button><div class="mat-widget-body" data-body></div>`;
+    el.querySelector(".mat-widget-x").addEventListener("click", (e) => { e.stopPropagation(); removeWidget(w.id); });
     enableWidgetDrag(el, w);
     // iframe app widgets (and info widgets with a URL) embed the app once — not re-rendered each tick.
     if (a && a.wdef && a.wdef.url && (kind === "iframe" || kind === "info")) {
@@ -1133,12 +1183,7 @@
     }
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      showCtx(e.clientX, e.clientY, [
-        { label: "Remove widget", danger: true, action: async () => {
-          await fetch("/api/v1/desktop/widgets/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id }) });
-          widgets = widgets.filter(x => x.id !== w.id); reconcileDesktop();
-        } }
-      ]);
+      showCtx(e.clientX, e.clientY, [{ label: "Remove widget", danger: true, action: () => removeWidget(w.id) }]);
     });
     return el;
   }
@@ -1235,6 +1280,10 @@
     const y = MARGIN;
     const r = await (await fetch("/api/v1/desktop/widgets/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ type, x, y, w: spec.w, h: spec.h }) })).json();
     widgets.push(r.widget); reconcileDesktop();
+  }
+  async function removeWidget(id) {
+    widgets = widgets.filter(x => x.id !== id); reconcileDesktop();
+    fetch("/api/v1/desktop/widgets/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id }) }).catch(()=>{});
   }
   function showAddWidgetMenu(x, y){
     const items = Object.entries(WIDGET_TYPES).map(([k, v]) => ({ label: v.title, action: () => addWidget(k) }));
