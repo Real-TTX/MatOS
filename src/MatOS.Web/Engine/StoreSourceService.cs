@@ -118,12 +118,21 @@ public class StoreSourceService
         if (string.IsNullOrWhiteSpace(appId)) return null;
         var uid = $"{src.Id}.{appId}";
         var image = Str(e, "image");
+        var composeInline = Str(e, "composeInline");
 
         CustomApp app;
         Uri iconBase;   // relative icons resolve next to the compose file (or index for image apps)
         if (!string.IsNullOrWhiteSpace(image))
         {
             app = new CustomApp { Id = uid, Kind = "image", Image = image, UiPort = Int(e, "uiPort", 80) };
+            iconBase = indexUri;
+        }
+        else if (!string.IsNullOrWhiteSpace(composeInline))
+        {
+            // Self-contained entry: the compose YAML lives inline in the index (App-Builder export).
+            app = new CustomApp { Id = uid, Kind = "compose", Compose = composeInline, UiService = Str(e, "uiService"), UiPort = Int(e, "uiPort", 80) };
+            ApplyOverrides(app, e);
+            _store.ApplyXMatos(app);
             iconBase = indexUri;
         }
         else
@@ -139,6 +148,7 @@ public class StoreSourceService
         }
 
         ApplyOverrides(app, e);
+        ApplyRichFields(app, e);   // volumes/env/actions/variables/widgets carried inline in the entry
         if (string.IsNullOrWhiteSpace(app.Name)) app.Name = appId;
         app.Source = src.Name;
         await ResolveIconAsync(http, app, iconBase, ct);
@@ -154,6 +164,48 @@ public class StoreSourceService
         if (Str(e, "description") is { Length: > 0 } d) app.Description = d;
         if (Str(e, "projectUrl") is { Length: > 0 } pu) app.ProjectUrl = pu;
     }
+
+    /// <summary>Rich, self-contained fields an entry may carry inline (used by App-Builder exports):
+    /// volumes/env for image apps, and actions/variables/widgets for any app. Present fields win.</summary>
+    private static void ApplyRichFields(CustomApp app, JsonElement e)
+    {
+        if (e.ValueKind != JsonValueKind.Object) return;
+        if (e.TryGetProperty("volumes", out var vols) && vols.ValueKind == JsonValueKind.Array)
+            app.Volumes = vols.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString() ?? "").Where(s => s.Length > 0).ToList();
+        if (e.TryGetProperty("env", out var env) && env.ValueKind == JsonValueKind.Object)
+            app.Env = env.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.String)
+                .ToDictionary(p => p.Name, p => p.Value.GetString() ?? "");
+        if (e.TryGetProperty("actions", out var acts) && acts.ValueKind == JsonValueKind.Array)
+            app.Actions = acts.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object)
+                .Select(x => new AppActionDef { Label = Str(x, "label"), Url = Str(x, "url") })
+                .Where(a => a.Label.Length > 0 && a.Url.Length > 0).ToList();
+        if (e.TryGetProperty("variables", out var vars) && vars.ValueKind == JsonValueKind.Array)
+            app.Variables = vars.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).Select(x => new AppVariable
+            {
+                Key = Str(x, "key"),
+                Label = Str(x, "label") is { Length: > 0 } l ? l : Str(x, "key"),
+                Type = Str(x, "type") is { Length: > 0 } t ? t : "text",
+                Default = Str(x, "default"),
+                Required = Bool(x, "required")
+            }).Where(v => v.Key.Length > 0).ToList();
+        if (e.TryGetProperty("widgets", out var wgs) && wgs.ValueKind == JsonValueKind.Array)
+            app.Widgets = wgs.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).Select(x => new AppWidgetDef
+            {
+                Id = Str(x, "id"),
+                Name = Str(x, "name") is { Length: > 0 } n ? n : Str(x, "id"),
+                Surface = Str(x, "surface") is { Length: > 0 } s ? s : "desktop",
+                Kind = Str(x, "kind") is { Length: > 0 } k ? k : "status",
+                Size = Str(x, "size") is { Length: > 0 } sz ? sz : "small",
+                Url = Str(x, "url"),
+                Icon = Str(x, "icon"),
+                RefreshSeconds = Int(x, "refreshSeconds", 0)
+            }).Where(w => w.Id.Length > 0).ToList();
+    }
+
+    private static bool Bool(JsonElement e, string key)
+        => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v)
+           && (v.ValueKind == JsonValueKind.True || (v.ValueKind == JsonValueKind.String && string.Equals(v.GetString(), "true", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>If the icon is a relative image file, fetch it and inline as a data: URI so the
     /// icon is self-contained and survives the source going offline. Emoji/data:/http are kept.</summary>

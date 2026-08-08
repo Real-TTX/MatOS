@@ -67,6 +67,7 @@
         <div id="ab-msg" class="card" style="display:none;margin:0.8rem 0"></div>
         <div style="display:flex;gap:0.6rem;margin-top:0.6rem">
             <button class="ui-btn primary" id="a-save">Save app</button>
+            <button class="ui-btn" id="a-export">Export…</button>
             <button class="ui-btn" id="a-reset">Reset</button>
             <button class="ui-btn" id="a-load">Edit existing…</button>
         </div>
@@ -240,6 +241,24 @@
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||r.status); }
       const j=await r.json(); editId=j.id||editId; flash("Saved — find it in the Store.",true);
     }catch(e){ flash("Save failed: "+e.message,false); }
+  });
+  // Export a self-contained store index.json (add its URL under Store → Sources on any matOS).
+  const slug=s=>(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+  function download(name,text){ const b=new Blob([text],{type:"application/json"}); const u=URL.createObjectURL(b); const l=document.createElement("a"); l.href=u; l.download=name; document.body.appendChild(l); l.click(); l.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
+  $("a-export").addEventListener("click",()=>{
+    const a=gather();
+    if(a.kind!=="compose" && (!a.name||!a.image)){ flash("Display name and Docker image are required to export.",false); return; }
+    if(a.kind==="compose" && !a.compose.trim()){ flash("A compose file is required to export.",false); return; }
+    const id=a.id||slug(a.name)||"app";
+    const entry={ id, name:a.name, category:a.category, tagline:a.tagline, description:a.description, projectUrl:a.projectUrl, icon:a.icon, uiPort:a.uiPort };
+    if(a.kind==="compose"){ entry.composeInline=a.compose; if(a.uiService) entry.uiService=a.uiService; }
+    else { entry.image=a.image; if(a.volumes.length) entry.volumes=a.volumes; if(Object.keys(a.env).length) entry.env=a.env; }
+    if(a.actions.length) entry.actions=a.actions;
+    if(a.widgets.length) entry.widgets=a.widgets;
+    Object.keys(entry).forEach(k=>{ if(entry[k]==="" ) delete entry[k]; });
+    const index={ name:(a.name||"App")+" — matOS catalog", apps:[entry] };
+    download(id+".json", JSON.stringify(index,null,2));
+    flash("Exported "+id+".json — host it and add its URL under Store → Sources.",true);
   });
   $("a-load").addEventListener("click",async()=>{
     let apps=[]; try{ apps=(await (await fetch("/api/v1/store/catalog")).json()).apps.filter(a=>!a.builtIn && !a.source); }catch(_){}
