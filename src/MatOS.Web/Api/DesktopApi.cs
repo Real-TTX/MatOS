@@ -16,6 +16,7 @@ public static class DesktopApi
     public record IdBody(string Id);
     public record AddWidgetBody(string Type, int X, int Y, int W, int H);
     public record MoveWidgetBody(string Id, int X, int Y);
+    public record WidgetConfigBody(string Id, Dictionary<string, string>? Config);
     public record TypeBody(string Type);
     public record RenameBody(string Key, string Label);
 
@@ -135,12 +136,18 @@ public static class DesktopApi
         g.MapPost("/widgets/remove", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
         { await svc.RemoveWidget(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
 
+        g.MapPost("/widgets/config", async (WidgetConfigBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.SetWidgetConfig(Uid(ctx), b.Id, b.Config ?? new()); return Results.Ok(new { ok = true }); });
+
         // ---- Taskbar widgets (tray) ----
         g.MapPost("/taskbar-widgets/add", async (TypeBody b, DesktopLayoutService svc, HttpContext ctx) =>
             Results.Ok(new { widget = await svc.AddTaskbarWidget(Uid(ctx), b.Type) }));
 
         g.MapPost("/taskbar-widgets/remove", async (IdBody b, DesktopLayoutService svc, HttpContext ctx) =>
         { await svc.RemoveTaskbarWidget(Uid(ctx), b.Id); return Results.Ok(new { ok = true }); });
+
+        g.MapPost("/taskbar-widgets/config", async (WidgetConfigBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.SetTaskbarWidgetConfig(Uid(ctx), b.Id, b.Config ?? new()); return Results.Ok(new { ok = true }); });
 
         // ---- Taskbar pins (Windows-11 style) ----
         g.MapPost("/taskbar-pin", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>

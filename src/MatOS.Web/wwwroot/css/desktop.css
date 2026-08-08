@@ -460,10 +460,36 @@ body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-conte
 .mat-tray-widget .tw-x { position: absolute; top: -3px; right: -3px; width: 15px; height: 15px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 9px; line-height: 15px; text-align: center; opacity: 0; transition: opacity .12s; }
 .mat-tray-widget:hover .tw-x { opacity: 1; }
 
-/* Widget remove button (appears on hover) */
-.mat-widget-x { position: absolute; top: 6px; right: 6px; z-index: 3; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(10,12,20,0.78); color: #fff; font-size: 0.78rem; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s, background .12s; display: grid; place-items: center; }
-.mat-widget:hover .mat-widget-x { opacity: 1; }
+/* Widget tools (gear + remove) — appear on hover, top-right corner */
+.mat-widget-tools { position: absolute; top: 6px; right: 6px; z-index: 3; display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
+.mat-widget:hover .mat-widget-tools { opacity: 1; }
+.mat-widget-gear, .mat-widget-x { width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(10,12,20,0.78); color: #fff; font-size: 0.78rem; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background .12s; }
 .mat-widget-x:hover { background: var(--danger); }
+.mat-widget-gear:hover { background: var(--accent, #8b5cf6); }
+
+/* Clock faces */
+.wg-analog-wrap { display: flex; align-items: center; justify-content: center; height: 100%; }
+.wg-analog { height: 100%; width: auto; aspect-ratio: 1 / 1; max-height: 100%; }
+.mat-widget.wg-clock-analog .mat-widget-body { padding: 0; }
+.wg-words { display: flex; flex-direction: column; gap: 0; line-height: 1.04; }
+.wg-words span { font-weight: 850; font-size: 1.35rem; letter-spacing: -0.01em; }
+
+/* Widget settings dialog (reuses the .wgp-* gallery shell) */
+.wgs-wrap { width: min(460px, 96vw); }
+.wgs-form { display: flex; flex-direction: column; gap: 1.1rem; }
+.wgs-row { display: flex; flex-direction: column; gap: 0.5rem; }
+.wgs-lbl { font-weight: 750; font-size: 0.9rem; }
+.wgs-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.5rem; }
+.wgs-choice { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; text-align: left; padding: 0.6rem 0.7rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); cursor: pointer; transition: border-color .12s, background .12s; }
+.wgs-choice:hover { border-color: var(--accent); }
+.wgs-choice.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.wgs-choice-t { font-weight: 750; font-size: 0.86rem; }
+.wgs-choice-d { font-size: 0.72rem; color: var(--muted); }
+.wgs-row.wgs-toggle { flex-direction: row; align-items: center; justify-content: space-between; }
+.wgs-switch { width: 44px; height: 26px; border-radius: 999px; border: none; background: rgba(148,163,184,0.4); position: relative; cursor: pointer; transition: background .14s; flex: 0 0 auto; }
+.wgs-switch span { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .14s; }
+.wgs-switch.on { background: var(--accent, #8b5cf6); }
+.wgs-switch.on span { left: 21px; }
 
 /* ---- "Add a widget" gallery modal ---- */
 .wgp-back { position: fixed; inset: 0; z-index: 1000; background: rgba(4,6,12,0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; padding: 1.2rem; opacity: 0; transition: opacity .16s; }

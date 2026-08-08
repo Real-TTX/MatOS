@@ -210,6 +210,17 @@ public class DesktopLayoutService
         await _config.SaveAsync("desktop-widgets", WidgetStore);
     }
 
+    /// <summary>Replace a desktop widget's settings (e.g. the clock's watch face). No-op if unknown.</summary>
+    public async Task SetWidgetConfig(string userId, string id, Dictionary<string, string> config)
+    {
+        lock (_gate)
+        {
+            if (WidgetStore.Users.TryGetValue(userId, out var l) && l.FirstOrDefault(w => w.Id == id) is { } w)
+                w.Config = config ?? new();
+        }
+        await _config.SaveAsync("desktop-widgets", WidgetStore);
+    }
+
     // ---- Taskbar widgets (tray, ordered) ----
     private TaskbarWidgetsStore TaskbarWidgetStore => _config.Get<TaskbarWidgetsStore>("taskbar-widgets");
 
@@ -236,6 +247,17 @@ public class DesktopLayoutService
     public async Task RemoveTaskbarWidget(string userId, string id)
     {
         lock (_gate) { if (TaskbarWidgetStore.Users.TryGetValue(userId, out var l)) l.RemoveAll(w => w.Id == id); }
+        await _config.SaveAsync("taskbar-widgets", TaskbarWidgetStore);
+    }
+
+    /// <summary>Replace a taskbar widget's settings. No-op if unknown.</summary>
+    public async Task SetTaskbarWidgetConfig(string userId, string id, Dictionary<string, string> config)
+    {
+        lock (_gate)
+        {
+            if (TaskbarWidgetStore.Users.TryGetValue(userId, out var l) && l.FirstOrDefault(w => w.Id == id) is { } w)
+                w.Config = config ?? new();
+        }
         await _config.SaveAsync("taskbar-widgets", TaskbarWidgetStore);
     }
 

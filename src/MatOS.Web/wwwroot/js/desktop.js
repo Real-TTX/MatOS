@@ -1139,6 +1139,60 @@
     memory:     { icon: "💾", desc: "Memory load" },
     containers: { icon: "📦", desc: "Running containers" },
   };
+  // ---- Per-widget settings ----
+  // Each widget type can declare a settings schema; the ⚙ on the widget opens a dialog built from it.
+  // Values are stored as strings in the widget's Config map (persisted per user).
+  const WIDGET_SETTINGS = {
+    clock: {
+      title: "Clock",
+      fields: [
+        { key: "face", label: "Watch face", type: "choice", default: "digital", options: [
+            { v: "digital", t: "Digital", d: "09:41 + date" },
+            { v: "analog",  t: "Analog",  d: "Hands on a dial" },
+            { v: "text",    t: "Text",    d: "“Nine Forty One”, one word per line" },
+          ] },
+        { key: "seconds", label: "Show seconds", type: "bool", default: "false", when: c => (c.face || "digital") !== "text" },
+        { key: "hour24",  label: "24-hour time", type: "bool", default: "false", when: c => (c.face || "digital") === "digital" },
+      ],
+    },
+  };
+  function widgetSettingsSchema(type){ return WIDGET_SETTINGS[type] || null; }
+  function widgetDefaults(type){ const s = WIDGET_SETTINGS[type]; const o = {}; if (s) for (const f of s.fields) o[f.key] = String(f.default); return o; }
+
+  // ---- Clock faces ----
+  const NUM_ONES = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const NUM_TENS = ["","","Twenty","Thirty","Forty","Fifty"];
+  function minuteWords(m){ if (m < 20) return NUM_ONES[m]; const t = NUM_TENS[Math.floor(m/10)], o = m%10; return o ? t + " " + NUM_ONES[o] : t; }
+  // Spoken time in words, e.g. 3:00 → "Three o'Clock", 3:05 → "Three Oh Five", 3:45 → "Three Forty Five".
+  function clockWords(d){
+    let h = d.getHours() % 12; if (h === 0) h = 12; const m = d.getMinutes();
+    if (m === 0) return NUM_ONES[h] + " o'Clock";
+    if (m < 10)  return NUM_ONES[h] + " Oh " + NUM_ONES[m];
+    return NUM_ONES[h] + " " + minuteWords(m);
+  }
+  function analogClockSvg(d, showSec){
+    const m = d.getMinutes(), s = d.getSeconds(), h = (d.getHours() % 12) + m/60;
+    const hand = (ang, len, w, col) => { const r = (ang - 90) * Math.PI/180; const x = 50 + len*Math.cos(r), y = 50 + len*Math.sin(r);
+      return `<line x1="50" y1="50" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`; };
+    let ticks = ""; for (let i = 0; i < 12; i++){ const r = (i*30 - 90) * Math.PI/180;
+      const x1 = 50+42*Math.cos(r), y1 = 50+42*Math.sin(r), x2 = 50+46*Math.cos(r), y2 = 50+46*Math.sin(r);
+      ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(255,255,255,0.55)" stroke-width="${i%3===0?2:1}"/>`; }
+    return `<svg viewBox="0 0 100 100" class="wg-analog"><circle cx="50" cy="50" r="47" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>${ticks}
+      ${hand(h*30,26,4,"#fff")}${hand(m*6,38,3,"#fff")}${showSec ? hand(s*6,40,1.4,"var(--accent,#8b5cf6)") : ""}
+      <circle cx="50" cy="50" r="2.6" fill="#fff"/></svg>`;
+  }
+  function renderClock(body, el, cfg){
+    cfg = cfg || {}; const face = cfg.face || "digital"; const d = new Date();
+    el.classList.toggle("wg-clock-analog", face === "analog");
+    el.classList.toggle("wg-clock-text", face === "text");
+    if (face === "analog"){ body.innerHTML = `<div class="wg-analog-wrap">${analogClockSvg(d, cfg.seconds === "true")}</div>`; return; }
+    if (face === "text"){ const words = clockWords(d).split(" "); body.innerHTML = `<div class="wg-words">${words.map(w => `<span>${esc(w)}</span>`).join("")}</div>`; return; }
+    const opts = cfg.hour24 === "true" ? { hour:"2-digit", minute:"2-digit", hour12:false } : { hour:"2-digit", minute:"2-digit" };
+    if (cfg.seconds === "true") opts.second = "2-digit";
+    body.innerHTML = `<div class="wg-clock">${d.toLocaleTimeString([], opts)}</div>
+      <div class="wg-sub">${d.toLocaleDateString([], { weekday:"long", day:"2-digit", month:"long" })}</div>`;
+  }
+
   const KIND_LABEL = { status: "Status", launcher: "Launcher", info: "Live panel", iframe: "Live panel" };
   function appWidgetCard(it) {
     const a = appWidgetDef(it.type);
@@ -1229,8 +1283,11 @@
     const a = appWidgetDef(w.type);
     const kind = a && a.wdef ? a.wdef.kind : "";
     el.className = "mat-widget " + (a ? ("mat-widget-app mat-widget-" + (kind || "status")) : ("mat-widget-" + w.type));
-    el.innerHTML = `<button class="mat-widget-x" title="Remove widget" aria-label="Remove widget">✕</button><div class="mat-widget-body" data-body></div>`;
+    const settings = widgetSettingsSchema(w.type);
+    el.innerHTML = `<div class="mat-widget-tools">${settings ? `<button class="mat-widget-gear" title="Widget settings" aria-label="Widget settings">⚙</button>` : ""}<button class="mat-widget-x" title="Remove widget" aria-label="Remove widget">✕</button></div><div class="mat-widget-body" data-body></div>`;
     el.querySelector(".mat-widget-x").addEventListener("click", (e) => { e.stopPropagation(); removeWidget(w.id); });
+    const gearBtn = el.querySelector(".mat-widget-gear");
+    if (gearBtn) gearBtn.addEventListener("click", (e) => { e.stopPropagation(); openWidgetSettings(w); });
     enableWidgetDrag(el, w);
     // iframe app widgets (and info widgets with a URL) embed the app once — not re-rendered each tick.
     if (a && a.wdef && a.wdef.url && (kind === "iframe" || kind === "info")) {
@@ -1281,9 +1338,7 @@
       const el = widgetEls.get(w.id); if (!el) continue;
       const body = el.querySelector("[data-body]"); if (!body) continue;
       if (w.type === "clock") {
-        const d = new Date();
-        body.innerHTML = `<div class="wg-clock">${d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>
-          <div class="wg-sub">${d.toLocaleDateString([], { weekday:"long", day:"2-digit", month:"long" })}</div>`;
+        renderClock(body, el, w.config || {});
       } else if (w.type === "containers") {
         const running = stackData.reduce((n,s)=>n+(s.running||0),0);
         const total = stackData.reduce((n,s)=>n+(s.total||0),0);
@@ -1332,7 +1387,64 @@
     widgetTick();
   }, 2000);
   setInterval(widgetTick, 30000);
-  setInterval(() => { const cw = widgetEls; for (const [id, el] of cw) { const w = widgets.find(x => x.id === id); if (w && w.type === "clock") widgetTick(); break; } }, 15000);
+  // Clock widgets update every second (analog second-hand / digital seconds / minute rollover).
+  function tickClocks(){ for (const w of widgets){ if (w.type !== "clock") continue; const el = widgetEls.get(w.id); if (!el) continue; const body = el.querySelector("[data-body]"); if (body) renderClock(body, el, w.config || {}); } }
+  setInterval(tickClocks, 1000);
+
+  // ---- Widget settings dialog ----
+  function openWidgetSettings(w){
+    const schema = widgetSettingsSchema(w.type); if (!schema) return;
+    document.querySelector(".wgp-back")?.remove();
+    const cfg = Object.assign(widgetDefaults(w.type), w.config || {});
+    const back = document.createElement("div"); back.className = "wgp-back";
+    back.innerHTML = `<div class="wgp-card-wrap wgs-wrap" role="dialog" aria-label="Widget settings">
+        <div class="wgp-head"><div><div class="wgp-eyebrow">Widget</div><h2>${esc(schema.title)} settings</h2>
+          <p class="wgp-hint">Personalise this widget — changes apply instantly.</p></div>
+          <button class="wgp-x" aria-label="Close">✕</button></div>
+        <div class="wgp-body"><div class="wgs-form"></div></div></div>`;
+    const form = back.querySelector(".wgs-form");
+    const close = () => { back.remove(); document.removeEventListener("keydown", onEsc); };
+    const onEsc = (e) => { if (e.key === "Escape") close(); };
+    back.querySelector(".wgp-x").addEventListener("click", close);
+    back.addEventListener("click", (e) => { if (e.target === back) close(); });
+    document.addEventListener("keydown", onEsc);
+
+    async function persist(){
+      w.config = Object.assign({}, cfg);
+      const el = widgetEls.get(w.id);
+      if (el){ const body = el.querySelector("[data-body]"); if (w.type === "clock" && body) renderClock(body, el, w.config); else widgetTick(); }
+      try { await fetch("/api/v1/desktop/widgets/config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id, config: w.config }) }); } catch(_){}
+    }
+    function draw(){
+      form.innerHTML = "";
+      for (const f of schema.fields){
+        if (f.when && !f.when(cfg)) continue;
+        const row = document.createElement("div"); row.className = "wgs-row";
+        if (f.type === "choice"){
+          row.innerHTML = `<div class="wgs-lbl">${esc(f.label)}</div><div class="wgs-choices"></div>`;
+          const wrap = row.querySelector(".wgs-choices");
+          for (const o of f.options){
+            const b = document.createElement("button"); b.type = "button"; b.className = "wgs-choice" + (String(cfg[f.key]) === o.v ? " sel" : "");
+            b.innerHTML = `<span class="wgs-choice-t">${esc(o.t)}</span>${o.d ? `<span class="wgs-choice-d">${esc(o.d)}</span>` : ""}`;
+            b.addEventListener("click", () => { cfg[f.key] = o.v; draw(); persist(); });
+            wrap.appendChild(b);
+          }
+        } else if (f.type === "bool"){
+          row.classList.add("wgs-toggle");
+          const on = String(cfg[f.key]) === "true";
+          row.innerHTML = `<span class="wgs-lbl">${esc(f.label)}</span>`;
+          const t = document.createElement("button"); t.type = "button"; t.className = "wgs-switch" + (on ? " on" : "");
+          t.setAttribute("role","switch"); t.setAttribute("aria-checked", on ? "true" : "false"); t.innerHTML = "<span></span>";
+          t.addEventListener("click", () => { cfg[f.key] = on ? "false" : "true"; draw(); persist(); });
+          row.appendChild(t);
+        }
+        form.appendChild(row);
+      }
+    }
+    draw();
+    document.body.appendChild(back);
+    requestAnimationFrame(() => back.classList.add("open"));
+  }
   async function addWidget(type){
     const spec = widgetSpec(type);
     // Place it near the top-right corner of the layer, but never off-screen
