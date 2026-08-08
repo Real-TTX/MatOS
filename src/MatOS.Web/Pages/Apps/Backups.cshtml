@@ -8,24 +8,32 @@
 <div id="bk">
     <div class="bk-head">
         <h1 class="bk-h">Backups</h1>
-        <p class="bk-sub">Back up Docker volumes to any other volume (incl. SMB shares), and schedule jobs by volume or whole stack.</p>
+        <p class="bk-sub">Back up whole apps (compose + volumes, so a restore runs again) or individual volumes — to any volume, incl. SMB shares — and schedule jobs.</p>
     </div>
     <div class="bk-cards" id="bk-cards"></div>
     <div class="tabbar" id="bk-tabs">
-        <button class="tab active" data-tab="backups">Backups</button>
+        <button class="tab" data-tab="apps">Apps</button>
+        <button class="tab active" data-tab="backups">Volumes</button>
         <button class="tab" data-tab="schedules">Schedules</button>
     </div>
     <div class="win-toolbar" style="gap:0.6rem;flex-wrap:wrap;margin-top:0.4rem">
+        <button class="ui-btn primary" id="bk-new-app" style="display:none">Back up an app</button>
         <button class="ui-btn primary" id="bk-new">Backup now</button>
         <button class="ui-btn primary" id="bk-new-sched" style="display:none">New schedule</button>
         <button class="ui-btn" id="bk-refresh">Refresh</button>
-        <span class="fx-muted" style="font-size:0.85rem;flex:1">Backups are gzip-compressed tar archives of a volume's contents.</span>
+        <span class="fx-muted" style="font-size:0.85rem;flex:1">Backups are gzip-compressed tar archives.</span>
     </div>
     <div id="bk-msg" class="card" style="display:none;margin-bottom:0.8rem"></div>
     <div class="card" id="bk-pane-backups" style="padding:0;overflow:hidden">
         <table class="bkt">
             <thead><tr><th>Created</th><th>Source volume</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
             <tbody id="bk-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+        </table>
+    </div>
+    <div class="card" id="bk-pane-apps" style="padding:0;overflow:hidden;display:none">
+        <table class="bkt">
+            <thead><tr><th>Created</th><th>App</th><th>Contents</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
+            <tbody id="bk-app-rows"><tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
         </table>
     </div>
     <div class="card" id="bk-pane-schedules" style="padding:0;overflow:hidden;display:none">
@@ -62,6 +70,26 @@
         <label class="fl"><span>Target (where the backup file is stored)</span><select class="ui-select" id="bk-tgt"></select>
             <span class="fx-muted" style="font-size:0.78rem">Pick a network location (SMB) for off-host backups.</span></label>
         <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-go">Start backup</button><button class="ui-btn" id="bk-cancel">Cancel</button></div>
+    </div></div>
+
+    <div class="dlg" id="bk-app-dlg" hidden><div class="dlg-card">
+        <h3 style="margin:0 0 0.3rem">Back up a whole app</h3>
+        <p class="fx-muted" style="font-size:0.82rem;margin:0 0 0.9rem">Saves the app's compose &amp; container config (pinned to the exact image version) plus its volumes. A restore recreates everything and starts it.</p>
+        <label class="fl"><span>App *</span><select class="ui-select" id="bk-app-stack"></select></label>
+        <div class="fl">
+            <span>Volumes to include <span class="fx-muted">(all by default)</span></span>
+            <div class="bk-src-picker" id="bk-app-vols"><span class="fx-muted" style="font-size:0.8rem">Pick an app…</span></div>
+        </div>
+        <label class="fl"><span>Store the backup on</span><select class="ui-select" id="bk-app-tgt"></select>
+            <span class="fx-muted" style="font-size:0.78rem">Pick a network location (SMB) for off-host backups.</span></label>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-app-go">Start backup</button><button class="ui-btn" id="bk-app-cancel">Cancel</button></div>
+    </div></div>
+
+    <div class="dlg" id="bk-arst-dlg" hidden><div class="dlg-card">
+        <h3 style="margin:0 0 0.9rem">Restore app</h3>
+        <div class="wz-note" id="bk-arst-info" style="margin-bottom:0.9rem"></div>
+        <p class="fx-muted" style="font-size:0.82rem;margin:0 0 0.9rem"><strong>This recreates the app's containers</strong> (replacing any with the same name) and <strong>overwrites the included volumes' data</strong>. The app will be started.</p>
+        <div style="display:flex;gap:0.5rem;margin-top:0.6rem"><button class="ui-btn primary" id="bk-arst-go">Restore &amp; run</button><button class="ui-btn" id="bk-arst-cancel">Cancel</button></div>
     </div></div>
 
     <div class="dlg" id="bk-rst-dlg" hidden><div class="dlg-card">
@@ -131,7 +159,8 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     const bs=state.backups||[]; const el=$("bk-cards"); if(!el) return;
     const totalSize=bs.reduce((a,b)=>a+(b.sizeBytes||0),0);
     const defs=[
-      {k:"Backups",v:bs.length,ic:"🗄️",color:"#8b5cf6"},
+      {k:"App backups",v:appCount==null?"—":appCount,ic:"📦",color:"#f59e0b"},
+      {k:"Volume backups",v:bs.length,ic:"🗄️",color:"#8b5cf6"},
       {k:"Total size",v:fmtB(totalSize),ic:"💽",color:"#22b8ff"},
       {k:"Schedules",v:schedCount==null?"—":schedCount,ic:"⏰",color:"#34d399"}
     ];
@@ -223,10 +252,13 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     document.querySelectorAll("#bk-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
     tab=t.dataset.tab;
     $("bk-pane-backups").style.display = tab==="backups"?"":"none";
+    $("bk-pane-apps").style.display = tab==="apps"?"":"none";
     $("bk-pane-schedules").style.display = tab==="schedules"?"":"none";
     $("bk-new").style.display = tab==="backups"?"":"none";
+    $("bk-new-app").style.display = tab==="apps"?"":"none";
     $("bk-new-sched").style.display = tab==="schedules"?"":"none";
     if(tab==="schedules") loadSchedules();
+    else if(tab==="apps") loadApps();
   }));
 
   async function loadSchedules(){
@@ -332,8 +364,79 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     try{ await fetch("/api/v1/backups/schedules/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:s.id})}); loadSchedules(); }
     catch(_){ flash("Delete failed.",false); } }
 
-  $("bk-refresh").addEventListener("click",()=>{ if(tab==="schedules") loadSchedules(); else load(); });
-  load();
+  // ---- Whole-app backups ----
+  let appState={apps:[],stacks:[],targetVolumes:[]}, appCount=null;
+  async function loadApps(){
+    try{ appState=await (await fetch("/api/v1/backups/apps")).json(); }
+    catch(_){ $("bk-app-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
+    appCount=(appState.apps||[]).length; updateCards();
+    const bs=appState.apps||[];
+    if(!bs.length){ $("bk-app-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">No app backups yet — click "Back up an app".</td></tr>`; return; }
+    $("bk-app-rows").innerHTML=bs.map((b,i)=>`<tr data-i="${i}">
+      <td>${esc(fmtWhen(b.createdUtc))}</td>
+      <td><strong>${esc(b.title||b.stackName)}</strong><div class="fx-muted" style="font-size:0.72rem">${esc(b.stackName)}</div></td>
+      <td>${b.containers} container${b.containers===1?"":"s"} · ${(b.volumes||[]).length} volume${(b.volumes||[]).length===1?"":"s"}</td>
+      <td class="mono">${esc(b.targetVolume)}${(appState.targetVolumes.find(v=>v.name===b.targetVolume)||{}).isSmb?'<span class="smb-chip">SMB</span>':''}</td>
+      <td class="num">${fmtB(b.sizeBytes)}</td>
+      <td><div class="bk-acts">
+        <button class="ui-btn" data-arst="${i}">Restore</button>
+        <button class="ui-btn" data-adl="${i}">Download</button>
+        <button class="ui-btn danger" data-adel="${i}">Delete</button>
+      </div></td></tr>`).join("");
+    $("bk-app-rows").querySelectorAll("[data-arst]").forEach(b=>b.addEventListener("click",()=>openAppRestore(+b.dataset.arst)));
+    $("bk-app-rows").querySelectorAll("[data-adl]").forEach(b=>b.addEventListener("click",()=>{ const x=bs[+b.dataset.adl]; window.open(`/api/v1/backups/apps/download?volume=${encodeURIComponent(x.targetVolume)}&file=${encodeURIComponent(x.fileName)}`,"_blank"); }));
+    $("bk-app-rows").querySelectorAll("[data-adel]").forEach(b=>b.addEventListener("click",()=>delApp(bs[+b.dataset.adel])));
+  }
+  function renderAppVols(){
+    const st=appState.stacks.find(s=>s.name===$("bk-app-stack").value); const box=$("bk-app-vols");
+    if(!st){ box.innerHTML=`<span class="fx-muted" style="font-size:0.8rem">Pick an app…</span>`; return; }
+    if(!st.volumes.length){ box.innerHTML=`<span class="fx-muted" style="font-size:0.8rem">This app has no named volumes — the compose &amp; config are still backed up.</span>`; return; }
+    box.innerHTML=`<label class="all"><input type="checkbox" id="bk-app-vol-all" checked> All volumes</label>`+
+      st.volumes.map(v=>`<label class="bk-vol"><input type="checkbox" class="bk-app-vol" data-v="${escA(v)}" checked> ${esc(v)}</label>`).join("");
+    const all=$("bk-app-vol-all");
+    all.addEventListener("change",()=>box.querySelectorAll(".bk-app-vol").forEach(c=>c.checked=all.checked));
+    box.querySelectorAll(".bk-app-vol").forEach(c=>c.addEventListener("change",()=>{ all.checked=[...box.querySelectorAll(".bk-app-vol")].every(x=>x.checked); }));
+  }
+  $("bk-new-app").addEventListener("click",()=>{
+    if(!appState.stacks.length){ flash("No apps found to back up.",false); return; }
+    const sel=$("bk-app-stack"); sel.innerHTML=appState.stacks.map(s=>`<option value="${escA(s.name)}">${esc(s.title||s.name)}${s.total?`  ·  ${s.running}/${s.total} running`:""}</option>`).join("");
+    const tgt=$("bk-app-tgt"); tgt.innerHTML=appState.targetVolumes.map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
+    renderAppVols(); $("bk-app-dlg").hidden=false;
+  });
+  $("bk-app-stack").addEventListener("change",renderAppVols);
+  $("bk-app-cancel").addEventListener("click",()=>{ $("bk-app-dlg").hidden=true; });
+  $("bk-app-go").addEventListener("click",async()=>{
+    const stack=$("bk-app-stack").value; if(!stack){ flash("Pick an app.",false); return; }
+    const box=$("bk-app-vols"); const all=$("bk-app-vol-all");
+    let volumes=null; // null = all
+    if(all && !all.checked) volumes=[...box.querySelectorAll(".bk-app-vol:checked")].map(c=>c.dataset.v);
+    const btn=$("bk-app-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Backing up…";
+    try{ const r=await fetch("/api/v1/backups/apps/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({stack,volumes,targetVolume:$("bk-app-tgt").value})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
+      const j=await r.json(); flash(`App backed up: ${j.backup.title||j.backup.stackName} (${j.backup.containers} containers, ${(j.backup.volumes||[]).length} volumes, ${fmtB(j.backup.sizeBytes)}).`,true);
+      $("bk-app-dlg").hidden=true; loadApps();
+    }catch(e){ flash("App backup failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
+  });
+  let arstIdx=-1;
+  function openAppRestore(i){ arstIdx=i; const b=appState.apps[i]; if(!b) return;
+    $("bk-arst-info").innerHTML=`Restoring <strong>${esc(b.title||b.stackName)}</strong> — ${b.containers} container${b.containers===1?"":"s"} and ${(b.volumes||[]).length} volume${(b.volumes||[]).length===1?"":"s"}${(b.volumes||[]).length?': <span class="mono">'+b.volumes.map(esc).join(", ")+'</span>':''}.`;
+    $("bk-arst-dlg").hidden=false; }
+  $("bk-arst-cancel").addEventListener("click",()=>{ $("bk-arst-dlg").hidden=true; });
+  $("bk-arst-go").addEventListener("click",async()=>{
+    const b=appState.apps[arstIdx]; if(!b) return;
+    if(!await matDialog.confirm(`Restore "${b.title||b.stackName}"? Its containers are recreated and the included volumes' data is overwritten.`,{title:"Restore app",danger:true,okLabel:"Restore & run"})) return;
+    const btn=$("bk-arst-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Restoring…";
+    try{ const r=await fetch("/api/v1/backups/apps/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
+      flash(`Restored ${b.title||b.stackName} — the app is starting.`,true); $("bk-arst-dlg").hidden=true;
+    }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
+  });
+  async function delApp(b){ if(!await matDialog.confirm(`Delete app backup "${b.fileName}"?`,{title:"Delete app backup",danger:true,okLabel:"Delete"})) return;
+    try{ await fetch("/api/v1/backups/apps/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})}); loadApps(); }
+    catch(e){ flash("Delete failed.",false); } }
+
+  $("bk-refresh").addEventListener("click",()=>{ if(tab==="schedules") loadSchedules(); else if(tab==="apps") loadApps(); else load(); });
+  load(); loadApps();
 })();
 </script>
 }
