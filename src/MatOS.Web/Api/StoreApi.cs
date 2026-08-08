@@ -6,7 +6,7 @@ namespace MatOS.Web.Api;
 /// <summary>App Store: catalog (built-in + custom, image or compose), install/uninstall, authoring.</summary>
 public static class StoreApi
 {
-    public record InstallBody(string AppId, Dictionary<string, string>? Variables);
+    public record InstallBody(string AppId, Dictionary<string, string>? Variables, Dictionary<string, string>? Options);
     public record UninstallBody(string Id, bool RemoveVolume);
     public record DeleteAppBody(string Id);
     public record PublishBody(string Id, bool Enabled, string? Hostname);
@@ -31,6 +31,11 @@ public static class StoreApi
                 actions = a.Actions.Select(x => new { x.Label, x.Url }),
                 variables = a.Variables.Select(v => new { v.Key, v.Label, v.Type, v.Default, v.Required }),
                 widgets = (a.Widgets ?? Array.Empty<AppWidgetDef>()).Select(w => new { w.Id, w.Name, w.Surface, w.Kind, w.Size, w.Url, w.Icon, w.RefreshSeconds }),
+                options = (a.Options ?? Array.Empty<AppOption>()).Select(o => new
+                {
+                    o.Id, o.Label, o.Description, o.Type, o.Default, o.DefaultChoice,
+                    choices = o.Choices.Select(c => new { c.Value, c.Label })
+                }),
                 handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>()
             })
         }));
@@ -82,7 +87,7 @@ public static class StoreApi
 
         g.MapPost("/install", async (InstallBody b, InstallService svc, CancellationToken ct) =>
         {
-            var r = await svc.InstallAsync(b.AppId, b.Variables, ct);
+            var r = await svc.InstallAsync(b.AppId, b.Variables, b.Options, ct);
             return r.Ok ? Results.Ok(new { r.Name, r.HostPort }) : Results.Problem(r.Error);
         }).RequireAuthorization("Admin");
 

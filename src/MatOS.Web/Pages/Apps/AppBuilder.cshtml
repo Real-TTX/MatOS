@@ -64,6 +64,12 @@
             <button type="button" class="ui-btn" id="a-add-widget" style="align-self:flex-start;margin-top:0.4rem">+ Add widget</button>
         </div>
 
+        <div class="fl" id="a-options-fl" style="display:none">
+            <span>Install options <span class="fx-muted">(optional add-on services or either/or variants the user picks at install — each merges into the compose)</span></span>
+            <div id="a-options"></div>
+            <button type="button" class="ui-btn" id="a-add-option" style="align-self:flex-start;margin-top:0.4rem">+ Add option</button>
+        </div>
+
         <div id="ab-msg" class="card" style="display:none;margin:0.8rem 0"></div>
         <div style="display:flex;gap:0.6rem;margin-top:0.6rem">
             <button class="ui-btn primary" id="a-save">Save app</button>
@@ -113,6 +119,13 @@
 .app-row .acts .ui-btn { border-radius:999px; padding:0.45rem 1.1rem; font-weight:750; }
 .chip { font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem; border-radius:999px; background:rgba(139,92,246,0.22); color:#c7b3ff; }
 .chip.compose { background:rgba(34,184,255,0.2); color:#9fe8ff; }
+.opt-row { border:1px solid var(--mat-border); border-radius:11px; padding:0.6rem 0.7rem; margin-bottom:0.6rem; background:var(--mat-surface-2); display:flex; flex-direction:column; gap:0.45rem; }
+.opt-head { display:flex; gap:0.4rem; align-items:center; }
+.opt-head .o-label { flex:1 1 auto; } .opt-head .o-id { flex:0 0 90px; } .opt-head .o-type { flex:0 0 130px; }
+.opt-row textarea { resize:vertical; }
+.o-choices .ch-row { border:1px dashed var(--mat-border); border-radius:9px; padding:0.45rem 0.55rem; margin-bottom:0.4rem; display:flex; flex-direction:column; gap:0.35rem; }
+.ch-row .ch-top { display:flex; gap:0.4rem; align-items:center; } .ch-row .ch-value { flex:0 0 120px; } .ch-row .ch-label { flex:1 1 auto; }
+.opt-hint { font-size:0.72rem; color:var(--mat-text-muted); }
 .pv-bigicon { width:120px; height:120px; border-radius:28px; display:grid; place-items:center; font-size:4.5rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); }
 .pv-bigicon img { width:100%; height:100%; object-fit:cover; }
 .pv-bigicon + .pv-cap { text-align:center; margin-top:0.7rem; font-weight:700; }
@@ -165,10 +178,21 @@
       surface:r.querySelector(".w-surface").value, kind:r.querySelector(".w-kind").value,
       size:r.querySelector(".w-size").value, url:r.querySelector(".w-url").value.trim(), icon:""
     })).filter(w=>w.id);
+    const options=[...$("a-options").querySelectorAll(".opt-row")].map(r=>{
+      const type=r.querySelector(".o-type").value;
+      const o={ id:r.querySelector(".o-id").value.trim(), label:r.querySelector(".o-label").value.trim(),
+                description:r.querySelector(".o-desc").value.trim(), type };
+      if(type==="choice"){
+        o.choices=[...r.querySelectorAll(".ch-row")].map(cr=>({ value:cr.querySelector(".ch-value").value.trim(),
+          label:cr.querySelector(".ch-label").value.trim(), compose:cr.querySelector(".ch-compose").value })).filter(c=>c.value);
+        o.defaultChoice = o.choices.length ? o.choices[0].value : "";
+      } else { o.default = r.querySelector(".o-default").checked; o.compose = r.querySelector(".o-compose").value; }
+      return o;
+    }).filter(o=>o.id && (o.type==="choice" ? o.choices.length : true));
     return {
       id:editId, kind, name:$("a-name").value.trim(), category:$("a-cat").value.trim()||"Custom",
       tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(), projectUrl:$("a-proj").value.trim(),
-      icon:$("a-icon").value.trim()||"📦", actions, widgets,
+      icon:$("a-icon").value.trim()||"📦", actions, widgets, options,
       image:$("a-image").value.trim(), uiPort:parseInt((kind==="compose"?$("a-cport"):$("a-port")).value||"80",10),
       volumes:$("a-vols").value.split("\n").map(s=>s.trim()).filter(Boolean), env,
       compose:$("a-compose").value, uiService:$("a-uisvc").value.trim()
@@ -190,6 +214,7 @@
     if(a.kind==="compose") rows.push(["Type","Compose stack"]); else if(a.image) rows.push(["Image",`<span class="mono">${esc(a.image)}</span>`]);
     if(a.volumes.length) rows.push(["Data volumes",esc(a.volumes.join(", "))]);
     if(a.projectUrl) rows.push(["Project",`<a href="${escA(a.projectUrl)}" target="_blank" rel="noopener">${esc(a.projectUrl)} ↗</a>`]);
+    if(a.options && a.options.length) rows.push(["Install options", a.options.map(o=>esc(o.label||o.id)+(o.type==="choice"?" (choice)":"")).join(", ")]);
     $("pv-page").innerHTML=`<div class="pv-detail-head"><div class="app-ico">${iconHtml(a.icon)}</div>
         <div><h1>${esc(a.name||"App name")}</h1><div class="tag">${esc(a.tagline||"")}</div><div style="margin-top:0.5rem">${chips}</div></div></div>
       <div class="pv-card"><h3>About</h3><p>${esc(a.description||a.tagline||"No description.")}</p></div>
@@ -223,8 +248,42 @@
     return d; }
   $("a-add-widget").addEventListener("click",()=>{ $("a-widgets").appendChild(widgetRow({size:"small"})); renderPreview(); });
 
+  // ---- install options repeater ----
+  function choiceRow(c){ c=c||{}; const d=document.createElement("div"); d.className="ch-row";
+    d.innerHTML=`<div class="ch-top"><input class="ui-input ch-value" placeholder="value" value="${escA(c.value||"")}"><input class="ui-input ch-label" placeholder="Label" value="${escA(c.label||"")}"><button type="button" class="ui-btn danger ch-del" title="Remove">✕</button></div>
+      <textarea class="ui-input mono ch-compose" rows="3" placeholder="services:&#10;  ...">${esc(c.compose||"")}</textarea>`;
+    d.querySelector(".ch-del").addEventListener("click",()=>{ d.remove(); renderPreview(); });
+    d.querySelectorAll("input,textarea").forEach(i=>i.addEventListener("input",renderPreview));
+    return d; }
+  function optionRow(o){ o=o||{}; const type=o.type==="choice"?"choice":"toggle"; const d=document.createElement("div"); d.className="opt-row";
+    d.innerHTML=`<div class="opt-head">
+        <input class="ui-input o-label" placeholder="Label (e.g. Add phpMyAdmin)" value="${escA(o.label||"")}">
+        <input class="ui-input mono o-id" placeholder="id" value="${escA(o.id||"")}">
+        <select class="ui-select o-type"><option value="toggle">Toggle (optional)</option><option value="choice">Choice (either/or)</option></select>
+        <button type="button" class="ui-btn danger o-del" title="Remove">✕</button></div>
+      <input class="ui-input o-desc" placeholder="Description (optional)" value="${escA(o.description||"")}">
+      <div class="o-toggle">
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;margin-bottom:0.35rem"><input type="checkbox" class="o-default" ${o.default?"checked":""}> On by default</label>
+        <textarea class="ui-input mono o-compose" rows="4" placeholder="services:&#10;  phpmyadmin:&#10;    image: phpmyadmin:latest">${esc(o.compose||"")}</textarea>
+      </div>
+      <div class="o-choice" style="display:none">
+        <div class="opt-hint">The first choice is the default. Each choice merges its compose fragment in.</div>
+        <div class="o-choices"></div>
+        <button type="button" class="ui-btn o-add-choice" style="align-self:flex-start;margin-top:0.3rem">+ Add choice</button>
+      </div>`;
+    const typeSel=d.querySelector(".o-type"); typeSel.value=type;
+    const sync=()=>{ const ch=typeSel.value==="choice"; d.querySelector(".o-choice").style.display=ch?"":"none"; d.querySelector(".o-toggle").style.display=ch?"none":""; };
+    typeSel.addEventListener("change",()=>{ sync(); renderPreview(); });
+    d.querySelector(".o-del").addEventListener("click",()=>{ d.remove(); renderPreview(); });
+    d.querySelector(".o-add-choice").addEventListener("click",()=>{ d.querySelector(".o-choices").appendChild(choiceRow({})); renderPreview(); });
+    d.querySelectorAll(".o-label,.o-id,.o-desc,.o-default,.o-compose").forEach(i=>i.addEventListener("input",renderPreview));
+    (o.choices||[]).forEach(c=>d.querySelector(".o-choices").appendChild(choiceRow(c)));
+    sync();
+    return d; }
+  $("a-add-option").addEventListener("click",()=>{ $("a-options").appendChild(optionRow({type:"toggle"})); renderPreview(); });
+
   // ---- kind toggle, icon, tabs ----
-  $("a-kind").addEventListener("change",()=>{ const c=$("a-kind").value==="compose"; $("a-compose-fields").style.display=c?"":"none"; $("a-image-fields").style.display=c?"none":""; renderPreview(); });
+  $("a-kind").addEventListener("change",()=>{ const c=$("a-kind").value==="compose"; $("a-compose-fields").style.display=c?"":"none"; $("a-image-fields").style.display=c?"none":""; $("a-options-fl").style.display=c?"":"none"; renderPreview(); });
   const iconInput=$("a-icon"), iconPrev=$("a-icon-prev");
   iconInput.addEventListener("input",()=>{ iconPrev.innerHTML=iconHtml(iconInput.value); renderPreview(); });
   $("a-icon-upload").addEventListener("click",()=>$("a-icon-file").click());
@@ -233,7 +292,7 @@
   ["a-name","a-cat","a-tag","a-desc","a-proj","a-image","a-port","a-vols","a-env","a-compose","a-uisvc","a-cport"].forEach(id=>$(id).addEventListener("input",renderPreview));
 
   // ---- reset / save / load ----
-  function reset(){ editId=""; $("ab-title").textContent="App Builder"; ["a-name","a-cat","a-tag","a-desc","a-proj","a-image","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value=""); $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-widgets").innerHTML=""; $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); renderPreview(); }
+  function reset(){ editId=""; $("ab-title").textContent="App Builder"; ["a-name","a-cat","a-tag","a-desc","a-proj","a-image","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value=""); $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-widgets").innerHTML=""; $("a-options").innerHTML=""; $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); renderPreview(); }
   $("a-reset").addEventListener("click",reset);
   $("a-save").addEventListener("click",async()=>{
     const app=gather();
@@ -257,6 +316,7 @@
     else { entry.image=a.image; if(a.volumes.length) entry.volumes=a.volumes; if(Object.keys(a.env).length) entry.env=a.env; }
     if(a.actions.length) entry.actions=a.actions;
     if(a.widgets.length) entry.widgets=a.widgets;
+    if(a.options && a.options.length) entry.options=a.options;
     Object.keys(entry).forEach(k=>{ if(entry[k]==="" ) delete entry[k]; });
     const index={ name:(a.name||"App")+" — matOS catalog", apps:[entry] };
     download(id+".json", JSON.stringify(index,null,2));
@@ -266,7 +326,8 @@
   function importEntry(en){
     const a={ id:en.id||"", name:en.name||"", category:en.category||"", tagline:en.tagline||"", description:en.description||"",
       projectUrl:en.projectUrl||"", icon:en.icon||"📦", uiPort:en.uiPort||80, uiService:en.uiService||"",
-      actions:Array.isArray(en.actions)?en.actions:[], widgets:Array.isArray(en.widgets)?en.widgets:[] };
+      actions:Array.isArray(en.actions)?en.actions:[], widgets:Array.isArray(en.widgets)?en.widgets:[],
+      options:Array.isArray(en.options)?en.options:[] };
     const compose=en.composeInline||en.compose||"";
     if(compose && (en.composeInline || /services\s*:/.test(compose))){ a.kind="compose"; a.compose=compose; }
     else { a.kind="image"; a.image=en.image||""; a.volumes=Array.isArray(en.volumes)?en.volumes:[]; a.env=(en.env&&typeof en.env==="object")?en.env:{}; }
@@ -299,6 +360,7 @@
     $("a-compose").value=a.compose||""; $("a-uisvc").value=a.uiService||"";
     (a.actions||[]).forEach(ac=>$("a-actions").appendChild(actionRow(ac.label,ac.url)));
     (a.widgets||[]).forEach(w=>$("a-widgets").appendChild(widgetRow(w)));
+    (a.options||[]).forEach(o=>$("a-options").appendChild(optionRow(o)));
     renderPreview();
   }
 

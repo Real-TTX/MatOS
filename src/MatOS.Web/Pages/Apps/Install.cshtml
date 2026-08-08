@@ -17,6 +17,12 @@
         </header>
         <ol class="wz-steps" id="wz-stepper"></ol>
 
+        <section class="wz-panel" id="p-options" hidden>
+            <h3>Options</h3>
+            <p class="wz-muted">Choose what to include — each option is composed into the app as extra services or settings.</p>
+            <div id="wz-options"></div>
+        </section>
+
         <section class="wz-panel" id="p-params" hidden>
             <h3>Parameters</h3>
             <p class="wz-muted">Set the values this app needs. They're applied on install.</p>
@@ -69,6 +75,11 @@
 .wz-panel h3 { margin:0 0 0.4rem; font-size:1rem; }
 .wz-muted { color:var(--mat-text-muted); font-size:0.86rem; }
 .fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
+.wz-opt-toggle { display:flex; gap:0.6rem; align-items:flex-start; padding:0.65rem 0.8rem; border:1px solid var(--mat-border); border-radius:11px; margin-bottom:0.55rem; cursor:pointer; transition:border-color .12s, background .12s; }
+.wz-opt-toggle:hover { border-color:var(--mat-accent); }
+.wz-opt-toggle input { margin-top:0.2rem; flex:0 0 auto; }
+.wz-opt-lbl { font-weight:700; }
+.wz-opt-toggle .wz-muted { display:block; margin-top:0.1rem; }
 .wz-review-row { display:flex; gap:0.7rem; padding:0.5rem 0; border-bottom:1px solid var(--mat-border); font-size:0.88rem; }
 .wz-review-row .k { flex:0 0 130px; color:var(--mat-text-muted); } .wz-review-row .v { min-width:0; word-break:break-word; }
 .wz-note { background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:10px; padding:0.8rem 0.9rem; font-size:0.88rem; }
@@ -96,7 +107,7 @@
   const isImg=s=>/^(https?:|data:)/i.test(s||"");
   const $=id=>document.getElementById(id);
   const id=$("wz").dataset.id, wkey="install:"+id;
-  let app=null, opener=false, hasVars=false, steps=[], si=0, result=null, installError=false, installed=false;
+  let app=null, opener=false, hasVars=false, hasOptions=false, steps=[], si=0, result=null, installError=false, installed=false;
 
   function close(){ try{ window.parent.postMessage({type:"matos:close",key:wkey}, location.origin); }catch(_){}}
   function refresh(){ try{ window.parent.postMessage({type:"matos:refresh"}, location.origin); }catch(_){}}
@@ -109,11 +120,16 @@
     // special "register" path. (opener stays false so the normal install flow runs.)
     opener=false;
     hasVars=!!(app.variables && app.variables.length);
-    steps = hasVars ? ["params","review","install","actions"] : ["review","install","actions"];
+    hasOptions=!!(app.options && app.options.length);
+    steps = [];
+    if(hasOptions) steps.push("options");
+    if(hasVars) steps.push("params");
+    steps.push("review","install","actions");
 
     $("wz-ico").innerHTML = isImg(app.icon)?`<img src="${escA(app.icon)}" alt="">`:esc(app.icon||"📦");
     $("wz-name").textContent = (opener?"Install ":"Install ")+app.name;
     $("wz-tag").textContent = app.tagline||"";
+    if(hasOptions) renderOptions();
     if(hasVars) renderFields();
     $("wz-load").hidden=true; $("wz-body").hidden=false;
     renderStepper(); show(0);
@@ -124,9 +140,24 @@
       <input class="ui-input" data-key="${escA(v.key)}" type="${v.type==='password'?'password':(v.type==='number'?'number':'text')}" value="${escA(v.default||'')}" placeholder="${escA(v.key)}"></label>`).join("");
   }
   function collectVars(){ const o={}; document.querySelectorAll("#wz-fields [data-key]").forEach(i=>o[i.dataset.key]=i.value); return o; }
+
+  function renderOptions(){
+    $("wz-options").innerHTML = app.options.map(o=>{
+      const desc = o.description ? `<span class="wz-muted">${esc(o.description)}</span>` : "";
+      if(o.type==="choice"){
+        const def = o.defaultChoice || ((o.choices&&o.choices[0]||{}).value);
+        const opts = (o.choices||[]).map(c=>`<option value="${escA(c.value)}" ${c.value===def?"selected":""}>${esc(c.label||c.value)}</option>`).join("");
+        return `<label class="fl"><span>${esc(o.label)}</span>${desc?`<span class="wz-muted" style="font-weight:400;margin-top:-0.1rem">${esc(o.description)}</span>`:""}
+          <select class="ui-select wz-opt" data-opt="${escA(o.id)}" data-type="choice">${opts}</select></label>`;
+      }
+      return `<label class="wz-opt-toggle"><input type="checkbox" class="wz-opt" data-opt="${escA(o.id)}" data-type="toggle" ${o.default?"checked":""}>
+        <span><span class="wz-opt-lbl">${esc(o.label)}</span>${desc}</span></label>`;
+    }).join("");
+  }
+  function collectOptions(){ const o={}; document.querySelectorAll("#wz-options .wz-opt").forEach(el=>{ o[el.dataset.opt]= el.dataset.type==="toggle" ? (el.checked?"true":"false") : el.value; }); return o; }
   function validateVars(){ let ok=true; document.querySelectorAll("#wz-fields [data-key]").forEach(i=>{ const v=app.variables.find(x=>x.key===i.dataset.key); if(v&&v.required&&!i.value.trim()){ ok=false; i.style.borderColor="#f4506b"; } else i.style.borderColor=""; }); return ok; }
 
-  const LABEL={params:"Parameters",review:"Review",install:opener?"Register":"Install",actions:"Done"};
+  const LABEL={options:"Options",params:"Parameters",review:"Review",install:opener?"Register":"Install",actions:"Done"};
   function renderStepper(){ $("wz-stepper").innerHTML = steps.map((s,i)=>`<li class="${i===si?'active':(i<si?'done':'')}"><div class="bar"></div><span>${LABEL[s]}</span></li>`).join(""); }
 
   function renderReview(){
@@ -140,6 +171,10 @@
     rows.push(app.kind==="compose" ? ["Type","Compose stack"] : ["Image", esc(app.image)]);
     rows.push(["Web access", esc("A local port is assigned automatically; publish it later from the app's settings.")]);
     if(app.volumes && app.volumes.length) rows.push(["Data volumes", esc(app.volumes.join(", ")+" (each gets its own volume)")]);
+    if(hasOptions){ const sel=collectOptions(); const shown=app.options.map(o=>{ const val=sel[o.id];
+        if(o.type==="toggle") return `${esc(o.label)}: <strong>${val==="true"?"Yes":"No"}</strong>`;
+        const c=(o.choices||[]).find(x=>x.value===val); return `${esc(o.label)}: <strong>${esc(c?(c.label||c.value):val)}</strong>`; }).join("<br>");
+      rows.push(["Options", shown]); }
     if(hasVars){ const v=collectVars(); const shown=app.variables.map(x=>`${esc(x.label||x.key)}: ${x.type==='password'?'••••••':esc(v[x.key]||'(default)')}`).join("<br>"); rows.push(["Parameters", shown]); }
     $("wz-review").innerHTML = rows.map(r=>`<div class="wz-review-row"><span class="k">${esc(r[0])}</span><span class="v">${r[1]}</span></div>`).join("");
   }
@@ -165,7 +200,7 @@
     currentInstallId = "i" + Math.random().toString(36).slice(2,10);
     if(!opener){ try{ window.parent.postMessage({type:"matos:installing", installId: currentInstallId, appId: id, name: app.name, icon: app.icon}, location.origin); }catch(_){} }
     try{
-      const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:hasVars?collectVars():{}})});
+      const r=await fetch("/api/v1/store/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appId:id,variables:hasVars?collectVars():{},options:hasOptions?collectOptions():{}})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||e.title||("HTTP "+r.status)); }
       result = await r.json().catch(()=>({}));
       prog.done(true); installed=true; refresh();
@@ -202,9 +237,9 @@
     close(); }
 
   // ---- step machinery ----
-  function panelFor(s){ return {params:"p-params",review:"p-review",install:"p-install",actions:"p-actions"}[s]; }
+  function panelFor(s){ return {options:"p-options",params:"p-params",review:"p-review",install:"p-install",actions:"p-actions"}[s]; }
   function show(i){ si=i; const s=steps[i];
-    ["p-params","p-review","p-install","p-actions"].forEach(p=>$(p).hidden=true); $(panelFor(s)).hidden=false;
+    ["p-options","p-params","p-review","p-install","p-actions"].forEach(p=>$(p).hidden=true); $(panelFor(s)).hidden=false;
     renderStepper();
     if(s==="review") renderReview();
     if(s==="install"){ $("install-title").textContent = opener?"Registering…":"Installing…"; $("wz-error").hidden=true; $("wz-install-note").hidden=true; installError=false; installed=false; }
@@ -218,9 +253,10 @@
   function setButtons(){ const s=steps[si];
     const set=(el,on)=>{ $(el).hidden=!on; };
     const installing = s==="install" && !installed && !installError;
-    set("wz-back", (s==="review"||s==="params") && si>0);
-    set("wz-cancel", installing || s==="review" || s==="params");
-    set("wz-next", s==="params");
+    const param = s==="params" || s==="options";
+    set("wz-back", (s==="review"||param) && si>0);
+    set("wz-cancel", installing || s==="review" || param);
+    set("wz-next", param);
     set("wz-go", s==="review" || (s==="install" && installError));
     set("wz-continue", s==="install" && installed);
     set("wz-close", s==="actions");

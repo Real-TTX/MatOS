@@ -44,6 +44,35 @@ public class AppWidgetDef
     public int RefreshSeconds { get; set; }              // info/iframe auto-refresh (0 = none)
 }
 
+/// <summary>One selectable choice of a "choice"-type install option — contributes its compose
+/// fragment (and optional env) to the assembled stack when picked.</summary>
+public class AppOptionChoice
+{
+    public string Value { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string Compose { get; set; } = "";                 // compose fragment merged in when picked
+    public Dictionary<string, string> Env { get; set; } = new();
+}
+
+/// <summary>An install-time option the user picks in the wizard, composed into ONE final compose file.
+/// type "toggle" = an optional add-on (e.g. phpMyAdmin) included when checked; type "choice" = pick one
+/// of several variants. Each contributes a compose fragment (services/volumes/networks are merged into
+/// the base) and/or env vars. Options apply to compose apps.</summary>
+public class AppOption
+{
+    public string Id { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Type { get; set; } = "toggle";              // "toggle" | "choice"
+    // toggle
+    public bool Default { get; set; }
+    public string Compose { get; set; } = "";                 // fragment merged in when on
+    public Dictionary<string, string> Env { get; set; } = new();
+    // choice
+    public List<AppOptionChoice> Choices { get; set; } = new();
+    public string DefaultChoice { get; set; } = "";
+}
+
 /// <summary>Unified app definition — built-in, custom single-image, or a Compose stack.
 /// Kind is "image" or "compose". Icon may be an emoji, an image URL, or a data: URI.
 /// Source is the name of the remote catalog it came from ("" = built-in or local custom).</summary>
@@ -53,7 +82,7 @@ public record AppDef(
     Dictionary<string, string> Env, AppAction[] Actions,
     string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn,
     string Source = "", AppHandler[]? Handlers = null, bool OnDemand = false,
-    string ProjectUrl = "", AppWidgetDef[]? Widgets = null);
+    string ProjectUrl = "", AppWidgetDef[]? Widgets = null, AppOption[]? Options = null);
 
 // ---- Custom (user-defined) apps: mutable shapes persisted as customapps.json ----
 
@@ -83,6 +112,7 @@ public class CustomApp
     public List<AppHandler> Handlers { get; set; } = new(); // file types this app can "open with"
     public string ProjectUrl { get; set; } = "";          // project / repo / docs home page
     public List<AppWidgetDef> Widgets { get; set; } = new(); // widgets this app offers
+    public List<AppOption> Options { get; set; } = new(); // install-time optional add-ons / variants
     public string Source { get; set; } = "";              // remote catalog name ("" = local)
 }
 

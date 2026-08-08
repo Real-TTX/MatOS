@@ -52,14 +52,19 @@ public class InstallService
     }
 
     public Task<InstallResult> InstallAsync(string appId, IDictionary<string, string>? vars, CancellationToken ct = default)
+        => InstallAsync(appId, vars, null, ct);
+
+    public Task<InstallResult> InstallAsync(string appId, IDictionary<string, string>? vars, IDictionary<string, string>? options, CancellationToken ct = default)
     {
         var app = _store.Find(appId);
         if (app == null) return Task.FromResult(new InstallResult(false, null, 0, "Unknown app."));
         // Every app installs the same way — including apps that also declare "Open with" file
         // handlers. They can be installed any number of times like any other app; the handler
         // just makes them appear in the File Explorer's "Open with" for their file types.
+        // Install-time options (optional add-on services / variants) apply to compose apps: their
+        // fragments are merged into the base compose so the whole selection becomes ONE stack.
         return string.Equals(app.Kind, "compose", StringComparison.OrdinalIgnoreCase)
-            ? InstallComposeAsync(app, vars ?? new Dictionary<string, string>(), ct)
+            ? InstallComposeAsync(app, vars ?? new Dictionary<string, string>(), options, ct)
             : InstallImageAsync(app, vars ?? new Dictionary<string, string>(), ct);
     }
 
@@ -159,9 +164,17 @@ public class InstallService
     };
 
     // ---- Compose stack ----
-    private async Task<InstallResult> InstallComposeAsync(AppDef app, IDictionary<string, string> vars, CancellationToken ct)
+    private async Task<InstallResult> InstallComposeAsync(AppDef app, IDictionary<string, string> vars, IDictionary<string, string>? options, CancellationToken ct)
     {
-        var services = _store.ParseServices(app.Compose);
+        // Selected install options (optional add-on services / variants) become extra compose files
+        // that docker compose merges natively — the base compose is written verbatim (no YAML round-trip).
+        var sel = options == null ? null : new Dictionary<string, string>(options);
+        var (fragments, optionEnv) = _store.ResolveOptions(app, sel);
+        // Effective service list = base services ∪ every fragment's services (for labels + UI resolution).
+        var services = _store.ParseServices(app.Compose).ToList();
+        foreach (var f in fragments)
+            foreach (var s in _store.ParseServices(f))
+                if (!services.Contains(s)) services.Add(s);
         if (services.Count == 0) return new(false, null, 0, "The compose file has no services (or is invalid YAML).");
         var ui = !string.IsNullOrWhiteSpace(app.UiService) && services.Contains(app.UiService) ? app.UiService : services[0];
 
@@ -173,6 +186,15 @@ public class InstallService
         Directory.CreateDirectory(dir);
 
         await File.WriteAllTextAsync(Path.Combine(dir, "docker-compose.yml"), app.Compose, ct);
+        // One file per selected option fragment; merged after the base and before the override.
+        var fileArgs = new List<string> { "-f", "docker-compose.yml" };
+        for (int i = 0; i < fragments.Count; i++)
+        {
+            var fn = $"matos-option-{i}.yml";
+            await File.WriteAllTextAsync(Path.Combine(dir, fn), fragments[i], ct);
+            fileArgs.Add("-f"); fileArgs.Add(fn);
+        }
+        fileArgs.Add("-f"); fileArgs.Add("matos-override.yml");
 
         // override: matos/matcad labels on every service, published port on the UI service
         var sb = new StringBuilder();
@@ -200,13 +222,14 @@ public class InstallService
         var env = new Dictionary<string, string>();
         foreach (var v in app.Variables)
             env[v.Key] = vars.TryGetValue(v.Key, out var val) && !string.IsNullOrEmpty(val) ? val : v.Default;
+        foreach (var kv in optionEnv) env[kv.Key] = kv.Value; // env contributed by the selected options
         var envFile = new StringBuilder();
         foreach (var kv in env) envFile.AppendLine($"{kv.Key}={kv.Value.Replace("\n", " ").Replace("\r", "")}");
         await File.WriteAllTextAsync(Path.Combine(dir, ".env"), envFile.ToString(), ct);
 
         try { await _docker.EnsureNetworkAsync(ProxyNetwork, ct); } catch { }
 
-        var upArgs = new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" };
+        var upArgs = new[] { "-p", project }.Concat(fileArgs).Concat(new[] { "up", "-d", "--remove-orphans" }).ToArray();
         var (code, _, err) = await RunCompose(dir, upArgs, env, ct);
         // Self-heal: Docker's address pool fills up as compose apps each create a network. If we hit
         // that, prune unused networks (safe — only removes ones no container uses) and retry once.
@@ -218,7 +241,7 @@ public class InstallService
         }
         if (code != 0) return new(false, project, port, "compose up failed: " + Trim(err));
         // On-demand: stop the freshly-started stack so it sits idle until opened.
-        if (app.OnDemand) { try { await RunCompose(dir, new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "stop" }, env, ct); } catch (Exception ex) { _log.LogWarning(ex, "Stopping on-demand stack {Project} after install failed", project); } }
+        if (app.OnDemand) { try { await RunCompose(dir, new[] { "-p", project }.Concat(fileArgs).Concat(new[] { "stop" }).ToArray(), env, ct); } catch (Exception ex) { _log.LogWarning(ex, "Stopping on-demand stack {Project} after install failed", project); } }
         _log.LogInformation("Installed compose app {App} as project {Project}", app.Id, project);
         Notify(MatOS.Web.Services.NotificationKind.Success, $"{app.Name} installed",
             app.OnDemand ? "Installed as on-demand — it starts when you open it and stops when you close it." : $"Stack {project} is running on port {port}.");
@@ -413,7 +436,19 @@ public class InstallService
     private async Task PublishComposeAsync(string appId, string project, bool enabled, string host, CancellationToken ct)
     {
         var app = _store.Find(appId) ?? throw new InvalidOperationException("App definition not found.");
-        var services = _store.ParseServices(app.Compose);
+        var dir = Path.Combine(Path.GetTempPath(), "matos", project);
+        Directory.CreateDirectory(dir);
+        // Reuse the base compose + any option fragment files written at install, so publishing/
+        // unpublishing re-runs the SAME merged stack and never drops optional add-on services.
+        var composePath = Path.Combine(dir, "docker-compose.yml");
+        var composeYaml = File.Exists(composePath) ? await File.ReadAllTextAsync(composePath, ct) : app.Compose;
+        var optionFiles = Directory.Exists(dir)
+            ? Directory.EnumerateFiles(dir, "matos-option-*.yml").Select(Path.GetFileName).Where(f => f != null).OrderBy(f => f).Cast<string>().ToList()
+            : new List<string>();
+        var services = _store.ParseServices(composeYaml);
+        foreach (var of in optionFiles)
+            foreach (var s in _store.ParseServices(await File.ReadAllTextAsync(Path.Combine(dir, of), ct)))
+                if (!services.Contains(s)) services.Add(s);
         if (services.Count == 0) throw new InvalidOperationException("Compose has no services.");
         var ui = !string.IsNullOrWhiteSpace(app.UiService) && services.Contains(app.UiService) ? app.UiService : services[0];
 
@@ -423,9 +458,7 @@ public class InstallService
         var instance = uiC?.Labels.GetValueOrDefault(MatosLabels.Instance, "1") ?? "1";
         int port = uiC?.Ports.FirstOrDefault(p => p.PublicPort is > 0)?.PublicPort ?? await NextFreePortAsync(ct);
 
-        var dir = Path.Combine(Path.GetTempPath(), "matos", project);
-        Directory.CreateDirectory(dir);
-        await File.WriteAllTextAsync(Path.Combine(dir, "docker-compose.yml"), app.Compose, ct);
+        if (!File.Exists(composePath)) await File.WriteAllTextAsync(composePath, composeYaml, ct);
 
         var sb = new StringBuilder(); sb.AppendLine("services:");
         foreach (var s in services)
@@ -450,7 +483,10 @@ public class InstallService
         }
         await File.WriteAllTextAsync(Path.Combine(dir, "matos-override.yml"), sb.ToString(), ct);
         if (!File.Exists(Path.Combine(dir, ".env"))) await File.WriteAllTextAsync(Path.Combine(dir, ".env"), "", ct);
-        await RunCompose(dir, new[] { "-p", project, "-f", "docker-compose.yml", "-f", "matos-override.yml", "up", "-d", "--remove-orphans" }, null, ct);
+        var files = new List<string> { "-f", "docker-compose.yml" };
+        foreach (var of in optionFiles) { files.Add("-f"); files.Add(of); }
+        files.Add("-f"); files.Add("matos-override.yml");
+        await RunCompose(dir, new[] { "-p", project }.Concat(files).Concat(new[] { "up", "-d", "--remove-orphans" }).ToArray(), null, ct);
     }
 
     // ---- "Open with" (file handlers): launch an on-demand container bound to a file ----

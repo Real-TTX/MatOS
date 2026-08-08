@@ -117,15 +117,81 @@ public class StoreService
                     Icon = Str(Get(m!, "icon")),
                     RefreshSeconds = int.TryParse(Str(Get(m!, "refreshSeconds")), out var rs) ? rs : 0
                 }).Where(w => w.Id.Length > 0).ToList();
+            if ((app.Options == null || app.Options.Count == 0) && AsList(Get(x, "options")) is { } opts)
+                app.Options = opts.Select(AsMap).Where(m => m != null).Select(m => new AppOption
+                {
+                    Id = Str(Get(m!, "id")),
+                    Label = Str(Get(m!, "label")) is { Length: > 0 } ol ? ol : Str(Get(m!, "id")),
+                    Description = Str(Get(m!, "description")),
+                    Type = Str(Get(m!, "type")) is { Length: > 0 } ot ? ot : "toggle",
+                    Default = string.Equals(Str(Get(m!, "default")), "true", StringComparison.OrdinalIgnoreCase),
+                    Compose = Str(Get(m!, "compose")),
+                    Env = MapStr(Get(m!, "env")),
+                    DefaultChoice = Str(Get(m!, "defaultChoice")),
+                    Choices = AsList(Get(m!, "choices"))?.Select(AsMap).Where(cm => cm != null).Select(cm => new AppOptionChoice
+                    {
+                        Value = Str(Get(cm!, "value")),
+                        Label = Str(Get(cm!, "label")) is { Length: > 0 } cl ? cl : Str(Get(cm!, "value")),
+                        Compose = Str(Get(cm!, "compose")),
+                        Env = MapStr(Get(cm!, "env"))
+                    }).Where(c => c.Value.Length > 0).ToList() ?? new()
+                }).Where(o => o.Id.Length > 0).ToList();
         }
         catch { /* best effort */ }
+    }
+
+    // ---- Install-time options → conditional compose assembly ----
+
+    /// <summary>Resolve the ACTIVE install-option fragments + env for a selection. Each fragment is a
+    /// standalone compose file that docker compose merges natively (passed as an extra <c>-f</c>), so
+    /// the user's base compose is written verbatim — no YAML round-trip that could change scalar
+    /// types/quoting (e.g. a "8080" string becoming a number). <paramref name="selections"/> maps
+    /// optionId → value ("true"/"false" for toggles, the chosen value for choices); unlisted options
+    /// fall back to their declared default.</summary>
+    public (List<string> Fragments, Dictionary<string, string> Env) ResolveOptions(AppDef app, IReadOnlyDictionary<string, string>? selections)
+    {
+        var env = new Dictionary<string, string>();
+        var fragments = new List<string>();
+        foreach (var o in app.Options ?? Array.Empty<AppOption>())
+        {
+            if (string.Equals(o.Type, "choice", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = selections != null && selections.TryGetValue(o.Id, out var v) && !string.IsNullOrEmpty(v)
+                    ? v : (!string.IsNullOrEmpty(o.DefaultChoice) ? o.DefaultChoice : o.Choices.FirstOrDefault()?.Value ?? "");
+                var choice = o.Choices.FirstOrDefault(c => c.Value == val);
+                if (choice != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(choice.Compose)) fragments.Add(choice.Compose);
+                    foreach (var kv in choice.Env) env[kv.Key] = kv.Value;
+                }
+            }
+            else // toggle
+            {
+                var on = selections != null && selections.TryGetValue(o.Id, out var v)
+                    ? string.Equals(v, "true", StringComparison.OrdinalIgnoreCase)
+                    : o.Default;
+                if (on)
+                {
+                    if (!string.IsNullOrWhiteSpace(o.Compose)) fragments.Add(o.Compose);
+                    foreach (var kv in o.Env) env[kv.Key] = kv.Value;
+                }
+            }
+        }
+        return (fragments, env);
+    }
+
+    private static Dictionary<string, string> MapStr(object? o)
+    {
+        var d = new Dictionary<string, string>();
+        if (AsMap(o) is { } m) foreach (var kv in m) d[kv.Key] = Str(kv.Value);
+        return d;
     }
 
     private static AppDef ToDef(CustomApp c) => new(
         c.Id, c.Name, c.Tagline, c.Description, c.Category, c.Image, c.UiPort, c.Icon,
         c.Volumes.ToArray(), c.Env, c.Actions.Select(a => new AppAction(a.Label, a.Url)).ToArray(),
         c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source, c.Handlers.ToArray(),
-        OnDemand: false, ProjectUrl: c.ProjectUrl, Widgets: c.Widgets.ToArray());
+        OnDemand: false, ProjectUrl: c.ProjectUrl, Widgets: c.Widgets.ToArray(), Options: c.Options.ToArray());
 
     private string UniqueId(string baseId)
     {
