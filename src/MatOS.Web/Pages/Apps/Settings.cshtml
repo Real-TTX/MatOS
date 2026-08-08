@@ -129,6 +129,14 @@
                         <div class="mset-label">App network<small>Network app containers join so the reverse proxy (Caddy/Matcad) can reach them. Leave blank for the default (<span class="mono">@Model.DefaultNetwork</span>). Set this to your existing Caddy/Matcad's network if you don't use matOS's bundled proxy.</small></div>
                         <input class="ui-input mono" name="Network" value="@Model.Network" placeholder="@Model.DefaultNetwork" />
                     </div>
+                    <div class="mset-row">
+                        <div class="mset-label">Port pool<small>Host-port range new apps publish their UI on. New installs take the next free port in this range (wraps around when full). E.g. <span class="mono">50000–59999</span>.</small></div>
+                        <div style="display:flex;align-items:center;gap:0.5rem">
+                            <input class="ui-input mono" name="PortPoolStart" type="number" min="1" max="65535" value="@Model.PortPoolStart" style="width:8rem" />
+                            <span class="fx-muted">–</span>
+                            <input class="ui-input mono" name="PortPoolEnd" type="number" min="1" max="65535" value="@Model.PortPoolEnd" style="width:8rem" />
+                        </div>
+                    </div>
                     <div class="mset-row"><div class="mset-label">Volumes path</div><div class="mono fx-muted">@Model.VolumesPath</div></div>
                     <div class="mset-row"><div class="mset-label">Inventory</div><div id="mset-inv" class="fx-muted">…</div></div>
                 </div>

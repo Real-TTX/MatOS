@@ -37,6 +37,12 @@ public class SystemConfig
 
     /// <summary>How many consecutive host ports are reserved for embedding (see <see cref="EmbedPortStart"/>).</summary>
     public int EmbedPortCount { get; set; } = 50;
+
+    /// <summary>Host-port pool that installed apps publish their UI on. New installs get the next free
+    /// port in [PortPoolStart, PortPoolEnd]; the allocator wraps back to the start when it reaches the
+    /// end. Change these to e.g. 50000–59999 to move all app ports into a custom range.</summary>
+    public int PortPoolStart { get; set; } = 20000;
+    public int PortPoolEnd { get; set; } = 65535;
 }
 
 /// <summary>Stable host-port assignment per stack for compatibility-mode embedding. Each opened app keeps

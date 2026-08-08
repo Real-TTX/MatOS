@@ -84,13 +84,17 @@ public class InstallService
     {
         var used = (await _docker.ListContainersAsync(true, ct)).SelectMany(c => c.Ports)
             .Where(p => p.PublicPort is > 0).Select(p => p.PublicPort!.Value).ToHashSet();
+        var sys = _config.Get<SystemConfig>("system");
+        int start = sys.PortPoolStart is > 0 and <= 65535 ? sys.PortPoolStart : 20000;
+        int end = sys.PortPoolEnd >= start && sys.PortPoolEnd <= 65535 ? sys.PortPoolEnd : 65535;
         int port;
         lock (_gate)
         {
             var s = _config.Get<InstallStore>("store");
-            port = Math.Max(20000, s.NextPort);
-            while (used.Contains(port)) port++;
-            s.NextPort = port + 1;
+            port = s.NextPort >= start && s.NextPort <= end ? s.NextPort : start;
+            for (int scanned = 0; used.Contains(port) && scanned <= end - start; scanned++)
+                if (++port > end) port = start;
+            s.NextPort = port + 1 > end ? start : port + 1;
         }
         await _config.SaveAsync("store", _config.Get<InstallStore>("store"));
         return port;

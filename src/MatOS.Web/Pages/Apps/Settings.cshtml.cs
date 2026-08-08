@@ -34,6 +34,8 @@ public class SettingsModel : PageModel
     [BindProperty] public string BaseDomain { get; set; } = "apps.localhost";
     [BindProperty] public string Network { get; set; } = "";
     [BindProperty] public bool CompatibilityMode { get; set; }
+    [BindProperty] public int PortPoolStart { get; set; } = 20000;
+    [BindProperty] public int PortPoolEnd { get; set; } = 65535;
 
     public IReadOnlyList<Wallpapers.Wallpaper> AllWallpapers => Wallpapers.All;
     public IReadOnlyList<string> DefaultWallpapers => Wallpapers.Defaults;
@@ -65,6 +67,8 @@ public class SettingsModel : PageModel
         BaseDomain = s.BaseDomain;
         Network = s.Network;
         CompatibilityMode = s.CompatibilityMode;
+        PortPoolStart = s.PortPoolStart;
+        PortPoolEnd = s.PortPoolEnd;
     }
 
     // System settings only — personal Appearance/Taskbar choices save instantly via
@@ -76,6 +80,8 @@ public class SettingsModel : PageModel
         s.BaseDomain = string.IsNullOrWhiteSpace(BaseDomain) ? "apps.localhost" : BaseDomain.Trim();
         s.Network = (Network ?? "").Trim();
         s.CompatibilityMode = CompatibilityMode;
+        s.PortPoolStart = PortPoolStart is > 0 and <= 65535 ? PortPoolStart : 20000;
+        s.PortPoolEnd = PortPoolEnd >= s.PortPoolStart && PortPoolEnd <= 65535 ? PortPoolEnd : 65535;
         await _config.SaveAsync("system", s);
 
         return RedirectToPage(new { saved = true });
