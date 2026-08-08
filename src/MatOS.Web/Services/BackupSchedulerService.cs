@@ -58,6 +58,10 @@ public class BackupSchedulerService : BackgroundService
         var notes = scope.ServiceProvider.GetRequiredService<NotificationService>();
         var docker = scope.ServiceProvider.GetRequiredService<MatOS.Web.Docker.DockerService>();
 
+        // Backup jobs (the tree-based jobs the UI uses) run first.
+        try { await scope.ServiceProvider.GetRequiredService<BackupJobService>().RunDueJobsAsync(ct); }
+        catch (Exception ex) { _log.LogWarning(ex, "Backup job scheduling failed"); }
+
         var store = config.Get<BackupScheduleStore>("backup-schedules");
         var now = DateTime.UtcNow;
         // Every backup target ever configured — we exclude these from "back up all volumes".

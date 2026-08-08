@@ -25,6 +25,7 @@ builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<DesktopLayoutService>();
 builder.Services.AddSingleton<MatOS.Web.Docker.VolumeFilesService>();
 builder.Services.AddSingleton<MatOS.Web.Services.BackupService>();
+builder.Services.AddSingleton<MatOS.Web.Services.BackupJobService>();
 builder.Services.AddSingleton<MatOS.Web.Services.NotificationService>();
 builder.Services.AddSingleton<MatOS.Web.Services.UpdateService>();
 builder.Services.AddHostedService<MatOS.Web.Services.BackupSchedulerService>();

@@ -6,92 +6,73 @@
 }
 
 <div id="bk">
+  <div id="bk-main">
     <div class="bk-head">
         <h1 class="bk-h">Backups</h1>
-        <p class="bk-sub">Back up whole apps (compose + volumes, so a restore runs again) or individual volumes — to any volume, incl. SMB shares — and schedule jobs.</p>
+        <p class="bk-sub">Create <strong>jobs</strong> that back up whatever you pick in one tree — whole apps (compose + volumes) and individual volumes together. Run them now or on a schedule.</p>
     </div>
     <div class="bk-cards" id="bk-cards"></div>
     <div class="tabbar" id="bk-tabs">
-        <button class="tab" data-tab="apps">Apps</button>
-        <button class="tab active" data-tab="backups">Volumes</button>
-        <button class="tab" data-tab="schedules">Schedules</button>
+        <button class="tab active" data-tab="jobs">Jobs</button>
+        <button class="tab" data-tab="history">History</button>
     </div>
     <div class="win-toolbar" style="gap:0.6rem;flex-wrap:wrap;margin-top:0.4rem">
-        <button class="ui-btn primary" id="bk-new-app" style="display:none">Back up an app</button>
-        <button class="ui-btn primary" id="bk-new">Backup now</button>
-        <button class="ui-btn primary" id="bk-new-sched" style="display:none">New schedule</button>
+        <button class="ui-btn primary" id="bk-new-job">New job</button>
         <button class="ui-btn" id="bk-refresh">Refresh</button>
-        <span class="fx-muted" style="font-size:0.85rem;flex:1">Backups are gzip-compressed tar archives.</span>
+        <span class="fx-muted" style="font-size:0.85rem;flex:1">A backup is a gzip-compressed archive; app backups also capture the compose &amp; pinned image so a restore runs again.</span>
     </div>
     <div id="bk-msg" class="card" style="display:none;margin-bottom:0.8rem"></div>
-    <div class="card" id="bk-pane-backups" style="padding:0;overflow:hidden">
+
+    <div class="card" id="bk-pane-jobs" style="padding:0;overflow:hidden">
         <table class="bkt">
-            <thead><tr><th>Created</th><th>Source volume</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
-            <tbody id="bk-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+            <thead><tr><th>Job</th><th>Backs up</th><th>When</th><th>Last run</th><th></th></tr></thead>
+            <tbody id="bk-job-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
         </table>
     </div>
-    <div class="card" id="bk-pane-apps" style="padding:0;overflow:hidden;display:none">
+    <div class="card" id="bk-pane-history" style="padding:0;overflow:hidden;display:none">
         <table class="bkt">
-            <thead><tr><th>Created</th><th>App</th><th>Contents</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
-            <tbody id="bk-app-rows"><tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
-        </table>
-    </div>
-    <div class="card" id="bk-pane-schedules" style="padding:0;overflow:hidden;display:none">
-        <table class="bkt">
-            <thead><tr><th>Name</th><th>Source → Target</th><th>When</th><th>Retention</th><th>Last run</th><th></th></tr></thead>
-            <tbody id="bk-sched-rows"><tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+            <thead><tr><th>Created</th><th>What</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
+            <tbody id="bk-hist-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
         </table>
     </div>
 
-    <div class="dlg" id="bk-sched-dlg" hidden><div class="dlg-card">
-        <h3 style="margin:0 0 0.9rem">Backup job</h3>
-        <label class="fl"><span>Name</span><input class="ui-input" id="bk-sched-name" placeholder="Nightly full backup" /></label>
-        <div class="fl">
-            <span>Source volumes <span class="fx-muted">(none selected = ALL volumes)</span></span>
-            <div class="bk-src-picker" id="bk-sched-srcs"></div>
+  </div><!-- /bk-main -->
+
+    <!-- Full-screen job editor -->
+    <div id="bk-editor" hidden>
+        <div class="bk-crumb"><button type="button" class="bk-crumb-link" id="bk-crumb-back">Backups</button><span class="bk-crumb-sep">›</span><strong id="bk-crumb-cur">New job</strong></div>
+        <div class="bk-editor-grid">
+            <div class="bk-editor-left">
+                <label class="fl"><span>Name</span><input class="ui-input" id="j-name" placeholder="Nightly backup" /></label>
+                <div class="grid2">
+                    <label class="fl"><span>Store on</span><select class="ui-select" id="j-tgt"></select></label>
+                    <label class="fl"><span>Schedule</span>
+                        <select class="ui-select" id="j-kind"><option value="manual">Manual only</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
+                    </label>
+                </div>
+                <div class="grid2">
+                    <label class="fl" id="j-timerow"><span>Time (server local)</span><input class="ui-input" id="j-time" type="time" value="03:00" /></label>
+                    <label class="fl" id="j-dayrow" style="display:none"><span>Day</span>
+                        <select class="ui-select" id="j-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+                    </label>
+                </div>
+                <div class="grid2">
+                    <label class="fl"><span>Keep for (days, 0 = forever)</span><input class="ui-input" id="j-ret" type="number" min="0" max="3650" value="30" /></label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;align-self:end;margin-bottom:0.8rem"><input type="checkbox" id="j-en" checked /> Enabled</label>
+                </div>
+            </div>
+            <div class="bk-editor-right">
+                <div class="fl" style="height:100%">
+                    <span>What to back up <span class="fx-muted">(tick apps and/or individual volumes)</span></span>
+                    <div class="job-tree job-tree-full" id="j-tree"></div>
+                </div>
+            </div>
         </div>
-        <label class="fl"><span>Target volume</span><select class="ui-select" id="bk-sched-tgt"></select></label>
-        <label class="fl"><span>Repeat</span>
-            <select class="ui-select" id="bk-sched-kind"><option value="hourly">Hourly</option><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
-        </label>
-        <div id="bk-sched-timerow" class="fl"><span>Time (server local)</span><input class="ui-input" id="bk-sched-time" type="time" value="03:00" /></div>
-        <div id="bk-sched-dayrow" class="fl" style="display:none"><span>Day</span>
-            <select class="ui-select" id="bk-sched-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
-        </div>
-        <label class="fl"><span>Retention (days, 0 = keep forever)</span><input class="ui-input" id="bk-sched-ret" type="number" min="0" max="3650" value="30" /></label>
-        <label style="display:flex;align-items:center;gap:0.4rem;margin:0 0 0.5rem"><input type="checkbox" id="bk-sched-en" checked /> Enabled</label>
-        <input type="hidden" id="bk-sched-id" />
-        <div style="display:flex;gap:0.5rem;margin-top:0.9rem"><button class="ui-btn primary" id="bk-sched-save">Save schedule</button><button class="ui-btn" id="bk-sched-cancel">Cancel</button></div>
-    </div></div>
+        <input type="hidden" id="j-id" />
+        <div class="bk-editor-actions"><button class="ui-btn primary" id="j-save">Save job</button><button class="ui-btn" id="j-cancel">Cancel</button></div>
+    </div>
 
-    <div class="dlg" id="bk-new-dlg" hidden><div class="dlg-card">
-        <h3 style="margin:0 0 0.9rem">New backup</h3>
-        <label class="fl"><span>Source volume *</span><select class="ui-select" id="bk-src"></select></label>
-        <label class="fl"><span>Target (where the backup file is stored)</span><select class="ui-select" id="bk-tgt"></select>
-            <span class="fx-muted" style="font-size:0.78rem">Pick a network location (SMB) for off-host backups.</span></label>
-        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-go">Start backup</button><button class="ui-btn" id="bk-cancel">Cancel</button></div>
-    </div></div>
-
-    <div class="dlg" id="bk-app-dlg" hidden><div class="dlg-card">
-        <h3 style="margin:0 0 0.3rem">Back up a whole app</h3>
-        <p class="fx-muted" style="font-size:0.82rem;margin:0 0 0.9rem">Saves the app's compose &amp; container config (pinned to the exact image version) plus its volumes. A restore recreates everything and starts it.</p>
-        <label class="fl"><span>App *</span><select class="ui-select" id="bk-app-stack"></select></label>
-        <div class="fl">
-            <span>Volumes to include <span class="fx-muted">(all by default)</span></span>
-            <div class="bk-src-picker" id="bk-app-vols"><span class="fx-muted" style="font-size:0.8rem">Pick an app…</span></div>
-        </div>
-        <label class="fl"><span>Store the backup on</span><select class="ui-select" id="bk-app-tgt"></select>
-            <span class="fx-muted" style="font-size:0.78rem">Pick a network location (SMB) for off-host backups.</span></label>
-        <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-app-go">Start backup</button><button class="ui-btn" id="bk-app-cancel">Cancel</button></div>
-    </div></div>
-
-    <div class="dlg" id="bk-arst-dlg" hidden><div class="dlg-card">
-        <h3 style="margin:0 0 0.9rem">Restore app</h3>
-        <div class="wz-note" id="bk-arst-info" style="margin-bottom:0.9rem"></div>
-        <p class="fx-muted" style="font-size:0.82rem;margin:0 0 0.9rem"><strong>This recreates the app's containers</strong> (replacing any with the same name) and <strong>overwrites the included volumes' data</strong>. The app will be started.</p>
-        <div style="display:flex;gap:0.5rem;margin-top:0.6rem"><button class="ui-btn primary" id="bk-arst-go">Restore &amp; run</button><button class="ui-btn" id="bk-arst-cancel">Cancel</button></div>
-    </div></div>
-
+    <!-- Restore into volume (volume backups) -->
     <div class="dlg" id="bk-rst-dlg" hidden><div class="dlg-card">
         <h3 style="margin:0 0 0.9rem">Restore backup</h3>
         <div class="wz-note" id="bk-rst-info" style="margin-bottom:0.9rem"></div>
@@ -99,11 +80,18 @@
             <span class="fx-muted" style="font-size:0.78rem"><strong>Existing files in the target volume are removed first.</strong></span></label>
         <div style="display:flex;gap:0.5rem;margin-top:1rem"><button class="ui-btn primary" id="bk-rst-go">Restore</button><button class="ui-btn" id="bk-rst-cancel">Cancel</button></div>
     </div></div>
+
+    <!-- Restore app -->
+    <div class="dlg" id="bk-arst-dlg" hidden><div class="dlg-card">
+        <h3 style="margin:0 0 0.9rem">Restore app</h3>
+        <div class="wz-note" id="bk-arst-info" style="margin-bottom:0.9rem"></div>
+        <p class="fx-muted" style="font-size:0.82rem;margin:0 0 0.9rem"><strong>This recreates the app's containers</strong> (replacing any with the same name) and <strong>overwrites the included volumes' data</strong>. The app will be started.</p>
+        <div style="display:flex;gap:0.5rem"><button class="ui-btn primary" id="bk-arst-go">Restore &amp; run</button><button class="ui-btn" id="bk-arst-cancel">Cancel</button></div>
+    </div></div>
 </div>
 
 @section Head {
 <style>
-/* bolder dashboard look; hide the generic window header */
 .win-header { display:none; }
 #bk { max-width:1100px; }
 .bk-head { margin-bottom:1rem; }
@@ -115,30 +103,49 @@
 .bk-card-ic { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:1rem; flex:0 0 auto; }
 .bk-card-k { font-size:0.74rem; color:var(--mat-text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
 .bk-card-v { font-size:1.7rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
-.bk-stackgrp { border-bottom:1px solid var(--mat-border); margin-bottom:0.35rem; padding-bottom:0.3rem; }
-.bk-stackgrp:last-child { border-bottom:0; margin-bottom:0; }
-.bk-stackgrp-head { display:flex; align-items:center; gap:0.4rem; font-weight:700; font-size:0.82rem; padding:0.25rem 0.15rem; }
-.bk-src-picker label.bk-vol { padding-left:1.4rem; }
 table.bkt { width:100%; border-collapse:collapse; }
 table.bkt th, table.bkt td { padding:0.55rem 0.9rem; text-align:left; white-space:nowrap; vertical-align:middle; }
 table.bkt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); }
 table.bkt tbody tr { border-top:1px solid var(--mat-border); }
 table.bkt th.num, table.bkt td.num { text-align:right; }
 .smb-chip { font-size:0.68rem; font-weight:700; padding:0.05rem 0.4rem; border-radius:999px; background:rgba(52,211,153,0.2); color:#7ff0c4; margin-left:0.3rem; }
+.pill { font-size:0.7rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; }
+.pill.app { background:rgba(245,158,11,0.2); color:#ffcf7a; } .pill.vol { background:rgba(139,92,246,0.2); color:#c9b6ff; }
 .fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
 .dlg { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:grid; place-items:center; z-index:30; }
 .dlg[hidden]{ display:none; }
 .dlg-card { width:min(460px,92%); background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:1.2rem; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+.bk-job-card { width:min(560px,94%); max-height:86vh; overflow:auto; }
 .wz-note { background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:10px; padding:0.7rem 0.85rem; font-size:0.86rem; }
 .bk-acts { display:flex; gap:0.3rem; justify-content:flex-end; }
 .bk-acts .ui-btn { padding:0.25rem 0.55rem; font-size:0.78rem; }
 .tabbar { display:flex; gap:0.15rem; border-bottom:1px solid var(--mat-border); }
 .tab { border:none; background:transparent; padding:0.5rem 0.85rem; font:inherit; font-weight:600; color:var(--mat-text-muted); cursor:pointer; border-bottom:2px solid transparent; }
 .tab.active { color:var(--mat-text); border-bottom-color:var(--mat-accent); }
-.sched-off { opacity:0.55; }
-.bk-src-picker { max-height:180px; overflow-y:auto; border:1px solid var(--mat-border); border-radius:8px; padding:0.4rem 0.5rem; background:var(--mat-surface-2); }
-.bk-src-picker label { display:flex; align-items:center; gap:0.4rem; padding:0.2rem 0.15rem; font-size:0.86rem; }
-.bk-src-picker .all { border-bottom:1px solid var(--mat-border); margin-bottom:0.3rem; padding-bottom:0.35rem; font-weight:600; }
+.job-off { opacity:0.55; }
+/* Tree */
+.job-tree { max-height:260px; overflow-y:auto; border:1px solid var(--mat-border); border-radius:10px; padding:0.4rem 0.5rem; background:var(--mat-surface-2); }
+.jt-sec { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--mat-text-muted); margin:0.5rem 0.15rem 0.3rem; }
+.jt-sec:first-child { margin-top:0.15rem; }
+.jt-app-head { display:flex; align-items:center; gap:0.4rem; padding:0.22rem 0.15rem; font-size:0.9rem; }
+.jt-exp { border:none; background:transparent; color:var(--mat-text-muted); cursor:pointer; width:18px; font-size:0.8rem; padding:0; transition:transform .12s; }
+.jt-exp.open { transform:rotate(90deg); }
+.jt-app-title { font-weight:600; } .jt-app-meta { color:var(--mat-text-muted); font-size:0.78rem; }
+.jt-vols { margin:0.1rem 0 0.25rem 1.9rem; display:none; }
+.jt-vols.open { display:block; }
+.jt-vol-row, .jt-std-row { display:flex; align-items:center; gap:0.4rem; padding:0.16rem 0.15rem; font-size:0.85rem; }
+.jt-vol-row .fx-muted { font-size:0.74rem; }
+/* Full-screen job editor */
+.bk-crumb { display:flex; align-items:center; gap:0.5rem; margin-bottom:1.2rem; font-size:1.05rem; }
+.bk-crumb-link { border:none; background:transparent; color:var(--mat-accent); font:inherit; font-weight:700; cursor:pointer; padding:0; }
+.bk-crumb-link:hover { text-decoration:underline; }
+.bk-crumb-sep { color:var(--mat-text-muted); }
+#bk-crumb-cur { font-size:1.05rem; font-weight:800; letter-spacing:-0.01em; }
+.bk-editor-grid { display:grid; grid-template-columns:1fr 1.1fr; gap:1.4rem; align-items:start; }
+.job-tree-full { max-height:54vh; }
+.bk-editor-actions { display:flex; gap:0.5rem; margin-top:1.3rem; padding-top:1rem; border-top:1px solid var(--mat-border); }
+@@media (max-width:760px){ .bk-editor-grid { grid-template-columns:1fr; } }
 </style>
 }
 
@@ -152,291 +159,212 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
   const $=id=>document.getElementById(id);
   const msg=$("bk-msg");
   const hexA=(hex,a)=>{ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; };
-  let state={backups:[],sourceVolumes:[],targetVolumes:[]};
-  let schedCount=null, stackVols=null;
+  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",6000); }
+
+  let jobsState={jobs:[],tree:{apps:[],volumes:[],targetVolumes:[]}};
+  let hist={vol:[],app:[],targets:[]};
 
   function updateCards(){
-    const bs=state.backups||[]; const el=$("bk-cards"); if(!el) return;
-    const totalSize=bs.reduce((a,b)=>a+(b.sizeBytes||0),0);
+    const el=$("bk-cards"); if(!el) return;
+    const total=(hist.vol||[]).reduce((a,b)=>a+(b.sizeBytes||0),0)+(hist.app||[]).reduce((a,b)=>a+(b.sizeBytes||0),0);
     const defs=[
-      {k:"App backups",v:appCount==null?"—":appCount,ic:"📦",color:"#f59e0b"},
-      {k:"Volume backups",v:bs.length,ic:"🗄️",color:"#8b5cf6"},
-      {k:"Total size",v:fmtB(totalSize),ic:"💽",color:"#22b8ff"},
-      {k:"Schedules",v:schedCount==null?"—":schedCount,ic:"⏰",color:"#34d399"}
+      {k:"Jobs",v:(jobsState.jobs||[]).length,ic:"🗂️",color:"#8b5cf6"},
+      {k:"Backups",v:(hist.vol||[]).length+(hist.app||[]).length,ic:"📦",color:"#f59e0b"},
+      {k:"Total size",v:fmtB(total),ic:"💽",color:"#22b8ff"},
     ];
     el.innerHTML=defs.map(c=>`<div class="bk-card"><div class="bk-card-top"><span class="bk-card-ic" style="background:${hexA(c.color,0.16)};color:${c.color}">${c.ic}</span><span class="bk-card-k">${c.k}</span></div><div class="bk-card-v">${c.v}</div></div>`).join("");
   }
 
-  // Maps each stack to the volumes its containers use, so the schedule picker can group by stack.
-  async function ensureStackVols(){
-    if(stackVols) return stackVols;
-    try{
-      const [ss,vs]=await Promise.all([fetch("/api/v1/docker/stacks").then(r=>r.json()),fetch("/api/v1/docker/volumes").then(r=>r.json())]);
-      const stacks=ss.stacks||[], vols=vs.volumes||[]; const groups=[];
-      for(const st of stacks){ const names=new Set((st.containers||[]).map(c=>c.name));
-        const sv=vols.filter(v=>(v.usedBy||[]).some(u=>names.has(u))).map(v=>v.name);
-        if(sv.length) groups.push({stack:st.name, vols:sv}); }
-      stackVols={groups};
-    }catch(_){ stackVols={groups:[]}; }
-    return stackVols;
-  }
-
-  function flash(t,ok){ msg.style.display=""; msg.style.borderColor=ok?"rgba(52,211,153,0.4)":"rgba(244,80,107,0.4)"; msg.style.background=ok?"rgba(52,211,153,0.14)":"rgba(244,80,107,0.14)"; msg.style.color=ok?"#7ff0c4":"#ffb3c0"; msg.textContent=t; setTimeout(()=>msg.style.display="none",6000); }
-
-  async function load(){
-    try{ state=await (await fetch("/api/v1/backups/list")).json(); }
-    catch(_){ $("bk-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
+  // ---- Jobs ----
+  async function loadJobs(){
+    try{ jobsState=await (await fetch("/api/v1/backups/jobs")).json(); }
+    catch(_){ $("bk-job-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
     updateCards();
-    if(schedCount==null){ try{ const d=await(await fetch("/api/v1/backups/schedules")).json(); schedCount=(d.schedules||[]).length; updateCards(); }catch(_){} }
-    const bs=state.backups||[];
-    if(!bs.length){ $("bk-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No backups yet — click "Backup now" to create your first one.</td></tr>`; return; }
-    $("bk-rows").innerHTML=bs.map((b,i)=>`<tr data-i="${i}">
-      <td>${esc(fmtWhen(b.createdUtc))}</td>
-      <td><strong>${esc(b.sourceVolume)}</strong></td>
-      <td class="mono">${esc(b.targetVolume)}${(state.targetVolumes.find(v=>v.name===b.targetVolume)||{}).isSmb?'<span class="smb-chip">SMB</span>':''}<div class="fx-muted" style="font-size:0.72rem">${esc(b.fileName)}</div></td>
-      <td class="num">${fmtB(b.sizeBytes)}</td>
+    const js=jobsState.jobs||[];
+    if(!js.length){ $("bk-job-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No jobs yet — click "New job" and pick what to back up.</td></tr>`; return; }
+    $("bk-job-rows").innerHTML=js.map((j,i)=>{
+      const apps=(j.targets||[]).filter(t=>t.type==="app").length, vols=(j.targets||[]).filter(t=>t.type!=="app").length;
+      const backs=[apps?`${apps} app${apps>1?"s":""}`:"", vols?`${vols} volume${vols>1?"s":""}`:""].filter(Boolean).join(" + ")||"nothing";
+      const when=j.kind==="manual"?"Manual":j.kind==="hourly"?"Hourly":j.kind==="weekly"?days[j.weekday]+" "+esc(j.time):"Daily "+esc(j.time);
+      return `<tr class="${j.enabled?'':'job-off'}" data-i="${i}">
+        <td><strong>${esc(j.name)}</strong>${j.lastError?'<div class="fx-muted" style="font-size:0.7rem;color:#ffb3c0">⚠ '+esc(j.lastError)+'</div>':(j.lastResult?'<div class="fx-muted" style="font-size:0.7rem">'+esc(j.lastResult)+'</div>':'')}</td>
+        <td>${esc(backs)} <span class="fx-muted">→ ${esc(j.targetVolume)}</span></td>
+        <td>${when}${j.enabled?"":" · off"}</td>
+        <td class="fx-muted">${j.lastRunUtc?fmtWhen(j.lastRunUtc):"—"}</td>
+        <td><div class="bk-acts">
+          <button class="ui-btn primary" data-run="${i}">Run now</button>
+          <button class="ui-btn" data-edit="${i}">Edit</button>
+          <button class="ui-btn danger" data-del="${i}">Delete</button>
+        </div></td></tr>`;}).join("");
+    $("bk-job-rows").querySelectorAll("[data-run]").forEach(b=>b.addEventListener("click",()=>runJob(js[+b.dataset.run])));
+    $("bk-job-rows").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openJob(js[+b.dataset.edit])));
+    $("bk-job-rows").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>delJob(js[+b.dataset.del])));
+  }
+  async function runJob(j){
+    if(!await matDialog.confirm(`Run "${j.name}" now?`,{title:"Run backup job",okLabel:"Run"})) return;
+    try{ await fetch("/api/v1/backups/jobs/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id})});
+      flash(`"${j.name}" started — you'll get a notification when it finishes.`,true);
+      setTimeout(()=>{ loadJobs(); loadHistory(); }, 2500);
+    }catch(e){ flash("Could not start job.",false); }
+  }
+  async function delJob(j){ if(!await matDialog.confirm(`Delete job "${j.name}"? (Existing backups are kept.)`,{title:"Delete job",danger:true,okLabel:"Delete"})) return;
+    try{ await fetch("/api/v1/backups/jobs/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id})}); loadJobs(); }
+    catch(_){ flash("Delete failed.",false); } }
+
+  // ---- Job editor + tree ----
+  function renderTree(){
+    const t=jobsState.tree||{apps:[],volumes:[]}; const box=$("j-tree"); box.innerHTML="";
+    if((t.apps||[]).length){
+      const h=document.createElement("div"); h.className="jt-sec"; h.textContent="Apps"; box.appendChild(h);
+      for(const a of t.apps){
+        const wrap=document.createElement("div");
+        const head=document.createElement("div"); head.className="jt-app-head";
+        head.innerHTML=`<button type="button" class="jt-exp" title="Show volumes">${a.volumes.length?"▸":"&nbsp;"}</button>
+          <label style="display:flex;align-items:center;gap:0.4rem;flex:1;cursor:pointer"><input type="checkbox" class="jt-app-cb" data-app="${escA(a.name)}">
+          <span class="jt-app-title">${esc(a.title||a.name)}</span> <span class="jt-app-meta">${a.total?`(${a.running}/${a.total} running · ${a.volumes.length} vol)`:""}</span></label>`;
+        wrap.appendChild(head);
+        const vols=document.createElement("div"); vols.className="jt-vols";
+        vols.innerHTML=a.volumes.map(v=>`<label class="jt-vol-row"><input type="checkbox" class="jt-vol" data-app="${escA(a.name)}" data-vol="${escA(v)}"> ${esc(v)}</label>`).join("")
+          || `<div class="fx-muted" style="font-size:0.78rem;padding:0.1rem">No named volumes — the whole-app backup still captures the compose.</div>`;
+        wrap.appendChild(vols);
+        const exp=head.querySelector(".jt-exp"); if(a.volumes.length) exp.addEventListener("click",()=>{ exp.classList.toggle("open"); vols.classList.toggle("open"); });
+        const appCb=head.querySelector(".jt-app-cb");
+        appCb.addEventListener("change",()=>{ vols.querySelectorAll(".jt-vol").forEach(c=>{ c.disabled=appCb.checked; if(appCb.checked) c.checked=false; }); });
+        box.appendChild(wrap);
+      }
+    }
+    if((t.volumes||[]).length){
+      const h=document.createElement("div"); h.className="jt-sec"; h.textContent="Other volumes"; box.appendChild(h);
+      for(const v of t.volumes){
+        const row=document.createElement("label"); row.className="jt-std-row";
+        row.innerHTML=`<input type="checkbox" class="jt-vol" data-vol="${escA(v.name)}"> ${esc(v.name)}${v.isSmb?'<span class="smb-chip">SMB</span>':""} <span class="fx-muted">${v.size>0?fmtB(v.size):""}</span>`;
+        box.appendChild(row);
+      }
+    }
+    if(!box.children.length) box.innerHTML=`<div class="fx-muted" style="padding:0.5rem">No apps or volumes found yet.</div>`;
+  }
+  function collectTargets(){
+    const targets=[];
+    (jobsState.tree.apps||[]).forEach(a=>{
+      const cb=$("j-tree").querySelector(`.jt-app-cb[data-app="${CSS.escape(a.name)}"]`);
+      if(cb&&cb.checked) targets.push({type:"app",ref:a.name});
+      else $("j-tree").querySelectorAll(`.jt-vol[data-app="${CSS.escape(a.name)}"]:checked`).forEach(c=>targets.push({type:"volume",ref:c.dataset.vol}));
+    });
+    $("j-tree").querySelectorAll(".jt-vol:not([data-app]):checked").forEach(c=>targets.push({type:"volume",ref:c.dataset.vol}));
+    return targets;
+  }
+  function jobKindChanged(){ const k=$("j-kind").value; $("j-timerow").style.display=(k==="manual"||k==="hourly")?"none":""; $("j-dayrow").style.display=k==="weekly"?"":"none"; }
+  $("j-kind").addEventListener("change",jobKindChanged);
+  function showEditor(on){ $("bk-main").style.display=on?"none":""; $("bk-editor").hidden=!on; }
+  function openJob(j){
+    renderTree();
+    const tgt=$("j-tgt"); tgt.innerHTML=(jobsState.tree.targetVolumes||[]).map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
+    if(j){
+      $("bk-crumb-cur").textContent="Edit job"; $("j-id").value=j.id; $("j-name").value=j.name; tgt.value=j.targetVolume;
+      $("j-kind").value=j.kind||"manual"; $("j-time").value=j.time||"03:00"; $("j-day").value=String(j.weekday||0); $("j-ret").value=j.retentionDays; $("j-en").checked=j.enabled;
+      for(const t of (j.targets||[])){
+        if(t.type==="app"){ const c=$("j-tree").querySelector(`.jt-app-cb[data-app="${CSS.escape(t.ref)}"]`); if(c){ c.checked=true; c.dispatchEvent(new Event("change")); } }
+        else { const c=$("j-tree").querySelector(`.jt-vol[data-vol="${CSS.escape(t.ref)}"]`); if(c) c.checked=true; }
+      }
+    } else {
+      $("bk-crumb-cur").textContent="New job"; $("j-id").value=""; $("j-name").value="";
+      $("j-kind").value="manual"; $("j-time").value="03:00"; $("j-day").value="0"; $("j-ret").value="30"; $("j-en").checked=true;
+    }
+    jobKindChanged(); showEditor(true);
+  }
+  $("bk-new-job").addEventListener("click",()=>openJob(null));
+  $("bk-crumb-back").addEventListener("click",()=>showEditor(false));
+  $("j-cancel").addEventListener("click",()=>showEditor(false));
+  $("j-save").addEventListener("click",async()=>{
+    const targets=collectTargets();
+    if(!$("j-name").value.trim()){ flash("Give the job a name.",false); return; }
+    if(!targets.length){ flash("Pick at least one app or volume.",false); return; }
+    const job={ id:$("j-id").value, name:$("j-name").value.trim(), targets, targetVolume:$("j-tgt").value,
+      kind:$("j-kind").value, time:$("j-time").value, weekday:+$("j-day").value, retentionDays:+$("j-ret").value, enabled:$("j-en").checked };
+    try{ const r=await fetch("/api/v1/backups/jobs/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(job)});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }
+      showEditor(false); flash("Job saved.",true); loadJobs();
+    }catch(e){ flash("Save failed: "+e.message,false); }
+  });
+
+  // ---- History (produced backups: apps + volumes, unified) ----
+  async function loadHistory(){
+    try{
+      const [v,a]=await Promise.all([fetch("/api/v1/backups/list").then(r=>r.json()),fetch("/api/v1/backups/apps").then(r=>r.json())]);
+      hist.vol=v.backups||[]; hist.targets=v.sourceVolumes||[]; hist.app=a.apps||[]; hist.appTargets=a.targetVolumes||[];
+    }catch(_){ $("bk-hist-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
+    updateCards();
+    const rows=[
+      ...hist.app.map(b=>({kind:"app",created:b.createdUtc,size:b.sizeBytes,tgt:b.targetVolume,file:b.fileName,title:b.title||b.stackName,sub:`${b.containers} container(s) · ${(b.volumes||[]).length} vol`,ref:b})),
+      ...hist.vol.map(b=>({kind:"vol",created:b.createdUtc,size:b.sizeBytes,tgt:b.targetVolume,file:b.fileName,title:b.sourceVolume,sub:b.fileName,ref:b})),
+    ].sort((x,y)=>new Date(y.created)-new Date(x.created));
+    if(!rows.length){ $("bk-hist-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No backups yet — run a job.</td></tr>`; return; }
+    $("bk-hist-rows").innerHTML=rows.map((r,i)=>`<tr data-i="${i}">
+      <td>${esc(fmtWhen(r.created))}</td>
+      <td><span class="pill ${r.kind==="app"?"app":"vol"}">${r.kind==="app"?"APP":"VOLUME"}</span> <strong>${esc(r.title)}</strong><div class="fx-muted" style="font-size:0.72rem">${esc(r.sub)}</div></td>
+      <td class="mono">${esc(r.tgt)}</td>
+      <td class="num">${fmtB(r.size)}</td>
       <td><div class="bk-acts">
         <button class="ui-btn" data-rst="${i}">Restore</button>
         <button class="ui-btn" data-dl="${i}">Download</button>
         <button class="ui-btn danger" data-del="${i}">Delete</button>
       </div></td></tr>`).join("");
-    $("bk-rows").querySelectorAll("[data-rst]").forEach(b=>b.addEventListener("click",()=>openRestore(+b.dataset.rst)));
-    $("bk-rows").querySelectorAll("[data-dl]").forEach(b=>b.addEventListener("click",()=>{ const x=bs[+b.dataset.dl]; window.open(`/api/v1/backups/download?volume=${encodeURIComponent(x.targetVolume)}&file=${encodeURIComponent(x.fileName)}`, "_blank"); }));
-    $("bk-rows").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>del(bs[+b.dataset.del])));
+    const get=i=>rows[+i];
+    $("bk-hist-rows").querySelectorAll("[data-rst]").forEach(b=>b.addEventListener("click",()=>{ const r=get(b.dataset.rst); r.kind==="app"?openAppRestore(r.ref):openVolRestore(r.ref); }));
+    $("bk-hist-rows").querySelectorAll("[data-dl]").forEach(b=>b.addEventListener("click",()=>{ const r=get(b.dataset.dl); const base=r.kind==="app"?"/api/v1/backups/apps/download":"/api/v1/backups/download"; window.open(`${base}?volume=${encodeURIComponent(r.tgt)}&file=${encodeURIComponent(r.file)}`,"_blank"); }));
+    $("bk-hist-rows").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{ const r=get(b.dataset.del); delBackup(r); }));
   }
+  async function delBackup(r){ if(!await matDialog.confirm(`Delete backup "${r.file}"?`,{title:"Delete backup",danger:true,okLabel:"Delete"})) return;
+    const url=r.kind==="app"?"/api/v1/backups/apps/delete":"/api/v1/backups/delete";
+    try{ await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:r.tgt,fileName:r.file})}); loadHistory(); }
+    catch(_){ flash("Delete failed.",false); } }
 
-  // ---- New backup dialog ----
-  function populateSelects(){
-    const srcSel=$("bk-src"); srcSel.innerHTML=state.sourceVolumes.map(v=>`<option value="${escA(v.name)}">${esc(v.name)}${v.isSmb?"  (SMB)":""}${v.size>0?"  ·  "+fmtB(v.size):""}</option>`).join("");
-    const tgtSel=$("bk-tgt"); tgtSel.innerHTML=state.targetVolumes.map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
-  }
-  $("bk-new").addEventListener("click",()=>{ if(!state.sourceVolumes.length){ flash("No volumes available.",false); return; } populateSelects(); $("bk-new-dlg").hidden=false; });
-  $("bk-cancel").addEventListener("click",()=>{ $("bk-new-dlg").hidden=true; });
-  $("bk-go").addEventListener("click",async()=>{
-    const btn=$("bk-go"); const src=$("bk-src").value, tgt=$("bk-tgt").value;
-    if(!src){ flash("Pick a source volume.",false); return; }
-    if(src===tgt){ flash("Source and target must differ.",false); return; }
-    btn.disabled=true; const orig=btn.textContent; btn.textContent="Backing up…";
-    try{ const r=await fetch("/api/v1/backups/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sourceVolume:src,targetVolume:tgt})});
-      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
-      const j=await r.json(); flash(`Backup written to ${j.backup.targetVolume}/${j.backup.fileName} (${fmtB(j.backup.sizeBytes)}).`,true);
-      $("bk-new-dlg").hidden=true; load();
-    }catch(e){ flash("Backup failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
-  });
-
-  // ---- Restore dialog ----
-  let rstIdx=-1;
-  function openRestore(i){ rstIdx=i; const b=state.backups[i]; if(!b) return;
-    $("bk-rst-info").innerHTML=`Restoring <strong>${esc(b.fileName)}</strong> from <span class="mono">${esc(b.targetVolume)}</span>. Original source volume: <strong>${esc(b.sourceVolume)}</strong>.`;
-    const sel=$("bk-rst-tgt"); sel.innerHTML=state.sourceVolumes.map(v=>`<option value="${escA(v.name)}" ${v.name===b.sourceVolume?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
+  // volume restore
+  let rstBackup=null;
+  function openVolRestore(b){ rstBackup=b;
+    $("bk-rst-info").innerHTML=`Restoring <strong>${esc(b.fileName)}</strong>. Original source volume: <strong>${esc(b.sourceVolume)}</strong>.`;
+    const sel=$("bk-rst-tgt"); sel.innerHTML=(hist.targets||[]).map(v=>`<option value="${escA(v.name)}" ${v.name===b.sourceVolume?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
     $("bk-rst-dlg").hidden=false; }
   $("bk-rst-cancel").addEventListener("click",()=>{ $("bk-rst-dlg").hidden=true; });
   $("bk-rst-go").addEventListener("click",async()=>{
-    const b=state.backups[rstIdx]; if(!b) return;
-    const into=$("bk-rst-tgt").value;
-    if(!await matDialog.confirm(`Restore backup INTO "${into}"? Existing files in that volume will be removed first.`,{title:"Restore backup",danger:true,okLabel:"Restore"})) return;
-    const btn=$("bk-rst-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Restoring…";
+    const b=rstBackup; if(!b) return; const into=$("bk-rst-tgt").value;
+    if(!await matDialog.confirm(`Restore INTO "${into}"? Existing files in that volume are removed first.`,{title:"Restore backup",danger:true,okLabel:"Restore"})) return;
+    const btn=$("bk-rst-go"); btn.disabled=true; const o=btn.textContent; btn.textContent="Restoring…";
     try{ const r=await fetch("/api/v1/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName,restoreInto:into})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
       flash(`Restored to ${into}.`,true); $("bk-rst-dlg").hidden=true;
-    }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
+    }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=o; }
   });
-
-  async function del(b){ if(!await matDialog.confirm(`Delete backup "${b.fileName}" from ${b.targetVolume}?`,{title:"Delete backup",danger:true,okLabel:"Delete"})) return;
-    try{ await fetch("/api/v1/backups/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})}); load(); }
-    catch(e){ flash("Delete failed.",false); } }
-
-  // ---- Schedules ----
-  let tab="backups", schedules=[];
-  document.querySelectorAll("#bk-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
-    document.querySelectorAll("#bk-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
-    tab=t.dataset.tab;
-    $("bk-pane-backups").style.display = tab==="backups"?"":"none";
-    $("bk-pane-apps").style.display = tab==="apps"?"":"none";
-    $("bk-pane-schedules").style.display = tab==="schedules"?"":"none";
-    $("bk-new").style.display = tab==="backups"?"":"none";
-    $("bk-new-app").style.display = tab==="apps"?"":"none";
-    $("bk-new-sched").style.display = tab==="schedules"?"":"none";
-    if(tab==="schedules") loadSchedules();
-    else if(tab==="apps") loadApps();
-  }));
-
-  async function loadSchedules(){
-    try{ const d=await (await fetch("/api/v1/backups/schedules")).json(); schedules=d.schedules||[]; }
-    catch(_){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
-    schedCount=schedules.length; updateCards();
-    const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    if(!schedules.length){ $("bk-sched-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">No schedules yet — click "New schedule".</td></tr>`; return; }
-    $("bk-sched-rows").innerHTML=schedules.map((s,i)=>{
-      const sources = (s.sourceVolumes && s.sourceVolumes.length) ? s.sourceVolumes : (s.sourceVolume?[s.sourceVolume]:[]);
-      const lbl=p=> p==="*" ? "All volumes" : (p.endsWith("/*") ? "🧱 "+p.slice(0,-2) : p);
-      const srcStr = (sources.length===0 || sources.includes("*")) ? "<em>All volumes</em>"
-        : (sources.length<=2 ? sources.map(x=>esc(lbl(x))).join(", ") : `${esc(lbl(sources[0]))} + ${sources.length-1} more`);
-      return `<tr class="${s.enabled?'':'sched-off'}" data-i="${i}">
-      <td><strong>${esc(s.name)}</strong>${s.lastError?'<div class="fx-muted" style="font-size:0.7rem;color:#ffb3c0">⚠ '+esc(s.lastError)+'</div>':''}</td>
-      <td class="mono">${srcStr} → ${esc(s.targetVolume)}</td>
-      <td>${s.kind==="hourly"?"Hourly":s.kind==="weekly"?days[s.weekday]+" "+esc(s.time):"Daily at "+esc(s.time)}</td>
-      <td>${s.retentionDays>0?s.retentionDays+" d":"∞"}</td>
-      <td class="fx-muted">${s.lastRunUtc?fmtWhen(s.lastRunUtc):"—"}</td>
-      <td><div class="bk-acts">
-        <button class="ui-btn" data-sedit="${i}">Edit</button>
-        <button class="ui-btn danger" data-sdel="${i}">Delete</button>
-      </div></td></tr>`;}).join("");
-    $("bk-sched-rows").querySelectorAll("[data-sedit]").forEach(b=>b.addEventListener("click",()=>openSched(schedules[+b.dataset.sedit])));
-    $("bk-sched-rows").querySelectorAll("[data-sdel]").forEach(b=>b.addEventListener("click",()=>delSched(schedules[+b.dataset.sdel])));
-  }
-
-  async function openSched(s){
-    populateSelects();
-    // Source picker: "All volumes (*)", then volumes grouped by the stack that uses them, then the rest.
-    const sv=await ensureStackVols();
-    const meta=n=>state.sourceVolumes.find(v=>v.name===n)||{};
-    const pick=$("bk-sched-srcs"); pick.innerHTML="";
-    const allRow=document.createElement("label"); allRow.className="all";
-    allRow.innerHTML=`<input type="checkbox" id="bk-sched-src-all"> All volumes (*) <span class="fx-muted">— every current &amp; future volume</span>`;
-    pick.appendChild(allRow);
-    const volRow=n=>{ const m=meta(n); const row=document.createElement("label"); row.className="bk-vol";
-      row.innerHTML=`<input type="checkbox" data-src="${escA(n)}"> ${esc(n)}${m.isSmb?"  (SMB)":""}${m.size>0?"  · "+fmtB(m.size):""}`; return row; };
-    // A stack group with a "select whole stack" checkbox stores a pattern (stack/*) that also covers
-    // future volumes; when checked its individual volumes are shown checked+disabled (covered).
-    const group=(title,names,stackName)=>{ if(!names.length) return;
-      const g=document.createElement("div"); g.className="bk-stackgrp";
-      const head=document.createElement("label"); head.className="bk-stackgrp-head";
-      head.innerHTML = stackName
-        ? `<input type="checkbox" class="bk-stack-all" data-stackall="${escA(stackName)}"> ${esc(title)} <span class="fx-muted" style="font-weight:400">(${names.length}, incl. future)</span>`
-        : `<span>${esc(title)}</span>`;
-      g.appendChild(head); for(const n of names) g.appendChild(volRow(n)); pick.appendChild(g);
-      const sa=head.querySelector(".bk-stack-all");
-      if(sa) sa.addEventListener("change",e=>{ g.querySelectorAll("[data-src]").forEach(c=>{ c.checked=e.target.checked; c.disabled=e.target.checked; }); });
-    };
-    const srcNames=state.sourceVolumes.map(v=>v.name); const srcSet=new Set(srcNames); const claimed=new Set();
-    for(const grp of sv.groups){ const names=grp.vols.filter(n=>srcSet.has(n)); if(names.length){ group("🧱 "+grp.stack, names, grp.stack); names.forEach(n=>claimed.add(n)); } }
-    group("Other volumes", srcNames.filter(n=>!claimed.has(n)), null);
-    const allCb=$("bk-sched-src-all");
-    allCb.addEventListener("change",()=>{ pick.querySelectorAll("[data-src], .bk-stack-all").forEach(c=>{ c.disabled=allCb.checked; if(allCb.checked) c.checked=false; }); });
-    // Target dropdown
-    const tgtSel=$("bk-sched-tgt"); tgtSel.innerHTML=$("bk-tgt").innerHTML;
-
-    if(s){
-      $("bk-sched-id").value=s.id; $("bk-sched-name").value=s.name; tgtSel.value=s.targetVolume;
-      const list = (s.sourceVolumes && s.sourceVolumes.length) ? s.sourceVolumes : (s.sourceVolume?[s.sourceVolume]:[]);
-      if(!list.length || list.includes("*")){ allCb.checked=true; allCb.dispatchEvent(new Event("change")); }
-      else for(const p of list){
-        if(p.endsWith("/*")){ const c=pick.querySelector(`.bk-stack-all[data-stackall="${CSS.escape(p.slice(0,-2))}"]`); if(c){ c.checked=true; c.dispatchEvent(new Event("change")); } }
-        else { const c=pick.querySelector(`[data-src="${CSS.escape(p)}"]`); if(c) c.checked=true; }
-      }
-      $("bk-sched-kind").value=s.kind; $("bk-sched-time").value=s.time; $("bk-sched-day").value=String(s.weekday);
-      $("bk-sched-ret").value=s.retentionDays; $("bk-sched-en").checked=s.enabled;
-    } else {
-      $("bk-sched-id").value=""; $("bk-sched-name").value="";
-      $("bk-sched-kind").value="daily"; $("bk-sched-time").value="03:00"; $("bk-sched-day").value="0";
-      $("bk-sched-ret").value="30"; $("bk-sched-en").checked=true;
-    }
-    kindChanged();
-    $("bk-sched-dlg").hidden=false;
-  }
-  function kindChanged(){ const k=$("bk-sched-kind").value; $("bk-sched-timerow").style.display = k==="hourly"?"none":""; $("bk-sched-dayrow").style.display = k==="weekly"?"":"none"; }
-  $("bk-sched-kind").addEventListener("change",kindChanged);
-  $("bk-new-sched").addEventListener("click",()=>{ if(!state.sourceVolumes.length){ flash("No volumes available.",false); return; } openSched(null); });
-  $("bk-sched-cancel").addEventListener("click",()=>{ $("bk-sched-dlg").hidden=true; });
-  $("bk-sched-save").addEventListener("click",async()=>{
-    const allCb=$("bk-sched-src-all"); const picks=$("bk-sched-srcs");
-    // Build the source patterns: "*" for all, "<stack>/*" per whole-stack selection, plain names otherwise.
-    let sourceVolumes;
-    if(allCb && allCb.checked) sourceVolumes=["*"];
-    else {
-      sourceVolumes=[];
-      picks.querySelectorAll(".bk-stack-all:checked").forEach(c=>{ if(c.dataset.stackall) sourceVolumes.push(c.dataset.stackall+"/*"); });
-      picks.querySelectorAll("[data-src]:checked").forEach(c=>{ if(!c.disabled) sourceVolumes.push(c.dataset.src); });
-    }
-    const body={ id:$("bk-sched-id").value, name:$("bk-sched-name").value.trim(),
-      sourceVolumes, targetVolume:$("bk-sched-tgt").value,
-      kind:$("bk-sched-kind").value, time:$("bk-sched-time").value, weekday:+$("bk-sched-day").value,
-      retentionDays:+$("bk-sched-ret").value, enabled:$("bk-sched-en").checked };
-    if(sourceVolumes.length===0){ flash("Pick a volume, a whole stack, or 'All volumes'.",false); return; }
-    if(sourceVolumes.includes(body.targetVolume)){ flash("A source volume can't equal the target.",false); return; }
-    try{ const r=await fetch("/api/v1/backups/schedules/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }
-      $("bk-sched-dlg").hidden=true; flash("Schedule saved.",true); loadSchedules();
-    }catch(e){ flash("Save failed: "+e.message,false); }
-  });
-  async function delSched(s){ if(!await matDialog.confirm(`Delete schedule "${s.name}"?`,{title:"Delete schedule",danger:true,okLabel:"Delete"})) return;
-    try{ await fetch("/api/v1/backups/schedules/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:s.id})}); loadSchedules(); }
-    catch(_){ flash("Delete failed.",false); } }
-
-  // ---- Whole-app backups ----
-  let appState={apps:[],stacks:[],targetVolumes:[]}, appCount=null;
-  async function loadApps(){
-    try{ appState=await (await fetch("/api/v1/backups/apps")).json(); }
-    catch(_){ $("bk-app-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
-    appCount=(appState.apps||[]).length; updateCards();
-    const bs=appState.apps||[];
-    if(!bs.length){ $("bk-app-rows").innerHTML=`<tr><td colspan="6" style="padding:1rem;color:var(--mat-text-muted)">No app backups yet — click "Back up an app".</td></tr>`; return; }
-    $("bk-app-rows").innerHTML=bs.map((b,i)=>`<tr data-i="${i}">
-      <td>${esc(fmtWhen(b.createdUtc))}</td>
-      <td><strong>${esc(b.title||b.stackName)}</strong><div class="fx-muted" style="font-size:0.72rem">${esc(b.stackName)}</div></td>
-      <td>${b.containers} container${b.containers===1?"":"s"} · ${(b.volumes||[]).length} volume${(b.volumes||[]).length===1?"":"s"}</td>
-      <td class="mono">${esc(b.targetVolume)}${(appState.targetVolumes.find(v=>v.name===b.targetVolume)||{}).isSmb?'<span class="smb-chip">SMB</span>':''}</td>
-      <td class="num">${fmtB(b.sizeBytes)}</td>
-      <td><div class="bk-acts">
-        <button class="ui-btn" data-arst="${i}">Restore</button>
-        <button class="ui-btn" data-adl="${i}">Download</button>
-        <button class="ui-btn danger" data-adel="${i}">Delete</button>
-      </div></td></tr>`).join("");
-    $("bk-app-rows").querySelectorAll("[data-arst]").forEach(b=>b.addEventListener("click",()=>openAppRestore(+b.dataset.arst)));
-    $("bk-app-rows").querySelectorAll("[data-adl]").forEach(b=>b.addEventListener("click",()=>{ const x=bs[+b.dataset.adl]; window.open(`/api/v1/backups/apps/download?volume=${encodeURIComponent(x.targetVolume)}&file=${encodeURIComponent(x.fileName)}`,"_blank"); }));
-    $("bk-app-rows").querySelectorAll("[data-adel]").forEach(b=>b.addEventListener("click",()=>delApp(bs[+b.dataset.adel])));
-  }
-  function renderAppVols(){
-    const st=appState.stacks.find(s=>s.name===$("bk-app-stack").value); const box=$("bk-app-vols");
-    if(!st){ box.innerHTML=`<span class="fx-muted" style="font-size:0.8rem">Pick an app…</span>`; return; }
-    if(!st.volumes.length){ box.innerHTML=`<span class="fx-muted" style="font-size:0.8rem">This app has no named volumes — the compose &amp; config are still backed up.</span>`; return; }
-    box.innerHTML=`<label class="all"><input type="checkbox" id="bk-app-vol-all" checked> All volumes</label>`+
-      st.volumes.map(v=>`<label class="bk-vol"><input type="checkbox" class="bk-app-vol" data-v="${escA(v)}" checked> ${esc(v)}</label>`).join("");
-    const all=$("bk-app-vol-all");
-    all.addEventListener("change",()=>box.querySelectorAll(".bk-app-vol").forEach(c=>c.checked=all.checked));
-    box.querySelectorAll(".bk-app-vol").forEach(c=>c.addEventListener("change",()=>{ all.checked=[...box.querySelectorAll(".bk-app-vol")].every(x=>x.checked); }));
-  }
-  $("bk-new-app").addEventListener("click",()=>{
-    if(!appState.stacks.length){ flash("No apps found to back up.",false); return; }
-    const sel=$("bk-app-stack"); sel.innerHTML=appState.stacks.map(s=>`<option value="${escA(s.name)}">${esc(s.title||s.name)}${s.total?`  ·  ${s.running}/${s.total} running`:""}</option>`).join("");
-    const tgt=$("bk-app-tgt"); tgt.innerHTML=appState.targetVolumes.map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
-    renderAppVols(); $("bk-app-dlg").hidden=false;
-  });
-  $("bk-app-stack").addEventListener("change",renderAppVols);
-  $("bk-app-cancel").addEventListener("click",()=>{ $("bk-app-dlg").hidden=true; });
-  $("bk-app-go").addEventListener("click",async()=>{
-    const stack=$("bk-app-stack").value; if(!stack){ flash("Pick an app.",false); return; }
-    const box=$("bk-app-vols"); const all=$("bk-app-vol-all");
-    let volumes=null; // null = all
-    if(all && !all.checked) volumes=[...box.querySelectorAll(".bk-app-vol:checked")].map(c=>c.dataset.v);
-    const btn=$("bk-app-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Backing up…";
-    try{ const r=await fetch("/api/v1/backups/apps/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({stack,volumes,targetVolume:$("bk-app-tgt").value})});
-      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
-      const j=await r.json(); flash(`App backed up: ${j.backup.title||j.backup.stackName} (${j.backup.containers} containers, ${(j.backup.volumes||[]).length} volumes, ${fmtB(j.backup.sizeBytes)}).`,true);
-      $("bk-app-dlg").hidden=true; loadApps();
-    }catch(e){ flash("App backup failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
-  });
-  let arstIdx=-1;
-  function openAppRestore(i){ arstIdx=i; const b=appState.apps[i]; if(!b) return;
-    $("bk-arst-info").innerHTML=`Restoring <strong>${esc(b.title||b.stackName)}</strong> — ${b.containers} container${b.containers===1?"":"s"} and ${(b.volumes||[]).length} volume${(b.volumes||[]).length===1?"":"s"}${(b.volumes||[]).length?': <span class="mono">'+b.volumes.map(esc).join(", ")+'</span>':''}.`;
+  // app restore
+  let arstBackup=null;
+  function openAppRestore(b){ arstBackup=b;
+    $("bk-arst-info").innerHTML=`Restoring <strong>${esc(b.title||b.stackName)}</strong> — ${b.containers} container(s) and ${(b.volumes||[]).length} volume(s)${(b.volumes||[]).length?': <span class="mono">'+b.volumes.map(esc).join(", ")+'</span>':''}.`;
     $("bk-arst-dlg").hidden=false; }
   $("bk-arst-cancel").addEventListener("click",()=>{ $("bk-arst-dlg").hidden=true; });
   $("bk-arst-go").addEventListener("click",async()=>{
-    const b=appState.apps[arstIdx]; if(!b) return;
+    const b=arstBackup; if(!b) return;
     if(!await matDialog.confirm(`Restore "${b.title||b.stackName}"? Its containers are recreated and the included volumes' data is overwritten.`,{title:"Restore app",danger:true,okLabel:"Restore & run"})) return;
-    const btn=$("bk-arst-go"); btn.disabled=true; const orig=btn.textContent; btn.textContent="Restoring…";
+    const btn=$("bk-arst-go"); btn.disabled=true; const o=btn.textContent; btn.textContent="Restoring…";
     try{ const r=await fetch("/api/v1/backups/apps/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
       flash(`Restored ${b.title||b.stackName} — the app is starting.`,true); $("bk-arst-dlg").hidden=true;
-    }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=orig; }
+    }catch(e){ flash("Restore failed: "+e.message,false); } finally{ btn.disabled=false; btn.textContent=o; }
   });
-  async function delApp(b){ if(!await matDialog.confirm(`Delete app backup "${b.fileName}"?`,{title:"Delete app backup",danger:true,okLabel:"Delete"})) return;
-    try{ await fetch("/api/v1/backups/apps/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetVolume:b.targetVolume,fileName:b.fileName})}); loadApps(); }
-    catch(e){ flash("Delete failed.",false); } }
 
-  $("bk-refresh").addEventListener("click",()=>{ if(tab==="schedules") loadSchedules(); else if(tab==="apps") loadApps(); else load(); });
-  load(); loadApps();
+  // ---- tabs ----
+  let tab="jobs";
+  document.querySelectorAll("#bk-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll("#bk-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+    tab=t.dataset.tab;
+    $("bk-pane-jobs").style.display=tab==="jobs"?"":"none";
+    $("bk-pane-history").style.display=tab==="history"?"":"none";
+    $("bk-new-job").style.display=tab==="jobs"?"":"none";
+    if(tab==="history") loadHistory();
+  }));
+  $("bk-refresh").addEventListener("click",()=>{ if(tab==="history") loadHistory(); else loadJobs(); });
+
+  loadJobs(); loadHistory();
 })();
 </script>
 }

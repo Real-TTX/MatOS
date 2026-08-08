@@ -113,7 +113,34 @@ public static class BackupsApi
             return Results.File(p, "application/gzip", name);
         });
 
-        // ---- Scheduled backups ----
+        // ---- Backup jobs (tree selection of apps + volumes; manual or scheduled) ----
+        g.MapGet("/jobs", async (BackupJobService jobs, BackupService svc, CancellationToken ct) =>
+        {
+            await svc.EnsureDefaultTargetAsync(ct);
+            var tree = await jobs.BuildTreeAsync(ct);
+            return Results.Ok(new { jobs = jobs.Store.Jobs, tree });
+        });
+
+        g.MapPost("/jobs/save", async (BackupJob job, BackupJobService jobs) =>
+        {
+            if (string.IsNullOrWhiteSpace(job.Name)) return Results.BadRequest(new { error = "A job name is required." });
+            if (job.Targets == null || job.Targets.Count == 0) return Results.BadRequest(new { error = "Select at least one app or volume to back up." });
+            return Results.Ok(new { job = await jobs.SaveAsync(job) });
+        });
+
+        g.MapPost("/jobs/delete", async (IdBody b, BackupJobService jobs) =>
+        { await jobs.DeleteAsync(b.Id); return Results.Ok(new { ok = true }); });
+
+        g.MapPost("/jobs/run", (IdBody b, BackupJobService jobs) =>
+        {
+            var job = jobs.Store.Jobs.FirstOrDefault(j => j.Id == b.Id);
+            if (job == null) return Results.NotFound();
+            // Fire-and-forget so a large backup can't time out the request; completion posts a notification.
+            _ = Task.Run(() => jobs.RunJobAsync(job, CancellationToken.None));
+            return Results.Ok(new { started = true });
+        });
+
+        // ---- Scheduled backups (legacy volume-only schedules) ----
         g.MapGet("/schedules", (JsonConfigService config) =>
         {
             var store = config.Get<BackupScheduleStore>("backup-schedules");
