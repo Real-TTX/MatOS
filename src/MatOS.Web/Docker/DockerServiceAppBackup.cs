@@ -44,7 +44,8 @@ public record AppSnapshot(
     string Title,
     DateTime CreatedUtc,
     List<ContainerSpec> Containers,
-    List<string> Volumes);
+    List<string> Volumes,
+    List<string>? Images = null);
 
 public partial class DockerService
 {
@@ -135,6 +136,25 @@ public partial class DockerService
         var title = stack.Containers.Select(x => x.Labels.GetValueOrDefault(MatosLabels.Title))
                         .FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)) ?? stackName;
         return new AppSnapshot(stackName, title!, DateTime.UtcNow, specs, volumes);
+    }
+
+    /// <summary>Save a Docker image to a tar file (docker save) so a backup can carry the image itself
+    /// and a restore works fully offline (no registry pull). Best effort.</summary>
+    public async Task SaveImageToAsync(string image, string filePath, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        await using var src = await client.Images.SaveImageAsync(image, ct);
+        await using var fs = File.Create(filePath);
+        await src.CopyToAsync(fs, ct);
+    }
+
+    /// <summary>Load a Docker image from a tar file (docker load) — used on restore to bring bundled
+    /// images back before recreating containers.</summary>
+    public async Task LoadImageFromAsync(string filePath, CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        await using var fs = File.OpenRead(filePath);
+        await client.Images.LoadImageAsync(new ImageLoadParameters { Quiet = true }, fs, new Progress<JSONMessage>(_ => { }), ct);
     }
 
     /// <summary>True if a named Docker volume exists.</summary>

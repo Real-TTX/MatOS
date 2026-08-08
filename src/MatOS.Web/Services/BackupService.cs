@@ -8,9 +8,10 @@ namespace MatOS.Web.Services;
 /// <summary>Metadata for one backup file that lives on a target volume.</summary>
 public record BackupInfo(string TargetVolume, string FileName, string SourceVolume, long SizeBytes, DateTime CreatedUtc);
 
-/// <summary>Metadata for one whole-app backup bundle (compose/config manifest + volume archives).</summary>
+/// <summary>Metadata for one whole-app backup bundle (compose/config manifest + volume archives +
+/// optionally the app's Docker images for offline restore).</summary>
 public record AppBackupInfo(string TargetVolume, string FileName, string StackName, string Title,
-    IReadOnlyList<string> Volumes, int Containers, long SizeBytes, DateTime CreatedUtc);
+    IReadOnlyList<string> Volumes, int Containers, int Images, long SizeBytes, DateTime CreatedUtc);
 
 /// <summary>Built-in backup engine: each backup is a gzip-compressed tar of a source volume's
 /// _data directory, written into another volume's _data directory. Because matOS bind-mounts
@@ -183,15 +184,22 @@ public class BackupService
     }
 
     /// <summary>Back up a whole app: snapshot every container's config (pinned image) + archive the
-    /// stack's named volumes (all by default, or the given subset) into one bundle on the target.</summary>
-    public async Task<AppBackupInfo> CreateAppAsync(string stackName, string[]? volumes, string? targetVolume, CancellationToken ct = default)
+    /// stack's named volumes (all by default, or the given subset) into one bundle on the target. When
+    /// <paramref name="includeImages"/> is set, the app's Docker images are saved into the bundle too
+    /// (docker save) so a restore is fully self-contained and works offline (no registry pull).</summary>
+    public async Task<AppBackupInfo> CreateAppAsync(string stackName, string[]? volumes, string? targetVolume, bool includeImages = true, CancellationToken ct = default)
     {
         var snap = await _docker.SnapshotStackAsync(stackName, ct)
                    ?? throw new InvalidOperationException($"App '{stackName}' has no containers to back up.");
         var include = (volumes == null || volumes.Length == 0)
             ? snap.Volumes
             : snap.Volumes.Where(v => volumes.Contains(v)).ToList();
-        var manifest = snap with { Volumes = include };
+        // Distinct image references to carry (prefer the tag ref, which docker load restores usable).
+        var imageRefs = includeImages
+            ? snap.Containers.Select(c => !string.IsNullOrWhiteSpace(c.ImageRef) ? c.ImageRef : c.Image)
+                             .Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList()
+            : new List<string>();
+        var manifest = snap with { Volumes = include, Images = imageRefs };
 
         var tgt = SafeName(string.IsNullOrWhiteSpace(targetVolume) ? DefaultTarget : targetVolume!);
         await EnsureDefaultTargetAsync(ct);
@@ -221,6 +229,15 @@ public class BackupService
                 volFiles.Add((v, vt));
             }
 
+            // Save each distinct image to its own tar (docker save) for offline restore.
+            var imgFiles = new List<string>();
+            for (int i = 0; i < imageRefs.Count; i++)
+            {
+                var it = Path.Combine(work, $"img-{i}.tar");
+                try { await _docker.SaveImageToAsync(imageRefs[i], it, ct); imgFiles.Add(it); }
+                catch (Exception ex) { _log.LogWarning(ex, "Could not save image {Image} into backup of {Stack}", imageRefs[i], stackName); }
+            }
+
             var json = JsonSerializer.SerializeToUtf8Bytes(manifest, _json);
             await using (var fs = File.Create(tmpPath))
             await using (var gz = new GZipStream(fs, CompressionLevel.SmallestSize))
@@ -235,12 +252,17 @@ public class BackupService
                         await using var vfs = File.OpenRead(path);
                         await tw.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, $"volumes/{vol}.tar.gz") { DataStream = vfs }, ct);
                     }
+                    for (int i = 0; i < imgFiles.Count; i++)
+                    {
+                        await using var ifs = File.OpenRead(imgFiles[i]);
+                        await tw.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, $"images/img-{i}.tar") { DataStream = ifs }, ct);
+                    }
                 }
             }
             File.Move(tmpPath, outPath, overwrite: true);
             var info = new FileInfo(outPath);
-            _log.LogInformation("Backed up app {Stack} → {Tgt}/{File} ({Size} bytes, {N} volumes)", stackName, tgt, fileName, info.Length, include.Count);
-            return new AppBackupInfo(tgt, fileName, stackName, manifest.Title, include, manifest.Containers.Count, info.Length, info.CreationTimeUtc);
+            _log.LogInformation("Backed up app {Stack} → {Tgt}/{File} ({Size} bytes, {N} volumes, {I} images)", stackName, tgt, fileName, info.Length, include.Count, imgFiles.Count);
+            return new AppBackupInfo(tgt, fileName, stackName, manifest.Title, include, manifest.Containers.Count, imgFiles.Count, info.Length, info.CreationTimeUtc);
         }
         catch { try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { } throw; }
         finally { try { Directory.Delete(work, true); } catch { } }
@@ -295,7 +317,7 @@ public class BackupService
                     var man = ReadManifest(f);
                     results.Add(new AppBackupInfo(v.Name, name,
                         man?.StackName ?? InferSource(name), man?.Title ?? (man?.StackName ?? InferSource(name)),
-                        man?.Volumes ?? new List<string>(), man?.Containers?.Count ?? 0, info.Length, info.CreationTimeUtc));
+                        man?.Volumes ?? new List<string>(), man?.Containers?.Count ?? 0, man?.Images?.Count ?? 0, info.Length, info.CreationTimeUtc));
                 }
                 catch { /* skip unreadable */ }
             }
@@ -313,6 +335,9 @@ public class BackupService
         if (!File.Exists(path)) throw new FileNotFoundException("App backup not found.", name);
 
         DockerAppManifest? manifest = null;
+        var work = Path.Combine(Path.GetTempPath(), "matos-apprst", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        var imageTars = new List<string>();
         await using (var fs = File.OpenRead(path))
         await using (var gz = new GZipStream(fs, CompressionMode.Decompress))
         {
@@ -339,13 +364,27 @@ public class BackupService
                     await using var vgz = new GZipStream(e.DataStream, CompressionMode.Decompress);
                     await TarFile.ExtractToDirectoryAsync(vgz, dstDir, overwriteFiles: true, ct);
                 }
+                else if (e.Name.StartsWith("images/", StringComparison.Ordinal) && e.DataStream != null)
+                {
+                    // Copy the bundled image tar out; it's docker-loaded below before recreation.
+                    var it = Path.Combine(work, Path.GetFileName(e.Name));
+                    await using (var ifs = File.Create(it)) await e.DataStream.CopyToAsync(ifs, ct);
+                    imageTars.Add(it);
+                }
             }
         }
         if (manifest == null) throw new InvalidOperationException("Backup manifest missing or invalid.");
-        // Volumes exist now — recreate the containers (pinned images) so the app comes back running.
-        foreach (var spec in manifest.Containers ?? new List<ContainerSpec>())
-            await _docker.RecreateFromSpecAsync(spec, ct);
-        _log.LogInformation("Restored app {Stack} from {Vol}/{File} ({N} containers)", manifest.StackName, vol, name, manifest.Containers?.Count ?? 0);
+        try
+        {
+            // Load any bundled images first so recreation uses them locally (no registry pull needed).
+            foreach (var it in imageTars)
+                try { await _docker.LoadImageFromAsync(it, ct); } catch (Exception ex) { _log.LogWarning(ex, "Loading bundled image {File} failed", it); }
+            // Volumes + images are in place — recreate the containers so the app comes back running.
+            foreach (var spec in manifest.Containers ?? new List<ContainerSpec>())
+                await _docker.RecreateFromSpecAsync(spec, ct);
+            _log.LogInformation("Restored app {Stack} from {Vol}/{File} ({N} containers, {I} images)", manifest.StackName, vol, name, manifest.Containers?.Count ?? 0, imageTars.Count);
+        }
+        finally { try { Directory.Delete(work, true); } catch { } }
     }
 
     public void DeleteApp(string targetVolume, string fileName)
@@ -367,4 +406,4 @@ public class BackupService
 
 /// <summary>Deserialization mirror of the Docker layer's AppSnapshot (records match field-for-field).
 /// Kept local to the backup service so the manifest schema and the snapshot stay in lock-step.</summary>
-public record DockerAppManifest(string StackName, string Title, DateTime CreatedUtc, List<ContainerSpec> Containers, List<string> Volumes);
+public record DockerAppManifest(string StackName, string Title, DateTime CreatedUtc, List<ContainerSpec> Containers, List<string> Volumes, List<string>? Images = null);

@@ -60,6 +60,8 @@
                     <label class="fl"><span>Keep for (days, 0 = forever)</span><input class="ui-input" id="j-ret" type="number" min="0" max="3650" value="30" /></label>
                     <label style="display:flex;align-items:center;gap:0.4rem;align-self:end;margin-bottom:0.8rem"><input type="checkbox" id="j-en" checked /> Enabled</label>
                 </div>
+                <label class="j-img-row"><input type="checkbox" id="j-img" checked />
+                    <span><strong>Include Docker images</strong><span class="fx-muted">Whole-app backups also carry the image (docker&nbsp;save) so a restore is fully offline — no registry needed. Larger backups.</span></span></label>
             </div>
             <div class="bk-editor-right">
                 <div class="jt-panel">
@@ -172,6 +174,10 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
 .jt-app-title { font-size:0.92rem; }
 .jt-vol-row, .jt-std-row { border-radius:8px; padding:0.26rem 0.4rem; }
 .jt-empty { padding:1.2rem; text-align:center; color:var(--mat-text-muted); font-size:0.85rem; }
+.j-img-row { display:flex; align-items:flex-start; gap:0.55rem; padding:0.6rem 0.75rem; border:1px solid var(--mat-border); border-radius:10px; background:var(--mat-surface-2); margin-bottom:0.8rem; cursor:pointer; }
+.j-img-row input { margin-top:0.15rem; flex:0 0 auto; }
+.j-img-row strong { font-weight:700; }
+.j-img-row .fx-muted { display:block; font-size:0.78rem; margin-top:0.1rem; }
 </style>
 }
 
@@ -315,14 +321,14 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     const tgt=$("j-tgt"); tgt.innerHTML=(jobsState.tree.targetVolumes||[]).map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
     if(j){
       $("bk-crumb-cur").textContent="Edit job"; $("j-id").value=j.id; $("j-name").value=j.name; tgt.value=j.targetVolume;
-      $("j-kind").value=j.kind||"manual"; $("j-time").value=j.time||"03:00"; $("j-day").value=String(j.weekday||0); $("j-ret").value=j.retentionDays; $("j-en").checked=j.enabled;
+      $("j-kind").value=j.kind||"manual"; $("j-time").value=j.time||"03:00"; $("j-day").value=String(j.weekday||0); $("j-ret").value=j.retentionDays; $("j-en").checked=j.enabled; $("j-img").checked=j.includeImages!==false;
       for(const t of (j.targets||[])){
         if(t.type==="app"){ const c=$("j-tree").querySelector(`.jt-app-cb[data-app="${CSS.escape(t.ref)}"]`); if(c){ c.checked=true; c.dispatchEvent(new Event("change")); } }
         else { const c=$("j-tree").querySelector(`.jt-vol[data-vol="${CSS.escape(t.ref)}"]`); if(c) c.checked=true; }
       }
     } else {
       $("bk-crumb-cur").textContent="New job"; $("j-id").value=""; $("j-name").value="";
-      $("j-kind").value="manual"; $("j-time").value="03:00"; $("j-day").value="0"; $("j-ret").value="30"; $("j-en").checked=true;
+      $("j-kind").value="manual"; $("j-time").value="03:00"; $("j-day").value="0"; $("j-ret").value="30"; $("j-en").checked=true; $("j-img").checked=true;
     }
     jobKindChanged(); $("j-tree-search").value=""; filterTree(""); updateSelCount(); showEditor(true);
   }
@@ -334,7 +340,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     if(!$("j-name").value.trim()){ flash("Give the job a name.",false); return; }
     if(!targets.length){ flash("Pick at least one app or volume.",false); return; }
     const job={ id:$("j-id").value, name:$("j-name").value.trim(), targets, targetVolume:$("j-tgt").value,
-      kind:$("j-kind").value, time:$("j-time").value, weekday:+$("j-day").value, retentionDays:+$("j-ret").value, enabled:$("j-en").checked };
+      kind:$("j-kind").value, time:$("j-time").value, weekday:+$("j-day").value, retentionDays:+$("j-ret").value, enabled:$("j-en").checked, includeImages:$("j-img").checked };
     try{ const r=await fetch("/api/v1/backups/jobs/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(job)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }
       showEditor(false); flash("Job saved.",true); loadJobs();
@@ -349,7 +355,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     }catch(_){ $("bk-hist-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Failed to load.</td></tr>`; return; }
     updateCards();
     const rows=[
-      ...hist.app.map(b=>({kind:"app",created:b.createdUtc,size:b.sizeBytes,tgt:b.targetVolume,file:b.fileName,title:b.title||b.stackName,sub:`${b.containers} container(s) · ${(b.volumes||[]).length} vol`,ref:b})),
+      ...hist.app.map(b=>({kind:"app",created:b.createdUtc,size:b.sizeBytes,tgt:b.targetVolume,file:b.fileName,title:b.title||b.stackName,sub:`${b.containers} container(s) · ${(b.volumes||[]).length} vol${b.images?` · ${b.images} img`:""}`,ref:b})),
       ...hist.vol.map(b=>({kind:"vol",created:b.createdUtc,size:b.sizeBytes,tgt:b.targetVolume,file:b.fileName,title:b.sourceVolume,sub:b.fileName,ref:b})),
     ].sort((x,y)=>new Date(y.created)-new Date(x.created));
     if(!rows.length){ $("bk-hist-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No backups yet — run a job.</td></tr>`; return; }

@@ -13,7 +13,7 @@ public static class BackupsApi
     public record RestoreBody(string TargetVolume, string FileName, string RestoreInto);
     public record DeleteBody(string TargetVolume, string FileName);
     public record DownloadQuery(string Volume, string File);
-    public record AppCreateBody(string Stack, string[]? Volumes, string? TargetVolume);
+    public record AppCreateBody(string Stack, string[]? Volumes, string? TargetVolume, bool? IncludeImages);
     public record AppFileBody(string TargetVolume, string FileName);
     public record ScheduleBody(string Id, string Name, List<string>? SourceVolumes, string? SourceVolume, string TargetVolume,
         string Kind, string Time, int Weekday, int RetentionDays, bool Enabled);
@@ -91,7 +91,7 @@ public static class BackupsApi
         g.MapPost("/apps/create", async (AppCreateBody b, BackupService svc, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(b.Stack)) return Results.BadRequest(new { error = "Pick an app." });
-            try { var r = await svc.CreateAppAsync(b.Stack, b.Volumes, b.TargetVolume, ct); return Results.Ok(new { backup = r }); }
+            try { var r = await svc.CreateAppAsync(b.Stack, b.Volumes, b.TargetVolume, b.IncludeImages ?? true, ct); return Results.Ok(new { backup = r }); }
             catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 

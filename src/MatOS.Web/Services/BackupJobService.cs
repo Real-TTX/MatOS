@@ -18,6 +18,9 @@ public class BackupJob
     public string Name { get; set; } = "";
     public List<BackupJobTarget> Targets { get; set; } = new();
     public string TargetVolume { get; set; } = "matos-backups";
+    /// <summary>Bundle the app's Docker images into whole-app backups (docker save) so a restore is
+    /// fully offline. Larger backups; turn off to rely on pulling the pinned image on restore.</summary>
+    public bool IncludeImages { get; set; } = true;
     public string Kind { get; set; } = "manual";   // "manual" | "hourly" | "daily" | "weekly"
     public string Time { get; set; } = "03:00";
     public int Weekday { get; set; }
@@ -106,7 +109,7 @@ public class BackupJobService
             try
             {
                 if (string.Equals(t.Type, "app", StringComparison.OrdinalIgnoreCase))
-                { var b = await _backup.CreateAppAsync(t.Ref, null, job.TargetVolume, ct); bytes += b.SizeBytes; ok++; }
+                { var b = await _backup.CreateAppAsync(t.Ref, null, job.TargetVolume, job.IncludeImages, ct); bytes += b.SizeBytes; ok++; }
                 else
                 { if (t.Ref == job.TargetVolume) continue; var b = await _backup.CreateAsync(t.Ref, job.TargetVolume, ct); bytes += b.SizeBytes; ok++; }
             }
