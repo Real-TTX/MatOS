@@ -15,6 +15,7 @@ public class IndexModel : PageModel
         new("network", "Network", "/apps/network", "network", true),
         new("proxy", "Proxy", "/apps/proxy", "proxy", true),
         new("store", "Store", "/apps/store", "store", false),
+        new("app-builder", "App Builder", "/apps/app-builder", "appbuilder", true),
         new("users", "Users", "/apps/users", "users", true),
         new("settings", "Settings", "/apps/settings", "settings", false),
     };
