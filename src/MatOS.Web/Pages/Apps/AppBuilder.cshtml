@@ -68,6 +68,8 @@
         <div style="display:flex;gap:0.6rem;margin-top:0.6rem">
             <button class="ui-btn primary" id="a-save">Save app</button>
             <button class="ui-btn" id="a-export">Export…</button>
+            <button class="ui-btn" id="a-import">Import…</button>
+            <input type="file" id="a-import-file" accept=".json,application/json" hidden />
             <button class="ui-btn" id="a-reset">Reset</button>
             <button class="ui-btn" id="a-load">Edit existing…</button>
         </div>
@@ -259,6 +261,26 @@
     const index={ name:(a.name||"App")+" — matOS catalog", apps:[entry] };
     download(id+".json", JSON.stringify(index,null,2));
     flash("Exported "+id+".json — host it and add its URL under Store → Sources.",true);
+  });
+  // Import an exported store file (a full index.json or a single app entry) into the form.
+  function importEntry(en){
+    const a={ id:en.id||"", name:en.name||"", category:en.category||"", tagline:en.tagline||"", description:en.description||"",
+      projectUrl:en.projectUrl||"", icon:en.icon||"📦", uiPort:en.uiPort||80, uiService:en.uiService||"",
+      actions:Array.isArray(en.actions)?en.actions:[], widgets:Array.isArray(en.widgets)?en.widgets:[] };
+    const compose=en.composeInline||en.compose||"";
+    if(compose && (en.composeInline || /services\s*:/.test(compose))){ a.kind="compose"; a.compose=compose; }
+    else { a.kind="image"; a.image=en.image||""; a.volumes=Array.isArray(en.volumes)?en.volumes:[]; a.env=(en.env&&typeof en.env==="object")?en.env:{}; }
+    loadApp(a);
+  }
+  $("a-import").addEventListener("click",()=>$("a-import-file").click());
+  $("a-import-file").addEventListener("change",()=>{
+    const f=$("a-import-file").files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{ const j=JSON.parse(r.result); const en=(j&&Array.isArray(j.apps)&&j.apps.length)?j.apps[0]:j;
+      if(!en||typeof en!=="object"||(!en.image&&!en.compose&&!en.composeInline&&!en.name)){ flash("That doesn't look like an exported app file.",false); return; }
+      importEntry(en); flash("Imported “"+(en.name||en.id||"app")+"” — review, then Save or Export.",true);
+    }catch(e){ flash("Import failed: "+e.message,false); } $("a-import-file").value=""; };
+    r.readAsText(f);
   });
   $("a-load").addEventListener("click",async()=>{
     let apps=[]; try{ apps=(await (await fetch("/api/v1/store/catalog")).json()).apps.filter(a=>!a.builtIn && !a.source); }catch(_){}
