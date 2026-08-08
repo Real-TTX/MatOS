@@ -62,8 +62,16 @@
                 </div>
             </div>
             <div class="bk-editor-right">
-                <div class="fl" style="height:100%">
-                    <span>What to back up <span class="fx-muted">(tick apps and/or individual volumes)</span></span>
+                <div class="jt-panel">
+                    <div class="jt-panel-head">
+                        <span class="jt-panel-title">What to back up</span>
+                        <span class="jt-sel-count" id="j-sel-count">Nothing selected</span>
+                    </div>
+                    <div class="jt-search-wrap">
+                        <span class="jt-search-ico">🔍</span>
+                        <input class="jt-search" id="j-tree-search" placeholder="Search apps &amp; volumes…" autocomplete="off" />
+                        <button type="button" class="jt-search-clear" id="j-tree-clear" title="Clear" hidden>✕</button>
+                    </div>
                     <div class="job-tree job-tree-full" id="j-tree"></div>
                 </div>
             </div>
@@ -142,10 +150,28 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
 .bk-crumb-link:hover { text-decoration:underline; }
 .bk-crumb-sep { color:var(--mat-text-muted); }
 #bk-crumb-cur { font-size:1.05rem; font-weight:800; letter-spacing:-0.01em; }
-.bk-editor-grid { display:grid; grid-template-columns:1fr 1.1fr; gap:1.4rem; align-items:start; }
-.job-tree-full { max-height:54vh; }
+.bk-editor-grid { display:grid; grid-template-columns:0.85fr 1.15fr; gap:1.6rem; align-items:start; }
 .bk-editor-actions { display:flex; gap:0.5rem; margin-top:1.3rem; padding-top:1rem; border-top:1px solid var(--mat-border); }
-@@media (max-width:760px){ .bk-editor-grid { grid-template-columns:1fr; } }
+@@media (max-width:820px){ .bk-editor-grid { grid-template-columns:1fr; } }
+
+/* Selection panel (search + tree) */
+.jt-panel { border:1px solid var(--mat-border); border-radius:14px; background:var(--mat-surface); overflow:hidden; display:flex; flex-direction:column; }
+.jt-panel-head { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; padding:0.7rem 0.9rem; border-bottom:1px solid var(--mat-border); }
+.jt-panel-title { font-weight:750; font-size:0.92rem; }
+.jt-sel-count { font-size:0.76rem; font-weight:700; color:var(--mat-accent); background:color-mix(in srgb, var(--mat-accent) 15%, transparent); padding:0.12rem 0.55rem; border-radius:999px; white-space:nowrap; }
+.jt-search-wrap { position:relative; display:flex; align-items:center; padding:0.6rem 0.9rem; border-bottom:1px solid var(--mat-border); }
+.jt-search-ico { position:absolute; left:1.15rem; font-size:0.85rem; opacity:0.6; pointer-events:none; }
+.jt-search { flex:1; background:var(--mat-surface-2); border:1px solid var(--mat-border); border-radius:9px; color:var(--mat-text); font:inherit; font-size:0.88rem; padding:0.45rem 1.9rem; }
+.jt-search:focus { outline:none; border-color:var(--mat-accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--mat-accent) 22%, transparent); }
+.jt-search-clear { position:absolute; right:1.15rem; border:none; background:transparent; color:var(--mat-text-muted); cursor:pointer; font-size:0.8rem; }
+.job-tree-full { max-height:56vh; min-height:240px; border:none; border-radius:0; background:transparent; padding:0.4rem 0.55rem; }
+/* larger, nicer rows */
+.jt-app-head { border-radius:9px; padding:0.34rem 0.35rem; }
+.jt-app-head:hover, .jt-vol-row:hover, .jt-std-row:hover { background:var(--mat-surface-2); }
+.jt-app-head.sel { background:color-mix(in srgb, var(--mat-accent) 12%, transparent); }
+.jt-app-title { font-size:0.92rem; }
+.jt-vol-row, .jt-std-row { border-radius:8px; padding:0.26rem 0.4rem; }
+.jt-empty { padding:1.2rem; text-align:center; color:var(--mat-text-muted); font-size:0.85rem; }
 </style>
 }
 
@@ -216,34 +242,61 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
   function renderTree(){
     const t=jobsState.tree||{apps:[],volumes:[]}; const box=$("j-tree"); box.innerHTML="";
     if((t.apps||[]).length){
-      const h=document.createElement("div"); h.className="jt-sec"; h.textContent="Apps"; box.appendChild(h);
+      const h=document.createElement("div"); h.className="jt-sec jt-sec-apps"; h.textContent="Apps"; box.appendChild(h);
       for(const a of t.apps){
-        const wrap=document.createElement("div");
+        const wrap=document.createElement("div"); wrap.className="jt-app";
+        wrap.dataset.appTitle=((a.title||a.name)+" "+a.name).toLowerCase();
         const head=document.createElement("div"); head.className="jt-app-head";
         head.innerHTML=`<button type="button" class="jt-exp" title="Show volumes">${a.volumes.length?"▸":"&nbsp;"}</button>
-          <label style="display:flex;align-items:center;gap:0.4rem;flex:1;cursor:pointer"><input type="checkbox" class="jt-app-cb" data-app="${escA(a.name)}">
-          <span class="jt-app-title">${esc(a.title||a.name)}</span> <span class="jt-app-meta">${a.total?`(${a.running}/${a.total} running · ${a.volumes.length} vol)`:""}</span></label>`;
+          <label style="display:flex;align-items:center;gap:0.4rem;flex:1;cursor:pointer;min-width:0"><input type="checkbox" class="jt-app-cb" data-app="${escA(a.name)}">
+          <span class="jt-app-title">${esc(a.title||a.name)}</span> <span class="jt-app-meta">${a.total?`${a.running}/${a.total} · ${a.volumes.length} vol`:""}</span></label>`;
         wrap.appendChild(head);
         const vols=document.createElement("div"); vols.className="jt-vols";
-        vols.innerHTML=a.volumes.map(v=>`<label class="jt-vol-row"><input type="checkbox" class="jt-vol" data-app="${escA(a.name)}" data-vol="${escA(v)}"> ${esc(v)}</label>`).join("")
-          || `<div class="fx-muted" style="font-size:0.78rem;padding:0.1rem">No named volumes — the whole-app backup still captures the compose.</div>`;
+        vols.innerHTML=a.volumes.map(v=>`<label class="jt-vol-row" data-search="${escA(String(v).toLowerCase())}"><input type="checkbox" class="jt-vol" data-app="${escA(a.name)}" data-vol="${escA(v)}"> ${esc(v)}</label>`).join("")
+          || `<div class="fx-muted" style="font-size:0.78rem;padding:0.1rem 0.4rem">No named volumes — the whole-app backup still captures the compose.</div>`;
         wrap.appendChild(vols);
         const exp=head.querySelector(".jt-exp"); if(a.volumes.length) exp.addEventListener("click",()=>{ exp.classList.toggle("open"); vols.classList.toggle("open"); });
         const appCb=head.querySelector(".jt-app-cb");
-        appCb.addEventListener("change",()=>{ vols.querySelectorAll(".jt-vol").forEach(c=>{ c.disabled=appCb.checked; if(appCb.checked) c.checked=false; }); });
+        appCb.addEventListener("change",()=>{ vols.querySelectorAll(".jt-vol").forEach(c=>{ c.disabled=appCb.checked; if(appCb.checked) c.checked=false; }); head.classList.toggle("sel",appCb.checked); });
         box.appendChild(wrap);
       }
     }
     if((t.volumes||[]).length){
-      const h=document.createElement("div"); h.className="jt-sec"; h.textContent="Other volumes"; box.appendChild(h);
+      const h=document.createElement("div"); h.className="jt-sec jt-sec-std"; h.textContent="Other volumes"; box.appendChild(h);
       for(const v of t.volumes){
-        const row=document.createElement("label"); row.className="jt-std-row";
+        const row=document.createElement("label"); row.className="jt-std-row"; row.dataset.search=String(v.name).toLowerCase();
         row.innerHTML=`<input type="checkbox" class="jt-vol" data-vol="${escA(v.name)}"> ${esc(v.name)}${v.isSmb?'<span class="smb-chip">SMB</span>':""} <span class="fx-muted">${v.size>0?fmtB(v.size):""}</span>`;
         box.appendChild(row);
       }
     }
-    if(!box.children.length) box.innerHTML=`<div class="fx-muted" style="padding:0.5rem">No apps or volumes found yet.</div>`;
+    if(!box.children.length) box.innerHTML=`<div class="jt-empty">No apps or volumes found yet.</div>`;
   }
+  function updateSelCount(){
+    const el=$("j-sel-count"); if(!el) return; const ts=collectTargets();
+    const apps=ts.filter(t=>t.type==="app").length, vols=ts.filter(t=>t.type!=="app").length;
+    if(!ts.length){ el.textContent="Nothing selected"; el.style.opacity="0.55"; }
+    else { el.style.opacity="1"; el.textContent=[apps?`${apps} app${apps>1?"s":""}`:"",vols?`${vols} volume${vols>1?"s":""}`:""].filter(Boolean).join(" · "); }
+  }
+  function filterTree(q){
+    q=(q||"").trim().toLowerCase(); const box=$("j-tree"); if(!box) return;
+    const clr=$("j-tree-clear"); if(clr) clr.hidden=!q;
+    let anyApp=false, anyStd=false;
+    for(const w of box.querySelectorAll(".jt-app")){
+      const titleMatch=!q||(w.dataset.appTitle||"").includes(q);
+      let volMatch=false;
+      for(const r of w.querySelectorAll(".jt-vol-row")){ const m=!q||(r.dataset.search||"").includes(q); r.style.display=(q&&!titleMatch&&!m)?"none":""; if(q&&m) volMatch=true; }
+      const show=!q||titleMatch||volMatch; w.style.display=show?"":"none"; if(show) anyApp=true;
+      const vols=w.querySelector(".jt-vols"), exp=w.querySelector(".jt-exp");
+      if(q&&show){ if(vols) vols.classList.add("open"); if(exp) exp.classList.add("open"); }
+      else if(!q){ if(vols) vols.classList.remove("open"); if(exp) exp.classList.remove("open"); }
+    }
+    for(const r of box.querySelectorAll(".jt-std-row")){ const m=!q||(r.dataset.search||"").includes(q); r.style.display=m?"":"none"; if(m) anyStd=true; }
+    const sa=box.querySelector(".jt-sec-apps"); if(sa) sa.style.display=anyApp?"":"none";
+    const ss=box.querySelector(".jt-sec-std"); if(ss) ss.style.display=anyStd?"":"none";
+  }
+  $("j-tree").addEventListener("change",updateSelCount);
+  $("j-tree-search").addEventListener("input",e=>filterTree(e.target.value));
+  $("j-tree-clear").addEventListener("click",()=>{ $("j-tree-search").value=""; filterTree(""); $("j-tree-search").focus(); });
   function collectTargets(){
     const targets=[];
     (jobsState.tree.apps||[]).forEach(a=>{
@@ -271,7 +324,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
       $("bk-crumb-cur").textContent="New job"; $("j-id").value=""; $("j-name").value="";
       $("j-kind").value="manual"; $("j-time").value="03:00"; $("j-day").value="0"; $("j-ret").value="30"; $("j-en").checked=true;
     }
-    jobKindChanged(); showEditor(true);
+    jobKindChanged(); $("j-tree-search").value=""; filterTree(""); updateSelCount(); showEditor(true);
   }
   $("bk-new-job").addEventListener("click",()=>openJob(null));
   $("bk-crumb-back").addEventListener("click",()=>showEditor(false));
