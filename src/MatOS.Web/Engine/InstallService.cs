@@ -271,6 +271,36 @@ public class InstallService
         catch (Exception ex) { return new(false, null, 0, ex.Message); }
     }
 
+    /// <summary>Re-run every installed instance of an app with an updated base compose (GitOps redeploy):
+    /// rewrites each project's docker-compose.yml and runs <c>up -d</c>, keeping the matos override, any
+    /// selected option fragments and the .env — so volumes are preserved and the stack updates in place.
+    /// Returns how many instances were redeployed.</summary>
+    public async Task<int> RedeployAppAsync(string appId, string composeYaml, CancellationToken ct = default)
+    {
+        var stacks = await _docker.ListStacksAsync(ct);
+        int n = 0;
+        foreach (var s in stacks.Where(s => s.Containers.Any(c => c.Labels.GetValueOrDefault(MatosLabels.App) == appId)))
+        {
+            var project = s.Containers.Select(c => c.Labels.GetValueOrDefault(ComposeLabels.Project)).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+            if (string.IsNullOrEmpty(project) || !project.StartsWith("matos-", StringComparison.Ordinal)) continue;
+            var dir = Path.Combine(Path.GetTempPath(), "matos", project);
+            if (!Directory.Exists(dir)) continue;
+            await File.WriteAllTextAsync(Path.Combine(dir, "docker-compose.yml"), composeYaml, ct);
+            var files = new List<string> { "-f", "docker-compose.yml" };
+            foreach (var of in Directory.EnumerateFiles(dir, "matos-option-*.yml").Select(Path.GetFileName).Where(f => f != null).OrderBy(f => f).Cast<string>())
+            { files.Add("-f"); files.Add(of); }
+            if (File.Exists(Path.Combine(dir, "matos-override.yml"))) { files.Add("-f"); files.Add("matos-override.yml"); }
+            try
+            {
+                await RunCompose(dir, new[] { "-p", project }.Concat(files).Concat(new[] { "up", "-d", "--remove-orphans" }).ToArray(), null, ct);
+                n++;
+            }
+            catch (Exception ex) { _log.LogWarning(ex, "Redeploy of {Project} failed", project); }
+        }
+        if (n > 0) _log.LogInformation("Redeployed {N} instance(s) of {App} from Git", n, appId);
+        return n;
+    }
+
     // ---- Publish / unpublish (external reverse-proxy route via Matcad) ----
     public async Task<InstallResult> PublishAsync(string id, bool enabled, string? hostname, CancellationToken ct = default)
     {

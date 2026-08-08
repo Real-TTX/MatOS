@@ -31,6 +31,44 @@
             </div>
         </div>
         <div id="a-compose-fields" style="display:none">
+            <div class="git-box">
+                <div class="git-row">
+                    <strong>Git source</strong>
+                    <span class="git-status" id="a-git-status">Not linked — the compose is edited here.</span>
+                    <button type="button" class="ui-btn" id="a-git-link">Link a Git repo…</button>
+                    <button type="button" class="ui-btn" id="a-git-unlink" style="display:none">Unlink</button>
+                </div>
+                <div id="a-git-fields" style="display:none">
+                    <div class="grid2">
+                        <label class="fl"><span>Repository URL (https)</span><input id="g-repo" class="ui-input mono" placeholder="https://github.com/user/repo.git" /></label>
+                        <label class="fl"><span>Branch <span class="fx-muted">(blank = default)</span></span><input id="g-branch" class="ui-input mono" placeholder="main" /></label>
+                    </div>
+                    <div class="grid2">
+                        <label class="fl"><span>Compose path in repo</span><input id="g-path" class="ui-input mono" placeholder="docker-compose.yml" value="docker-compose.yml" /></label>
+                        <label class="fl"><span>Access token <span class="fx-muted">(private repos)</span></span><input id="g-token" class="ui-input mono" type="password" placeholder="ghp_… (optional)" /></label>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;align-items:center">
+                        <button type="button" class="ui-btn primary" id="g-fetch">Fetch compose</button>
+                        <span class="git-status" id="g-fetch-msg"></span>
+                    </div>
+                </div>
+                <div id="a-git-policy" style="display:none">
+                    <div class="grid2">
+                        <label class="fl"><span>Auto-update</span>
+                            <select id="g-mode" class="ui-select">
+                                <option value="off">Off — never check</option>
+                                <option value="flag" selected>Notify — show an update badge</option>
+                                <option value="redeploy">Auto-redeploy on change</option>
+                            </select></label>
+                        <label class="fl"><span>Check every (minutes)</span><input id="g-interval" class="ui-input" type="number" min="5" value="60" /></label>
+                    </div>
+                    <div class="git-status" id="a-git-applied"></div>
+                    <div style="display:flex;gap:0.5rem;margin-top:0.3rem">
+                        <button type="button" class="ui-btn" id="a-git-check" style="display:none">Check for updates</button>
+                        <button type="button" class="ui-btn primary" id="a-git-apply" style="display:none">Pull &amp; redeploy</button>
+                    </div>
+                </div>
+            </div>
             <label class="fl"><span>docker-compose.yml *</span><textarea id="a-compose" class="ui-input mono" rows="8" placeholder="services:&#10;  web:&#10;    image: nginx:alpine"></textarea></label>
             <div class="grid2">
                 <label class="fl"><span>UI service <span class="fx-muted">(blank = first)</span></span><input id="a-uisvc" class="ui-input mono" placeholder="web" /></label>
@@ -126,6 +164,15 @@
 .o-choices .ch-row { border:1px dashed var(--mat-border); border-radius:9px; padding:0.45rem 0.55rem; margin-bottom:0.4rem; display:flex; flex-direction:column; gap:0.35rem; }
 .ch-row .ch-top { display:flex; gap:0.4rem; align-items:center; } .ch-row .ch-value { flex:0 0 120px; } .ch-row .ch-label { flex:1 1 auto; }
 .opt-hint { font-size:0.72rem; color:var(--mat-text-muted); }
+.git-box { border:1px solid var(--mat-border); border-radius:11px; padding:0.7rem 0.8rem; margin-bottom:0.8rem; background:var(--mat-surface-2); }
+.git-box.linked { border-color:var(--mat-accent); }
+.git-row { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.git-row strong { font-size:0.9rem; }
+.git-status { font-size:0.78rem; color:var(--mat-text-muted); flex:1 1 auto; min-width:120px; }
+.git-status.upd { color:#ffcf7a; font-weight:600; }
+.git-status.ok { color:#7ff0c4; }
+.git-status.err { color:#ffb3c0; }
+#a-git-fields, #a-git-policy { margin-top:0.6rem; }
 .pv-bigicon { width:120px; height:120px; border-radius:28px; display:grid; place-items:center; font-size:4.5rem; overflow:hidden; background:var(--mat-surface-2); border:1px solid var(--mat-border); }
 .pv-bigicon img { width:100%; height:100%; object-fit:cover; }
 .pv-bigicon + .pv-cap { text-align:center; margin-top:0.7rem; font-weight:700; }
@@ -189,7 +236,7 @@
       } else { o.default = r.querySelector(".o-default").checked; o.compose = r.querySelector(".o-compose").value; }
       return o;
     }).filter(o=>o.id && (o.type==="choice" ? o.choices.length : true));
-    return {
+    const out={
       id:editId, kind, name:$("a-name").value.trim(), category:$("a-cat").value.trim()||"Custom",
       tagline:$("a-tag").value.trim(), description:$("a-desc").value.trim(), projectUrl:$("a-proj").value.trim(),
       icon:$("a-icon").value.trim()||"📦", actions, widgets, options,
@@ -197,6 +244,10 @@
       volumes:$("a-vols").value.split("\n").map(s=>s.trim()).filter(Boolean), env,
       compose:$("a-compose").value, uiService:$("a-uisvc").value.trim()
     };
+    if(kind==="compose" && gitBinding) out.git={ repo:gitBinding.repo, branch:gitBinding.branch, path:gitBinding.path,
+      token:gitBinding.token||"", updateMode:$("g-mode").value||gitBinding.updateMode||"flag",
+      intervalMinutes:parseInt($("g-interval").value||"60",10), appliedCommit:gitBinding.appliedCommit||"", latestCommit:gitBinding.latestCommit||"" };
+    return out;
   }
 
   // ---- previews ----
@@ -282,6 +333,55 @@
     return d; }
   $("a-add-option").addEventListener("click",()=>{ $("a-options").appendChild(optionRow({type:"toggle"})); renderPreview(); });
 
+  // ---- Git source (GitOps) ----
+  let gitBinding=null, gitFieldsOpen=false;
+  const gitEls={ box:document.querySelector(".git-box"), link:$("a-git-link"), unlink:$("a-git-unlink"),
+    fields:$("a-git-fields"), policy:$("a-git-policy"), status:$("a-git-status"), applied:$("a-git-applied"),
+    check:$("a-git-check"), apply:$("a-git-apply") };
+  function gitStatus(el,msg,cls){ el.className="git-status"+(cls?" "+cls:""); el.textContent=msg; }
+  function renderGit(){
+    const linked=!!gitBinding; gitEls.box.classList.toggle("linked",linked);
+    gitEls.unlink.style.display=linked?"":"none"; gitEls.link.style.display=linked?"none":"";
+    gitEls.fields.style.display=(!linked&&gitFieldsOpen)?"":"none"; gitEls.policy.style.display=linked?"":"none";
+    const cmp=$("a-compose"); cmp.readOnly=linked; cmp.style.opacity=linked?0.75:1;
+    if(linked){
+      gitStatus(gitEls.status,`Linked: ${gitBinding.repo}${gitBinding.branch?" · "+gitBinding.branch:""} · ${gitBinding.path}`,"ok");
+      $("g-mode").value=gitBinding.updateMode||"flag"; $("g-interval").value=gitBinding.intervalMinutes||60;
+      const upd=gitBinding.latestCommit&&gitBinding.latestCommit!==gitBinding.appliedCommit;
+      gitStatus(gitEls.applied, gitBinding.appliedCommit?("Installed commit "+gitBinding.appliedCommit.slice(0,8)+(upd?" · update available "+gitBinding.latestCommit.slice(0,8):"")):"", upd?"upd":"");
+      gitEls.check.style.display=editId?"":"none"; gitEls.apply.style.display=(editId&&upd)?"":"none";
+    } else { gitStatus(gitEls.status,"Not linked — the compose is edited here."); gitEls.applied.textContent=""; gitEls.check.style.display="none"; gitEls.apply.style.display="none"; }
+  }
+  gitEls.link.addEventListener("click",()=>{ gitFieldsOpen=true; renderGit(); });
+  gitEls.unlink.addEventListener("click",()=>{ gitBinding=null; gitFieldsOpen=false; renderGit(); renderPreview(); });
+  $("g-mode").addEventListener("change",()=>{ if(gitBinding) gitBinding.updateMode=$("g-mode").value; });
+  $("g-interval").addEventListener("input",()=>{ if(gitBinding) gitBinding.intervalMinutes=parseInt($("g-interval").value||"60",10); });
+  $("g-fetch").addEventListener("click",async()=>{
+    const repo=$("g-repo").value.trim(); if(!repo){ gitStatus($("g-fetch-msg"),"Enter a repository URL.","err"); return; }
+    const body={ repo, branch:$("g-branch").value.trim(), path:$("g-path").value.trim()||"docker-compose.yml", token:$("g-token").value };
+    gitStatus($("g-fetch-msg"),"Cloning…");
+    try{ const r=await fetch("/api/v1/store/git/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||("HTTP "+r.status)); }
+      const j=await r.json();
+      $("a-kind").value="compose"; $("a-kind").dispatchEvent(new Event("change"));
+      $("a-compose").value=j.compose||"";
+      if((j.services||[]).length && !$("a-uisvc").value.trim()) $("a-uisvc").value=j.services[0];
+      gitBinding={ repo, branch:body.branch, path:body.path, token:body.token, updateMode:$("g-mode").value||"flag", intervalMinutes:parseInt($("g-interval").value||"60",10), appliedCommit:j.commit||"", latestCommit:j.commit||"" };
+      gitFieldsOpen=false; renderGit(); renderPreview();
+      gitStatus($("g-fetch-msg"),`Fetched ${(j.services||[]).length} service(s) @@ ${j.commit?j.commit.slice(0,8):"HEAD"}.`,"ok");
+    }catch(e){ gitStatus($("g-fetch-msg"),"Fetch failed: "+e.message,"err"); }
+  });
+  gitEls.check.addEventListener("click",async()=>{ if(!editId||!gitBinding) return; gitStatus(gitEls.applied,"Checking…");
+    try{ const r=await fetch("/api/v1/store/git/check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:editId})}); const j=await r.json(); gitBinding.latestCommit=j.latest||gitBinding.latestCommit; renderGit(); }
+    catch(_){ gitStatus(gitEls.applied,"Check failed.","err"); } });
+  gitEls.apply.addEventListener("click",async()=>{ if(!editId||!gitBinding) return; gitStatus(gitEls.applied,"Pulling & redeploying…");
+    try{ const r=await fetch("/api/v1/store/git/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:editId})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||e.error||r.status); }
+      const j=await r.json(); gitBinding.appliedCommit=j.commit||gitBinding.appliedCommit; gitBinding.latestCommit=j.commit||gitBinding.latestCommit;
+      try{ const cat=await (await fetch("/api/v1/store/catalog")).json(); const a=(cat.apps||[]).find(x=>x.id===editId); if(a) $("a-compose").value=a.compose||$("a-compose").value; }catch(_){}
+      renderGit(); flash(`Updated to ${j.commit?j.commit.slice(0,8):"latest"}${j.redeployed?` · redeployed ${j.redeployed} instance(s)`:""}.`,true);
+    }catch(e){ gitStatus(gitEls.applied,"Apply failed: "+e.message,"err"); } });
+
   // ---- kind toggle, icon, tabs ----
   $("a-kind").addEventListener("change",()=>{ const c=$("a-kind").value==="compose"; $("a-compose-fields").style.display=c?"":"none"; $("a-image-fields").style.display=c?"none":""; $("a-options-fl").style.display=c?"":"none"; renderPreview(); });
   const iconInput=$("a-icon"), iconPrev=$("a-icon-prev");
@@ -292,7 +392,7 @@
   ["a-name","a-cat","a-tag","a-desc","a-proj","a-image","a-port","a-vols","a-env","a-compose","a-uisvc","a-cport"].forEach(id=>$(id).addEventListener("input",renderPreview));
 
   // ---- reset / save / load ----
-  function reset(){ editId=""; $("ab-title").textContent="App Builder"; ["a-name","a-cat","a-tag","a-desc","a-proj","a-image","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value=""); $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-widgets").innerHTML=""; $("a-options").innerHTML=""; $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); renderPreview(); }
+  function reset(){ editId=""; $("ab-title").textContent="App Builder"; ["a-name","a-cat","a-tag","a-desc","a-proj","a-image","a-vols","a-env","a-compose","a-uisvc"].forEach(i=>$(i).value=""); $("a-port").value="80"; $("a-cport").value="80"; iconInput.value="📦"; iconPrev.innerHTML="📦"; $("a-actions").innerHTML=""; $("a-widgets").innerHTML=""; $("a-options").innerHTML=""; gitBinding=null; gitFieldsOpen=false; ["g-repo","g-branch","g-token"].forEach(i=>$(i).value=""); $("g-path").value="docker-compose.yml"; gitStatus($("g-fetch-msg"),""); renderGit(); $("a-kind").value="image"; $("a-kind").dispatchEvent(new Event("change")); renderPreview(); }
   $("a-reset").addEventListener("click",reset);
   $("a-save").addEventListener("click",async()=>{
     const app=gather();
@@ -361,6 +461,9 @@
     (a.actions||[]).forEach(ac=>$("a-actions").appendChild(actionRow(ac.label,ac.url)));
     (a.widgets||[]).forEach(w=>$("a-widgets").appendChild(widgetRow(w)));
     (a.options||[]).forEach(o=>$("a-options").appendChild(optionRow(o)));
+    if(a.git && a.git.repo){ gitBinding={ repo:a.git.repo, branch:a.git.branch||"", path:a.git.path||"docker-compose.yml", token:"",
+        updateMode:a.git.updateMode||"flag", intervalMinutes:a.git.intervalMinutes||60, appliedCommit:a.git.appliedCommit||"", latestCommit:a.git.latestCommit||"" }; }
+    renderGit();
     renderPreview();
   }
 

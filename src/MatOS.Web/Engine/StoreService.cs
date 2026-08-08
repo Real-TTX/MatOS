@@ -24,6 +24,28 @@ public class StoreService
 
     public AppDef? Find(string id) => AllApps().FirstOrDefault(a => a.Id == id);
     public List<CustomApp> CustomApps() => Store.Apps.ToList();
+    public CustomApp? FindCustom(string id) { lock (_gate) return Store.Apps.FirstOrDefault(a => a.Id == id); }
+
+    /// <summary>Record a git-bound app's poller state, and optionally apply a freshly synced compose
+    /// (updating the stored compose + applied commit). Persists customapps.json.</summary>
+    public async Task ApplyGitSync(string id, string? compose, string latestCommit, bool applied, string? error)
+    {
+        lock (_gate)
+        {
+            var app = Store.Apps.FirstOrDefault(a => a.Id == id);
+            if (app?.Git == null) return;
+            app.Git.LastCheckedUtc = DateTime.UtcNow;
+            if (!string.IsNullOrEmpty(latestCommit)) app.Git.LatestCommit = latestCommit;
+            app.Git.LastError = error ?? "";
+            if (applied && compose != null)
+            {
+                app.Compose = compose;
+                if (!string.IsNullOrEmpty(latestCommit)) app.Git.AppliedCommit = latestCommit;
+                app.Git.LastSyncedUtc = DateTime.UtcNow;
+            }
+        }
+        await _config.SaveAsync("customapps", Store);
+    }
 
     /// <summary>Cached apps from every enabled remote source (see <see cref="StoreSourceService"/>).</summary>
     private List<CustomApp> RemoteApps()
@@ -44,6 +66,10 @@ public class StoreService
         lock (_gate)
         {
             var s = Store;
+            var existing = s.Apps.FirstOrDefault(a => a.Id == app.Id);
+            // Preserve a git PAT the client didn't resend (the catalog never exposes the token).
+            if (app.Git != null && string.IsNullOrEmpty(app.Git.Token) && existing?.Git != null && !string.IsNullOrEmpty(existing.Git.Token))
+                app.Git.Token = existing.Git.Token;
             s.Apps.RemoveAll(a => a.Id == app.Id);
             s.Apps.Add(app);
         }
@@ -191,7 +217,8 @@ public class StoreService
         c.Id, c.Name, c.Tagline, c.Description, c.Category, c.Image, c.UiPort, c.Icon,
         c.Volumes.ToArray(), c.Env, c.Actions.Select(a => new AppAction(a.Label, a.Url)).ToArray(),
         c.Kind, c.Compose, c.UiService, c.Variables.ToArray(), false, c.Source, c.Handlers.ToArray(),
-        OnDemand: false, ProjectUrl: c.ProjectUrl, Widgets: c.Widgets.ToArray(), Options: c.Options.ToArray());
+        OnDemand: false, ProjectUrl: c.ProjectUrl, Widgets: c.Widgets.ToArray(), Options: c.Options.ToArray(),
+        Git: c.Git);
 
     private string UniqueId(string baseId)
     {

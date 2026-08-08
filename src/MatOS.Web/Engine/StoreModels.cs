@@ -73,6 +73,27 @@ public class AppOption
     public string DefaultChoice { get; set; } = "";
 }
 
+/// <summary>Binds a compose app to a Git repository (GitOps). matOS keeps its own synced copy of the
+/// compose (in the app's <c>Compose</c>); the upstream file is never modified. Auto-update is per-app:
+/// UpdateMode "off" never checks, "flag" checks and surfaces an update badge, "redeploy" applies and
+/// re-runs installed instances automatically. Private repos use a Personal Access Token.</summary>
+public class GitBinding
+{
+    public string Repo { get; set; } = "";                 // https clone URL
+    public string Branch { get; set; } = "";               // "" = the repo's default branch
+    public string Path { get; set; } = "docker-compose.yml"; // path to the compose file within the repo
+    public string Token { get; set; } = "";                // PAT for private repos (injected into the https URL)
+    public string UpdateMode { get; set; } = "flag";       // "off" | "flag" | "redeploy"
+    public int IntervalMinutes { get; set; } = 60;         // how often the poller checks the remote
+    public string AppliedCommit { get; set; } = "";        // commit whose compose is currently stored/installed
+    public string LatestCommit { get; set; } = "";         // newest commit seen on the remote (poller)
+    public DateTime? LastCheckedUtc { get; set; }
+    public DateTime? LastSyncedUtc { get; set; }
+    public string LastError { get; set; } = "";
+    /// <summary>True when the remote has advanced past the applied commit.</summary>
+    public bool UpdateAvailable => !string.IsNullOrEmpty(LatestCommit) && LatestCommit != AppliedCommit;
+}
+
 /// <summary>Unified app definition — built-in, custom single-image, or a Compose stack.
 /// Kind is "image" or "compose". Icon may be an emoji, an image URL, or a data: URI.
 /// Source is the name of the remote catalog it came from ("" = built-in or local custom).</summary>
@@ -82,7 +103,8 @@ public record AppDef(
     Dictionary<string, string> Env, AppAction[] Actions,
     string Kind, string Compose, string UiService, AppVariable[] Variables, bool BuiltIn,
     string Source = "", AppHandler[]? Handlers = null, bool OnDemand = false,
-    string ProjectUrl = "", AppWidgetDef[]? Widgets = null, AppOption[]? Options = null);
+    string ProjectUrl = "", AppWidgetDef[]? Widgets = null, AppOption[]? Options = null,
+    GitBinding? Git = null);
 
 // ---- Custom (user-defined) apps: mutable shapes persisted as customapps.json ----
 
@@ -113,6 +135,7 @@ public class CustomApp
     public string ProjectUrl { get; set; } = "";          // project / repo / docs home page
     public List<AppWidgetDef> Widgets { get; set; } = new(); // widgets this app offers
     public List<AppOption> Options { get; set; } = new(); // install-time optional add-ons / variants
+    public GitBinding? Git { get; set; }                  // when set: compose is synced from a Git repo
     public string Source { get; set; } = "";              // remote catalog name ("" = local)
 }
 

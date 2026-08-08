@@ -32,6 +32,8 @@ builder.Services.AddSingleton<MatOS.Web.Engine.StoreService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.StoreSourceService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.RegistryInfoService>();
 builder.Services.AddSingleton<MatOS.Web.Engine.InstallService>();
+builder.Services.AddSingleton<MatOS.Web.Services.GitService>();
+builder.Services.AddHostedService<MatOS.Web.Services.GitSyncService>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<MatOS.Web.Controls.Common.ControlIdGenerator>();
 builder.Services.AddHostedService<SessionCleanupService>();

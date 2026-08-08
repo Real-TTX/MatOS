@@ -1,5 +1,6 @@
 using MatOS.Web.Docker;
 using MatOS.Web.Engine;
+using MatOS.Web.Services;
 
 namespace MatOS.Web.Api;
 
@@ -15,6 +16,7 @@ public static class StoreApi
     public record ToggleSourceBody(string Id, bool Enabled);
     public record OpenWithBody(string AppId, string Volume, string Path);
     public record CloseBody(string Id);
+    public record GitPreviewBody(string Repo, string? Branch, string? Path, string? Token);
 
     public static void MapStoreApi(this IEndpointRouteBuilder api)
     {
@@ -36,6 +38,12 @@ public static class StoreApi
                     o.Id, o.Label, o.Description, o.Type, o.Default, o.DefaultChoice,
                     choices = o.Choices.Select(c => new { c.Value, c.Label })
                 }),
+                git = a.Git == null ? null : new
+                {
+                    a.Git.Repo, a.Git.Branch, a.Git.Path, a.Git.UpdateMode, a.Git.IntervalMinutes,
+                    a.Git.AppliedCommit, a.Git.LatestCommit, updateAvailable = a.Git.UpdateAvailable,
+                    a.Git.LastError, a.Git.LastSyncedUtc, a.Git.LastCheckedUtc, hasToken = !string.IsNullOrEmpty(a.Git.Token)
+                },
                 handles = a.Handlers is { Length: > 0 } h ? h.SelectMany(x => x.Extensions).Distinct().ToArray() : Array.Empty<string>()
             })
         }));
@@ -158,6 +166,39 @@ public static class StoreApi
                 return s == null ? Results.NotFound() : Results.Ok(new { source = s });
             }
             return Results.Ok(new { sources = await src.SyncAllAsync(ct) });
+        }).RequireAuthorization("Admin");
+
+        // ---- Git app sources (GitOps): clone a repo's compose → a first-class app, sync/update it ----
+        g.MapPost("/git/preview", async (GitPreviewBody b, GitService git, StoreService store, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(b.Repo)) return Results.BadRequest(new { error = "A repository URL is required." });
+            var binding = new GitBinding { Repo = b.Repo.Trim(), Branch = (b.Branch ?? "").Trim(), Path = string.IsNullOrWhiteSpace(b.Path) ? "docker-compose.yml" : b.Path!.Trim(), Token = b.Token ?? "" };
+            var r = await git.FetchComposeAsync("preview", binding, ct);
+            if (!r.Ok) return Results.Problem(r.Error);
+            return Results.Ok(new { compose = r.Compose, commit = r.Commit, services = store.ParseServices(r.Compose) });
+        }).RequireAuthorization("Admin");
+
+        // Cheap poll: has the remote advanced past the installed commit? Updates the app's poller state.
+        g.MapPost("/git/check", async (SourceIdBody b, GitService git, StoreService store, CancellationToken ct) =>
+        {
+            var app = store.FindCustom(b.Id);
+            if (app?.Git == null) return Results.NotFound();
+            var r = await git.LsRemoteAsync(app.Git, ct);
+            await store.ApplyGitSync(b.Id, null, r.Ok ? r.Sha : "", applied: false, r.Ok ? null : r.Error);
+            var a2 = store.FindCustom(b.Id);
+            return Results.Ok(new { updateAvailable = a2?.Git?.UpdateAvailable ?? false, latest = a2?.Git?.LatestCommit, applied = a2?.Git?.AppliedCommit, error = a2?.Git?.LastError });
+        }).RequireAuthorization("Admin");
+
+        // Pull the latest compose, store it, and re-run any installed instances in place.
+        g.MapPost("/git/apply", async (SourceIdBody b, GitService git, StoreService store, InstallService svc, CancellationToken ct) =>
+        {
+            var app = store.FindCustom(b.Id);
+            if (app?.Git == null) return Results.NotFound();
+            var r = await git.FetchComposeAsync(b.Id, app.Git, ct);
+            if (!r.Ok) { await store.ApplyGitSync(b.Id, null, "", false, r.Error); return Results.Problem(r.Error); }
+            await store.ApplyGitSync(b.Id, r.Compose, r.Commit, applied: true, null);
+            var redeployed = await svc.RedeployAppAsync(b.Id, r.Compose, ct);
+            return Results.Ok(new { ok = true, commit = r.Commit, redeployed });
         }).RequireAuthorization("Admin");
 
         // ---- File handlers ("open with") — every catalog app that declares this file type,
