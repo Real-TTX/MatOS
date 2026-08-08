@@ -222,6 +222,21 @@ public static class DockerApi
             }
             catch (OperationCanceledException) { /* client disconnected */ }
         });
+
+        // Aggregated CPU/memory across all running containers over ONE SSE connection — the desktop's
+        // resource widgets use this so they don't open a stream per container (which would exhaust the
+        // browser's ~6-connection-per-host limit and stall every other request, e.g. opening windows).
+        g.MapGet("/stats/stream", async (DockerService docker, HttpContext http) =>
+        {
+            PrepareSse(http);
+            var opts = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            try
+            {
+                await foreach (var s in docker.FollowAggregateStatsAsync(http.RequestAborted))
+                    await WriteSse(http, "stat", JsonSerializer.Serialize(s, opts));
+            }
+            catch (OperationCanceledException) { /* client disconnected */ }
+        });
     }
 
     private static async Task<IResult> Guard(Func<Task> action)

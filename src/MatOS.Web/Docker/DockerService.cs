@@ -317,6 +317,54 @@ public partial class DockerService
             yield return s;
     }
 
+    /// <summary>One aggregated CPU/memory sample across ALL running containers, refreshed every ~2s.
+    /// The desktop's resource widgets use this via a SINGLE SSE connection instead of one stream per
+    /// container — a browser only allows ~6 concurrent connections per host over HTTP/1.1, so N live
+    /// per-container streams would starve every other request (app windows would never load).</summary>
+    public async IAsyncEnumerable<ContainerStatSample> FollowAggregateStatsAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        using var client = CreateClient();
+        while (!ct.IsCancellationRequested)
+        {
+            List<string> running;
+            try
+            {
+                var list = await client.Containers.ListContainersAsync(new ContainersListParameters { All = false }, ct);
+                running = list.Where(c => string.Equals(c.State, "running", StringComparison.OrdinalIgnoreCase))
+                              .Select(c => c.ID).Where(id => !string.IsNullOrEmpty(id)).ToList();
+            }
+            catch { running = new List<string>(); }
+
+            var samples = await Task.WhenAll(running.Select(id => StatsOnceAsync(client, id, ct)));
+            double cpu = 0; long mem = 0, lim = 0;
+            foreach (var s in samples) { if (s == null) continue; cpu += s.CpuPercent; mem += s.MemoryBytes; lim = Math.Max(lim, s.MemoryLimitBytes); }
+            yield return new ContainerStatSample(Math.Round(cpu, 1), mem, lim);
+
+            try { await Task.Delay(2000, ct); } catch { break; }
+        }
+    }
+
+    /// <summary>A single (non-streaming) CPU/memory reading for one container. Docker's one-shot stats
+    /// still include the previous CPU snapshot, so the percentage is computable. Best effort — returns
+    /// null on any error/timeout so one bad container never stalls the aggregate.</summary>
+    private static async Task<ContainerStatSample?> StatsOnceAsync(DockerClient client, string id, CancellationToken ct)
+    {
+        var tcs = new TaskCompletionSource<ContainerStatsResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var progress = new Progress<ContainerStatsResponse>(r => tcs.TrySetResult(r));
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(5000);
+            var run = client.Containers.GetContainerStatsAsync(id, new ContainerStatsParameters { Stream = false }, progress, cts.Token);
+            await Task.WhenAny(run, tcs.Task);
+            if (tcs.Task.IsCompletedSuccessfully) return MapStats(tcs.Task.Result);
+            try { await run; } catch { /* ignore */ }
+            return null;
+        }
+        catch { return null; }
+    }
+
     private static ContainerStatSample? MapStats(ContainerStatsResponse r)
     {
         if (r?.CPUStats?.CPUUsage == null || r.PreCPUStats?.CPUUsage == null) return null;

@@ -1236,26 +1236,21 @@
   }
   // Rolling history for the resource-monitor widget (aggregate across all running containers).
   const wgCpuHist = [], wgMemHist = []; const WG_HIST = 40;
-  const wgStreams = new Map();  // containerId -> EventSource
-  const wgLatest = new Map();   // containerId -> { cpu, mem, lim }
+  // ONE aggregated SSE stream for all resource widgets. Opening a stream per container would use up
+  // the browser's ~6-connections-per-host budget (HTTP/1.1) and stall every other request — that's
+  // what made opening app windows hang on a blank page once enough containers were running.
+  let wgAggSrc = null;
+  let wgAgg = { cpu: 0, mem: 0, memLim: 0 };
   function wgSyncStreams(){
-    const wantResourceWidgets = widgets.some(w => w.type === "resources" || w.type === "cpu" || w.type === "memory");
-    if (!wantResourceWidgets) { for (const [id, s] of wgStreams) { try { s.close(); } catch (_) {} } wgStreams.clear(); wgLatest.clear(); return; }
-    const running = new Set(stackData.flatMap(s => (s.containers||[]).filter(c => c.running).map(c => c.id)));
-    for (const [id, s] of wgStreams) if (!running.has(id)) { try { s.close(); } catch (_) {} wgStreams.delete(id); wgLatest.delete(id); }
-    for (const id of running) {
-      if (wgStreams.has(id)) continue;
-      const src = new EventSource(`/api/v1/docker/containers/${id}/stats/stream`);
-      src.addEventListener("stat", e => { try { const s = JSON.parse(e.data); wgLatest.set(id, { cpu: +s.cpuPercent||0, mem: +s.memoryBytes||0, lim: +s.memoryLimitBytes||0 }); } catch (_) {} });
-      src.onerror = () => {};
-      wgStreams.set(id, src);
-    }
+    const want = widgets.some(w => w.type === "resources" || w.type === "cpu" || w.type === "memory");
+    if (!want) { if (wgAggSrc) { try { wgAggSrc.close(); } catch (_) {} wgAggSrc = null; } wgAgg = { cpu: 0, mem: 0, memLim: 0 }; return; }
+    if (wgAggSrc) return; // already streaming
+    const src = new EventSource("/api/v1/docker/stats/stream");
+    src.addEventListener("stat", e => { try { const s = JSON.parse(e.data); wgAgg = { cpu: +s.cpuPercent||0, mem: +s.memoryBytes||0, memLim: +s.memoryLimitBytes||0 }; } catch (_) {} });
+    src.onerror = () => {};
+    wgAggSrc = src;
   }
-  function wgAggregate(){
-    let cpu = 0, mem = 0, memLim = 0;
-    for (const [, v] of wgLatest) { cpu += v.cpu||0; mem += v.mem||0; memLim = Math.max(memLim, v.lim||0); }
-    return { cpu, mem, memLim };
-  }
+  function wgAggregate(){ return wgAgg; }
   function wgAreaSvg(data, color, max){
     const W = 100, H = 30, n = data.length; if (n < 2) return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%"></svg>`;
     const step = W/(n-1); const pts = data.map((v,i)=>[i*step, H - Math.min(1,(v||0)/(max||1))*(H-2) - 1]);
