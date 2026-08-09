@@ -6,36 +6,42 @@
 }
 
 <div id="bk">
-  <div id="bk-main">
-    <div class="bk-head">
-        <h1 class="bk-h">Backups</h1>
-        <p class="bk-sub">Create <strong>jobs</strong> that back up whatever you pick in one tree — whole apps (compose + volumes) and individual volumes together. Run them now or on a schedule.</p>
-    </div>
-    <div class="bk-cards" id="bk-cards"></div>
-    <div class="tabbar" id="bk-tabs">
-        <button class="tab active" data-tab="jobs">Jobs</button>
-        <button class="tab" data-tab="history">History</button>
-    </div>
-    <div class="win-toolbar" style="gap:0.6rem;flex-wrap:wrap;margin-top:0.4rem">
-        <button class="ui-btn primary" id="bk-new-job">New job</button>
-        <button class="ui-btn" id="bk-refresh">Refresh</button>
-        <span class="fx-muted" style="font-size:0.85rem;flex:1">A backup is a gzip-compressed archive; app backups also capture the compose &amp; pinned image so a restore runs again.</span>
-    </div>
-    <div id="bk-msg" class="card" style="display:none;margin-bottom:0.8rem"></div>
+  <div class="bkx-wrap" id="bk-main">
+    <aside class="bkx-nav">
+        <div class="bkx-nav-title">Backups</div>
+        <button class="bkx-nav-btn active" data-tab="jobs"><span class="i">🗂️</span> Jobs</button>
+        <button class="bkx-nav-btn" data-tab="history"><span class="i">📦</span> History</button>
+    </aside>
+    <section class="bkx-main">
+        <div id="bk-msg" class="card" style="display:none;margin-bottom:0.8rem"></div>
 
-    <div class="card" id="bk-pane-jobs" style="padding:0;overflow:hidden">
-        <table class="bkt">
-            <thead><tr><th>Job</th><th>Backs up</th><th>When</th><th>Last run</th><th></th></tr></thead>
-            <tbody id="bk-job-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
-        </table>
-    </div>
-    <div class="card" id="bk-pane-history" style="padding:0;overflow:hidden;display:none">
-        <table class="bkt">
-            <thead><tr><th>Created</th><th>What</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
-            <tbody id="bk-hist-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
-        </table>
-    </div>
+        <section class="bkx-panel" data-panel="jobs">
+            <div class="bkx-head">
+                <div><h2>Backup jobs</h2><p class="fx-muted">Pick apps, their settings, images or individual volumes in one tree and back them up now or on a schedule.</p></div>
+                <button class="ui-btn primary" id="bk-new-job">＋ New job</button>
+            </div>
+            <div class="bk-cards" id="bk-cards"></div>
+            <div class="card" id="bk-pane-jobs" style="padding:0;overflow:hidden">
+                <table class="bkt">
+                    <thead><tr><th>Job</th><th>Backs up</th><th>When</th><th>Last run</th><th></th></tr></thead>
+                    <tbody id="bk-job-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </section>
 
+        <section class="bkx-panel" data-panel="history" hidden>
+            <div class="bkx-head">
+                <div><h2>History</h2><p class="fx-muted">Every backup that ran, with its size — restore, download or delete.</p></div>
+                <button class="ui-btn" id="bk-refresh">Refresh</button>
+            </div>
+            <div class="card" id="bk-pane-history" style="padding:0;overflow:hidden">
+                <table class="bkt">
+                    <thead><tr><th>Created</th><th>What</th><th>Stored on</th><th class="num">Size</th><th></th></tr></thead>
+                    <tbody id="bk-hist-rows"><tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+    </section>
   </div><!-- /bk-main -->
 
     <!-- Full-screen job editor -->
@@ -107,10 +113,20 @@
 @section Head {
 <style>
 .win-header { display:none; }
-#bk { max-width:1100px; }
-.bk-head { margin-bottom:1rem; }
-.bk-h { font-size:1.6rem; font-weight:800; letter-spacing:-0.02em; margin:0; }
-.bk-sub { margin:0.25rem 0 0; color:var(--mat-text-muted); font-size:0.9rem; }
+#bk { position:absolute; inset:0; }
+/* Proxy-style app shell: left nav + main panels */
+.bkx-wrap { position:absolute; inset:0; display:flex; background:var(--mat-bg); }
+.bkx-nav { width:210px; flex:0 0 auto; border-right:1px solid var(--mat-border); padding:1rem 0.6rem; background:rgba(0,0,0,0.18); display:flex; flex-direction:column; gap:0.1rem; overflow:auto; }
+.bkx-nav-title { font-weight:800; font-size:1.15rem; padding:0.2rem 0.6rem 0.9rem; }
+.bkx-nav-btn { display:flex; align-items:center; gap:0.55rem; width:100%; padding:0.55rem 0.6rem; border:none; background:transparent; color:var(--mat-text); border-radius:8px; cursor:pointer; font:inherit; font-size:0.9rem; text-align:left; }
+.bkx-nav-btn:hover { background:var(--mat-surface-2); }
+.bkx-nav-btn.active { background:var(--mat-accent); color:#fff; }
+.bkx-nav-btn .i { font-size:1.05rem; width:1.3rem; text-align:center; }
+.bkx-main { flex:1 1 auto; overflow:auto; padding:1.3rem 1.5rem 2rem; min-width:0; }
+.bkx-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.9rem; }
+.bkx-head h2 { margin:0 0 0.2rem; font-size:1.15rem; }
+.bkx-head p { margin:0; font-size:0.84rem; max-width:60ch; }
+#bk-editor { position:absolute; inset:0; overflow:auto; padding:1.3rem 1.5rem 2rem; background:var(--mat-bg); }
 .bk-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0.8rem; margin-bottom:1.2rem; }
 .bk-card { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:14px; padding:0.9rem 1rem; }
 .bk-card-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
@@ -427,12 +443,10 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
 
   // ---- tabs ----
   let tab="jobs";
-  document.querySelectorAll("#bk-tabs .tab").forEach(t=>t.addEventListener("click",()=>{
-    document.querySelectorAll("#bk-tabs .tab").forEach(x=>x.classList.toggle("active",x===t));
+  document.querySelectorAll(".bkx-nav-btn").forEach(t=>t.addEventListener("click",()=>{
+    document.querySelectorAll(".bkx-nav-btn").forEach(x=>x.classList.toggle("active",x===t));
     tab=t.dataset.tab;
-    $("bk-pane-jobs").style.display=tab==="jobs"?"":"none";
-    $("bk-pane-history").style.display=tab==="history"?"":"none";
-    $("bk-new-job").style.display=tab==="jobs"?"":"none";
+    document.querySelectorAll(".bkx-panel").forEach(p=>p.hidden=p.dataset.panel!==tab);
     if(tab==="history") loadHistory();
   }));
   $("bk-refresh").addEventListener("click",()=>{ if(tab==="history") loadHistory(); else loadJobs(); });
