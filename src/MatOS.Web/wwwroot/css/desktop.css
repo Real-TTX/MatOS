@@ -228,6 +228,9 @@ body.tb-center #mat-tray { justify-self: end; }
   pointer-events: none;
 }
 body.tb-top #mat-toasts { bottom: auto; top: 60px; }
+/* When the taskbar is at the top, tray popovers must open DOWNWARD (else they're off-screen above). */
+body.tb-top .mat-user-menu { bottom: auto; top: 44px; }
+body.tb-top #mat-notify { bottom: auto; top: 56px; }
 .mat-toast {
   display: grid; grid-template-columns: 22px 1fr auto; gap: 0.6rem; align-items: start;
   min-width: 260px; max-width: 360px; padding: 0.7rem 0.9rem;
