@@ -1,0 +1,124 @@
+/* ============================================================================
+   macOS OS style — a purely additive skin, active only under [data-os="macos"].
+   Restyles chrome (dock, window buttons, rounding, font); app content untouched.
+   The default Windows look lives elsewhere and is not affected by this file.
+   ============================================================================ */
+
+/* ---- System font ---- */
+[data-os="macos"] body,
+[data-os="macos"] input,
+[data-os="macos"] button,
+[data-os="macos"] select,
+[data-os="macos"] textarea {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Inter", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -0.005em;
+}
+
+/* ---- Taskbar → floating centered Dock ---- */
+[data-os="macos"] #mat-taskbar {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: calc(100vw - 28px);
+  height: auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 7px 10px;
+  background: rgba(40, 42, 54, 0.42);
+  -webkit-backdrop-filter: blur(34px) saturate(1.7);
+  backdrop-filter: blur(34px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  grid-template-columns: none;
+}
+/* honour top/bottom pref but keep the dock floating + centered */
+[data-os="macos"].tb-top #mat-taskbar { top: 12px; bottom: auto; }
+
+[data-os="macos"] .tb-spacer { display: none; }
+[data-os="macos"] #mat-tb-cluster { display: flex; align-items: flex-end; gap: 4px; background: none; padding: 0; }
+[data-os="macos"] #mat-tasks-pinned,
+[data-os="macos"] #mat-tasks { display: flex; align-items: flex-end; gap: 4px; }
+/* Hide the taskbar search pill — macOS uses Spotlight, not a dock search box */
+[data-os="macos"] #mat-tb-search { display: none; }
+
+/* Dock items: square-ish, big icons, magnify on hover (JS refines proximity) */
+[data-os="macos"] #mat-start-btn,
+[data-os="macos"] #mat-taskbar .mat-task {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  padding: 0;
+  transition: transform .14s cubic-bezier(.2,.9,.3,1);
+  transform-origin: bottom center;
+  will-change: transform;
+}
+[data-os="macos"] #mat-taskbar .mat-task .mat-task-ico { width: 32px; height: 32px; font-size: 1.7rem; }
+[data-os="macos"] #mat-taskbar .mat-task .mat-task-ico img,
+[data-os="macos"] #mat-start-btn img { width: 32px; height: 32px; }
+[data-os="macos"] #mat-taskbar .mat-task .mat-task-label { display: none; } /* dock shows icons only */
+[data-os="macos"] #mat-start-btn:hover,
+[data-os="macos"] #mat-taskbar .mat-task:hover { transform: scale(1.5) translateY(-9px); }
+/* running dot under dock items */
+[data-os="macos"] #mat-taskbar .mat-task.running::after,
+[data-os="macos"] #mat-taskbar .mat-task.active::after {
+  content: ""; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.85);
+}
+
+/* Tray (bell/user/clock/show-desktop) — a compact separated group at the dock's right */
+[data-os="macos"] #mat-tray {
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+[data-os="macos"] #mat-tray .mat-clock { font-size: 0.72rem; line-height: 1.05; text-align: center; }
+[data-os="macos"] #mat-show-desktop { width: 8px; }
+
+/* ---- Windows: traffic-light buttons on the left, rounder frame ---- */
+[data-os="macos"] .mat-window {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
+}
+[data-os="macos"] .mat-window.maximized { border-radius: 0; }
+[data-os="macos"] .mat-titlebar { position: relative; padding-left: 74px; justify-content: center; }
+[data-os="macos"] .mat-title { text-align: center; font-weight: 600; font-size: 0.82rem; }
+[data-os="macos"] .mat-win-icon { position: absolute; left: 74px; } /* icon after the lights, subtle */
+[data-os="macos"] .mat-win-icon.mat-win-icon-fallback,
+[data-os="macos"] .mat-win-icon-svg { display: none; }
+
+/* The three lights: absolutely placed at the left of the titlebar, in order */
+[data-os="macos"] .mat-win-btn.mat-close,
+[data-os="macos"] .mat-win-btn.mat-min,
+[data-os="macos"] .mat-win-btn.mat-max {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 12px; height: 12px; min-width: 0; padding: 0; border-radius: 50%;
+  border: none; color: transparent; font-size: 0; line-height: 12px; text-align: center;
+  display: grid; place-items: center;
+}
+[data-os="macos"] .mat-win-btn.mat-close { left: 14px; background: #ff5f57; }
+[data-os="macos"] .mat-win-btn.mat-min   { left: 34px; background: #febc2e; }
+[data-os="macos"] .mat-win-btn.mat-max   { left: 54px; background: #28c840; }
+[data-os="macos"] .mat-win-btn.mat-close:hover,
+[data-os="macos"] .mat-win-btn.mat-min:hover,
+[data-os="macos"] .mat-win-btn.mat-max:hover { filter: brightness(0.92); }
+/* reveal glyphs when hovering the titlebar (like macOS) */
+[data-os="macos"] .mat-titlebar:hover .mat-win-btn.mat-close,
+[data-os="macos"] .mat-titlebar:hover .mat-win-btn.mat-min,
+[data-os="macos"] .mat-titlebar:hover .mat-win-btn.mat-max { font-size: 9px; color: rgba(0, 0, 0, 0.55); }
+/* the internal refresh button isn't part of the macOS lights — tuck it to the right, subtle */
+[data-os="macos"] .mat-refresh { order: 9; opacity: 0.55; }
+
+/* ---- Start menu: a touch more macOS (rounded, translucent) ---- */
+[data-os="macos"] #mat-startmenu { border-radius: 18px; }

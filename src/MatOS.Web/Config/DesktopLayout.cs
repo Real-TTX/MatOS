@@ -60,6 +60,10 @@ public class DesktopPrefs
     /// <summary>Show each app's title text next to its icon on the taskbar (Windows-11 lets you
     /// turn this off to fit more icons — "Never show" / "Show labels").</summary>
     public bool TaskbarLabels { get; set; } = true;
+    /// <summary>Overall OS look &amp; feel: "windows" (default — bottom taskbar, right-side window
+    /// buttons) or "macos" (centered magnifying dock, traffic-light window buttons on the left,
+    /// rounder windows, system font). Restyles chrome only; the app content is unchanged.</summary>
+    public string OsStyle { get; set; } = "windows";
 }
 
 public class DesktopPrefsStore

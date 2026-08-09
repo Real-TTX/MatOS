@@ -567,6 +567,7 @@
   // Apply personal taskbar prefs by toggling body classes + CSS variables (styling lives in desktop.css).
   function applyTaskbarPrefs(p) {
     if (!p) return;
+    if (p.osStyle === "macos" || p.osStyle === "windows") document.documentElement.setAttribute("data-os", p.osStyle);
     const body = document.body;
     body.classList.toggle("tb-top", p.taskbarPosition === "top");
     body.classList.toggle("tb-center", p.taskbarAlign === "center");

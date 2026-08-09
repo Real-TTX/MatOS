@@ -12,13 +12,14 @@
     var wpStyle = prefs.WallpaperStyle is "fill" or "fit" or "center" or "tile" ? prefs.WallpaperStyle : "fill";
     var effTheme = string.IsNullOrWhiteSpace(prefs.Theme) ? desktop.Theme : prefs.Theme;
     var theme = (effTheme ?? "auto").ToLowerInvariant() switch { "light" => "light", "dark" => "dark", _ => "auto" };
+    var osStyle = prefs.OsStyle == "macos" ? "macos" : "windows";
     var accent = prefs.AccentColor;
     var name = User.Identity?.Name ?? "user";
     var role = User.IsAdmin() ? "Administrator" : "User";
     var initial = string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
 }
 <!DOCTYPE html>
-<html lang="en" data-theme="@theme">
+<html lang="en" data-theme="@theme" data-os="@osStyle">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -32,6 +33,7 @@
     <link rel="stylesheet" href="~/css/desktop.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/window.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/dialog.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/macos.css" asp-append-version="true" />
     @if (!string.IsNullOrWhiteSpace(accent))
     {
         <style>:root{--accent:@accent;--accent-2:@accent;--accent-grad:@accent;--mat-accent:@accent;--mat-accent-2:@accent;}</style>
@@ -157,5 +159,6 @@
     <script src="~/js/dialog.js" asp-append-version="true"></script>
     <script src="~/js/window-manager.js" asp-append-version="true"></script>
     <script src="~/js/desktop.js" asp-append-version="true"></script>
+    <script src="~/js/dock.js" asp-append-version="true"></script>
 </body>
 </html>

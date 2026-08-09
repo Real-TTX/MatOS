@@ -24,6 +24,13 @@
             <div class="mset-panel active" data-panel="appearance">
                 <h2>Appearance <span class="mset-you" title="Personal setting — applies to your account only">👤</span></h2>
                 <div class="mset-group pad">
+                    <div class="mset-grouphead">OS style</div>
+                    <div class="mset-row">
+                        <div class="mset-label">Look &amp; feel<small>Windows-style bottom taskbar, or a macOS look with a centered magnifying dock, traffic-light window buttons and a system font.</small></div>
+                        <div class="tb-seg" id="os-style"><button type="button" data-v="windows" class="@(Model.OsStyle!="macos"?"active":"")">Windows</button><button type="button" data-v="macos" class="@(Model.OsStyle=="macos"?"active":"")">macOS</button></div>
+                    </div>
+                </div>
+                <div class="mset-group pad">
                     <div class="mset-grouphead">Theme</div>
                     <div class="th-picker" style="padding:0.9rem 1rem 1rem">
                         @foreach (var t in new[] { ("auto", "System"), ("light", "Light"), ("dark", "Dark") })
@@ -314,6 +321,7 @@
   const acPicker = document.getElementById("ac-picker");
   const acCustom = document.getElementById("ac-custom-input");
   const posSeg = document.getElementById("tb-pos"), alignSeg = document.getElementById("tb-align"), searchCb = document.getElementById("tb-search"), labelsCb = document.getElementById("tb-labels");
+  const osSeg = document.getElementById("os-style");
 
   function segValue(seg){ const b=seg && seg.querySelector("button.active"); return b?b.dataset.v:(seg?seg.querySelector("button").dataset.v:""); }
   function segSelect(seg, v){ if(seg) seg.querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.v===v)); }
@@ -331,6 +339,7 @@
       taskbarAlign: alignSeg ? segValue(alignSeg) : "left",
       taskbarSearch: searchCb ? searchCb.checked : true,
       taskbarLabels: labelsCb ? labelsCb.checked : true,
+      osStyle: osSeg ? segValue(osSeg) : "windows",
     };
   }
   function previewAll(body){
@@ -379,7 +388,7 @@
       acPicker.querySelectorAll(".ac-swatch").forEach(x=>x.classList.remove("selected"));
       acPicker.dataset.customActive="0"; if(acCustom) acCustom.value="#8b5cf6"; saveAll(); });
   }
-  [posSeg, alignSeg].forEach(seg => seg && seg.addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; segSelect(seg, b.dataset.v); saveAll(); }));
+  [posSeg, alignSeg, osSeg].forEach(seg => seg && seg.addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; segSelect(seg, b.dataset.v); saveAll(); }));
   if(searchCb) searchCb.addEventListener("change", saveAll);
   if(labelsCb) labelsCb.addEventListener("change", saveAll);
 

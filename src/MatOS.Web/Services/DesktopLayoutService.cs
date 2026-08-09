@@ -286,7 +286,7 @@ public class DesktopLayoutService
     public DesktopPrefs GetPrefs(string userId)
     {
         lock (_gate) return PrefsStore.Users.TryGetValue(userId, out var p)
-            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, WallpaperStyle = p.WallpaperStyle, AccentColor = p.AccentColor, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign, TaskbarLabels = p.TaskbarLabels }
+            ? new DesktopPrefs { Wallpaper = p.Wallpaper, Theme = p.Theme, WallpaperStyle = p.WallpaperStyle, AccentColor = p.AccentColor, TaskbarPosition = p.TaskbarPosition, TaskbarSearch = p.TaskbarSearch, TaskbarAlign = p.TaskbarAlign, TaskbarLabels = p.TaskbarLabels, OsStyle = p.OsStyle }
             : new DesktopPrefs();
     }
 
@@ -305,6 +305,7 @@ public class DesktopLayoutService
             p.TaskbarSearch = prefs.TaskbarSearch;
             p.TaskbarAlign = prefs.TaskbarAlign is "center" or "left" ? prefs.TaskbarAlign : "left";
             p.TaskbarLabels = prefs.TaskbarLabels;
+            p.OsStyle = prefs.OsStyle is "macos" or "windows" ? prefs.OsStyle : "windows";
         }
         await _config.SaveAsync("desktop-prefs", PrefsStore);
     }

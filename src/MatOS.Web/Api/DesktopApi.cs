@@ -63,6 +63,7 @@ public static class DesktopApi
                 taskbarSearch = p.TaskbarSearch,
                 taskbarAlign = p.TaskbarAlign,
                 taskbarLabels = p.TaskbarLabels,
+                osStyle = string.IsNullOrWhiteSpace(p.OsStyle) ? "windows" : p.OsStyle,
             });
         });
 

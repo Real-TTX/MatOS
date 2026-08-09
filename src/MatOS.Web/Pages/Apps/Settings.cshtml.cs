@@ -28,6 +28,7 @@ public class SettingsModel : PageModel
     public bool TaskbarSearch { get; set; } = true;
     public string TaskbarAlign { get; set; } = "left";
     public bool TaskbarLabels { get; set; } = true;
+    public string OsStyle { get; set; } = "windows";
 
     // System — shared by every user, saved via the form post below.
     [BindProperty] public string InstanceName { get; set; } = "matOS";
@@ -62,6 +63,7 @@ public class SettingsModel : PageModel
         TaskbarSearch = p.TaskbarSearch;
         TaskbarAlign = p.TaskbarAlign;
         TaskbarLabels = p.TaskbarLabels;
+        OsStyle = string.IsNullOrWhiteSpace(p.OsStyle) ? "windows" : p.OsStyle;
 
         InstanceName = s.InstanceName;
         BaseDomain = s.BaseDomain;
