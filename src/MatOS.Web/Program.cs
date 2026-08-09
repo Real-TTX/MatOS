@@ -102,6 +102,7 @@ api.MapDesktopApi();
 api.MapFilesApi();
 api.MapStoreApi();
 api.MapBackupsApi();
+api.MapAccountApi();
 api.MapNotificationsApi();
 api.MapUpdatesApi();
 api.MapMatcadApi();

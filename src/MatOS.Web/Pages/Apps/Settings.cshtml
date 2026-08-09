@@ -1,14 +1,19 @@
 @page "/apps/settings"
+@using MatOS.Web.Auth
 @model MatOS.Web.Pages.Apps.SettingsModel
 @{
     ViewData["Title"] = "Settings";
     Layout = "_WindowLayout";
+    var uname = User.Identity?.Name ?? "user";
+    var urole = User.IsAdmin() ? "Administrator" : "User";
+    var uinitial = string.IsNullOrEmpty(uname) ? "?" : uname[..1].ToUpperInvariant();
 }
 
 <div class="mset">
     <aside class="mset-side">
         <div class="mset-title">Settings</div>
         <div class="mset-side-head">Personal <span class="mset-you" title="Only affects your account">👤</span></div>
+        <button class="mset-nav" data-p="account"><span class="i">👤</span> Account</button>
         <button class="mset-nav active" data-p="appearance"><span class="i">🎨</span> Appearance</button>
         <button class="mset-nav" data-p="taskbar"><span class="i">📊</span> Taskbar</button>
         <div class="mset-side-head">Apps</div>
@@ -20,6 +25,22 @@
     </aside>
 
     <section class="mset-main">
+        <div class="mset-panel" data-panel="account">
+            <h2>Account <span class="mset-you" title="Personal setting — applies to your account only">👤</span></h2>
+            <div class="mset-group pad">
+                <div class="acct-id"><span class="acct-avatar">@uinitial</span><div><div class="acct-name">@uname</div><div class="fx-muted">@urole</div></div></div>
+            </div>
+            <div class="mset-group pad">
+                <div class="mset-grouphead">Change password</div>
+                <div class="acct-form">
+                    <label class="fl"><span>Current password</span><input class="ui-input" id="acct-cur" type="password" autocomplete="current-password" /></label>
+                    <label class="fl"><span>New password</span><input class="ui-input" id="acct-new" type="password" autocomplete="new-password" /></label>
+                    <label class="fl"><span>Confirm new password</span><input class="ui-input" id="acct-conf" type="password" autocomplete="new-password" /></label>
+                    <div id="acct-msg" class="acct-msg" style="display:none"></div>
+                    <button type="button" class="ui-btn primary" id="acct-save">Update password</button>
+                </div>
+            </div>
+        </div>
         <form method="post">
             <div class="mset-panel active" data-panel="appearance">
                 <h2>Appearance <span class="mset-you" title="Personal setting — applies to your account only">👤</span></h2>
@@ -195,6 +216,13 @@
 .mset-nav .i { font-size:1.05rem; }
 .mset-main { flex:1 1 auto; overflow:auto; padding:1.4rem 1.6rem 2.5rem; }
 .mset-panel { display:none; } .mset-panel.active { display:block; }
+.fl { display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem; } .fl > span { font-size:0.82rem; font-weight:600; color:var(--mat-text-muted); }
+.acct-id { display:flex; align-items:center; gap:0.9rem; padding:0.3rem 0.2rem; }
+.acct-avatar { width:52px; height:52px; border-radius:999px; background:var(--mat-accent); display:grid; place-items:center; color:#fff; font-weight:800; font-size:1.3rem; flex:0 0 auto; }
+.acct-name { font-weight:800; font-size:1.05rem; }
+.acct-form { padding:0.2rem 1rem 1rem; max-width:360px; }
+.acct-msg { margin:0.2rem 0 0.7rem; font-size:0.85rem; border-radius:8px; padding:0.5rem 0.7rem; }
+.acct-msg.ok { background:rgba(52,211,153,0.14); color:#7ff0c4; } .acct-msg.err { background:rgba(244,80,107,0.14); color:#ffb3c0; }
 .mset-panel h2 { margin:0 0 1rem; font-size:1.35rem; font-weight:800; letter-spacing:-0.02em; }
 .mset-group { background:var(--mat-surface); border:1px solid var(--mat-border); border-radius:12px; overflow:hidden; margin-bottom:1rem; }
 .mset-grouphead { padding:0.7rem 1rem 0.2rem; font-size:0.72rem; color:var(--mat-text-muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:700; }
@@ -395,6 +423,20 @@
   // ---- Deep-link into a specific panel (?panel=taskbar or postMessage matos:goto-panel) ----
   function gotoPanel(name){ const nav=document.querySelector(`.mset-nav[data-p="${name}"]`); if(nav) nav.click(); }
   try{ const p=new URLSearchParams(location.search).get("panel"); if(p) gotoPanel(p); }catch(_){}
+
+  // ---- Account: change password (fetch, no page reload) ----
+  const acctSave=document.getElementById("acct-save");
+  if(acctSave) acctSave.addEventListener("click",async()=>{
+    const cur=document.getElementById("acct-cur").value, nw=document.getElementById("acct-new").value, cf=document.getElementById("acct-conf").value;
+    const msg=document.getElementById("acct-msg"); const show=(t,ok)=>{ msg.style.display=""; msg.className="acct-msg "+(ok?"ok":"err"); msg.textContent=t; };
+    if(!cur||!nw){ show("Enter your current and a new password.",false); return; }
+    if(nw!==cf){ show("The new passwords do not match.",false); return; }
+    acctSave.disabled=true;
+    try{ const r=await fetch("/api/v1/account/password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({currentPassword:cur,newPassword:nw,confirmPassword:cf})});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }
+      show("Password changed.",true); ["acct-cur","acct-new","acct-conf"].forEach(i=>document.getElementById(i).value="");
+    }catch(e){ show("Could not change password: "+e.message,false); } finally{ acctSave.disabled=false; }
+  });
   window.addEventListener("message", e => { if(e.origin!==location.origin) return; const m=e.data; if(m && m.type==="matos:goto-panel" && m.panel) gotoPanel(m.panel); });
 
   // ---- Hidden apps (icon list + Add picker; hides apps/stacks/containers shown on the desktop) ----
