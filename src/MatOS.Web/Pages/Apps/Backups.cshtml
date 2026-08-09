@@ -216,8 +216,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     const js=jobsState.jobs||[];
     if(!js.length){ $("bk-job-rows").innerHTML=`<tr><td colspan="5" style="padding:1rem;color:var(--mat-text-muted)">No jobs yet — click "New job" and pick what to back up.</td></tr>`; return; }
     $("bk-job-rows").innerHTML=js.map((j,i)=>{
-      const apps=(j.targets||[]).filter(t=>t.type==="app").length, vols=(j.targets||[]).filter(t=>t.type!=="app").length;
-      const backs=[apps?`${apps} app${apps>1?"s":""}`:"", vols?`${vols} volume${vols>1?"s":""}`:""].filter(Boolean).join(" + ")||"nothing";
+      const backs=targetSummary(j.targets||[]," + ")||"nothing";
       const when=j.kind==="manual"?"Manual":j.kind==="hourly"?"Hourly":j.kind==="weekly"?days[j.weekday]+" "+esc(j.time):"Daily "+esc(j.time);
       return `<tr class="${j.enabled?'':'job-off'}" data-i="${i}">
         <td><strong>${esc(j.name)}</strong>${j.lastError?'<div class="fx-muted" style="font-size:0.7rem;color:#ffb3c0">⚠ '+esc(j.lastError)+'</div>':(j.lastResult?'<div class="fx-muted" style="font-size:0.7rem">'+esc(j.lastResult)+'</div>':'')}</td>
@@ -253,17 +252,20 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
         const wrap=document.createElement("div"); wrap.className="jt-app";
         wrap.dataset.appTitle=((a.title||a.name)+" "+a.name).toLowerCase();
         const head=document.createElement("div"); head.className="jt-app-head";
-        head.innerHTML=`<button type="button" class="jt-exp" title="Show volumes">${a.volumes.length?"▸":"&nbsp;"}</button>
+        head.innerHTML=`<button type="button" class="jt-exp" title="Show parts">▸</button>
           <label style="display:flex;align-items:center;gap:0.4rem;flex:1;cursor:pointer;min-width:0"><input type="checkbox" class="jt-app-cb" data-app="${escA(a.name)}">
           <span class="jt-app-title">${esc(a.title||a.name)}</span> <span class="jt-app-meta">${a.total?`${a.running}/${a.total} · ${a.volumes.length} vol`:""}</span></label>`;
         wrap.appendChild(head);
         const vols=document.createElement("div"); vols.className="jt-vols";
-        vols.innerHTML=a.volumes.map(v=>`<label class="jt-vol-row" data-search="${escA(String(v).toLowerCase())}"><input type="checkbox" class="jt-vol" data-app="${escA(a.name)}" data-vol="${escA(v)}"> ${esc(v)}</label>`).join("")
-          || `<div class="fx-muted" style="font-size:0.78rem;padding:0.1rem 0.4rem">No named volumes — the whole-app backup still captures the compose.</div>`;
+        const partRows =
+          `<label class="jt-vol-row jt-part"><input type="checkbox" class="jt-part-cb" data-app="${escA(a.name)}" data-part="settings"> ⚙️ App settings <span class="fx-muted" style="font-size:0.74rem">compose &amp; config</span></label>`+
+          `<label class="jt-vol-row jt-part"><input type="checkbox" class="jt-part-cb" data-app="${escA(a.name)}" data-part="image"> 💿 Image</label>`;
+        const volRows = a.volumes.map(v=>`<label class="jt-vol-row" data-search="${escA(String(v).toLowerCase())}"><input type="checkbox" class="jt-vol" data-app="${escA(a.name)}" data-vol="${escA(v)}"> 🗄️ ${esc(v)}</label>`).join("");
+        vols.innerHTML = partRows + (volRows || `<div class="fx-muted" style="font-size:0.74rem;padding:0.1rem 0.4rem">No named volumes.</div>`);
         wrap.appendChild(vols);
-        const exp=head.querySelector(".jt-exp"); if(a.volumes.length) exp.addEventListener("click",()=>{ exp.classList.toggle("open"); vols.classList.toggle("open"); });
+        const exp=head.querySelector(".jt-exp"); exp.addEventListener("click",()=>{ exp.classList.toggle("open"); vols.classList.toggle("open"); });
         const appCb=head.querySelector(".jt-app-cb");
-        appCb.addEventListener("change",()=>{ vols.querySelectorAll(".jt-vol").forEach(c=>{ c.disabled=appCb.checked; if(appCb.checked) c.checked=false; }); head.classList.toggle("sel",appCb.checked); });
+        appCb.addEventListener("change",()=>{ vols.querySelectorAll(".jt-vol,.jt-part-cb").forEach(c=>{ c.disabled=appCb.checked; if(appCb.checked) c.checked=false; }); head.classList.toggle("sel",appCb.checked); });
         box.appendChild(wrap);
       }
     }
@@ -277,11 +279,16 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     }
     if(!box.children.length) box.innerHTML=`<div class="jt-empty">No apps or volumes found yet.</div>`;
   }
+  function targetSummary(ts, sep){
+    const c=k=>ts.filter(t=>(t.type||"volume")===k).length;
+    const p=[]; if(c("app"))p.push(`${c("app")} app${c("app")>1?"s":""}`); if(c("settings"))p.push(`${c("settings")} settings`);
+    if(c("image"))p.push(`${c("image")} image${c("image")>1?"s":""}`); if(c("volume"))p.push(`${c("volume")} volume${c("volume")>1?"s":""}`);
+    return p.join(sep);
+  }
   function updateSelCount(){
     const el=$("j-sel-count"); if(!el) return; const ts=collectTargets();
-    const apps=ts.filter(t=>t.type==="app").length, vols=ts.filter(t=>t.type!=="app").length;
     if(!ts.length){ el.textContent="Nothing selected"; el.style.opacity="0.55"; }
-    else { el.style.opacity="1"; el.textContent=[apps?`${apps} app${apps>1?"s":""}`:"",vols?`${vols} volume${vols>1?"s":""}`:""].filter(Boolean).join(" · "); }
+    else { el.style.opacity="1"; el.textContent=targetSummary(ts," · "); }
   }
   function filterTree(q){
     q=(q||"").trim().toLowerCase(); const box=$("j-tree"); if(!box) return;
@@ -304,13 +311,15 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
   $("j-tree-search").addEventListener("input",e=>filterTree(e.target.value));
   $("j-tree-clear").addEventListener("click",()=>{ $("j-tree-search").value=""; filterTree(""); $("j-tree-search").focus(); });
   function collectTargets(){
-    const targets=[];
+    const tree=$("j-tree"); const targets=[];
     (jobsState.tree.apps||[]).forEach(a=>{
-      const cb=$("j-tree").querySelector(`.jt-app-cb[data-app="${CSS.escape(a.name)}"]`);
-      if(cb&&cb.checked) targets.push({type:"app",ref:a.name});
-      else $("j-tree").querySelectorAll(`.jt-vol[data-app="${CSS.escape(a.name)}"]:checked`).forEach(c=>targets.push({type:"volume",ref:c.dataset.vol}));
+      const cb=tree.querySelector(`.jt-app-cb[data-app="${CSS.escape(a.name)}"]`);
+      if(cb&&cb.checked){ targets.push({type:"app",ref:a.name}); return; }
+      const sc=tree.querySelector(`.jt-part-cb[data-app="${CSS.escape(a.name)}"][data-part="settings"]`); if(sc&&sc.checked) targets.push({type:"settings",ref:a.name});
+      const ic=tree.querySelector(`.jt-part-cb[data-app="${CSS.escape(a.name)}"][data-part="image"]`); if(ic&&ic.checked) targets.push({type:"image",ref:a.name});
+      tree.querySelectorAll(`.jt-vol[data-app="${CSS.escape(a.name)}"]:checked`).forEach(c=>targets.push({type:"volume",ref:c.dataset.vol}));
     });
-    $("j-tree").querySelectorAll(".jt-vol:not([data-app]):checked").forEach(c=>targets.push({type:"volume",ref:c.dataset.vol}));
+    tree.querySelectorAll(".jt-vol:not([data-app]):checked").forEach(c=>targets.push({type:"volume",ref:c.dataset.vol}));
     return targets;
   }
   function jobKindChanged(){ const k=$("j-kind").value; $("j-timerow").style.display=(k==="manual"||k==="hourly")?"none":""; $("j-dayrow").style.display=k==="weekly"?"":"none"; }
@@ -324,6 +333,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
       $("j-kind").value=j.kind||"manual"; $("j-time").value=j.time||"03:00"; $("j-day").value=String(j.weekday||0); $("j-ret").value=j.retentionDays; $("j-en").checked=j.enabled; $("j-img").checked=j.includeImages!==false;
       for(const t of (j.targets||[])){
         if(t.type==="app"){ const c=$("j-tree").querySelector(`.jt-app-cb[data-app="${CSS.escape(t.ref)}"]`); if(c){ c.checked=true; c.dispatchEvent(new Event("change")); } }
+        else if(t.type==="settings"||t.type==="image"){ const c=$("j-tree").querySelector(`.jt-part-cb[data-app="${CSS.escape(t.ref)}"][data-part="${t.type}"]`); if(c) c.checked=true; }
         else { const c=$("j-tree").querySelector(`.jt-vol[data-vol="${CSS.escape(t.ref)}"]`); if(c) c.checked=true; }
       }
     } else {

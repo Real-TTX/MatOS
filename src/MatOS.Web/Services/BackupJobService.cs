@@ -108,10 +108,20 @@ public class BackupJobService
             if (string.IsNullOrWhiteSpace(t.Ref)) continue;
             try
             {
-                if (string.Equals(t.Type, "app", StringComparison.OrdinalIgnoreCase))
-                { var b = await _backup.CreateAppAsync(t.Ref, null, job.TargetVolume, job.IncludeImages, ct); bytes += b.SizeBytes; ok++; }
-                else
-                { if (t.Ref == job.TargetVolume) continue; var b = await _backup.CreateAsync(t.Ref, job.TargetVolume, ct); bytes += b.SizeBytes; ok++; }
+                long sz;
+                switch ((t.Type ?? "volume").ToLowerInvariant())
+                {
+                    case "app":      // whole app: settings + image (per job toggle) + all volumes
+                        sz = (await _backup.CreateAppAsync(t.Ref, null, job.TargetVolume, job.IncludeImages, ct)).SizeBytes; break;
+                    case "settings": // just the compose/config manifest (no volumes, no image)
+                        sz = (await _backup.CreateAppAsync(t.Ref, Array.Empty<string>(), job.TargetVolume, false, ct)).SizeBytes; break;
+                    case "image":    // the app's image(s) + manifest (no volumes)
+                        sz = (await _backup.CreateAppAsync(t.Ref, Array.Empty<string>(), job.TargetVolume, true, ct)).SizeBytes; break;
+                    default:         // a single volume
+                        if (t.Ref == job.TargetVolume) continue;
+                        sz = (await _backup.CreateAsync(t.Ref, job.TargetVolume, ct)).SizeBytes; break;
+                }
+                bytes += sz; ok++;
             }
             catch (Exception ex) { errors.Add($"{t.Ref}: {ex.Message}"); }
         }
@@ -156,8 +166,9 @@ public class BackupJobService
     private async Task PruneAsync(BackupJob job, CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-job.RetentionDays);
-        var appRefs = job.Targets.Where(t => string.Equals(t.Type, "app", StringComparison.OrdinalIgnoreCase)).Select(t => t.Ref).ToHashSet();
-        var volRefs = job.Targets.Where(t => !string.Equals(t.Type, "app", StringComparison.OrdinalIgnoreCase)).Select(t => t.Ref).ToHashSet();
+        var appTypes = new[] { "app", "settings", "image" };
+        var appRefs = job.Targets.Where(t => appTypes.Contains((t.Type ?? "").ToLowerInvariant())).Select(t => t.Ref).ToHashSet();
+        var volRefs = job.Targets.Where(t => string.Equals(t.Type, "volume", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(t.Type)).Select(t => t.Ref).ToHashSet();
         if (appRefs.Count > 0)
             foreach (var b in (await _backup.ListAppsAsync(ct)).Where(x => x.TargetVolume == job.TargetVolume && appRefs.Contains(x.StackName) && x.CreatedUtc < cutoff))
                 try { _backup.DeleteApp(b.TargetVolume, b.FileName); } catch { }
