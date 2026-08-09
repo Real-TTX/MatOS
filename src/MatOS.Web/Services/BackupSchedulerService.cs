@@ -80,7 +80,7 @@ public class BackupSchedulerService : BackgroundService
             foreach (var src in sources.Distinct())
             {
                 if (string.IsNullOrWhiteSpace(src) || src == s.TargetVolume) continue;
-                try { var b = await backups.CreateAsync(src, s.TargetVolume, ct); totals += b.SizeBytes; successes++; }
+                try { var b = await backups.CreateAsync(src, s.TargetVolume, null, ct); totals += b.SizeBytes; successes++; }
                 catch (Exception ex) { errors.Add($"{src}: {ex.Message}"); }
             }
             s.LastRunUtc = now; s.LastError = errors.Count > 0 ? string.Join("; ", errors.Take(3)) : null;

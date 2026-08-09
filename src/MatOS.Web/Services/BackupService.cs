@@ -39,12 +39,24 @@ public class BackupService
             throw new ArgumentException("Invalid volume name.");
         return n;
     }
-    private static string SafeFile(string n)
+    // A backup file name, possibly with "/" subfolders (from a job's target path). No traversal.
+    private static string SafeFile(string n) => SafeRelFile(n, BackupSuffix);
+    private static string SafeRelFile(string n, string suffix)
     {
-        if (string.IsNullOrWhiteSpace(n) || n.Contains('/') || n.Contains('\\') || n.Contains("..") || !n.EndsWith(BackupSuffix, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(n) || n.Contains('\\') || n.Contains("..") || n.StartsWith('/') || n.EndsWith('/') || !n.EndsWith(suffix, StringComparison.Ordinal))
             throw new ArgumentException("Invalid backup file name.");
         return n;
     }
+    /// <summary>Sanitize an optional subfolder within the target volume (empty = the volume root).</summary>
+    private static string SafeRelDir(string? p)
+    {
+        if (string.IsNullOrWhiteSpace(p)) return "";
+        var segs = p.Replace('\\', '/').Split('/')
+            .Select(seg => new string(seg.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' or ' ').ToArray()).Trim(' ', '.'))
+            .Where(seg => seg.Length > 0);
+        return string.Join("/", segs);
+    }
+    private string FullPath(string vol, string relName) => Path.Combine(DataDir(vol), relName.Replace('/', Path.DirectorySeparatorChar));
 
     /// <summary>Ensure the default backup target volume exists (created on demand).</summary>
     public async Task EnsureDefaultTargetAsync(CancellationToken ct = default)
@@ -67,9 +79,9 @@ public class BackupService
         {
             var dir = DataDir(v.Name);
             if (!Directory.Exists(dir)) continue;
-            foreach (var f in Directory.EnumerateFiles(dir, "*" + BackupSuffix, SearchOption.TopDirectoryOnly))
+            foreach (var f in Directory.EnumerateFiles(dir, "*" + BackupSuffix, SearchOption.AllDirectories))
             {
-                var name = Path.GetFileName(f);
+                var name = Path.GetRelativePath(dir, f).Replace('\\', '/'); // may include a subfolder path
                 if (name.EndsWith(AppSuffix, StringComparison.Ordinal)) continue; // whole-app bundles are listed separately
                 var source = InferSource(name);
                 try
@@ -85,13 +97,15 @@ public class BackupService
 
     private static string InferSource(string fileName)
     {
-        var stem = fileName.EndsWith(BackupSuffix, StringComparison.Ordinal) ? fileName[..^BackupSuffix.Length] : fileName;
+        var leaf = fileName.Replace('\\', '/'); var slash = leaf.LastIndexOf('/'); if (slash >= 0) leaf = leaf[(slash + 1)..];
+        var stem = leaf.EndsWith(BackupSuffix, StringComparison.Ordinal) ? leaf[..^BackupSuffix.Length] : leaf;
         var idx = stem.LastIndexOf("__", StringComparison.Ordinal);
         return idx > 0 ? stem[..idx] : stem;
     }
 
-    /// <summary>Create a backup of <paramref name="sourceVolume"/> as a .tar.gz on <paramref name="targetVolume"/>.</summary>
-    public async Task<BackupInfo> CreateAsync(string sourceVolume, string? targetVolume, CancellationToken ct = default)
+    /// <summary>Create a backup of <paramref name="sourceVolume"/> as a .tar.gz on <paramref name="targetVolume"/>,
+    /// optionally inside the subfolder <paramref name="targetPath"/> of that volume.</summary>
+    public async Task<BackupInfo> CreateAsync(string sourceVolume, string? targetVolume, string? targetPath = null, CancellationToken ct = default)
     {
         var src = SafeName(sourceVolume);
         var tgt = SafeName(string.IsNullOrWhiteSpace(targetVolume) ? DefaultTarget : targetVolume!);
@@ -99,13 +113,16 @@ public class BackupService
 
         await EnsureDefaultTargetAsync(ct);
 
+        var relDir = SafeRelDir(targetPath);
         var srcDir = DataDir(src); var tgtDir = DataDir(tgt);
         if (!Directory.Exists(srcDir)) throw new DirectoryNotFoundException($"Source volume '{src}' has no data directory.");
-        if (!Directory.Exists(tgtDir)) Directory.CreateDirectory(tgtDir);
+        var outDir = string.IsNullOrEmpty(relDir) ? tgtDir : Path.Combine(tgtDir, relDir.Replace('/', Path.DirectorySeparatorChar));
+        if (!Directory.Exists(outDir)) Directory.CreateDirectory(outDir);
 
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         var fileName = $"{src}__{stamp}{BackupSuffix}";
-        var outPath = Path.Combine(tgtDir, fileName);
+        var relName = string.IsNullOrEmpty(relDir) ? fileName : relDir + "/" + fileName;
+        var outPath = Path.Combine(outDir, fileName);
         var tmpPath = outPath + ".part";
         try
         {
@@ -114,8 +131,8 @@ public class BackupService
                 await TarFile.CreateFromDirectoryAsync(srcDir, gz, includeBaseDirectory: false, ct);
             File.Move(tmpPath, outPath, overwrite: true);
             var info = new FileInfo(outPath);
-            _log.LogInformation("Backed up {Src} → {Tgt}/{File} ({Size} bytes)", src, tgt, fileName, info.Length);
-            return new BackupInfo(tgt, fileName, src, info.Length, info.CreationTimeUtc);
+            _log.LogInformation("Backed up {Src} → {Tgt}/{File} ({Size} bytes)", src, tgt, relName, info.Length);
+            return new BackupInfo(tgt, relName, src, info.Length, info.CreationTimeUtc);
         }
         catch
         {
@@ -132,7 +149,7 @@ public class BackupService
         var name = SafeFile(fileName);
         var dst = SafeName(restoreInto);
 
-        var backupPath = Path.Combine(DataDir(backupVol), name);
+        var backupPath = FullPath(backupVol, name);
         if (!File.Exists(backupPath)) throw new FileNotFoundException("Backup file not found.", name);
 
         var dstDir = DataDir(dst);
@@ -152,16 +169,16 @@ public class BackupService
     {
         var vol = SafeName(targetVolume);
         var name = SafeFile(fileName);
-        var path = Path.Combine(DataDir(vol), name);
+        var path = FullPath(vol, name);
         if (File.Exists(path)) File.Delete(path);
     }
 
     public (string Path, string DownloadName) BackupFilePath(string targetVolume, string fileName)
     {
         var vol = SafeName(targetVolume); var name = SafeFile(fileName);
-        var path = Path.Combine(DataDir(vol), name);
+        var path = FullPath(vol, name);
         if (!File.Exists(path)) throw new FileNotFoundException("Backup file not found.", name);
-        return (path, name);
+        return (path, Path.GetFileName(name));
     }
 
     // ============================================================================================
@@ -178,16 +195,14 @@ public class BackupService
     }
     private static string SafeAppFile(string n)
     {
-        if (string.IsNullOrWhiteSpace(n) || n.Contains('/') || n.Contains('\\') || n.Contains("..") || !n.EndsWith(AppSuffix, StringComparison.Ordinal))
-            throw new ArgumentException("Invalid app-backup file name.");
-        return n;
+        return SafeRelFile(n, AppSuffix);
     }
 
     /// <summary>Back up a whole app: snapshot every container's config (pinned image) + archive the
     /// stack's named volumes (all by default, or the given subset) into one bundle on the target. When
     /// <paramref name="includeImages"/> is set, the app's Docker images are saved into the bundle too
     /// (docker save) so a restore is fully self-contained and works offline (no registry pull).</summary>
-    public async Task<AppBackupInfo> CreateAppAsync(string stackName, string[]? volumes, string? targetVolume, bool includeImages = true, CancellationToken ct = default)
+    public async Task<AppBackupInfo> CreateAppAsync(string stackName, string[]? volumes, string? targetVolume, bool includeImages = true, string? targetPath = null, CancellationToken ct = default)
     {
         var snap = await _docker.SnapshotStackAsync(stackName, ct)
                    ?? throw new InvalidOperationException($"App '{stackName}' has no containers to back up.");
@@ -203,12 +218,14 @@ public class BackupService
 
         var tgt = SafeName(string.IsNullOrWhiteSpace(targetVolume) ? DefaultTarget : targetVolume!);
         await EnsureDefaultTargetAsync(ct);
-        var tgtDir = DataDir(tgt);
-        Directory.CreateDirectory(tgtDir);
+        var relDir = SafeRelDir(targetPath);
+        var outDir = string.IsNullOrEmpty(relDir) ? DataDir(tgt) : Path.Combine(DataDir(tgt), relDir.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(outDir);
 
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         var fileName = $"{SafeStack(stackName)}__{stamp}{AppSuffix}";
-        var outPath = Path.Combine(tgtDir, fileName);
+        var relName = string.IsNullOrEmpty(relDir) ? fileName : relDir + "/" + fileName;
+        var outPath = Path.Combine(outDir, fileName);
         var tmpPath = outPath + ".part";
         var work = Path.Combine(Path.GetTempPath(), "matos-appbk", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
@@ -261,8 +278,8 @@ public class BackupService
             }
             File.Move(tmpPath, outPath, overwrite: true);
             var info = new FileInfo(outPath);
-            _log.LogInformation("Backed up app {Stack} → {Tgt}/{File} ({Size} bytes, {N} volumes, {I} images)", stackName, tgt, fileName, info.Length, include.Count, imgFiles.Count);
-            return new AppBackupInfo(tgt, fileName, stackName, manifest.Title, include, manifest.Containers.Count, imgFiles.Count, info.Length, info.CreationTimeUtc);
+            _log.LogInformation("Backed up app {Stack} → {Tgt}/{File} ({Size} bytes, {N} volumes, {I} images)", stackName, tgt, relName, info.Length, include.Count, imgFiles.Count);
+            return new AppBackupInfo(tgt, relName, stackName, manifest.Title, include, manifest.Containers.Count, imgFiles.Count, info.Length, info.CreationTimeUtc);
         }
         catch { try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { } throw; }
         finally { try { Directory.Delete(work, true); } catch { } }
@@ -308,9 +325,9 @@ public class BackupService
         {
             var dir = DataDir(v.Name);
             if (!Directory.Exists(dir)) continue;
-            foreach (var f in Directory.EnumerateFiles(dir, "*" + AppSuffix, SearchOption.TopDirectoryOnly))
+            foreach (var f in Directory.EnumerateFiles(dir, "*" + AppSuffix, SearchOption.AllDirectories))
             {
-                var name = Path.GetFileName(f);
+                var name = Path.GetRelativePath(dir, f).Replace('\\', '/');
                 try
                 {
                     var info = new FileInfo(f);
@@ -331,7 +348,7 @@ public class BackupService
     {
         var vol = SafeName(targetVolume);
         var name = SafeAppFile(fileName);
-        var path = Path.Combine(DataDir(vol), name);
+        var path = FullPath(vol, name);
         if (!File.Exists(path)) throw new FileNotFoundException("App backup not found.", name);
 
         DockerAppManifest? manifest = null;
@@ -391,16 +408,16 @@ public class BackupService
     {
         var vol = SafeName(targetVolume);
         var name = SafeAppFile(fileName);
-        var p = Path.Combine(DataDir(vol), name);
+        var p = FullPath(vol, name);
         if (File.Exists(p)) File.Delete(p);
     }
 
     public (string Path, string DownloadName) AppBackupFilePath(string targetVolume, string fileName)
     {
         var vol = SafeName(targetVolume); var name = SafeAppFile(fileName);
-        var path = Path.Combine(DataDir(vol), name);
+        var path = FullPath(vol, name);
         if (!File.Exists(path)) throw new FileNotFoundException("App backup not found.", name);
-        return (path, name);
+        return (path, Path.GetFileName(name));
     }
 }
 

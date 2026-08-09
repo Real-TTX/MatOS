@@ -46,9 +46,13 @@
                 <label class="fl"><span>Name</span><input class="ui-input" id="j-name" placeholder="Nightly backup" /></label>
                 <div class="grid2">
                     <label class="fl"><span>Store on</span><select class="ui-select" id="j-tgt"></select></label>
+                    <label class="fl"><span>Subfolder <span class="fx-muted">(optional)</span></span><input class="ui-input mono" id="j-path" placeholder="e.g. nightly or apps/db" /></label>
+                </div>
+                <div class="grid2">
                     <label class="fl"><span>Schedule</span>
                         <select class="ui-select" id="j-kind"><option value="manual">Manual only</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
                     </label>
+                    <div></div>
                 </div>
                 <div class="grid2">
                     <label class="fl" id="j-timerow"><span>Time (server local)</span><input class="ui-input" id="j-time" type="time" value="03:00" /></label>
@@ -329,7 +333,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     renderTree();
     const tgt=$("j-tgt"); tgt.innerHTML=(jobsState.tree.targetVolumes||[]).map(v=>`<option value="${escA(v.name)}" ${v.name==="matos-backups"?"selected":""}>${esc(v.name)}${v.isSmb?"  (SMB)":""}</option>`).join("");
     if(j){
-      $("bk-crumb-cur").textContent="Edit job"; $("j-id").value=j.id; $("j-name").value=j.name; tgt.value=j.targetVolume;
+      $("bk-crumb-cur").textContent="Edit job"; $("j-id").value=j.id; $("j-name").value=j.name; tgt.value=j.targetVolume; $("j-path").value=j.targetPath||"";
       $("j-kind").value=j.kind||"manual"; $("j-time").value=j.time||"03:00"; $("j-day").value=String(j.weekday||0); $("j-ret").value=j.retentionDays; $("j-en").checked=j.enabled; $("j-img").checked=j.includeImages!==false;
       for(const t of (j.targets||[])){
         if(t.type==="app"){ const c=$("j-tree").querySelector(`.jt-app-cb[data-app="${CSS.escape(t.ref)}"]`); if(c){ c.checked=true; c.dispatchEvent(new Event("change")); } }
@@ -337,7 +341,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
         else { const c=$("j-tree").querySelector(`.jt-vol[data-vol="${CSS.escape(t.ref)}"]`); if(c) c.checked=true; }
       }
     } else {
-      $("bk-crumb-cur").textContent="New job"; $("j-id").value=""; $("j-name").value="";
+      $("bk-crumb-cur").textContent="New job"; $("j-id").value=""; $("j-name").value=""; $("j-path").value="";
       $("j-kind").value="manual"; $("j-time").value="03:00"; $("j-day").value="0"; $("j-ret").value="30"; $("j-en").checked=true; $("j-img").checked=true;
     }
     jobKindChanged(); $("j-tree-search").value=""; filterTree(""); updateSelCount(); showEditor(true);
@@ -349,7 +353,7 @@ table.bkt th.num, table.bkt td.num { text-align:right; }
     const targets=collectTargets();
     if(!$("j-name").value.trim()){ flash("Give the job a name.",false); return; }
     if(!targets.length){ flash("Pick at least one app or volume.",false); return; }
-    const job={ id:$("j-id").value, name:$("j-name").value.trim(), targets, targetVolume:$("j-tgt").value,
+    const job={ id:$("j-id").value, name:$("j-name").value.trim(), targets, targetVolume:$("j-tgt").value, targetPath:$("j-path").value.trim(),
       kind:$("j-kind").value, time:$("j-time").value, weekday:+$("j-day").value, retentionDays:+$("j-ret").value, enabled:$("j-en").checked, includeImages:$("j-img").checked };
     try{ const r=await fetch("/api/v1/backups/jobs/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(job)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.detail||("HTTP "+r.status)); }

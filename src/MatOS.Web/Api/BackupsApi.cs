@@ -38,7 +38,7 @@ public static class BackupsApi
 
         g.MapPost("/create", async (CreateBody b, BackupService svc, CancellationToken ct) =>
         {
-            try { var r = await svc.CreateAsync(b.SourceVolume, b.TargetVolume, ct); return Results.Ok(new { backup = r }); }
+            try { var r = await svc.CreateAsync(b.SourceVolume, b.TargetVolume, null, ct); return Results.Ok(new { backup = r }); }
             catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
@@ -91,7 +91,7 @@ public static class BackupsApi
         g.MapPost("/apps/create", async (AppCreateBody b, BackupService svc, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(b.Stack)) return Results.BadRequest(new { error = "Pick an app." });
-            try { var r = await svc.CreateAppAsync(b.Stack, b.Volumes, b.TargetVolume, b.IncludeImages ?? true, ct); return Results.Ok(new { backup = r }); }
+            try { var r = await svc.CreateAppAsync(b.Stack, b.Volumes, b.TargetVolume, b.IncludeImages ?? true, null, ct); return Results.Ok(new { backup = r }); }
             catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 

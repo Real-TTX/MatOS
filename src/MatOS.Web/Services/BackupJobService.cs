@@ -18,6 +18,8 @@ public class BackupJob
     public string Name { get; set; } = "";
     public List<BackupJobTarget> Targets { get; set; } = new();
     public string TargetVolume { get; set; } = "matos-backups";
+    /// <summary>Optional subfolder within the target volume to store this job's backups in.</summary>
+    public string TargetPath { get; set; } = "";
     /// <summary>Bundle the app's Docker images into whole-app backups (docker save) so a restore is
     /// fully offline. Larger backups; turn off to rely on pulling the pinned image on restore.</summary>
     public bool IncludeImages { get; set; } = true;
@@ -112,14 +114,14 @@ public class BackupJobService
                 switch ((t.Type ?? "volume").ToLowerInvariant())
                 {
                     case "app":      // whole app: settings + image (per job toggle) + all volumes
-                        sz = (await _backup.CreateAppAsync(t.Ref, null, job.TargetVolume, job.IncludeImages, ct)).SizeBytes; break;
+                        sz = (await _backup.CreateAppAsync(t.Ref, null, job.TargetVolume, job.IncludeImages, job.TargetPath, ct)).SizeBytes; break;
                     case "settings": // just the compose/config manifest (no volumes, no image)
-                        sz = (await _backup.CreateAppAsync(t.Ref, Array.Empty<string>(), job.TargetVolume, false, ct)).SizeBytes; break;
+                        sz = (await _backup.CreateAppAsync(t.Ref, Array.Empty<string>(), job.TargetVolume, false, job.TargetPath, ct)).SizeBytes; break;
                     case "image":    // the app's image(s) + manifest (no volumes)
-                        sz = (await _backup.CreateAppAsync(t.Ref, Array.Empty<string>(), job.TargetVolume, true, ct)).SizeBytes; break;
+                        sz = (await _backup.CreateAppAsync(t.Ref, Array.Empty<string>(), job.TargetVolume, true, job.TargetPath, ct)).SizeBytes; break;
                     default:         // a single volume
                         if (t.Ref == job.TargetVolume) continue;
-                        sz = (await _backup.CreateAsync(t.Ref, job.TargetVolume, ct)).SizeBytes; break;
+                        sz = (await _backup.CreateAsync(t.Ref, job.TargetVolume, job.TargetPath, ct)).SizeBytes; break;
                 }
                 bytes += sz; ok++;
             }
