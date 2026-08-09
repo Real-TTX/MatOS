@@ -65,8 +65,14 @@
 [data-os="macos"] #mat-taskbar .mat-task .mat-task-ico img,
 [data-os="macos"] #mat-start-btn img { width: 32px; height: 32px; }
 [data-os="macos"] #mat-taskbar .mat-task .mat-task-label { display: none; } /* dock shows icons only */
-[data-os="macos"] #mat-start-btn:hover,
-[data-os="macos"] #mat-taskbar .mat-task:hover { transform: scale(1.5) translateY(-9px); }
+/* dock magnification is driven by dock.js (proximity); allow icons to grow past the pill edges */
+[data-os="macos"] #mat-taskbar,
+[data-os="macos"] #mat-tb-cluster,
+[data-os="macos"] #mat-tasks,
+[data-os="macos"] #mat-tasks-pinned { overflow: visible; }
+/* fallback hover-scale only when JS magnify hasn't set an inline transform (keyboard/touch) */
+[data-os="macos"] #mat-start-btn:not([style*="transform"]):hover,
+[data-os="macos"] #mat-taskbar .mat-task:not([style*="transform"]):hover { transform: scale(1.4) translateY(-8px); }
 /* running dot under dock items */
 [data-os="macos"] #mat-taskbar .mat-task.running::after,
 [data-os="macos"] #mat-taskbar .mat-task.active::after {

@@ -4,20 +4,23 @@
   "use strict";
   const html = document.documentElement;
   const active = () => html.getAttribute("data-os") === "macos";
-  const MAX = 1.6, MIN = 1.0, R = 120; // peak scale, base scale, influence radius (px)
+  const MAX = 1.5, MIN = 1.0, R = 130; // peak scale, base scale, influence radius (px)
 
   function items() {
     const c = document.getElementById("mat-tb-cluster");
     return c ? [...c.querySelectorAll("#mat-start-btn, .mat-task")] : [];
   }
-  function reset() { for (const el of items()) el.style.transform = ""; }
+  // Reset with the CSS transition back on, so the icons settle smoothly.
+  function reset() { for (const el of items()) { el.style.transition = ""; el.style.transform = ""; } }
   function magnify(cx) {
     for (const el of items()) {
+      // While tracking the cursor, disable the transition so the scale follows instantly (no lag/jitter).
+      el.style.transition = "none";
       const r = el.getBoundingClientRect();
       const d = Math.abs(cx - (r.left + r.width / 2));
       let s = MIN;
       if (d < R) { const t = 1 - d / R; s = MIN + (MAX - MIN) * t * t; }
-      el.style.transform = s > 1.001 ? `scale(${s.toFixed(3)}) translateY(${(-(s - 1) * 20).toFixed(1)}px)` : "";
+      el.style.transform = s > 1.001 ? `scale(${s.toFixed(3)}) translateY(${(-(s - 1) * 14).toFixed(1)}px)` : "";
     }
   }
   document.addEventListener("pointermove", (e) => {
