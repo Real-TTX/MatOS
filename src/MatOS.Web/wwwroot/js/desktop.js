@@ -529,8 +529,8 @@
     if (pinnedView) pinnedView.hidden = showAll;
     if (allView) allView.hidden = !showAll;
     startMenu.classList.toggle("sm-showing-all", showAll);
-    const allBar = document.querySelector(".sm-allbar"); if (allBar) allBar.style.display = q ? "none" : "";
-    const allLbl = document.getElementById("sm-allbtn-label"); if (allLbl) allLbl.textContent = smShowAll ? "Pinned" : "All apps";
+    const tgl = document.getElementById("sm-view-toggle");
+    if (tgl) tgl.querySelectorAll("button").forEach(b => b.classList.toggle("active", (b.dataset.v === "all") === smShowAll));
     if (!showAll) { renderPinned(); return; }
     const match = t => !q || (t || "").toLowerCase().includes(q);
     const inFolder = new Set(); for (const f of startFolders) for (const k of (f.keys || [])) inFolder.add(k);
@@ -593,7 +593,7 @@
     el.style.transformOrigin = (isTop ? "top" : "bottom") + " center";
   }
 
-  function openStart() { if (!startMenu) return; smShowAll = false; startMenu.hidden = false; positionNearAnchor(startMenu, startBtn); startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
+  function openStart() { if (!startMenu) return; try { smShowAll = localStorage.getItem("matos.smView") === "all"; } catch(_){} startMenu.hidden = false; positionNearAnchor(startMenu, startBtn); startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
   function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); startMenu.classList.remove("tb-driven"); }
   // Taskbar search (Windows-11 style): typing forwards into the start menu. When the taskbar
   // search is driving the menu, we hide the menu's own search input (one focused input only —
@@ -731,9 +731,9 @@
       if (head) { const fid = head.closest(".sm-folder").dataset.sfid; if (startFoldersCollapsed.has(fid)) startFoldersCollapsed.delete(fid); else startFoldersCollapsed.add(fid); renderStartMenu(startSearch ? startSearch.value : ""); return; }
       const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); if (tbSearch) tbSearch.value = ""; } if (it) delete it.dataset.suppressClick;
     });
-    // "All apps" / "Pinned" toggle.
-    const smToggleAll = document.getElementById("sm-toggle-all");
-    if (smToggleAll) smToggleAll.addEventListener("click", () => { smShowAll = !smShowAll; renderStartMenu(startSearch ? startSearch.value : ""); });
+    // All ↔ Favorites toggle (footer). Remembers the choice so it opens the same way next time.
+    const viewToggle = document.getElementById("sm-view-toggle");
+    if (viewToggle) viewToggle.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; smShowAll = b.dataset.v === "all"; try { localStorage.setItem("matos.smView", smShowAll ? "all" : "fav"); } catch(_){} renderStartMenu(startSearch ? startSearch.value : ""); });
     // Drag a start-menu item onto the desktop to pin it there (with a chosen position).
     startMenu.addEventListener("pointerdown", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
@@ -787,8 +787,8 @@
       const items = appMenuItems(key, { after: closeStart });
       items.push({ sep: true });
       items.push(startPins.includes(key)
-        ? { label: "Unpin from Start", action: () => unpinFromStart(key) }
-        : { label: "Pin to Start", action: () => pinToStart(key) });
+        ? { label: "Remove from Favorites", action: () => unpinFromStart(key) }
+        : { label: "Add to Favorites", action: () => pinToStart(key) });
       const inF = startFolders.find(f => (f.keys || []).includes(key));
       if (inF) items.push({ label: "Remove from folder", action: () => removeFromStartFolder(key) });
       else { for (const f of startFolders) items.push({ label: `Add to “${f.name}”`, action: () => addToStartFolder(key, f.id) }); items.push({ label: "New folder…", action: () => createStartFolderWith(key) }); }

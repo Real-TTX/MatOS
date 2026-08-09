@@ -58,11 +58,11 @@
             <input id="mat-start-search" type="search" placeholder="Search apps…" autocomplete="off" aria-label="Search apps" />
         </div>
         <div class="sm-body">
-            <!-- Pinned grid (Windows-11 style) — default view -->
+            <!-- Favorites grid (Windows-11 style) — default view -->
             <div id="sm-pinned-view">
-                <div class="sm-section-title">Pinned</div>
+                <div class="sm-section-title">Favorites</div>
                 <div class="sm-pinned-grid" id="sm-pinned"></div>
-                <div class="sm-pinned-empty" id="sm-pinned-empty" hidden>Nothing pinned yet. Right-click any app and choose <strong>Pin to Start</strong>.</div>
+                <div class="sm-pinned-empty" id="sm-pinned-empty" hidden>No favorites yet. Right-click any app and choose <strong>Add to Favorites</strong>.</div>
             </div>
             <!-- Full categorised list -->
             <div id="sm-all-view" hidden>
@@ -75,17 +75,16 @@
                 <div class="sm-empty" id="sm-empty" hidden>No matching apps.</div>
             </div>
         </div>
-        <div class="sm-allbar">
-            <button type="button" class="sm-allbtn" id="sm-toggle-all">
-                <span class="sm-allbtn-ico" aria-hidden="true">▦</span><span id="sm-allbtn-label">All apps</span><span class="sm-allbtn-chev" aria-hidden="true">›</span>
-            </button>
-        </div>
         <div class="sm-footer">
             <div class="sm-user" data-open-url="/apps/account" data-open-title="My Account" data-open-key="account" style="cursor:pointer" title="My account">
                 <span class="mat-avatar">@initial</span>
                 <div><div class="nm">@name</div><div class="rl">@role</div></div>
             </div>
             <div class="sm-foot-actions">
+                <div class="sm-view-toggle" id="sm-view-toggle" role="tablist" title="Show favorites or all apps">
+                    <button type="button" data-v="fav" role="tab">★ Favorites</button>
+                    <button type="button" data-v="all" role="tab">All</button>
+                </div>
                 <button class="sm-foot-btn" data-open-url="/apps/settings" data-open-title="Settings" data-open-key="settings" title="Settings" aria-label="Settings">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 6.6 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 13.4H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 6.6L4.5 6.5a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9z"/></svg>
                 </button>
