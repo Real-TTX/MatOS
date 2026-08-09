@@ -160,7 +160,7 @@
 .fx-stackhead { font-size:0.7rem; font-weight:700; color:var(--mat-text-muted); padding:0.5rem 0.4rem 0.2rem; }
 
 .fx-main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; }
-.fx-tabs { display:flex; align-items:stretch; gap:0.2rem; padding:0.35rem 0.5rem 0; border-bottom:1px solid var(--mat-border); overflow-x:auto; scrollbar-width:thin; }
+.fx-tabs { display:none; } /* tabs removed by request — single-location explorer */
 .fx-tab { display:flex; align-items:center; gap:0.4rem; max-width:200px; padding:0.4rem 0.4rem 0.4rem 0.7rem; border:1px solid var(--mat-border); border-bottom:none; border-radius:9px 9px 0 0; background:var(--mat-surface-2); color:var(--mat-text-muted); cursor:pointer; white-space:nowrap; }
 .fx-tab.active { background:var(--mat-surface); color:var(--mat-text); border-color:var(--mat-accent); }
 .fx-tab-ico { flex:0 0 auto; }
@@ -575,7 +575,6 @@ table.fx-tbl tbody tr.sel { background:rgba(139,92,246,0.22); }
       : [];
     const items = onItem ? [
       {label:"Open",fn:()=>{ if(sel.isDir)openFolder(cur.volume,sel.path); else openFile(sel.path); }},
-      {label:"Open in new tab",fn:()=>openInNewTab(cur.volume,sel.path),hide:!sel.isDir},
       {label:"Download",fn:()=>{ dl.src=api(cur.volume,"download",`path=${encodeURIComponent(sel.path)}`); },hide:sel.isDir},
       ...openWithItems,
       {sep:true},{label:"Copy",fn:()=>{ clip={op:"copy",volume:cur.volume,path:sel.path,name:sel.name}; updateOps(); }},

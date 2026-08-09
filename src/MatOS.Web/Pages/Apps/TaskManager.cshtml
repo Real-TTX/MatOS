@@ -64,6 +64,13 @@ table.tmt th, table.tmt td { padding:0.5rem 0.85rem; text-align:left; white-spac
 table.tmt thead th { font-size:0.78rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); cursor:pointer; user-select:none; }
 table.tmt thead th.num, table.tmt td.num { text-align:right; }
 table.tmt tbody tr { border-bottom:1px solid var(--mat-border); } table.tmt tbody tr:hover { background:rgba(255,255,255,0.05); }
+/* Keep the Actions column (last) pinned to the right so long columns never hide it. */
+table.tmt th:last-child, table.tmt td:last-child { position:sticky; right:0; z-index:2; background:var(--mat-bg); box-shadow:-10px 0 10px -8px rgba(0,0,0,0.55); }
+table.tmt tbody tr:hover td:last-child { background:#1b2130; }
+.tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; white-space:nowrap; }
+/* Truncate wide text columns with an ellipsis instead of blowing out the table width. */
+table.tmt td.mono { max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+table.tmt td.tm-clip { max-width:180px; overflow:hidden; text-overflow:ellipsis; }
 .tm-acts { display:flex; gap:0.3rem; justify-content:flex-end; } .tm-acts .ui-btn { padding:0.28rem 0.5rem; font-size:0.78rem; }
 /* General dashboard */
 .tm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.8rem; margin-bottom:1rem; }
@@ -253,8 +260,8 @@ td .tm-appicon { margin-right:0.5rem; }
       const ports=(c.ports||[]).map(p=>p.publicPort?`${p.publicPort}→${p.privatePort}`:`${p.privatePort}`).join(", ")||"—";
       return `<tr>
         <td>${c.running?'<span class="pill on">running</span>':'<span class="pill off">'+esc(c.state)+'</span>'}</td>
-        <td><strong>${esc(c.name)}</strong></td>
-        <td class="fx-muted">${esc(c._project||"—")}</td>
+        <td class="tm-clip"><strong>${esc(c.name)}</strong></td>
+        <td class="fx-muted tm-clip">${esc(c._project||"—")}</td>
         <td class="mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${esc(c.image)}</td>
         <td class="num" data-cpu="${c.id}">${c.running?(st.cpu!=null?st.cpu.toFixed(1)+"%":"…"):"—"}</td>
         <td class="num" data-mem="${c.id}">${c.running?(st.mem!=null?fmtB(st.mem):"…"):"—"}</td>
