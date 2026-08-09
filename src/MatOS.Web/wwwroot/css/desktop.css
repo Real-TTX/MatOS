@@ -330,6 +330,18 @@ body.tb-no-labels .mat-task { max-width: 44px; padding: 0 0.55rem; justify-conte
 .sm-item.sm-installing { cursor: default; opacity: 0.85; }
 .sm-item.sm-installing .sm-ico { animation: sm-pulse 1.1s ease-in-out infinite; }
 .sm-inst-badge { font-size: 0.6rem; font-weight: 700; color: var(--accent); }
+/* Pinned grid (Windows-11 style) + "All apps" toggle */
+.sm-pinned-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 0.4rem; }
+.sm-pinned-empty { color: var(--muted); font-size: 0.85rem; padding: 1.4rem 0.8rem; text-align: center; line-height: 1.5; }
+.sm-pin-tile { position: relative; }
+.sm-pin-tile.dragging { opacity: 0.45; }
+.sm-pin-tile.drop-target::before { content: ""; position: absolute; left: -3px; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--accent); }
+.sm-allbar { padding: 0.45rem 0.9rem; border-top: 1px solid var(--border); }
+.sm-allbtn { width: 100%; display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; }
+.sm-allbtn:hover { border-color: var(--accent); }
+.sm-allbtn-ico { font-size: 0.95rem; }
+.sm-allbtn-chev { margin-left: auto; color: var(--muted); transition: transform .12s; }
+#mat-startmenu.sm-showing-all .sm-allbtn-chev { transform: rotate(90deg); }
 @keyframes sm-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 /* Start-menu folders (collapsible groups spanning the whole grid width) */
 .sm-folder { grid-column: 1 / -1; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.03); overflow: hidden; }

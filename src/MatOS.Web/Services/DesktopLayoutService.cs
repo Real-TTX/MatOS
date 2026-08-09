@@ -310,6 +310,26 @@ public class DesktopLayoutService
         await _config.SaveAsync("desktop-prefs", PrefsStore);
     }
 
+    // ---- Start-menu pins (Windows-11 "Pinned" grid — ordered) ----
+    private StartPinsStore StartPinStore => _config.Get<StartPinsStore>("startmenu-pins");
+    public List<string> GetStartPins(string userId)
+    { lock (_gate) return StartPinStore.Users.TryGetValue(userId, out var l) ? new List<string>(l) : new List<string>(); }
+    public async Task AddStartPin(string userId, string key)
+    {
+        lock (_gate) { if (!StartPinStore.Users.TryGetValue(userId, out var l)) { l = new(); StartPinStore.Users[userId] = l; } if (!l.Contains(key)) l.Add(key); }
+        await _config.SaveAsync("startmenu-pins", StartPinStore);
+    }
+    public async Task RemoveStartPin(string userId, string key)
+    {
+        lock (_gate) { if (StartPinStore.Users.TryGetValue(userId, out var l)) l.Remove(key); }
+        await _config.SaveAsync("startmenu-pins", StartPinStore);
+    }
+    public async Task ReorderStartPins(string userId, List<string> keys)
+    {
+        lock (_gate) StartPinStore.Users[userId] = (keys ?? new()).Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().ToList();
+        await _config.SaveAsync("startmenu-pins", StartPinStore);
+    }
+
     // ---- Taskbar pins (Windows-11 style — always shown, running or not) ----
     private TaskbarPinsStore TaskbarPinStore => _config.Get<TaskbarPinsStore>("taskbar-pins");
 

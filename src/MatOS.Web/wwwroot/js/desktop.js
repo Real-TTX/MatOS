@@ -89,6 +89,8 @@
   let taskbarWidgets = []; // tray widgets [{id,type,order,config}]
   let startFolders = []; // start-menu folders [{id,name,keys:[...]}]
   const startFoldersCollapsed = new Set();
+  let startPins = [];   // ordered app keys pinned to the Start-menu grid (Windows-11 style)
+  let smShowAll = false; // Start menu view: false = Pinned grid, true = full categorised list
   let labels = {};    // key -> custom display name (per user)
   let taskbarPins = new Set(); // app keys pinned to the taskbar (Windows-11 style — always shown)
   const pendingInstalls = new Map(); // installId -> { appId, name, icon }
@@ -479,9 +481,57 @@
       <button class="sm-folder-head"><span class="sm-folder-chev">▸</span><span class="sm-folder-name">${esc(f.name)}</span><span class="sm-folder-count">${members.length}</span></button>
       <div class="sm-folder-items">${items}</div></div>`;
   }
+  // ---- Start-menu pinned grid (Windows-11 style) ----
+  const sfPinPost = (op, body) => fetch("/api/v1/desktop/startmenu/pins/" + op, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) }).catch(()=>{});
+  function persistStartPins(){ sfPinPost("reorder", { keys: startPins }); }
+  function pinToStart(key){ if (!startPins.includes(key)) { startPins.push(key); smRerender(); sfPinPost("add", { key }); } }
+  function unpinFromStart(key){ startPins = startPins.filter(k => k !== key); smRerender(); sfPinPost("remove", { key }); }
+  function renderPinned(){
+    const grid = document.getElementById("sm-pinned"), empty = document.getElementById("sm-pinned-empty");
+    if (!grid) return;
+    const items = startPins.map(startItemFor).filter(Boolean);
+    if (empty) empty.hidden = items.length > 0;
+    grid.innerHTML = items.map(a => smItem(a, a.sys ? "sys" : "", a.sys ? a.iconHtml : a.inner, false)).join("");
+    grid.querySelectorAll(".sm-item").forEach(el => el.classList.add("sm-pin-tile"));
+    wirePinnedDrag();
+  }
+  function wirePinnedDrag(){
+    const grid = document.getElementById("sm-pinned"); if (!grid || grid._wired) return; grid._wired = true;
+    grid.addEventListener("pointerdown", (e) => {
+      const tile = e.target.closest(".sm-pin-tile"); if (!tile) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const sx = e.clientX, sy = e.clientY; let moved = false, dragEl = null, dragKey = null;
+      const clearTargets = () => grid.querySelectorAll(".sm-pin-tile").forEach(t => t.classList.remove("drop-target"));
+      const onMove = (ev) => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) { moved = true; dragEl = tile; dragKey = tile.dataset.key; tile.classList.add("dragging"); }
+        if (moved) { const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".sm-pin-tile"); clearTargets(); if (over && over !== dragEl) over.classList.add("drop-target"); }
+      };
+      const onUp = (ev) => {
+        document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp);
+        if (moved) {
+          tile.classList.remove("dragging");
+          const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".sm-pin-tile"); clearTargets();
+          if (over && over !== dragEl) { const from = startPins.indexOf(dragKey), to = startPins.indexOf(over.dataset.key);
+            if (from > -1 && to > -1) { startPins.splice(from, 1); startPins.splice(to, 0, dragKey); persistStartPins(); renderPinned(); } }
+          tile.dataset.suppressClick = "1";
+        }
+      };
+      document.addEventListener("pointermove", onMove); document.addEventListener("pointerup", onUp);
+    });
+  }
+
   function renderStartMenu(filter) {
     if (!startMenu) return;
     const q = (filter || "").trim().toLowerCase();
+    // Pinned view by default; searching always shows the full, filtered list.
+    const showAll = smShowAll || !!q;
+    const pinnedView = document.getElementById("sm-pinned-view"), allView = document.getElementById("sm-all-view");
+    if (pinnedView) pinnedView.hidden = showAll;
+    if (allView) allView.hidden = !showAll;
+    startMenu.classList.toggle("sm-showing-all", showAll);
+    const allBar = document.querySelector(".sm-allbar"); if (allBar) allBar.style.display = q ? "none" : "";
+    const allLbl = document.getElementById("sm-allbtn-label"); if (allLbl) allLbl.textContent = smShowAll ? "Pinned" : "All apps";
+    if (!showAll) { renderPinned(); return; }
     const match = t => !q || (t || "").toLowerCase().includes(q);
     const inFolder = new Set(); for (const f of startFolders) for (const k of (f.keys || [])) inFolder.add(k);
     const sys = systemApps().filter(a => match(a.title) && !inFolder.has(a.key));
@@ -543,7 +593,7 @@
     el.style.transformOrigin = (isTop ? "top" : "bottom") + " center";
   }
 
-  function openStart() { if (!startMenu) return; startMenu.hidden = false; positionNearAnchor(startMenu, startBtn); startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
+  function openStart() { if (!startMenu) return; smShowAll = false; startMenu.hidden = false; positionNearAnchor(startMenu, startBtn); startBtn.classList.add("active"); if (startSearch) { startSearch.value = ""; setTimeout(() => startSearch.focus(), 20); } renderStartMenu(""); }
   function closeStart() { if (!startMenu || startMenu.hidden) return; startMenu.hidden = true; startBtn.classList.remove("active"); startMenu.classList.remove("tb-driven"); }
   // Taskbar search (Windows-11 style): typing forwards into the start menu. When the taskbar
   // search is driving the menu, we hide the menu's own search input (one focused input only —
@@ -681,9 +731,13 @@
       if (head) { const fid = head.closest(".sm-folder").dataset.sfid; if (startFoldersCollapsed.has(fid)) startFoldersCollapsed.delete(fid); else startFoldersCollapsed.add(fid); renderStartMenu(startSearch ? startSearch.value : ""); return; }
       const it = e.target.closest(".sm-item"); if (it && !it.dataset.suppressClick) { e.preventDefault(); launchEl(it); closeStart(); if (tbSearch) tbSearch.value = ""; } if (it) delete it.dataset.suppressClick;
     });
+    // "All apps" / "Pinned" toggle.
+    const smToggleAll = document.getElementById("sm-toggle-all");
+    if (smToggleAll) smToggleAll.addEventListener("click", () => { smShowAll = !smShowAll; renderStartMenu(startSearch ? startSearch.value : ""); });
     // Drag a start-menu item onto the desktop to pin it there (with a chosen position).
     startMenu.addEventListener("pointerdown", (e) => {
       const it = e.target.closest(".sm-item"); if (!it) return;
+      if (it.closest("#sm-pinned")) return; // the Pinned grid handles its own drag (reorder)
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const startX = e.clientX, startY = e.clientY; let ghost = null, dragged = false;
       const onMove = (ev) => {
@@ -731,8 +785,11 @@
       const key = it.dataset.key; if (!key) return;
       e.preventDefault();
       const items = appMenuItems(key, { after: closeStart });
-      const inF = startFolders.find(f => (f.keys || []).includes(key));
       items.push({ sep: true });
+      items.push(startPins.includes(key)
+        ? { label: "Unpin from Start", action: () => unpinFromStart(key) }
+        : { label: "Pin to Start", action: () => pinToStart(key) });
+      const inF = startFolders.find(f => (f.keys || []).includes(key));
       if (inF) items.push({ label: "Remove from folder", action: () => removeFromStartFolder(key) });
       else { for (const f of startFolders) items.push({ label: `Add to “${f.name}”`, action: () => addToStartFolder(key, f.id) }); items.push({ label: "New folder…", action: () => createStartFolderWith(key) }); }
       showCtx(e.clientX, e.clientY, items);
@@ -1463,7 +1520,7 @@
 
   // ---- init ----
   async function init() {
-    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); taskbarWidgets = d.taskbarWidgets || []; startFolders = d.startFolders || []; } }
+    try { const r = await fetch("/api/v1/desktop/layout", { headers: { Accept: "application/json" } }); if (r.ok) { const d = await r.json(); layout = d.positions || {}; pins = new Set(d.pins || []); folders = d.folders || []; widgets = d.widgets || []; labels = d.labels || {}; taskbarPins = new Set(d.taskbarPins || []); taskbarWidgets = d.taskbarWidgets || []; startFolders = d.startFolders || []; startPins = d.startPins || []; } }
     catch (_) { layout = {}; }
     // Personal preferences (wallpaper/theme fallback + taskbar).
     try { const p = await (await fetch("/api/v1/desktop/prefs")).json(); applyTaskbarPrefs(p); } catch (_) {}

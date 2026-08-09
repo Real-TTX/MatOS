@@ -14,6 +14,7 @@ public static class DesktopApi
     public record IdNameBody(string Id, string Name);
     public record FolderItemBody(string Id, string Key);
     public record IdBody(string Id);
+    public record KeysBody(List<string>? Keys);
     public record AddWidgetBody(string Type, int X, int Y, int W, int H);
     public record MoveWidgetBody(string Id, int X, int Y);
     public record WidgetConfigBody(string Id, Dictionary<string, string>? Config);
@@ -37,6 +38,7 @@ public static class DesktopApi
                 taskbarPins = svc.GetTaskbarPins(uid),
                 taskbarWidgets = svc.GetTaskbarWidgets(uid),
                 startFolders = svc.GetStartFolders(uid),
+                startPins = svc.GetStartPins(uid),
             });
         });
 
@@ -126,6 +128,14 @@ public static class DesktopApi
         { await svc.AddToStartFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
         g.MapPost("/startmenu/folders/remove", async (FolderItemBody b, DesktopLayoutService svc, HttpContext ctx) =>
         { await svc.RemoveFromStartFolder(Uid(ctx), b.Id, b.Key); return Results.Ok(new { ok = true }); });
+
+        // ---- Start-menu pinned grid (Windows-11 style) ----
+        g.MapPost("/startmenu/pins/add", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { if (string.IsNullOrWhiteSpace(b.Key)) return Results.BadRequest(); await svc.AddStartPin(Uid(ctx), b.Key); return Results.Ok(new { ok = true }); });
+        g.MapPost("/startmenu/pins/remove", async (KeyBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.RemoveStartPin(Uid(ctx), b.Key); return Results.Ok(new { ok = true }); });
+        g.MapPost("/startmenu/pins/reorder", async (KeysBody b, DesktopLayoutService svc, HttpContext ctx) =>
+        { await svc.ReorderStartPins(Uid(ctx), b.Keys ?? new()); return Results.Ok(new { ok = true }); });
 
         // ---- Widgets ----
         g.MapPost("/widgets/add", async (AddWidgetBody b, DesktopLayoutService svc, HttpContext ctx) =>

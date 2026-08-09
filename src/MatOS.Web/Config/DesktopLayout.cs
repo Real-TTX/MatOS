@@ -100,6 +100,13 @@ public class StartFoldersStore
     public Dictionary<string, List<StartFolder>> Users { get; set; } = new();
 }
 
+/// <summary>Ordered list of app keys the user pinned to the Start menu's Pinned grid (Windows-11
+/// style). Distinct from desktop pins and taskbar pins. Persisted as startmenu-pins.json.</summary>
+public class StartPinsStore
+{
+    public Dictionary<string, List<string>> Users { get; set; } = new();
+}
+
 /// <summary>A desktop widget the user has placed on their desktop. Type identifies the widget
 /// implementation on the client (e.g. "clock", "cpu", "memory", "containers"); Config carries
 /// arbitrary widget-specific settings; W/H are size buckets (1..3, small/medium/large).</summary>

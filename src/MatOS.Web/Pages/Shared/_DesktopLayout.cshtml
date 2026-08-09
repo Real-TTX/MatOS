@@ -58,13 +58,27 @@
             <input id="mat-start-search" type="search" placeholder="Search apps…" autocomplete="off" aria-label="Search apps" />
         </div>
         <div class="sm-body">
-            <div class="sm-section-title" id="sm-system-title">System</div>
-            <div class="sm-list" id="sm-system"></div>
-            <div class="sm-section-title" id="sm-apps-title">Apps</div>
-            <div class="sm-list" id="sm-apps"></div>
-            <div class="sm-section-title" id="sm-containers-title">Containers</div>
-            <div class="sm-list" id="sm-containers"></div>
-            <div class="sm-empty" id="sm-empty" hidden>No matching apps.</div>
+            <!-- Pinned grid (Windows-11 style) — default view -->
+            <div id="sm-pinned-view">
+                <div class="sm-section-title">Pinned</div>
+                <div class="sm-pinned-grid" id="sm-pinned"></div>
+                <div class="sm-pinned-empty" id="sm-pinned-empty" hidden>Nothing pinned yet. Right-click any app and choose <strong>Pin to Start</strong>.</div>
+            </div>
+            <!-- Full categorised list -->
+            <div id="sm-all-view" hidden>
+                <div class="sm-section-title" id="sm-system-title">System</div>
+                <div class="sm-list" id="sm-system"></div>
+                <div class="sm-section-title" id="sm-apps-title">Apps</div>
+                <div class="sm-list" id="sm-apps"></div>
+                <div class="sm-section-title" id="sm-containers-title">Containers</div>
+                <div class="sm-list" id="sm-containers"></div>
+                <div class="sm-empty" id="sm-empty" hidden>No matching apps.</div>
+            </div>
+        </div>
+        <div class="sm-allbar">
+            <button type="button" class="sm-allbtn" id="sm-toggle-all">
+                <span class="sm-allbtn-ico" aria-hidden="true">▦</span><span id="sm-allbtn-label">All apps</span><span class="sm-allbtn-chev" aria-hidden="true">›</span>
+            </button>
         </div>
         <div class="sm-footer">
             <div class="sm-user" data-open-url="/apps/account" data-open-title="My Account" data-open-key="account" style="cursor:pointer" title="My account">
