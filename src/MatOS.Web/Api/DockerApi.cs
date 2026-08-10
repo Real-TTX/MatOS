@@ -237,6 +237,29 @@ public static class DockerApi
             }
             catch (OperationCanceledException) { /* client disconnected */ }
         });
+
+        // Installed apps + their INTERNAL upstream (http://container:uiPort) — lets the Proxy point a
+        // domain straight at an app without the user knowing the container/port.
+        g.MapGet("/app-upstreams", async (DockerService docker, CancellationToken ct) =>
+        {
+            var all = await docker.ListContainersAsync(true, ct);
+            var apps = all
+                .Where(c => c.MatosManaged
+                            && c.Labels.GetValueOrDefault("matos.ephemeral", "") != "true"
+                            && !string.IsNullOrEmpty(c.Labels.GetValueOrDefault("matcad.port")))
+                .Select(c => new
+                {
+                    title = c.Labels.GetValueOrDefault("matos.title", c.Name),
+                    container = c.Name,
+                    port = c.Labels.GetValueOrDefault("matcad.port"),
+                    upstream = $"http://{c.Name}:{c.Labels.GetValueOrDefault("matcad.port")}",
+                    running = c.IsRunning
+                })
+                .GroupBy(x => x.upstream).Select(x => x.First())
+                .OrderBy(x => x.title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return Results.Ok(new { apps });
+        });
     }
 
     private static async Task<IResult> Guard(Func<Task> action)

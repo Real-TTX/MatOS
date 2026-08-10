@@ -86,6 +86,9 @@
 .px-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.8rem; }
 .px-head h2 { margin:0 0 0.2rem; font-size:1.15rem; }
 .px-head p { margin:0; font-size:0.84rem; max-width:60ch; }
+.px-adv-toggle { border:none; background:transparent; color:var(--mat-accent); font:inherit; font-weight:600; font-size:0.85rem; cursor:pointer; padding:0.25rem 0; margin:0.1rem 0 0.4rem; align-self:flex-start; }
+.px-adv-toggle:hover { text-decoration:underline; }
+.px-adv-toggle::before { content:"⚙ "; }
 table.pxt { width:100%; border-collapse:collapse; }
 table.pxt th, table.pxt td { padding:0.55rem 0.9rem; text-align:left; vertical-align:middle; }
 table.pxt thead th { font-size:0.76rem; color:var(--mat-text-muted); border-bottom:1px solid var(--mat-border); }
@@ -137,7 +140,7 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
   const get=p=>req("GET",p);
 
   // ---- state ----
-  let providerTypes=[], providers=[], routes=[], auths=[], certs=null;
+  let providerTypes=[], providers=[], routes=[], auths=[], certs=null, appUpstreams=[];
 
   function banner(msg,kind){ const b=$("px-banner"); if(!msg){ b.style.display="none"; return; }
     b.style.display=""; b.className="card"; b.style.border=kind==="err"?"1px solid rgba(244,80,107,0.4)":"1px solid var(--mat-border)";
@@ -230,6 +233,7 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
     const tb=$("px-routes");
     try{ routes=await get("/routes"); auths=await get("/authentications"); providers=await get("/providers"); }
     catch(e){ tb.innerHTML=`<tr><td colspan="6" class="px-empty">${esc(e.message)}</td></tr>`; return; }
+    try{ appUpstreams=(await (await fetch("/api/v1/docker/app-upstreams")).json()).apps||[]; }catch(_){}
     if(!routes.length){ tb.innerHTML=`<tr><td colspan="6" class="px-empty">No routes yet. Add your first domain.</td></tr>`; return; }
     const authName=id=>{ const a=auths.find(x=>x.id===id); return a?a.name:null; };
     const certPill=r=>{ const k=(r.certKind||"").toLowerCase();
@@ -258,35 +262,56 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
     const provOpts=`<option value="">— none —</option>`+providers.map(p=>`<option value="${p.id}"${r&&r.providerId===p.id?" selected":""}>${esc(p.name)}</option>`).join("");
     const authOpts=`<option value="">— none —</option>`+auths.map(a=>`<option value="${a.id}"${r&&r.authenticationId===a.id?" selected":""}>${esc(a.name)} (${esc(a.type)})</option>`).join("");
     const isWild=r&&r.wildcard; const isRedirect=r&&!r.upstream&&r.fallbackUrl;
+    // If the route already points at a known app, default to that app (simple mode); else open Advanced.
+    const matchedApp = r && r.upstream ? appUpstreams.find(a=>a.upstream===r.upstream) : null;
+    const advNeeded = !!(editing && (isWild || isRedirect || (r.upstream && !matchedApp) || r.insecureSkipVerify || r.authenticationId));
+    const appSel = matchedApp ? matchedApp.upstream : (advNeeded ? "__custom__" : "");
+    const appOpts = `<option value=""${appSel?"":" selected"}>— Choose an app —</option>`+
+      appUpstreams.map(a=>`<option value="${escA(a.upstream)}"${appSel===a.upstream?" selected":""}>${esc(a.title)}${a.running?"":" (stopped)"}</option>`).join("")+
+      `<option value="__custom__"${appSel==="__custom__"?" selected":""}>Custom / advanced…</option>`;
     openModal(editing?"Edit domain":"Add domain",`
       <div id="rf-err"></div>
       <label class="pf"><span>Host</span><input class="ui-input mono" id="rf-host" value="${r?escA(r.host):""}" placeholder="app.example.com"></label>
-      <div class="grid2">
-        <label class="pf"><span>Type</span><select class="ui-select" id="rf-type"><option value="single"${isWild?"":" selected"}>Single host</option><option value="wildcard"${isWild?" selected":""}>Wildcard (*.domain)</option></select></label>
-        <label class="pf"><span>Target</span><select class="ui-select" id="rf-target"><option value="proxy"${isRedirect?"":" selected"}>Reverse proxy</option><option value="redirect"${isRedirect?" selected":""}>Redirect</option></select></label>
+      <label class="pf"><span>App</span><select class="ui-select" id="rf-app">${appOpts}</select>
+        <small class="fx-muted">The domain is reverse-proxied to this app — matOS knows its port. Pick “Custom / advanced…” for a custom upstream, redirect or wildcard.</small></label>
+      <button type="button" class="px-adv-toggle" id="rf-adv-toggle">Advanced</button>
+      <div id="rf-adv" style="display:${advNeeded?"block":"none"}">
+        <div class="grid2">
+          <label class="pf"><span>Type</span><select class="ui-select" id="rf-type"><option value="single"${isWild?"":" selected"}>Single host</option><option value="wildcard"${isWild?" selected":""}>Wildcard (*.domain)</option></select></label>
+          <label class="pf"><span>Target</span><select class="ui-select" id="rf-target"><option value="proxy"${isRedirect?"":" selected"}>Reverse proxy</option><option value="redirect"${isRedirect?" selected":""}>Redirect</option></select></label>
+        </div>
+        <label class="pf" id="rf-up-wrap"><span>Upstream <small class="fx-muted">(http://container:port)</small></span><input class="ui-input mono" id="rf-upstream" value="${r&&r.upstream?escA(r.upstream):""}" placeholder="http://myapp:8080"></label>
+        <label class="pf" id="rf-fb-wrap" style="display:none"><span>Redirect to (URL)</span><input class="ui-input mono" id="rf-fallback" value="${r&&r.fallbackUrl?escA(r.fallbackUrl):""}" placeholder="https://example.com"></label>
+        <label class="pf" id="rf-prov-wrap" style="display:none"><span>DNS provider <small class="fx-muted">(required for wildcard, DNS-01)</small></span><select class="ui-select" id="rf-provider">${provOpts}</select></label>
+        <label class="pf"><span>Authentication <small class="fx-muted">(optional)</small></span><select class="ui-select" id="rf-auth">${authOpts}</select></label>
+        <label class="px-check"><input type="checkbox" id="rf-insecure"${r&&r.insecureSkipVerify?" checked":""}> Skip upstream TLS verification (self-signed backends)</label>
       </div>
-      <label class="pf" id="rf-up-wrap"><span>Upstream <small class="fx-muted">(http://container:port)</small></span><input class="ui-input mono" id="rf-upstream" value="${r&&r.upstream?escA(r.upstream):""}" placeholder="http://myapp:8080"></label>
-      <label class="pf" id="rf-fb-wrap" style="display:none"><span>Redirect to (URL)</span><input class="ui-input mono" id="rf-fallback" value="${r&&r.fallbackUrl?escA(r.fallbackUrl):""}" placeholder="https://example.com"></label>
-      <label class="pf" id="rf-prov-wrap" style="display:none"><span>DNS provider <small class="fx-muted">(required for wildcard, DNS-01)</small></span><select class="ui-select" id="rf-provider">${provOpts}</select></label>
-      <label class="pf"><span>Authentication <small class="fx-muted">(optional)</small></span><select class="ui-select" id="rf-auth">${authOpts}</select></label>
-      <label class="px-check"><input type="checkbox" id="rf-insecure"${r&&r.insecureSkipVerify?" checked":""}> Skip upstream TLS verification (self-signed backends)</label>
       <label class="px-check"><input type="checkbox" id="rf-enabled"${!r||r.enabled?" checked":""}> Enabled</label>
       <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
         <button class="ui-btn primary" id="rf-save">${editing?"Save":"Add"}</button>
         ${editing?`<span style="flex:1"></span><button class="ui-btn danger" id="rf-del">Delete</button>`:""}
       </div>`);
-    const type=$("rf-type"), target=$("rf-target");
+    const type=$("rf-type"), target=$("rf-target"), app=$("rf-app"), adv=$("rf-adv");
     function sync(){
       const wild=type.value==="wildcard", redir=target.value==="redirect";
       $("rf-prov-wrap").style.display=wild?"":"none";
       $("rf-up-wrap").style.display=redir?"none":"";
       $("rf-fb-wrap").style.display=redir?"":"none";
+      const appChosen = app.value && app.value!=="__custom__";
+      const up=$("rf-upstream"); up.disabled = appChosen && !redir;
+      if(appChosen && !redir) up.value = app.value;
     }
+    $("rf-adv-toggle").addEventListener("click",()=>{ adv.style.display = adv.style.display==="none"?"block":"none"; });
+    app.addEventListener("change",()=>{ if(app.value==="__custom__") adv.style.display="block"; sync(); });
     type.addEventListener("change",sync); target.addEventListener("change",sync); sync();
     $("rf-save").addEventListener("click",async()=>{
       $("rf-err").innerHTML="";
-      const body={ id:r?r.id:null, host:$("rf-host").value.trim(), wildcard:type.value==="wildcard",
-        target:target.value, upstream:$("rf-upstream").value.trim(), fallbackUrl:$("rf-fallback").value.trim(),
+      const appChosen = app.value && app.value!=="__custom__";
+      const wildcard = appChosen ? false : type.value==="wildcard";
+      const tgt = appChosen ? "proxy" : target.value;
+      const upstream = appChosen ? app.value : $("rf-upstream").value.trim();
+      const body={ id:r?r.id:null, host:$("rf-host").value.trim(), wildcard,
+        target:tgt, upstream, fallbackUrl:appChosen?"":$("rf-fallback").value.trim(),
         insecureSkipVerify:$("rf-insecure").checked, redirectPermanent:false,
         authenticationId:$("rf-auth").value?+$("rf-auth").value:null, providerId:$("rf-provider").value?+$("rf-provider").value:null,
         acmeEmail:null, enabled:$("rf-enabled").checked, name:"" };
@@ -302,7 +327,7 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
   }
   $("px-add-route").addEventListener("click",()=>{
     // ensure providers+auths are loaded for the dropdowns
-    Promise.all([providers.length?null:get("/providers").then(d=>providers=d), get("/authentications").then(d=>auths=d)]).then(()=>routeForm(null)).catch(()=>routeForm(null));
+    Promise.all([providers.length?null:get("/providers").then(d=>providers=d), get("/authentications").then(d=>auths=d), fetch("/api/v1/docker/app-upstreams").then(r=>r.json()).then(d=>appUpstreams=d.apps||[]).catch(()=>{})]).then(()=>routeForm(null)).catch(()=>routeForm(null));
   });
 
   // ================= Certificates =================
