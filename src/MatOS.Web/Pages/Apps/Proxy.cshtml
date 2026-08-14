@@ -271,9 +271,9 @@ table.pxt tbody tr { border-top:1px solid var(--mat-border); }
       `<option value="__custom__"${appSel==="__custom__"?" selected":""}>Custom / advanced…</option>`;
     openModal(editing?"Edit domain":"Add domain",`
       <div id="rf-err"></div>
-      <label class="pf"><span>Host</span><input class="ui-input mono" id="rf-host" value="${r?escA(r.host):""}" placeholder="app.example.com"></label>
       <label class="pf"><span>App</span><select class="ui-select" id="rf-app">${appOpts}</select>
-        <small class="fx-muted">The domain is reverse-proxied to this app — matOS knows its port. Pick “Custom / advanced…” for a custom upstream, redirect or wildcard.</small></label>
+        <small class="fx-muted">Give one of your apps a domain — matOS points it at the right container &amp; port for you. Choose “Custom / advanced…” for a manual upstream, redirect or wildcard.</small></label>
+      <label class="pf"><span>Domain</span><input class="ui-input mono" id="rf-host" value="${r?escA(r.host):""}" placeholder="app.example.com"></label>
       <button type="button" class="px-adv-toggle" id="rf-adv-toggle">Advanced</button>
       <div id="rf-adv" style="display:${advNeeded?"block":"none"}">
         <div class="grid2">
