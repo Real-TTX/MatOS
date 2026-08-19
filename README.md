@@ -1,101 +1,234 @@
+<div align="center">
+
+<img src="src/MatOS.Web/wwwroot/icon-192.png" width="96" alt="matOS" />
+
 # matOS
 
-A self-hosted, browser-based **operating system for Docker** — an iOS/umbrelOS-style desktop
-where every container appears as an app icon and opens in a draggable window. matOS is the
-control-plane sibling to **[Matcad](https://github.com/Real-TTX/Matcad)** (the Caddy/xcaddy
-reverse-proxy manager): matOS manages *apps* (containers, the App Store, the desktop UX) while
-Matcad manages *routing* (it turns `matcad.*` container labels into Caddy config).
+**A desktop operating system for your Docker host – in the browser.**
 
-> **Milestone 1 (walking skeleton)** — deployable full stack on port **4333**, desktop shell +
-> window manager, local login + roles + restart-persistent sessions, JSON config store, and
-> reading existing Docker containers as app icons. The App Store, template/port-pool install
-> engine and update monitoring are designed-for and land in later milestones.
+Every container is an app icon, every app opens in a window. An App Store that installs
+self-hosted software in one click, a reverse proxy that gives each app a domain, backups
+of whole apps, live monitoring and a file explorer for your volumes. One stack, no cloud.
 
-## Stack
+</div>
 
-- **.NET 10 · ASP.NET Core Razor Pages** (matching the sibling projects), TagHelper control
-  library, vanilla-JS window manager, SSE for live logs/stats.
-- **Docker.DotNet** talks to the mounted engine socket.
-- **JSON** is the primary store (configs, users, sessions) on a mounted data volume.
-- Full stack in one compose: `matos` + `caddy` (matcad-caddy) + `matcad`.
+![The matOS desktop with the App Store open](docs/images/desktop.png)
+
+---
+
+## What this is about
+
+Running self-hosted software on Docker usually means a terminal, a pile of `docker-compose.yml`
+files and a browser full of `:8080` tabs. matOS puts a real desktop on top of your engine:
+containers show up as app icons, open in draggable windows, and new software installs from an
+App Store — each app in its own volume, wired to a reverse proxy, backed up and monitored from
+the same place. It's the control-plane sibling to **[Matcad](https://github.com/Real-TTX/Matcad)**
+(the Caddy reverse-proxy manager): matOS runs the *apps*, Matcad does the *routing*.
+
+## At a glance
+
+**Desktop & windows**
+- Every container is an **app icon** on the desktop; a click opens it in a **draggable, resizable
+  window** (position & size are remembered)
+- **Windows-11-style Start menu** with a **Favorites** grid and an *All apps* view, folders, and
+  a taskbar with pinned apps, search and a system tray
+- **Desktop widgets** (clock with analog/digital/text faces, CPU/memory, container status) and
+  desktop/Start folders
+- **Two OS styles**: the default Windows look or a **macOS** skin — a centered magnifying **dock**,
+  traffic-light window buttons and a system font — plus light/dark themes and wallpapers
+
+**App Store**
+- Install self-hosted apps as **single containers or compose stacks** in one click — each gets its
+  own volume and a desktop icon
+- **Install-time options**: tick optional add-on services (e.g. *phpMyAdmin*) or either/or variants,
+  composed into one stack
+- Add your own catalogs, **Git repositories** (public or private, GitOps auto-update), or build an
+  app in the **App Builder** (icon, store page, widgets, options) with a live preview
+- Store detail pages pull **versions from Docker Hub** and the **README from GHCR/GitHub**
+
+**Reverse proxy (Matcad)**
+- Give an app a **domain** the simple way — *pick the app, type the host*; matOS knows the container
+  and port and wires the upstream for you
+- Everything else lives under **Advanced**: manual upstreams, redirects, **wildcard** domains,
+  authentication and **DNS-01 wildcard certificates** (e.g. netcup)
+- Automatic HTTPS through Caddy; routes, certificates and DNS providers in one window
+
+**Backups**
+- Build **jobs** from one tree: tick a **whole app**, or just its **settings / image / individual
+  volumes** — run now or on a schedule with retention
+- A whole-app backup captures the **compose & config pinned to the exact image digest** — and
+  optionally the **image itself** — so a restore brings *everything* back **running, offline**
+- Store on any volume (incl. **SMB** shares) and an optional sub-path; a **History** tab lists every
+  backup with its size to restore, download or delete
+
+**Monitoring & files**
+- **Task Manager**: live CPU/memory, free space and container counts; per-app, per-stack, per-
+  container, volumes and networks — with logs and stats over SSE
+- **File Explorer** for your named volumes: browse, upload/download, edit with syntax highlighting,
+  and *Open with* an app
+
+**Users**
+- Local login with **roles** (Admin / User), restart-persistent sessions
+- **Account** lives in Settings: change your password without leaving the desktop
+
+## Screenshots
+
+### Start menu – Favorites and all apps
+
+![The Start menu with a Favorites grid](docs/images/start-menu.png)
+
+Opens on a **Favorites** grid you curate (right-click any app → *Add to Favorites*, drag to
+reorder). The footer toggles between **Favorites** and **All** and remembers the choice; typing
+searches everything.
+
+### Task Manager – everything the engine is doing
+
+![Task Manager with live stats](docs/images/task-manager.png)
+
+CPU, memory, free space and container counts up top, a live graph and the busiest apps beside it.
+Separate views for apps, stacks, containers, volumes and networks — each with the actions you need.
+
+### Backups – jobs from one tree
+
+![Backups with jobs and the selection tree](docs/images/backups.png)
+
+One job, one tree: whole apps or their settings / image / individual volumes, to any target
+(SMB included), now or on a schedule. Restores recreate volumes *and* containers so the app runs
+again — offline if the image was bundled.
+
+### Proxy – a domain per app
+
+![The Proxy app with routes](docs/images/proxy.png)
+
+Give an app a domain by picking it from a list; matOS derives the upstream. Wildcards, redirects,
+DNS-01 certificates and authentication are one *Advanced* click away. Automatic HTTPS via Caddy.
+
+### File Explorer and Settings
+
+| Files | Settings |
+|---|---|
+| ![File Explorer](docs/images/files.png) | ![Settings with themes and account](docs/images/settings.png) |
+
+Browse and edit your Docker volumes; change appearance, taskbar, the OS style and your account
+password — all inside the desktop.
+
+### A macOS look, if you like
+
+![macOS dock theme](docs/images/macos.png)
+
+*Settings → Appearance → OS style: macOS* turns the taskbar into a centered, magnifying dock and
+gives windows traffic-light buttons and a system font. The default Windows look is untouched.
 
 ## Quick start
 
-```bash
-# rebuild + redeploy the whole stack (Windows / PowerShell)
-pwsh scripts/deploy.ps1
+matOS runs as a small stack: **matOS** itself plus the sibling **Matcad** reverse proxy (Caddy).
 
-# or with docker compose directly
-docker compose up -d --build
+```yaml
+name: matos
+services:
+  matos:
+    image: ghcr.io/real-ttx/matos:latest
+    container_name: matos
+    restart: unless-stopped
+    ports:
+      - "4333:8080"
+    environment:
+      MatOS__Matcad__ApiUrl: "http://matcad:4433"
+      MatOS__Matcad__ApiKey: "change-me"   # must match Matcad's key below
+    volumes:
+      - matos-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock            # matOS controls the engine
+      - /var/lib/docker/volumes:/var/lib/docker/volumes       # so the File Explorer can read volumes
+    extra_hosts: [ "host.docker.internal:host-gateway" ]
+    networks: [ matnet ]
+
+  caddy:
+    image: ghcr.io/real-ttx/matcad-caddy:latest
+    container_name: matos-caddy
+    restart: unless-stopped
+    ports: [ "80:80", "443:443", "443:443/udp", "21000-21049:21000-21049" ]
+    volumes: [ caddy-data:/data, caddy-config:/config ]
+    networks: [ matnet ]
+
+  matcad:
+    image: ghcr.io/real-ttx/matcad:latest
+    container_name: matos-matcad
+    restart: unless-stopped
+    environment:
+      Matcad__ApiKey: "change-me"          # must match matOS above
+      Matcad__Caddy__AdminUrl: "http://caddy:2019"
+    volumes: [ matcad-data:/app/data ]
+    networks: [ matnet ]
+
+volumes: { matos-data: , caddy-data: , caddy-config: , matcad-data: }
+networks: { matnet: }
 ```
 
-Then open **http://localhost:4333** and complete the first-run setup (create the admin account).
-
-- matOS UI: `http://localhost:4333`
-- Caddy (Matcad) serves app subdomains on `:80` / `:443`
-
-The `caddy` and `matcad` services pull prebuilt images from GHCR
-(`ghcr.io/real-ttx/matcad-caddy`, `ghcr.io/real-ttx/matcad`). If those packages are private,
-run `docker login ghcr.io` first. To run **matOS on its own** (no proxy layer):
-
 ```bash
-docker compose up -d matos
+docker compose up -d
 ```
 
-## How apps are reached (reverse proxy)
+Then open **http://localhost:4333** and complete the **first-run setup** (create the admin
+account). The `matos-data` volume keeps the config, users and session keys, so an update is just
+`docker compose pull && docker compose up -d`.
 
-matOS never talks to Caddy directly. When it creates an app container it stamps Matcad's labels —
-`matcad.enable=true`, `matcad.host=<slug>-<instance>.<BaseDomain>`, `matcad.port=<internal port>` —
-and attaches the container to the shared `matos` Docker network. Matcad discovers the labels and
-configures Caddy, so each install gets its **own subdomain** (this is how the same app can be
-installed multiple times without host-port collisions). Set the base domain in **Settings**;
-`apps.localhost` works locally with no DNS setup (`*.localhost` resolves to loopback).
+Published images (GitHub Container Registry):
 
-> Enable "Docker discovery" once in Matcad's settings and set its base domain so it picks up
-> matOS-labelled containers.
+| Tag | Built from | Use it for |
+|---|---|---|
+| `ghcr.io/real-ttx/matos:latest` | `main` | releases |
+| `ghcr.io/real-ttx/matos:nightly` | `dev` | the newest features |
 
-## Users, roles & sessions
+### matOS on its own (no proxy layer)
 
-- Local login with a simple role system (**Admin**, **User**); Entra/AD login is planned.
-- Passwords are BCrypt-hashed; sessions are opaque GUID tokens stored as JSON on the volume, so
-  **they survive a container restart**. DataProtection keys are persisted to the volume too.
+The reverse proxy is optional — leave `caddy` and `matcad` out and drop `MatOS__Matcad__*`. The
+Proxy app is then inactive; everything else works. Apps still open in windows via their published
+ports.
 
-## Configuration & data
-
-Everything persists under the `matos-data` volume (`/app/data`):
-
-- `config/*.json` — users, sessions, desktop + system settings
-- `keys/` — DataProtection key ring
-- `backups/` — rolling config backups
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `MATOS_DATA_DIR` | `/app/data` | Data volume path |
-| `MATOS_VERSION` | `local` | Version string (set by CI / deploy script) |
-| `MatOS__Docker__Endpoint` | `unix:///var/run/docker.sock` | Docker engine endpoint |
-
-## Local development
+### From source
 
 ```bash
-# fast inner loop (no container)
-ASPNETCORE_URLS=http://localhost:4333 dotnet run --project src/MatOS.Web
+docker compose up -d --build     # builds matOS, pulls caddy/matcad
 ```
 
-On Windows, point matOS at Docker Desktop's engine to see containers:
-`MatOS__Docker__Endpoint=npipe://./pipe/docker_engine`.
+### Settings that matter
 
-## Versioning & CI
+| Variable | Default | Meaning |
+|---|---|---|
+| `MatOS__Docker__Endpoint` | `unix:///var/run/docker.sock` | Docker engine socket |
+| `MATOS_DATA_DIR` | `/app/data` | Data directory (JSON config, users, sessions, keys, git clones) |
+| `MatOS__Matcad__ApiUrl` / `ApiKey` | – | Matcad REST API for the Proxy app (key must match Matcad) |
+| `MATOS_EMBED_PORTS` | `21000-21049` | Host port range Caddy uses to embed apps DNS-free |
+| `ASPNETCORE_URLS` | `http://+:8080` | Bind address inside the container |
 
-Scheme: `release` → `<major>.<minor>.<build>-<date>`, `dev` → `nightly-<build>-<date>`,
-`local` → `local-<date>` (`version.json` holds `major.minor`). GitHub Actions publish to
-`ghcr.io/real-ttx/matos` — `.github/workflows/dev.yml` (branch `dev` → `:nightly`) and
-`release.yml` (branch `main` → `:latest`).
+## How it is built
 
-Branches: **main** (release) · **dev** (development).
+- **ASP.NET Core 10** (Razor Pages + minimal API), a TagHelper control library, a **vanilla-JS
+  window manager** — no framework, no build step
+- **Docker.DotNet** talks to the mounted engine socket; **`docker compose`** deploys stacks
+- **JSON** is the primary store (config, users, sessions) on the mounted `/app/data` volume;
+  **DataProtection** keys live there too, so sessions survive a restart
+- Live logs & stats over **SSE**; whole-app backups use `docker save`/`load` for offline restores
+- `git` is bundled so Git app sources can be cloned (private repos via a token)
 
-## Roadmap
+## Status
 
-- **M2** — App Store: Git-hosted Compose templates with `$PORT-*`/`$VAR` placeholders, a port
-  pool, auto subdomains + `matcad.*` labels, and multiple installs of the same app.
-- **M3** — Update monitoring (compare installed image digests against the catalog/registry).
-- **M4** — More system apps (files/volumes, network, logs), Entra login, notifications.
+| Area | Status |
+|---|---|
+| Desktop shell, window manager, taskbar, Start menu, folders, widgets | ✅ |
+| Login, roles, restart-persistent sessions, account/password | ✅ |
+| App Store: catalog, install engine (image + compose), install options | ✅ |
+| Remote catalogs, **Git sources (GitOps)**, **App Builder** | ✅ |
+| Reverse proxy (Matcad): app-based routes, wildcards, DNS-01 certs, auth | ✅ |
+| Backups: jobs, whole-app + image, volumes, schedules, SMB, history | ✅ |
+| Task Manager, File Explorer, Settings, themes (Windows + **macOS**) | ✅ |
+| Entra/AD login, more polish | planned |
+
+## Branches & versioning
+
+| Branch | Purpose | Image tag |
+|---|---|---|
+| `main` | Release | `ghcr.io/real-ttx/matos:latest` |
+| `dev` | Development | `ghcr.io/real-ttx/matos:nightly` |
+
+matOS is one of the **Mat*** siblings (Matcad, MatFile, …) and shares their stack and conventions.
