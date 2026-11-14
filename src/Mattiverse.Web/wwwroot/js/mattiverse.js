@@ -32,11 +32,37 @@
   if (auto) {
     var wait = parseInt(auto.getAttribute('data-autorefresh'), 10) || 5000;
     var reload = function () {
-      // On the home screen a reload would take its window with it (js/os.js), or the person's editing and dragging (os-hold): wait while there is one.
-      if (document.body.classList.contains('os-has-window') || document.body.classList.contains('os-hold')) { setTimeout(reload, wait); return; }
+      // The home screen refreshes itself in place (js/os.js): a reload would take its windows with it.
+      if (window.MattiverseOs) { return; }
       if (!document.hidden) { location.reload(); } else { document.addEventListener('visibilitychange', function () { location.reload(); }, { once: true }); }
     };
     setTimeout(reload, wait);
+  }
+
+  // ------------------------------------------------------------------ numbers that move: <section id="..." data-live="5000">
+  // The page is fetched again and only the marked parts are exchanged, so the window, the scroll position and the tools stay as they are (the Task Manager).
+
+  var live = $$('[data-live][id]');
+  if (live.length) {
+    var every = parseInt(live[0].getAttribute('data-live'), 10) || 5000;
+    var busy = false;
+    setInterval(function () {
+      // not behind the back of somebody who is answering a question, has a menu open or holds a button of the list
+      if (busy || document.hidden || $('dialog[open]') || live.some(function (el) { return el.contains(document.activeElement); })) { return; }
+      busy = true;
+      fetch(location.href, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
+        .then(function (html) {
+          if (!html) { return; }
+          var fresh = new DOMParser().parseFromString(html, 'text/html');
+          live.forEach(function (el) {
+            var next = fresh.getElementById(el.id);
+            if (next && next.innerHTML !== el.innerHTML) { el.innerHTML = next.innerHTML; }
+          });
+        })
+        .catch(function () { /* the next round asks again */ })
+        .then(function () { busy = false; });
+    }, every);
   }
 
   // ------------------------------------------------------------------ job log viewer: <pre data-job-log data-job-id="12">

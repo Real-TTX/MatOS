@@ -35,6 +35,7 @@ public sealed partial class AppService
     private readonly CatalogService _catalog;
     private readonly ComposeFiles _files;
     private readonly DockerService _docker;
+    private readonly RuntimeReader _runtime;
     private readonly PortPlanner _ports;
     private readonly ISecretProtector _protector;
     private readonly SystemConfigService _config;
@@ -55,6 +56,7 @@ public sealed partial class AppService
         CatalogService catalog,
         ComposeFiles files,
         DockerService docker,
+        RuntimeReader runtime,
         PortPlanner ports,
         ISecretProtector protector,
         SystemConfigService config,
@@ -74,6 +76,7 @@ public sealed partial class AppService
         _catalog = catalog;
         _files = files;
         _docker = docker;
+        _runtime = runtime;
         _ports = ports;
         _protector = protector;
         _config = config;
@@ -104,14 +107,14 @@ public sealed partial class AppService
     /// <summary>The live state of all apps from one <c>docker ps</c> call, keyed by slug.</summary>
     public async Task<Dictionary<string, RuntimeInfo>> GetRuntimesAsync(CancellationToken ct = default)
     {
-        var containers = await _docker.ListContainersAsync(ct: ct);
+        var containers = await _runtime.ListContainersAsync(ct: ct);
         return containers
             .GroupBy(c => c.Instance)
             .ToDictionary(g => g.Key, g => DockerService.Summarize(g.ToList()));
     }
 
     public async Task<RuntimeInfo> GetRuntimeAsync(string slug, CancellationToken ct = default)
-        => DockerService.Summarize(await _docker.ListContainersAsync(slug, ct));
+        => DockerService.Summarize(await _runtime.ListContainersAsync(slug, ct));
 
     /// <summary>The stack as its engine has it now (compose and env), for the Files tab.</summary>
     public Task<StackSpec?> ReadStackAsync(InstalledApp app, CancellationToken ct = default)

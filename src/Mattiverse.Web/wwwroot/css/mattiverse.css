@@ -53,8 +53,48 @@
 .mv-in-window .mv-window-only { display: block; }
 .mv-in-window .mat-app { grid-template-columns: minmax(0, 1fr); }
 .mv-in-window .mat-nav, .mv-in-window .mat-topbar { display: none; }
-.mv-in-window .mat-page { padding-top: var(--mat-space-5); }
 .mv-in-window .mv-appview__bar { display: none; }
+
+/* The look of a page in there: the window is the frame, so the page is quieter and rounder than in the shell (the tokens of the toolkit, set for the window). */
+html.mv-in-window { --mat-radius-sm: 6px; --mat-radius: 8px; --mat-radius-lg: 12px; --mat-radius-xl: 16px; --mat-content-pad: clamp(16px, 4vw, 24px); --mat-card-pad: var(--mat-space-5); --mat-card-head-pad-y: var(--mat-space-3); }
+.mv-in-window .mat-main { scrollbar-width: thin; scrollbar-color: var(--mat-scroll-thumb) transparent; }
+.mv-in-window .mat-page { padding-top: var(--mat-space-5); gap: var(--mat-space-5); animation: mv-page-in var(--mat-dur-slow) var(--mat-ease) both; }
+.mv-in-window .mat-page.mv-flush { padding-top: 0; gap: 0; animation: none; }
+@keyframes mv-page-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mv-in-window .mat-page { animation: none; } }
+/* The bar of the window names the page: its title is there for a screen reader only, the line under it stays as the lead. */
+.mv-in-window .mv-pagehead h1, .mv-in-window .mv-pagehead:not(:has(.mat-page__sub)) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mv-in-window .mv-pagehead .mat-page__sub { margin-top: 0; font-size: var(--mat-fs-sm); }
+/* Tabs are a segmented control: a tray, the current one a raised key. */
+.mv-in-window .mat-tabs { display: inline-flex; align-self: flex-start; max-width: 100%; gap: 2px; padding: 3px; border: 0; border-radius: var(--mat-radius-lg); background: var(--mat-bg-2); box-shadow: inset 0 0 0 1px var(--mat-border); scrollbar-width: none; }
+.mv-in-window .mat-tab { min-height: var(--mat-control-h-sm); margin: 0; padding: 0 var(--mat-space-3); border: 0; border-radius: var(--mat-radius); font-size: var(--mat-fs-sm); transition: background-color var(--mat-dur-fast) var(--mat-ease), color var(--mat-dur-fast) var(--mat-ease); }
+.mv-in-window .mat-tab[aria-selected="true"], .mv-in-window .mat-tab.is-active { background: var(--mat-surface); color: var(--mat-text); box-shadow: 0 0 0 1px var(--mat-border), var(--mat-shadow-1); }
+/* Lists: the tools lie on the page (no card around them), the table is flat, a row answers the pointer, and the name of a row reads as text, not as a link. */
+.mv-in-window .mat-toolbar { padding: 0; border: 0; background: none; box-shadow: none; }
+.mv-in-window .mat-table-wrap { box-shadow: none; }
+.mv-in-window .mat-table tbody tr { transition: background-color var(--mat-dur-fast) var(--mat-ease); }
+.mv-in-window .mat-table tbody tr:hover { background: var(--mat-surface-2); }
+.mv-in-window .mat-table td a:not(.mat-btn) { color: var(--mat-text); font-weight: 600; }
+.mv-in-window .mat-table td a:not(.mat-btn):hover { color: var(--mat-accent-text); }
+.mv-in-window .mat-card { box-shadow: none; }
+.mv-in-window .mat-alert { border-radius: var(--mat-radius-lg); }
+.mv-in-window .mv-apphead .mv-appicon { box-shadow: var(--mat-shadow-2); }
+/* The settings and the account: their tabs are the sidebar of the window when it is wide enough (as the settings of a desktop), with what or who it is on top. */
+.mv-winnav__head { display: none; }
+@media (min-width: 720px) {
+  .mv-in-window .mat-main:has(.mv-winnav) { margin-left: 220px; }
+  .mv-in-window .mv-winnav { position: fixed; inset: 0 auto 0 0; width: 220px; display: flex; flex-direction: column; gap: var(--mat-space-4); padding: var(--mat-space-4) var(--mat-space-3); background: var(--mat-nav-bg); border-right: 1px solid var(--mat-border); overflow-y: auto; scrollbar-width: thin; }
+  .mv-in-window .mv-winnav__head { display: flex; align-items: center; gap: var(--mat-space-3); min-width: 0; padding: var(--mat-space-2); }
+  .mv-in-window .mv-winnav__head > span:last-child { display: flex; flex-direction: column; min-width: 0; line-height: var(--mat-lh-tight); }
+  .mv-in-window .mv-winnav__head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mv-in-window .mv-winnav__head small { color: var(--mat-text-muted); font-size: var(--mat-fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mv-in-window .mv-winnav .mat-tabs { display: flex; flex-direction: column; align-self: stretch; gap: 2px; padding: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+  .mv-in-window .mv-winnav .mat-tab { justify-content: flex-start; gap: var(--mat-space-3); min-height: var(--mat-control-h); padding: 0 var(--mat-space-2); font-size: var(--mat-fs-md); font-weight: 500; color: var(--mat-text); }
+  .mv-in-window .mv-winnav .mat-tab:hover { background: var(--mat-surface-3); }
+  .mv-in-window .mv-winnav .mat-tab.is-active { background: var(--mat-accent-soft-strong); box-shadow: none; font-weight: 650; }
+  .mv-in-window .mv-winnav .mat-tab .mat-icon { width: 26px; height: 26px; padding: 5px; border-radius: var(--mat-radius-sm); background: var(--mat-surface); color: var(--mat-accent-text); box-shadow: 0 0 0 1px var(--mat-border); }
+  .mv-in-window .mv-winnav .mat-tab.is-active .mat-icon { background: var(--mat-accent); color: var(--mat-on-accent); box-shadow: none; }
+}
 
 /* The wallpaper picker (Account, Home screen): a small picture in each choice. */
 .mv-wallthumb { display: block; width: 100%; margin-bottom: var(--mat-space-2); aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid var(--mat-border); border-radius: var(--mat-radius); background: var(--mat-bg); }
@@ -96,6 +136,30 @@
 .mv-appview__title span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mv-appview__frame { flex: 1 1 0; min-height: 0; width: 100%; border: 0; background: var(--mat-thumb); }
 .mv-appview__fallback { flex: 1 1 0; display: grid; place-items: center; padding: var(--mat-space-6) var(--mat-content-pad); }
+
+/* How busy the host is (Settings, System): a meter and its number in one line. */
+.mv-load { display: flex; align-items: center; gap: var(--mat-space-3); }
+.mv-progress { flex: 1 1 auto; max-width: 240px; height: 8px; border: 0; border-radius: var(--mat-radius-pill); background: var(--mat-surface-3); overflow: hidden; -webkit-appearance: none; appearance: none; }
+.mv-progress::-webkit-progress-bar { background: var(--mat-surface-3); }
+.mv-progress::-webkit-progress-value { background: var(--mat-success); border-radius: var(--mat-radius-pill); }
+.mv-progress::-moz-progress-bar { background: var(--mat-success); border-radius: var(--mat-radius-pill); }
+.mv-progress[data-tone="warn"]::-webkit-progress-value { background: var(--mat-warning); }
+.mv-progress[data-tone="warn"]::-moz-progress-bar { background: var(--mat-warning); }
+.mv-progress[data-tone="error"]::-webkit-progress-value { background: var(--mat-danger); }
+.mv-progress[data-tone="error"]::-moz-progress-bar { background: var(--mat-danger); }
+.mv-load span { min-width: 4ch; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); font-variant-numeric: tabular-nums; }
+
+/* The Task Manager: a dot says whether a container runs, the bar of a row is short, its numbers stand in a column. */
+.mv-stat__body .mv-progress { display: block; width: 100%; max-width: none; height: 6px; margin-top: var(--mat-space-2); }
+.mv-stat--row { flex-direction: row; padding: var(--mat-space-3) var(--mat-space-4); }
+.mv-task__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mat-border-strong, var(--mat-border)); }
+.mv-task__dot.is-running { background: var(--mat-success); box-shadow: 0 0 0 3px var(--mat-success-bg); }
+.mv-tasks .mv-load { min-width: 130px; }
+.mv-tasks .mv-progress { max-width: 72px; height: 6px; }
+.mv-tasks .mv-load span { min-width: 6ch; text-align: right; }
+.mv-task__mem { display: inline-block; min-width: 8ch; font-variant-numeric: tabular-nums; }
+.mv-tasks .mat-table__actions form { display: contents; }
+.mv-tasks .mat-pill + .mat-pill { margin-left: var(--mat-space-1); }
 
 /* ---- A centred card: a shared link ---- */
 .mv-centered { display: flex; flex-direction: column; align-items: center; gap: var(--mat-space-3); text-align: center; }

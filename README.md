@@ -7,7 +7,7 @@
 **Your Docker host as a home screen. Install, update and back up your apps with a tap.**
 
 Mattiverse OS is a home screen for your server, like the one on your phone: widgets on a wallpaper, your apps as icons, a dock,
-and one window for everything else. Pick an app in the store and Mattiverse installs it, gives it an address, keeps it up to date and backs it up.
+and windows for everything else. Pick an app in the store and Mattiverse installs it, gives it an address, keeps it up to date and backs it up.
 Underneath, five programs do the real work and keep their own part of the configuration: [MatDock](https://github.com/Real-TTX/MatDock) (stacks, backups),
 [Matcad](https://github.com/Real-TTX/Matcad) (addresses, HTTPS), [Matddns](https://github.com/Real-TTX/Matddns) (DNS records),
 [MatIdentity](https://github.com/Real-TTX/MatIdentity) (one sign-in) and [MatSMTP](https://github.com/Real-TTX/MatSMTP) (the mail of all apps).
@@ -25,8 +25,7 @@ Self-hosting usually means a terminal, a pile of `docker-compose.yml` files and 
 layer on top: a **home screen** that feels like a phone or a tablet, a **store** with one-click installs, a **setup wizard** that asks for your
 domain and DNS account once and wires the engines together, and **backups** you can actually restore.
 
-It is the small, mobile-friendly sibling of **MatOS**. Where MatOS is a desktop with many windows, Mattiverse has **one window at a time**,
-like a phone: it opens over the home screen, and the home button brings you back. Every app is a plain `docker compose` stack in MatDock:
+It is the small, mobile-friendly sibling of **MatOS**. Its home screen is a phone's, its windows are a desktop's: several open side by side over the home screen, and the dock is the taskbar. Every app is a plain `docker compose` stack in MatDock:
 you can edit it there, and Mattiverse keeps your change when it updates the app.
 
 ## At a glance
@@ -35,19 +34,20 @@ you can edit it there, and Mattiverse keeps your change when it updates the app.
 - A **home screen**: a status bar with the time, running tasks, the theme and you; widgets of glass for today, the engines, the apps
   that run, the last backup, the activity and Docker; the apps as icons (a badge when one is not running), a search (key `/`) and a
   **dock** with the store, the apps, the backups and the settings
-- **One window at a time**: the store, an app, the backups, the settings ... open in a window over the home screen, with a title, Back,
-  Reload, *open in a new tab* and three lights: close, home (the window stays open in the background, its icon shows a dot) and full size.
-  On a phone it fills the screen, with a bar at the bottom to go home. The address keeps the window (`/#/Store`), so a reload opens it again
+- **Windows like a desktop**: the store, an app, the backups, the settings ... each open in a window of their own over the home screen, with a title, Back,
+  Reload, *open in a new tab* and three lights: close, put away (the app stays open, its icon shows a dot) and fill the screen. Move a window by
+  its bar, size it at its edges, drop it at the top or a side of the screen to fill the screen or a half. The dock is the taskbar, the windows
+  come back after a reload, and every app remembers where its window was. On a phone a window fills the screen, with a bar at the bottom to go home
 - **The engines are part of the system**: a widget with their state, the folder *System*, and a window for each that shows what it keeps
-  for which app. An engine whose image allows it (`MAT_FRAME_ANCESTORS`, see [How it works](#how-it-works)) opens right there in the window
-- An installed app opens in a new tab, or in the window when you choose that in its menu (right click or long press)
+  for which app. An engine whose image allows it (`MAT_FRAME_ANCESTORS`, see [How it works](#how-it-works)) opens right there in its window
+- An installed app opens in a window too, or in a new tab when you choose that in its menu (right click or long press)
 - **Apps bring their own icons and widgets**: an app can put several icons on the home screen (MatOffice: Docs, Sheets, Slides, Base), add entries to
   the menu of an icon (*New document*) and widgets with its numbers, all from its own description: Mattiverse has no code for any app
 - **Apps connect themselves**: install MatDrive and MatOffice, and MatDrive opens its office files in MatOffice, with no key to copy. Each app says what it
   offers and what it uses; Mattiverse connects them, and every app shows its connections on one page (and works without Mattiverse, connected by hand)
 - **Wallpapers** drawn for Mattiverse: *Orbit* (the planet of the logo, light or dark with the theme; the default), the Earth from orbit,
   a jungle, a lagoon and mountains seen from above, or none. Each person picks their own
-- Inside the window Mattiverse looks and behaves like every other Mat app: it is built on **MatUi**, the toolkit of
+- Inside a window Mattiverse looks and behaves like every other Mat app: it is built on **MatUi**, the toolkit of
   [MatDesign](https://github.com/Real-TTX/MatDesign), with its lists, forms, dialogs and dark mode
 
 **Setup wizard** (first start, and again whenever you like)
@@ -79,25 +79,32 @@ you can edit it there, and Mattiverse keeps your change when it updates the app.
 
 | Light | On a phone | A window on a phone |
 |---|---|---|
-| ![The home screen in the light theme](docs/images/home-light.png) | ![The home screen on a phone: widgets, apps and the dock](docs/images/mobile-home.png) | ![The store in the window on a phone, with the bar to go home](docs/images/mobile-window.png) |
+| ![The home screen in the light theme](docs/images/home-light.png) | ![The home screen on a phone: widgets, apps and the dock](docs/images/mobile-home.png) | ![The store in a window on a phone: it fills the screen, with the bar to go home](docs/images/mobile-window.png) |
 
-The picture at the top is the dark theme; *System* follows the device. On a phone the widgets stack, the window fills the screen and the
+The picture at the top is the dark theme; *System* follows the device. On a phone the widgets stack, a window fills the screen and the
 bar at the bottom goes home.
 
 | The folder *System* | The menu of an app | Your wallpaper |
 |---|---|---|
-| ![The folder System: the five engines and all engines](docs/images/folder-system.png) | ![The menu of an app: open in the window or a new tab, always in a new tab, details, manage](docs/images/app-menu.png) | ![Your account, Home screen: the wallpapers to choose from](docs/images/wallpapers.png) |
+| ![The folder System: the five engines and all engines](docs/images/folder-system.png) | ![The menu of an app: open, in a new tab, always in a new tab, details, manage, and where it sits on the home screen](docs/images/app-menu.png) | ![Your account, Home screen: the wallpapers to choose from](docs/images/wallpapers.png) |
 
 | Orbit | Earth | Jungle | Lagoon | Mountains |
 |---|---|---|---|---|
 | ![Orbit](src/Mattiverse.Web/wwwroot/img/wallpapers/orbit-dark-thumb.jpg) | ![Earth](src/Mattiverse.Web/wwwroot/img/wallpapers/earth-thumb.jpg) | ![Jungle](src/Mattiverse.Web/wwwroot/img/wallpapers/jungle-thumb.jpg) | ![Lagoon](src/Mattiverse.Web/wwwroot/img/wallpapers/lagoon-thumb.jpg) | ![Mountains](src/Mattiverse.Web/wwwroot/img/wallpapers/mountains-thumb.jpg) |
 
-### One window at a time
+### Windows
 
-![The store in the window over the home screen: the traffic lights, Back, the title, Reload and open in a new tab](docs/images/store.png)
+![Three windows over the home screen: the store as the left half, the activity and the settings beside it; the dock marks the open ones](docs/images/windows.png)
 
-Everything that is not the home screen opens in **the window**: the store above, an app, the activity, the settings. The yellow light
-goes home and keeps the window (its icon gets a dot), the red one closes it, the green one makes it full size.
+Everything that is not the home screen opens in **a window**: the store above, an app, the activity, the settings. Several are open side by side:
+move one by its bar, size it at its edges, bring one to the front with a click. The yellow light puts a window away and keeps the app (its icon
+gets a dot), the red one closes it, the green one fills the screen.
+Let go at the top of the screen a window fills it, at the left or right edge it takes that half. The dock is the taskbar: a dot under every
+app that has a window, a click brings it to the front. The windows come back after a reload, and every app remembers where its window was.
+
+| One window | The settings, with their sidebar | The menu of a window |
+|---|---|---|
+| ![The store in a window: the traffic lights, Back, the title, Reload and open in a new tab](docs/images/store.png) | ![The settings in a window: General, Engines, System and the setup wizard in a sidebar](docs/images/settings.png) | ![A right click on the bar of a window: reload, a new tab, fill the screen, a half, put away, close](docs/images/window-menu.png) |
 
 | An app | Installing, with a live log |
 |---|---|
@@ -107,13 +114,17 @@ Buttons read from positive to negative: **Open, Stop, Restart, Update, Back up**
 
 ### The engines
 
-| An engine in the window | Settings, Engines |
+| An engine in a window | Settings, Engines |
 |---|---|
-| ![MatDock in the window: its state and what it keeps for each app](docs/images/engine-window.png) | ![Settings, Engines: the five engines, their version and state, and what Mattiverse hands over](docs/images/engines.png) |
+| ![MatDock in a window: its state and what it keeps for each app](docs/images/engine-window.png) | ![Settings, Engines: the five engines, their version and state, and what Mattiverse hands over](docs/images/engines.png) |
 
 The window of an engine says what it keeps for which app (a stack in MatDock, a route in Matcad, a record in Matddns, a client in
-MatIdentity, a relay user in MatSMTP). It opens the engine itself in the window when the engine allows Mattiverse to frame it, otherwise in a
+MatIdentity, a relay user in MatSMTP). It opens the engine itself in a window when the engine allows Mattiverse to frame it, otherwise in a
 new tab. The *Engines* tab of the settings hands the domain and the DNS account over again (*Connect again*).
+
+![Settings, System: Docker as MatDock reports it, with processor, memory and disk, and the version and data folder of Mattiverse](docs/images/system.png)
+
+*System* shows Docker as MatDock reports it: the load of the processor, the memory and the disk of the host, and how many containers run.
 
 ### Manage an app
 
@@ -227,7 +238,7 @@ setup wizard. An update is `docker compose pull && docker compose up -d`; everyt
 - **Backups** are made by MatDock (a bundle of volumes, compose and `.env`) and listed in MatDock too; the apps that Mattiverse runs itself
   are backed up by Mattiverse's own runner. One page shows both.
 - **The window** is a frame of Mattiverse's own pages; a page in it drops its menu and header and keeps only its content. An engine is shown
-  in the window when it allows it: Mattiverse passes its own addresses in **`MAT_FRAME_ANCESTORS`** (its route, this machine with its port,
+  in a window when it allows it: Mattiverse passes its own addresses in **`MAT_FRAME_ANCESTORS`** (its route, this machine with its port,
   the addresses people signed in from), and the engine answers with `frame-ancestors` for them (MatPlatform 1.5.0). Mattiverse checks the
   headers first and offers a new tab, with the reason, when an engine does not allow it.
 - Without an engine's API (an older image, or not installed yet) Mattiverse falls back to its own `docker compose` runner, so nothing stops working.
@@ -282,8 +293,8 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 
 | Area | Status |
 |---|---|
-| Mattiverse OS: home screen, widgets, one window, the folder *System*, wallpapers, phone layout | ✅ |
-| The look of the Mat family inside the window (MatUi of MatDesign: lists, forms, dialogs, dark mode) | ✅ |
+| Mattiverse OS: home screen, widgets, windows (move, size, halves, taskbar), the folder *System*, wallpapers, phone layout | ✅ |
+| The look of the Mat family inside a window (MatUi of MatDesign: lists, forms, dialogs, dark mode) | ✅ |
 | Store, setup wizard, themes | ✅ |
 | Install / update / uninstall / start / stop with live logs | ✅ |
 | Backups: manual, scheduled, retention, restore, download (MatDock's, merged with Mattiverse's own) | ✅ |
@@ -293,7 +304,7 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | Single sign-on through MatIdentity (installed and wired by Mattiverse: the apps and Mattiverse itself) | ✅ |
 | Mail through MatSMTP (installed by the wizard; a relay user and the `MATSMTP_*` variables for every app that sends mail) | ✅ (the apps still have to read the variables) |
 | Apps that describe themselves (platform contract): the tab Manage with their tiles, settings and buttons | ✅ |
-| The engines inside the window (`MAT_FRAME_ANCESTORS`, MatPlatform 1.5.0) | ✅ in Mattiverse; the engines on their `feature/frame-ancestors` branches, in their images with the next release |
+| The engines inside a window (`MAT_FRAME_ANCESTORS`, MatPlatform 1.5.0) | ✅ in Mattiverse; the engines on their `feature/frame-ancestors` branches, in their images with the next release |
 | Apps that connect themselves (bindings) and bring their own icons, widgets and menu entries (contract 2, MatPlatform 2.0) | ✅ MatOffice and MatDrive; the engines move onto the bindings next |
 | Widgets you arrange yourself, widgets with the data of the person who is looking, a search across the apps | planned |
 | Microsoft Entra ID sign-in | planned (the login is already behind `AuthService` / `SessionService`) |

@@ -21,6 +21,7 @@ public class DetailsModel : PageModel
     private readonly AppService _apps;
     private readonly CatalogService _catalog;
     private readonly DockerService _docker;
+    private readonly RuntimeReader _runtime;
     private readonly MattiverseDbContext _db;
     private readonly ComposeRenderer _names;
     private readonly BackupHub _hub;
@@ -33,6 +34,7 @@ public class DetailsModel : PageModel
         AppService apps,
         CatalogService catalog,
         DockerService docker,
+        RuntimeReader runtime,
         MattiverseDbContext db,
         ComposeRenderer names,
         BackupHub hub,
@@ -44,6 +46,7 @@ public class DetailsModel : PageModel
         _apps = apps;
         _catalog = catalog;
         _docker = docker;
+        _runtime = runtime;
         _db = db;
         _names = names;
         _hub = hub;
@@ -134,7 +137,7 @@ public class DetailsModel : PageModel
             case "logs":
                 var container = Containers.FirstOrDefault(c => c.Name == Container) ?? Containers.FirstOrDefault();
                 Container = container?.Name;
-                LogText = container is null ? "The app has no containers." : await _docker.GetLogsAsync(container.Name, 400, ct);
+                LogText = container is null ? "The app has no containers." : await _runtime.GetLogsAsync(container.Name, 400, ct);
                 break;
             case "backups" when User.IsAdmin():
                 Backups = (await _hub.ListAsync(ct)).Where(b => b.AppSlug == App.Slug).Take(50).ToList();
@@ -227,7 +230,7 @@ public class DetailsModel : PageModel
 
         App = app;
         Catalog = _catalog.Get(app.CatalogId);
-        Containers = await _docker.ListContainersAsync(app.Slug, ct);
+        Containers = await _runtime.ListContainersAsync(app.Slug, ct);
         Runtime = DockerService.Summarize(Containers);
         Status = AppStatus.Of(app, Runtime);
         OpenUrl = await _urls.OpenUrlAsync(app, Request, ct);

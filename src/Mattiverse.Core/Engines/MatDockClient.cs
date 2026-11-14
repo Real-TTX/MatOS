@@ -28,6 +28,36 @@ public sealed class MatDockClient : EngineClient
     public Task EnsureLocalEnvironmentAsync(CancellationToken ct = default)
         => SendAsync(HttpMethod.Put, "environments/local", new JsonObject(), null, ct);
 
+    // ------------------------------------------------------------------ reading (what the pages show: Engines/RuntimeReader)
+
+    private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(6);
+
+    /// <summary>Every stack of the host with its containers (no usage: that would cost a sampling interval).</summary>
+    public async Task<JsonArray?> ListStacksAsync(CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Get, "stacks", null, ReadTimeout, ct) as JsonArray;
+
+    /// <summary>The local environment: the version of Docker and the last reading of the host.</summary>
+    public async Task<JsonObject?> GetLocalEnvironmentAsync(CancellationToken ct = default)
+        => (await SendAsync(HttpMethod.Get, "environments", null, ReadTimeout, ct) as JsonArray)?
+            .OfType<JsonObject>()
+            .FirstOrDefault(e => e["type"]?.GetValue<string>() == "local");
+
+    /// <summary>Every container of the host with its CPU and memory (MatDock samples them, so the first answer takes a moment).</summary>
+    public async Task<JsonArray?> ListContainersAsync(CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Get, "containers", null, TimeSpan.FromSeconds(12), ct) as JsonArray;
+
+    /// <summary>Starts, stops or restarts one container (<c>start</c>, <c>stop</c>, <c>restart</c>); MatDock answers when Docker is done.</summary>
+    public Task ContainerActionAsync(string container, string action, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Post, $"containers/{Uri.EscapeDataString(container)}/actions/{action}", null, TimeSpan.FromSeconds(60), ct);
+
+    /// <summary>The last lines of the log of a container (plain text).</summary>
+    public async Task<string?> GetContainerLogsAsync(string container, int tail, CancellationToken ct = default)
+    {
+        using var buffer = new MemoryStream();
+        await CopyToAsync($"containers/{Uri.EscapeDataString(container)}/logs?tail={tail}", buffer, ct);
+        return System.Text.Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd();
+    }
+
     // ------------------------------------------------------------------ stacks
 
     /// <summary>Creates or updates the stack. With <paramref name="deploy"/> the stack is also started and the id of the operation is returned.</summary>

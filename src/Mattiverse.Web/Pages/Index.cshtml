@@ -115,7 +115,7 @@
                 <div class="os-widget @size" data-widget @Home(item)>
                     <span class="os-widget__head">@Ui.Icon("whale")Docker</span>
                     <span class="os-widget__value">@Model.Engine.ContainersRunning<small> containers</small></span>
-                    <span class="os-widget__note">Docker @Model.Engine.Version</span>
+                    <span class="os-widget__note">Docker @Model.Engine.Version@(Model.Engine.Load is { } load ? $" · CPU {load.CpuPercent:0} %" : "")</span>
                 </div>
                 break;
 

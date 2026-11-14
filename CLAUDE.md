@@ -5,7 +5,7 @@ interfaces or major data flow change.
 
 ## What Mattiverse is
 
-A launcher (iOS/Android look, one app open at a time) that **installs, updates and backs up Docker apps**. It is a thin layer on top of
+A launcher (iOS/Android look, windows like a desktop) that **installs, updates and backs up Docker apps**. It is a thin layer on top of
 five **engines** that own the configuration and show it in their own UI: **MatDock** (stacks, backups, schedules), **Matcad** (routes,
 certificates, DNS providers), **Matddns** (IP sources, DNS records, rules), **MatIdentity** (the single sign-on: a client per app, docs/ARCHITECTURE.md "MatIdentity")
 and **MatSMTP** (the mail relay: a relay user per app that consumes `mail.smtp`, docs/ARCHITECTURE.md "MatSMTP"). `EngineIds.All` names them in the order they are installed
@@ -18,7 +18,7 @@ socket, plain JavaScript (no build step), Docker-first. Web port **8030**.
 The look and the controls are **MatUi**, the toolkit of [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all Mat apps, port 8060): the pages are built from its classes and follow its rulebook. Look there (the Components page, the Shell page, the rules) before building any UI.
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing the design: it records the decisions (the engines own the
-configuration, reading goes to Docker and changes to the engines, catalog as data, ...). [docs/ENGINES.md](docs/ENGINES.md) is the API contract
+configuration, reading and changes go through the engines, catalog as data, ...). [docs/ENGINES.md](docs/ENGINES.md) is the API contract
 with MatDock, Matcad, Matddns, MatIdentity and MatSMTP, [docs/CATALOG.md](docs/CATALOG.md) the format of a catalog entry (`platform`, `consumes`),
 [docs/INTEGRATION.md](docs/INTEGRATION.md) the state of the sibling repositories (the `mattiverse-integration` branches).
 The apps connect to each other through **bindings** (MatDesign docs/PLATFORM.md contract 2, docs/APP-MODEL.md): Mattiverse is the broker (`BindingBroker`) and the shell (the
@@ -61,7 +61,7 @@ src/Mattiverse.Core        domain, no web types
                              compose file; ComposePorts: a routed app publishes no port, the proxy the ports of its port routes),
                              ComposeFiles, ComposeRunner, AppReconciler (adopt MatDock stacks), AppVariables, PortPlanner, AppAddresses (public and internal address of an app)
   Engines/                   IStackEngine: LocalComposeEngine (own docker compose) and MatDockEngine; StackEngines picks one;
-                             EngineClient/EngineLocator (address + API key of an installed engine), MatDockClient, EngineIds
+                             EngineClient/EngineLocator (address + API key of an installed engine), MatDockClient, EngineIds, RuntimeReader (what the pages show of the runtime: asked from MatDock; the Task Manager `/Tasks` is its list of every container with CPU and memory)
   Backups/                   IBackupProvider: LocalBackupProvider (BackupService, own runner) and MatDockBackupProvider; BackupHub merges
                              them (ids local:<id>, matdock:<id>); BackupSchedulerService runs the local schedules
   Catalog/                   CatalogParser/Service/Models + apps/*.yml (embedded)
@@ -80,7 +80,7 @@ src/Mattiverse.Web         Razor Pages, controls, JS/CSS, Program.cs
   Controls/                  tag helpers icon (a use of the sprite), app-icon, mat-field (label, control, hint, error), tab-bar; ListModels (ToolbarModel, PagerModel, ListView, ListQuery)
   Pages/                     Index (Mattiverse OS), Engines/ (one engine in the window), Apps/, Store/, Backups/, Jobs/, Settings/, Wizard/, People/ (the people, groups and grants of MatIdentity:
                              Index, Edit, Access, Groups, Group), Users/ (Mattiverse's own accounts, a tab of People), Account/, Share/
-  Pages/Shared/              _Layout (the shell: menus, switcher, user, theme, breadcrumb), _Launcher (Mattiverse OS: status bar, wallpaper, the one window, no menu), _Bare (no menu), _Head, _Toolbar, _Pager, _ValidationSummary, _StatusPill, _DnsFields
+  Pages/Shared/              _Layout (the shell: menus, switcher, user, theme, breadcrumb), _Launcher (Mattiverse OS: status bar, wallpaper, the windows, no menu), _Bare (no menu), _Head, _Toolbar, _Pager, _ValidationSummary, _StatusPill, _DnsFields
   Infrastructure/            cookie session validation, setup guard, DB bootstrap, API endpoints (the job log, the theme, PUT/DELETE /api/home: the arrangement of the home screen), health check, MatIdentitySignIn, BackchannelLogout (POST /signout-backchannel)
   Support/                   Toolkit (the icon sprite), Ui (Icon, Logo), Navigation (the menus: NavSet, NavItem, NavBadge), Launcher (the parts of Mattiverse as apps on the home screen and in its dock), EngineOverview (the five engines for the settings, the home screen and /Engines), HomeContributions (the launchers, quick actions and widgets of the apps for the home screen), Crumbs, AppUrls, FrameProbe, AppStatus, Format
   wwwroot/matui/             the toolkit, a copy of MatDesign's; wwwroot/css/mattiverse.css the few classes only this app has (mv-*, mv-in-window); css/os.css the home screen (os-*); js/mattiverse.js its behaviour, js/os.js the home screen, js/window-mode.js a page in the window
@@ -93,7 +93,8 @@ tests/e2e                    run.js: the pages in a real browser against the run
 **Code**
 - Microsoft C# guidelines, file-scoped namespaces, `.editorconfig`. Few nested types; several business functions per class are fine.
 - Long Docker work never runs in a request: queue a `Job` (`AppJobs.*`) and let the pages poll `/api/jobs/<id>/log`.
-- **Read from Docker, change through the engines.** Status, containers and logs come from `docker` (labels); installs, updates, backups, routes and
+- **Read and change through the engines.** What a page shows of the runtime (status, containers, logs, the host) comes from MatDock through `Engines/RuntimeReader`
+  (Docker directly only before MatDock is there, while it does not answer, and inside a job); installs, updates, backups, routes and
   DNS records go through the engine's API with `managedBy: mattiverse`. Never write to an engine without that marker; never delete what Mattiverse did not create.
 - Engine clients share the request's `DbContext` (the locator reads the app): never call two of them in parallel.
 - Anything that parses CLI output has a unit test (a stopped container has an empty last field: never `Trim` such lines).
@@ -117,8 +118,10 @@ tests/e2e                    run.js: the pages in a real browser against the run
   or `Flush` (an app in a frame). Pages without a menu (sign-in, setup, a shared link, errors) use `_Bare`.
 - **The logo is the planet with its orbit (`img/logo.svg`), on purpose:** the owner prefers it to the flat glyph tile that rule IDENT-03 asks for. Do not replace it without asking.
 - **The home screen is Mattiverse OS, on purpose** (owner, 2026-11-08/09; docs/ARCHITECTURE.md "The home screen"): `_Launcher` with `css/os.css` and `js/os.js`, its own look
-  (status bar, glass, the system font; colours only as `--os-*` in `os.css`), NOT the toolkit: do not bring the menu of MatUi back there. ONE window at a time: `data-window` opens a page of
-  Mattiverse in it (an iframe); `js/window-mode.js` drops the menu, header and breadcrumb of a page in there (`mv-in-window`, `mv-window-only`), `_Bare` pages (`data-top-level`) leave it.
+  (status bar, glass, the system font; colours only as `--os-*` in `os.css`), NOT the toolkit: do not bring the menu of MatUi back there. Windows like a desktop (`js/os.js`): `data-window` opens a page in a window of its own (an iframe from the template in `_Launcher`); the bar moves it, the edges size it, the top and the sides of the
+  screen take it full or as a half, the dock is the taskbar, the place of an app's window is kept in `localStorage`, the open windows of a tab in `sessionStorage`. The home screen never reloads by
+  itself (it would lose the windows): it refreshes in place (`refresh()`). `js/window-mode.js` drops the menu, header and breadcrumb of a page in there (`mv-in-window`, `mv-window-only`), `_Bare` pages (`data-top-level`) leave it.
+  In there a page also looks like a part of the window (`mattiverse.css`, "The look of a page in there"): the title of the layout is hidden (the bar names the page), tabs are a segmented control, and the tabs in `mv-winnav` (settings, account) are the sidebar of a wide window.
   A page reached only through the menu needs a way inside the window (the settings have `_SettingsTabs`). Installed apps open in the window too (the address Matcad serves; *Always open in a new tab* in the menu of an app); the engines
   live in the folder *System* and open `/Engines?id=` (`Support/EngineOverview.cs`); their own pages open there in the window when they allow Mattiverse to frame them
   (`MAT_FRAME_ANCESTORS`, filled by `Core/Integrations/FrameLink.cs` for apps whose compose file names it; `FrameProbe`/`FramePolicy` check before a frame). Wallpapers are drawn by `scripts/wallpapers` (`node scripts/wallpapers/render.js`);
@@ -131,6 +134,7 @@ tests/e2e                    run.js: the pages in a real browser against the run
 - Take screenshots of real data only; never real user data in `docs/images`. The pictures of the README come from a second Mattiverse (own volume, port 8130, own subnets) with two apps installed
   through the UI; remove it afterwards. With `Mattiverse__ProjectPrefix` and `Mattiverse__NetworkName` of its own (`mvshots`) it installs its own engines beside the dev stack's: catalog copies in
   `/data/catalog` with a subnet each, Matcad's proxy on other ports than 80/443, MatIdentity and MatSMTP from local images (`pull_policy: never`; their GHCR images are private).
+  Give it a port range of its own too (`Mattiverse__HostPortRangeStart/End`, the dev stack's Matcad holds 8100 and up) and reach it as `http://127.0.0.1:8130` (`localhost` stops answering once the container has joined its network). The window pictures (`windows.png`) place their windows through `localStorage` (`mattiverse.os.geo.<app>`).
   Shoot with Edge started with `--lang=en-GB` (the clock and the dates follow the browser's language, not Playwright's `locale`) and a fixed clock (`page.clock.setFixedTime`).
 
 **Git**

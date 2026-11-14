@@ -13,7 +13,10 @@
     <div class="mat-alert mat-alert--warning" role="alert"><icon name="alert" /><div class="mat-alert__body">Please set your own password before you continue.</div></div>
 }
 
-<tab-bar model="Model.Tabs" label="Account" />
+<div class="mv-winnav">
+    <div class="mv-winnav__head"><span class="mat-avatar" aria-hidden="true">@Ui.Initials(User.GetDisplayName())</span><span><strong>@User.GetDisplayName()</strong><small>@User.GetRole()</small></span></div>
+    <tab-bar model="Model.Tabs" label="Account" />
+</div>
 
 @if (Model.HomeTab)
 {

@@ -4,7 +4,7 @@
 @using Mattiverse.Core.Users
 @{
     // Mattiverse OS: the home screen is a small operating system, not a page of the toolkit (the owner's choice, docs/ARCHITECTURE.md "The home screen").
-    // A status bar, the wallpaper of the account, the page (widgets, apps, dock) and ONE window: the pages of Mattiverse open in it (an iframe), with the toolkit
+    // A status bar, the wallpaper of the account, the page (widgets, apps, dock) and its windows: the pages of Mattiverse open in them (an iframe each), with the toolkit
     // inside as everywhere (js/window-mode.js). Its look is css/os.css, its behaviour js/os.js. The page draws its own head (one h1, in the first widget).
     ViewData["Os"] = true;
     var config = await ConfigSvc.GetAsync(Context.RequestAborted);
@@ -28,9 +28,10 @@
     <a class="mat-skip" href="#main">Skip to the content</a>
     @Html.Raw(Toolkit.Sprite)
 
-    @* The status bar stays above everything, also above the window (like the menu bar of a Mac). *@
+    @* The status bar stays above everything, also above the windows (like the menu bar of a Mac); beside the logo it names the window in front. *@
     <header class="os-status">
             <a class="os-status__brand" href="/" aria-label="@name, home screen"><img src="/img/logo.svg" alt="" width="18" height="18" /><span>@name</span></a>
+            <span class="os-status__app" data-os-active aria-live="polite"></span>
             <div class="os-status__end">
                 @if (activeJobs > 0)
                 {
@@ -56,28 +57,39 @@
             }
             @RenderBody()
         </main>
+        @* The windows (js/os.js makes one from the template for every page that is opened). Red closes it, yellow puts it away and keeps the app as it is (its icon in
+       the dock brings it back), green fills the screen; the bar moves it, the edges size it. On a phone it fills the screen and the bar at its bottom goes home. *@
+        <div class="os-windows" id="os-windows"><div class="os-snap" data-os-snap aria-hidden="true" hidden></div></div>
     </div>
 
-    @* The one window. Red closes it, yellow goes home and keeps the app as it is (a tap on its icon brings it back), green fills the screen; on a phone the bar at the bottom goes home. *@
-    <div class="os-scrim" hidden></div>
-    <section class="os-window" id="os-window" role="dialog" aria-label="Window" hidden>
-        <div class="os-window__bar">
-            <div class="os-lights">
-                <button type="button" class="os-light os-light--close" data-win-close aria-label="Close" title="Close">@Ui.Icon("x")</button>
-                <button type="button" class="os-light os-light--home" data-win-home aria-label="Home screen (the app stays open)" title="Home screen (the app stays open)">@Ui.Icon("minus")</button>
-                <button type="button" class="os-light os-light--max" data-win-max aria-label="Full screen" title="Full screen">@Ui.Icon("plus")</button>
+    <template id="os-window-template">
+        <section class="os-window" role="dialog" aria-label="Window">
+            <div class="os-window__bar">
+                <div class="os-lights">
+                    <button type="button" class="os-light os-light--close" data-win-close aria-label="Close" title="Close">@Ui.Icon("x")</button>
+                    <button type="button" class="os-light os-light--min" data-win-min aria-label="Put away (the app stays open)" title="Put away (the app stays open)">@Ui.Icon("minus")</button>
+                    <button type="button" class="os-light os-light--max" data-win-max aria-label="Fill the screen" title="Fill the screen" aria-pressed="false">@Ui.Icon("plus")</button>
+                </div>
+                <button type="button" class="os-wbtn" data-win-back aria-label="Back" title="Back" disabled>@Ui.Icon("chevron-left")</button>
+                <div class="os-window__title"><span class="os-window__icon" data-win-icon></span><span data-win-title></span></div>
+                <div class="os-window__end">
+                    <button type="button" class="os-wbtn" data-win-reload aria-label="Reload" title="Reload">@Ui.Icon("refresh")</button>
+                    <button type="button" class="os-wbtn" data-win-tab aria-label="Open in a new tab" title="Open in a new tab">@Ui.Icon("external")</button>
+                    <button type="button" class="os-wbtn os-wbtn--x" data-win-close aria-label="Close" title="Close">@Ui.Icon("x")</button>
+                </div>
             </div>
-            <button type="button" class="os-wbtn" data-win-back aria-label="Back" title="Back" disabled>@Ui.Icon("chevron-left")</button>
-            <div class="os-window__title"><span class="os-window__icon" data-win-icon></span><span data-win-title></span></div>
-            <div class="os-window__end">
-                <button type="button" class="os-wbtn" data-win-reload aria-label="Reload" title="Reload">@Ui.Icon("refresh")</button>
-                <button type="button" class="os-wbtn" data-win-tab aria-label="Open in a new tab" title="Open in a new tab">@Ui.Icon("external")</button>
-                <button type="button" class="os-wbtn os-wbtn--x" data-win-close aria-label="Close" title="Close">@Ui.Icon("x")</button>
-            </div>
-        </div>
-        <iframe class="os-window__frame" name="os-window" title="Window"></iframe>
-        <button type="button" class="os-homebar" data-win-home aria-label="Home screen"></button>
-    </section>
+            <iframe class="os-window__frame" title="Window"></iframe>
+            <button type="button" class="os-homebar" data-win-min aria-label="Home screen"></button>
+            <span class="os-window__grip os-window__grip--n" data-win-resize="n" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--e" data-win-resize="e" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--s" data-win-resize="s" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--w" data-win-resize="w" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--ne" data-win-resize="ne" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--se" data-win-resize="se" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--sw" data-win-resize="sw" aria-hidden="true"></span>
+            <span class="os-window__grip os-window__grip--nw" data-win-resize="nw" aria-hidden="true"></span>
+        </section>
+    </template>
 
     <div class="os-menu os-menu--user" id="os-user-menu" role="menu" aria-label="@displayName" hidden>
         <div class="os-menu__head">

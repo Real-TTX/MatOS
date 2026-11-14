@@ -15,6 +15,12 @@ public sealed record ContainerInfo(
     public bool IsRunning => State.Equals("running", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// A container as the Task Manager lists it: any container of the host, with what it uses right now. <see cref="Own"/> is true for the containers of
+/// this Mattiverse (its stacks); the usage is <c>null</c> while nobody measured it (a stopped container, or MatDock did not answer).
+/// </summary>
+public sealed record ContainerTask(ContainerInfo Container, bool Own, double? CpuPercent = null, double? MemoryPercent = null, long? MemoryBytes = null);
+
 /// <summary>How an app looks right now (derived from its containers).</summary>
 public enum RuntimeState
 {
@@ -44,7 +50,12 @@ public sealed record DockerEngineInfo(
     long MemoryBytes,
     int ContainersRunning,
     int ContainersTotal,
-    int Images);
+    int Images,
+    HostLoad? Load = null,
+    string Source = "Docker");
+
+/// <summary>How busy the host is, as MatDock measures it (percent of CPU, memory and disk in use).</summary>
+public sealed record HostLoad(double CpuPercent, double MemoryPercent, double DiskPercent);
 
 /// <summary>A host port that an existing container publishes.</summary>
 public sealed record PublishedPort(int HostPort, string Protocol, string Container);

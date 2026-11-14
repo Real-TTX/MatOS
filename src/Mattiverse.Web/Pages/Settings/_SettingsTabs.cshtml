@@ -1,7 +1,7 @@
 @model string
 @{
     // Inside the window of the home screen the menu (with its submenu Settings) is gone: these tabs lead between the pages of the settings.
-    // They are shown only there (mv-window-only); in the shell the submenu does it.
+    // They are shown only there (mv-window-only); in the shell the submenu does it. A window that is wide enough shows them as its sidebar (mv-winnav), under what this is.
     var tabs = new TabBarModel
     {
         Tabs =
@@ -13,4 +13,7 @@
         ],
     };
 }
-<div class="mv-window-only"><tab-bar model="tabs" label="Settings" /></div>
+<div class="mv-window-only mv-winnav">
+    <div class="mv-winnav__head">@Ui.Logo("sm")<span><strong>@Ui.App.Name</strong><small>Version @AppVersion.Current</small></span></div>
+    <tab-bar model="tabs" label="Settings" />
+</div>

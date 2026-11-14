@@ -1,205 +1,668 @@
 /* Mattiverse OS: the behaviour of the home screen (Pages/Shared/_Launcher.cshtml, css/os.css). Plain JavaScript, no build step.
 
-   ONE window at a time, like the apps of a phone. Anything with data-window opens that page of Mattiverse in it (an iframe of the same origin;
-   the page drops its menu there, js/window-mode.js). Red closes the window; yellow (or the bar at the bottom of a phone) goes home and keeps
-   the app as it is, so a tap on its icon brings it back; green fills the screen. Back goes back inside the window.
-   The address keeps the page of the window (#/Store), so a reload opens it again and the browser's Back goes home.
+   WINDOWS, like a desktop. Anything with data-window opens that page in a window of its own (an iframe; a page of Mattiverse drops its menu there,
+   js/window-mode.js). Several windows are open side by side:
+   - the bar moves a window, its edges and corners size it, a click anywhere in it brings it to the front;
+   - red closes it, yellow puts it away (the app stays as it is), green fills the screen; a double click on the bar fills the screen too;
+   - dragged to the top of the screen it fills it, dragged to the left or right edge it takes that half; dragged away it has its own size again;
+   - the dock is the taskbar: a dot under an app that has a window, an icon for every window that has none there; a click brings the window to the
+     front, a click on the one in front puts it away. The logo in the status bar shows the desktop;
+   - every app remembers where its window was and how large (this browser), and a reload of the home screen brings the windows back (this tab).
+   The address keeps the page of the window in front (#/Store). On a phone a window fills the screen and the bar at its bottom goes home.
 
-   An installed app opens in a new tab (its own address, target=_blank): the default for an app. Its menu (a right click, a long press) opens it
-   in the window instead, and can make that the default for this app (kept in this browser).
+   An installed app opens in a window too; its menu (a right click, a long press) opens it in a new tab instead, and can make that the default for
+   this app (kept in this browser).
 
    The person arranges the home screen, and the account keeps it (PUT /api/home: pages, what is off the screen, the sizes of the widgets):
-   - a right click (a long press on a touch screen) gives everything its menu: an app, a widget, the dock, the window's bar, the empty screen;
+   - a right click (a long press on a touch screen) gives everything its menu: an app, a widget, the dock, a window's bar, the empty screen;
      Shift with the right click is the browser's own menu, and a field keeps the browser's menu (to paste);
    - a thing is dragged with the mouse to another place; at the edge of the screen, or over a dot, the page turns (past the last one a new page begins);
    - "Edit the home screen" makes the things wiggle: a finger drags them too, a minus takes one off the screen, "Show again" brings it back;
    - the pages turn with a swipe, the dots below them, or the arrow keys.
+   The home screen refreshes itself without a reload (refresh(): the things are fetched and put in place), so the windows stay.
    The search narrows the apps of all pages (the key / puts the focus there, Enter opens the first one). The clocks tick here. */
 (function () {
   'use strict';
 
-  var win = document.getElementById('os-window');
-  if (!win) { return; }
+  var layer = document.getElementById('os-windows');
+  var template = document.getElementById('os-window-template');
+  if (!layer || !template) { return; }
+  // The home screen inside one of its own windows (a page that led back to it) is not a second desktop (js/window-mode.js closes that window).
+  try { if (window.top !== window.self && window.top.location.origin === location.origin) { return; } } catch (e) { /* framed by someone else */ }
 
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
   var html = document.documentElement;
   var body = document.body;
-  var frame = $('.os-window__frame', win);
-  var scrim = $('.os-scrim');
-  var titleEl = $('[data-win-title]', win);
-  var iconEl = $('[data-win-icon]', win);
-  var backBtn = $('[data-win-back]', win);
+  var dock = $('.os-dock');
+  var statusBar = $('.os-status');
+  var activeName = $('[data-os-active]');
+  var snapEl = $('[data-os-snap]');
   var instance = html.getAttribute('data-os') || 'Mattiverse';
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var phone = window.matchMedia('(max-width: 700px)');
   var PREFS = 'mattiverse.os.window.';
-  var MAX = 'mattiverse.os.max';
+  var GEO = 'mattiverse.os.geo.';
+  var OPEN = 'mattiverse.os.windows';
   var PAGE = 'mattiverse.os.page';
+  var MINW = 380;
+  var MINH = 260;
 
-  var state = { open: false, start: null, stack: [], source: null, tab: null };
+  // ------------------------------------------------------------------ the windows
 
-  // ------------------------------------------------------------------ the window
+  var wins = [];
+  var zTop = 10;
+  var seq = 0;
+  var mv = null;
+  var restoring = false;
 
   function centre(el) {
     var r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
-
-  // The window grows out of the icon that opened it and shrinks back into it.
-  function animate(name, from, done) {
-    if (reduced || !from) { if (done) { done(); } return; }
-    var r = win.getBoundingClientRect();
-    win.style.transformOrigin = (from.x - r.left) + 'px ' + (from.y - r.top) + 'px';
-    win.classList.add(name);
-    var end = function () {
-      win.removeEventListener('animationend', end);
-      win.classList.remove(name);
-      win.removeAttribute('style');
-      if (done) { done(); }
-    };
-    win.addEventListener('animationend', end);
+  function byEl(el) { return wins.filter(function (w) { return w.el === el; })[0] || null; }
+  function byId(id) { return wins.filter(function (w) { return String(w.id) === String(id); })[0] || null; }
+  function windowOf(app) { return wins.filter(function (w) { return w.app === app && !w.leaving; })[0] || null; }
+  // The window in front: the topmost one that is on the screen.
+  function active() {
+    var top = null;
+    wins.forEach(function (w) { if (!w.min && !w.leaving && (!top || w.z > top.z)) { top = w; } });
+    return top;
+  }
+  function pinned(app) {
+    return dock ? $$('.os-dock__app[data-window]', dock).filter(function (a) { return a.getAttribute('data-window') === app; })[0] || null : null;
+  }
+  function sourceOf(app) {
+    return pinned(app) || $$('.os-app[data-window]').filter(function (a) { return a.getAttribute('data-window') === app; })[0] || null;
   }
 
-  function setIcon(source) {
-    iconEl.innerHTML = '';
-    var pic = source && source.querySelector('.os-app__icon > .mv-appicon, .os-app__icon > .os-ico, .os-dock__app > .os-ico');
-    if (pic) { iconEl.appendChild(pic.cloneNode(true)); }
-  }
-
-  function setTitle(text) {
-    titleEl.textContent = text || '';
-    win.setAttribute('aria-label', text || 'Window');
-    frame.setAttribute('title', text || 'Window');
-  }
-
-  function markRunning() {
-    $$('.is-running').forEach(function (el) { el.classList.remove('is-running'); });
-    if (!state.start) { return; }
-    $$('[data-window]').forEach(function (el) {
-      if (el.getAttribute('data-window') === state.start && (el.classList.contains('os-app') || el.classList.contains('os-dock__app'))) { el.classList.add('is-running'); }
-    });
-  }
-
-  function open(url, opts) {
-    opts = opts || {};
-    closeMenus();
-    closeFolders();
-    var resume = state.start === url && frame.getAttribute('src');
-    state.source = opts.source || state.source;
-    if (!resume) {
-      state.start = url;
-      state.stack = [];
-      state.tab = null;
-      backBtn.disabled = true;
-      setTitle(opts.title || '');
-      setIcon(opts.source);
-      frame.setAttribute('src', url);
+  // Where windows may be: below the status bar, and (filling the screen, or a half) above the dock.
+  function area() {
+    var top = statusBar ? statusBar.getBoundingClientRect().bottom : 0;
+    var bottom = window.innerHeight;
+    if (dock && !phone.matches) {
+      var d = dock.getBoundingClientRect();
+      if (d.height && d.top > top + MINH) { bottom = d.top - 10; }
     }
-    markRunning();
-    win.hidden = false;
-    scrim.hidden = false;
-    body.classList.add('os-has-window');
-    state.open = true;
-    if (!opts.fromAddress) { history.pushState({ os: url }, '', '#' + (resume ? (currentPath() || url) : url)); }
-    animate('is-opening', opts.source && body.contains(opts.source) ? centre(opts.source) : null, function () {
-      try { frame.focus(); } catch (e) { /* the frame may not take the focus yet */ }
+    return { top: top, right: window.innerWidth, bottom: bottom };
+  }
+  function modeRect(mode) {
+    var a = area();
+    var h = a.bottom - a.top;
+    var half = Math.round(a.right / 2);
+    if (mode === 'max') { return { x: 0, y: a.top, w: a.right, h: h }; }
+    if (mode === 'left') { return { x: 8, y: a.top + 8, w: half - 12, h: h - 8 }; }
+    if (mode === 'right') { return { x: half + 4, y: a.top + 8, w: a.right - half - 12, h: h - 8 }; }
+    return null;
+  }
+  function defaultRect() {
+    var a = area();
+    var w = Math.min(1180, a.right - 64);
+    var h = Math.min(800, a.bottom - a.top - 28);
+    return { x: Math.round((a.right - w) / 2), y: Math.round(a.top + Math.max(12, (a.bottom - a.top - h) / 2)), w: w, h: h };
+  }
+  // A window keeps its bar on the screen, whatever the size of the browser.
+  function clampRect(r) {
+    var a = area();
+    r.w = Math.round(Math.max(MINW, Math.min(r.w, a.right)));
+    r.h = Math.round(Math.max(MINH, Math.min(r.h, window.innerHeight - a.top)));
+    r.x = Math.round(Math.max(140 - r.w, Math.min(r.x, a.right - 140)));
+    r.y = Math.round(Math.max(a.top, Math.min(r.y, window.innerHeight - 48)));
+    return r;
+  }
+  function validRect(r) {
+    return r && [r.x, r.y, r.w, r.h].every(function (n) { return typeof n === 'number' && isFinite(n); }) ? { x: r.x, y: r.y, w: r.w, h: r.h } : null;
+  }
+  function validMode(m) { return m === 'max' || m === 'left' || m === 'right' ? m : 'normal'; }
+  function remembered(app) {
+    try {
+      var g = JSON.parse(localStorage.getItem(GEO + app) || 'null');
+      var r = validRect(g);
+      return r ? { rect: r, mode: validMode(g.mode) } : null;
+    } catch (e) { return null; }
+  }
+  function remember(w) {
+    try { localStorage.setItem(GEO + w.app, JSON.stringify({ x: w.rect.x, y: w.rect.y, w: w.rect.w, h: w.rect.h, mode: w.mode })); } catch (e) { /* private mode */ }
+  }
+
+  // Puts the window where its state says (its own place, the whole screen, a half). On a phone the stylesheet fills the screen with it.
+  function place(w, glide) {
+    var r = modeRect(w.mode) || w.rect;
+    var el = w.el;
+    if (glide && !reduced && !w.min) {
+      el.classList.add('is-settling');
+      clearTimeout(w.settling);
+      w.settling = setTimeout(function () { el.classList.remove('is-settling'); }, 280);
+    }
+    el.style.left = r.x + 'px';
+    el.style.top = r.y + 'px';
+    el.style.width = r.w + 'px';
+    el.style.height = r.h + 'px';
+    el.classList.toggle('is-max', w.mode === 'max');
+    el.classList.toggle('is-tiled', w.mode === 'left' || w.mode === 'right');
+    var max = $('[data-win-max]', el);
+    if (max) { max.setAttribute('aria-pressed', w.mode === 'max' ? 'true' : 'false'); }
+  }
+
+  // A window grows out of its icon and shrinks back into it; without one it fades.
+  function animateWin(w, name, from, done) {
+    if (w.anim) { w.anim(); }
+    if (reduced) { if (done) { done(); } return; }
+    var el = w.el;
+    if (from) {
+      var r = el.getBoundingClientRect();
+      el.style.transformOrigin = (from.x - r.left) + 'px ' + (from.y - r.top) + 'px';
+    }
+    el.classList.add(name);
+    var timer = null;
+    var onEnd = function (e) { if (e.target === el) { end(); } };
+    function end() {
+      clearTimeout(timer);
+      el.removeEventListener('animationend', onEnd);
+      w.anim = null;
+      el.classList.remove(name);
+      el.style.transformOrigin = '';
+      if (done) { done(); }
+    }
+    el.addEventListener('animationend', onEnd);
+    timer = setTimeout(end, 700);
+    w.anim = end;
+  }
+  function originOf(w) {
+    var el = w.entry || pinned(w.app) || w.source;
+    return el && body.contains(el) && el.getClientRects().length ? centre(el) : null;
+  }
+
+  function setIcon(w, source) {
+    var pic = source && source.querySelector('.os-app__icon > .mv-appicon, .os-app__icon > .os-ico, :scope > .os-ico, :scope > .mv-appicon');
+    var make = function () {
+      if (pic) { return pic.cloneNode(true); }
+      var blank = document.createElement('span');
+      blank.className = 'os-ico os-ico--window';
+      blank.innerHTML = icon('monitor');
+      return blank;
+    };
+    w.iconEl.innerHTML = '';
+    w.iconEl.appendChild(make());
+    if (w.entry) { w.entry.innerHTML = ''; w.entry.appendChild(make()); }
+  }
+  function setTitle(w, text) {
+    w.title = text || '';
+    w.titleEl.textContent = w.title;
+    w.el.setAttribute('aria-label', w.title || 'Window');
+    w.frame.setAttribute('title', w.title || 'Window');
+    if (w.entry) {
+      w.entry.setAttribute('aria-label', w.title || 'Window');
+      w.entry.setAttribute('data-title', w.title || 'Window');
+      w.entry.setAttribute('data-tip', w.title || 'Window');
+    }
+    if (activeName && w === active()) { activeName.textContent = w.title; }
+  }
+
+  // The dock is the taskbar: a window whose app has no icon there gets one for as long as it is open.
+  var dockOpen = null;
+  var dockSep = null;
+  function addEntry(w) {
+    if (!dock) { return; }
+    if (!dockOpen) {
+      dockSep = document.createElement('span');
+      dockSep.className = 'os-dock__sep';
+      dockSep.setAttribute('aria-hidden', 'true');
+      dockOpen = document.createElement('div');
+      dockOpen.className = 'os-dock__open';
+      dock.appendChild(dockSep);
+      dock.appendChild(dockOpen);
+    }
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'os-dock__app os-dock__win is-running';
+    b.setAttribute('data-win-id', String(w.id));
+    dockOpen.appendChild(b);
+    w.entry = b;
+    dockSep.hidden = false;
+    if (!reduced && !restoring && b.animate) { b.animate([{ transform: 'scale(.3)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .9, .25, 1)' }); }
+  }
+  function removeEntry(w) {
+    if (w.entry) { w.entry.remove(); w.entry = null; }
+    if (dockSep) { dockSep.hidden = !dockOpen.firstElementChild; }
+  }
+
+  function markRunning(top) {
+    var open = {};
+    wins.forEach(function (w) { if (!w.leaving) { open[w.app] = true; } });
+    $$('[data-window]').forEach(function (el) {
+      if (!el.classList.contains('os-app') && !el.classList.contains('os-dock__app')) { return; }
+      var app = el.getAttribute('data-window');
+      el.classList.toggle('is-running', !!open[app]);
+      el.classList.toggle('is-front', !!top && top.app === app);
     });
   }
 
-  // Home: the window goes, the app stays (close = false) or is gone (close = true).
-  function home(close, fromAddress) {
-    if (!state.open && !close) { return; }
-    var from = state.source && body.contains(state.source) ? centre(state.source) : null;
-    var finish = function () {
-      win.hidden = true;
-      scrim.hidden = true;
-      body.classList.remove('os-has-window');
-      if (close) {
-        frame.removeAttribute('src');
-        frame.src = 'about:blank';
-        state.start = null;
-        state.stack = [];
-        setIcon(null);
-        setTitle('');
-      }
-      markRunning();
-      if (state.source && body.contains(state.source)) { try { state.source.focus(); } catch (e) { /* no focus */ } }
-    };
-    var wasOpen = state.open;
-    state.open = false;
-    if (!fromAddress && location.hash) { history.replaceState(null, '', location.pathname + location.search); }
-    if (wasOpen) { animate('is-closing', from, finish); } else { finish(); }
-  }
-
-  function currentPath() {
+  function pathOf(w) {
     try {
-      var loc = frame.contentWindow && frame.contentWindow.location;
+      var loc = w.frame.contentWindow && w.frame.contentWindow.location;
       if (loc && loc.href !== 'about:blank' && loc.origin === location.origin) { return loc.pathname + loc.search; }
     } catch (e) { /* another origin */ }
     return null;
   }
 
-  // Every page that loads in the window: its title, whether Back has somewhere to go, the address, the theme.
-  frame.addEventListener('load', function () {
-    var path = currentPath();
-    if (!path) { return; }
-    var s = state.stack;
-    if (s.length > 1 && s[s.length - 2] === path) { s.pop(); } else if (s[s.length - 1] !== path) { s.push(path); }
-    backBtn.disabled = s.length < 2;
-    var doc = frame.contentDocument;
-    if (doc) {
-      setTitle((doc.title || '').split(' · ')[0].replace(instance, '').trim() || titleEl.textContent);
-      var ext = doc.querySelector('[data-window-tab]');
-      state.tab = ext ? ext.getAttribute('data-window-tab') : null;
-      syncTheme();
-    }
-    if (state.open) { history.replaceState({ os: state.start }, '', '#' + path); }
-  });
-
-  function goBack() { try { frame.contentWindow.history.back(); } catch (e) { /* nothing to go back to */ } }
-  function reloadWindow() { try { frame.contentWindow.location.reload(); } catch (e) { frame.src = frame.src; } }
-  function windowInTab() { window.open(state.tab || currentPath() || state.start, '_blank', 'noopener'); }
-  function toggleMax() {
-    var max = win.classList.toggle('is-max');
-    try { localStorage.setItem(MAX, max ? '1' : '0'); } catch (e) { /* private mode */ }
+  // The address names the page of the window in front; without one it is the home screen. The first window adds a step for the browser's Back
+  // (which shows the desktop again); after that the address only follows.
+  function address(top, push) {
+    var want = top ? '#' + (pathOf(top) || top.start) : '';
+    if (location.hash === want) { return; }
+    if (!want) { history.replaceState(null, '', location.pathname + location.search); return; }
+    if (push && !location.hash) { history.pushState({ os: 1 }, '', want); } else { history.replaceState({ os: 1 }, '', want); }
   }
 
-  $$('[data-win-close]', win).forEach(function (b) { b.addEventListener('click', function () { home(true); }); });
-  $$('[data-win-home]', win).forEach(function (b) { b.addEventListener('click', function () { home(false); }); });
-  backBtn.addEventListener('click', goBack);
-  $('[data-win-reload]', win).addEventListener('click', reloadWindow);
-  $('[data-win-tab]', win).addEventListener('click', windowInTab);
-  $('[data-win-max]', win).addEventListener('click', toggleMax);
-  try { if (localStorage.getItem(MAX) === '1') { win.classList.add('is-max'); } } catch (e) { /* private mode */ }
-  scrim.addEventListener('click', function () { home(false); });
+  // The windows of this tab, so that a reload of the home screen brings them back.
+  function persist() {
+    if (restoring) { return; }
+    try {
+      sessionStorage.setItem(OPEN, JSON.stringify(wins.filter(function (w) { return !w.leaving; }).map(function (w) {
+        return { app: w.app, start: w.start, url: pathOf(w) || w.url, title: w.title, rect: w.rect, mode: w.mode, min: w.min, z: w.z };
+      })));
+    } catch (e) { /* private mode */ }
+  }
 
-  // A page in the window asks to go home (a link to /, or it landed on the home screen).
+  // After every change: which window is in front, the dots in the dock, the address, what is kept.
+  function sync(push) {
+    var top = active();
+    wins.forEach(function (w) {
+      w.el.classList.toggle('is-active', w === top);
+      if (w.entry) { w.entry.classList.toggle('is-front', w === top); }
+    });
+    body.classList.toggle('os-has-window', !!top);
+    if (activeName) { activeName.textContent = top ? top.title : ''; }
+    markRunning(top);
+    address(top, push);
+    persist();
+  }
+
+  // The theme of the home screen is the theme of the windows.
+  function syncTheme(w) {
+    var doc;
+    try { doc = w.frame.contentDocument; } catch (e) { return; }
+    if (!doc || !doc.documentElement || !pathOf(w)) { return; }
+    var t = html.getAttribute('data-theme');
+    if (t) { doc.documentElement.setAttribute('data-theme', t); } else { doc.documentElement.removeAttribute('data-theme'); }
+  }
+  new MutationObserver(function () { wins.forEach(syncTheme); }).observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+
+  function create(app, url, opts) {
+    var el = template.content.firstElementChild.cloneNode(true);
+    var w = {
+      id: ++seq, app: app, start: opts.start || url, url: url, el: el,
+      frame: $('.os-window__frame', el), titleEl: $('[data-win-title]', el), iconEl: $('[data-win-icon]', el), backBtn: $('[data-win-back]', el),
+      stack: [], tab: null, source: opts.source || null, title: '', min: false, leaving: false, z: 0, entry: null, anim: null,
+      mode: 'normal', rect: null,
+    };
+    var kept = opts.rect ? { rect: opts.rect, mode: opts.mode } : remembered(app);
+    w.rect = kept ? kept.rect : defaultRect();
+    w.mode = kept ? validMode(kept.mode) : 'normal';
+    // A window never opens exactly on another one: a step down and to the right, like a stack of paper.
+    if (!opts.rect && w.mode === 'normal') {
+      for (var n = 0; n < 8 && wins.some(function (o) { return !o.min && !o.leaving && o.mode === 'normal' && Math.abs(o.rect.x - w.rect.x) < 10 && Math.abs(o.rect.y - w.rect.y) < 10; }); n++) {
+        w.rect.x += 30;
+        w.rect.y += 30;
+      }
+    }
+    clampRect(w.rect);
+    el.id = 'os-window-' + w.id;
+    w.frame.setAttribute('name', 'os-window-' + w.id);
+    var first = !windowOf(app);
+    wins.push(w);
+    layer.appendChild(el);
+    if (!(first && pinned(app))) { addEntry(w); }
+    setTitle(w, opts.title || '');
+    setIcon(w, opts.source || sourceOf(app));
+    place(w);
+
+    // Every page that loads in the window: its title, whether Back has somewhere to go, the address, the theme.
+    w.frame.addEventListener('load', function () {
+      var path = pathOf(w);
+      if (!path) { return; }
+      var s = w.stack;
+      if (s.length > 1 && s[s.length - 2] === path) { s.pop(); } else if (s[s.length - 1] !== path) { s.push(path); }
+      w.backBtn.disabled = s.length < 2;
+      var doc = w.frame.contentDocument;
+      if (doc) {
+        setTitle(w, (doc.title || '').split(' · ')[0].replace(instance, '').trim() || w.title);
+        var ext = doc.querySelector('[data-window-tab]');
+        w.tab = ext ? ext.getAttribute('data-window-tab') : null;
+        syncTheme(w);
+        // A press inside the page brings its window to the front.
+        doc.addEventListener('pointerdown', function () { closeMenus(); if (active() !== w && !w.min && !w.leaving) { show(w); } }, true);
+      }
+      if (w === active()) { address(w, false); }
+      persist();
+      if (!restoring && s.length > 1) { refreshIn(1500); }
+    });
+    w.frame.setAttribute('src', url);
+
+    if (opts.min) {
+      w.min = true;
+      el.hidden = true;
+    } else {
+      w.z = opts.z || (zTop += 2);
+      zTop = Math.max(zTop, w.z);
+      el.style.zIndex = String(w.z);
+      if (!restoring) {
+        var from = opts.source && body.contains(opts.source) && opts.source.getClientRects().length ? centre(opts.source) : originOf(w);
+        animateWin(w, from ? 'is-opening' : 'is-appearing', from);
+      }
+    }
+    return w;
+  }
+
+  // Brings a window to the front (back on the screen when it was put away).
+  function show(w, opts) {
+    var was = w.min;
+    w.min = false;
+    w.el.hidden = false;
+    w.z = (zTop += 2);
+    w.el.style.zIndex = String(w.z);
+    if (was) {
+      place(w);
+      var from = originOf(w);
+      animateWin(w, from ? 'is-opening' : 'is-appearing', from);
+    }
+    sync(!(opts && opts.fromAddress));
+    try { w.frame.focus({ preventScroll: true }); } catch (e) { /* the frame may not take the focus yet */ }
+  }
+
+  // Opens a page: the window its app has already comes to the front (as it is, or on that page with navigate), else a new one.
+  function open(url, opts) {
+    opts = opts || {};
+    closeMenus();
+    closeFolders();
+    var app = opts.app || url;
+    var w = opts.fresh ? null : windowOf(app);
+    if (w) {
+      if (opts.navigate && (pathOf(w) || w.url) !== url) { w.url = url; w.frame.setAttribute('src', url); }
+      if (opts.source) { w.source = opts.source; }
+      show(w, opts);
+      return w;
+    }
+    w = create(app, url, opts);
+    sync(!opts.fromAddress);
+    return w;
+  }
+
+  // Puts a window away: the app stays as it is, its icon in the dock brings it back.
+  function minimize(w) {
+    if (w.min || w.leaving) { return; }
+    var from = originOf(w);
+    w.min = true;
+    sync(false);
+    animateWin(w, from ? 'is-closing' : 'is-leaving', from, function () { if (w.min) { w.el.hidden = true; } });
+    var back = w.entry || pinned(w.app) || w.source;
+    if (back && body.contains(back) && !active()) { try { back.focus({ preventScroll: true }); } catch (e) { /* no focus */ } }
+  }
+  function showDesktop() { wins.slice().forEach(minimize); }
+
+  function close(w) {
+    if (w.leaving) { return; }
+    var wasMin = w.min;
+    w.leaving = true;
+    var gone = function () {
+      w.el.remove();
+      wins.splice(wins.indexOf(w), 1);
+      sync(false);
+    };
+    removeEntry(w);
+    sync(false);
+    if (wasMin) { gone(); } else { animateWin(w, 'is-leaving', null, gone); }
+    var next = active();
+    if (next) { try { next.frame.focus({ preventScroll: true }); } catch (e) { /* no focus */ } }
+  }
+  function closeAll() { wins.slice().forEach(close); }
+
+  function goBack(w) { try { w.frame.contentWindow.history.back(); } catch (e) { /* nothing to go back to */ } }
+  function reloadWindow(w) { try { w.frame.contentWindow.location.reload(); } catch (e) { w.frame.src = w.frame.src; } }
+  function windowInTab(w) { window.open(w.tab || pathOf(w) || w.url, '_blank', 'noopener'); }
+  function setMode(w, mode) {
+    if (w.min) { show(w); }
+    w.mode = w.mode === mode ? 'normal' : mode;
+    if (w.mode === 'normal') { clampRect(w.rect); }
+    place(w, true);
+    remember(w);
+    persist();
+  }
+
+  layer.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    var el = e.target.closest('.os-window');
+    var w = el ? byEl(el) : null;
+    if (!b || !w) { return; }
+    if (b.hasAttribute('data-win-close')) { close(w); }
+    else if (b.hasAttribute('data-win-min')) { minimize(w); }
+    else if (b.hasAttribute('data-win-max')) { setMode(w, 'max'); }
+    else if (b.hasAttribute('data-win-back')) { goBack(w); }
+    else if (b.hasAttribute('data-win-reload')) { reloadWindow(w); }
+    else if (b.hasAttribute('data-win-tab')) { windowInTab(w); }
+  });
+  layer.addEventListener('dblclick', function (e) {
+    var bar = e.target.closest('.os-window__bar');
+    if (!bar || e.target.closest('button') || phone.matches) { return; }
+    var w = byEl(bar.closest('.os-window'));
+    if (w) { setMode(w, 'max'); }
+  });
+
+  // ------------------------------------------------------------------ moving and sizing a window
+
+  function setSnap(mode) {
+    if (!mv || mv.snap === mode) { return; }
+    mv.snap = mode;
+    if (!snapEl) { return; }
+    var r = mode ? modeRect(mode) : null;
+    if (!r) { snapEl.hidden = true; return; }
+    snapEl.style.left = r.x + 'px';
+    snapEl.style.top = r.y + 'px';
+    snapEl.style.width = r.w + 'px';
+    snapEl.style.height = r.h + 'px';
+    snapEl.style.zIndex = String(mv.w.z - 1);
+    snapEl.hidden = false;
+  }
+  function beginMove(e) {
+    var w = mv.w;
+    mv.started = true;
+    if (w.mode !== 'normal') {
+      // Dragged out of the full screen or a half: its own size again, under the pointer. Sized there: from what is seen.
+      var seen = modeRect(w.mode);
+      if (mv.kind === 'move') {
+        w.rect.x = Math.round(e.clientX - w.rect.w * ((e.clientX - seen.x) / seen.w));
+        w.rect.y = seen.y;
+      } else {
+        w.rect = seen;
+      }
+      w.mode = 'normal';
+      place(w);
+    }
+    mv.r0 = { x: w.rect.x, y: w.rect.y, w: w.rect.w, h: w.rect.h };
+    mv.x0 = e.clientX;
+    mv.y0 = e.clientY;
+    body.classList.add('os-moving');
+    body.setAttribute('data-os-moving', mv.kind);
+    w.el.classList.remove('is-settling');
+    closeMenus();
+  }
+  function endMove() {
+    var m = mv;
+    mv = null;
+    if (!m || !m.started) { return; }
+    var w = m.w;
+    if (m.snap) { w.mode = m.snap; } else { clampRect(w.rect); }
+    if (snapEl) { snapEl.hidden = true; }
+    place(w, true);
+    body.classList.remove('os-moving');
+    body.removeAttribute('data-os-moving');
+    remember(w);
+    persist();
+  }
+
+  layer.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest('.os-window');
+    var w = el ? byEl(el) : null;
+    if (!w || w.leaving) { return; }
+    if (w !== active()) { show(w); }
+    if (mv || phone.matches || (e.pointerType === 'mouse' && e.button !== 0)) { return; }
+    var grip = e.target.closest('[data-win-resize]');
+    var bar = e.target.closest('.os-window__bar');
+    if (!grip && (!bar || e.target.closest('button'))) { return; }
+    mv = { w: w, id: e.pointerId, kind: grip ? grip.getAttribute('data-win-resize') : 'move', x0: e.clientX, y0: e.clientY, started: false, snap: null };
+    if (grip) { e.preventDefault(); beginMove(e); }
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (!mv || e.pointerId !== mv.id) { return; }
+    if (!mv.started) {
+      if (Math.abs(e.clientX - mv.x0) + Math.abs(e.clientY - mv.y0) < 5) { return; }
+      beginMove(e);
+    }
+    e.preventDefault();
+    var dx = e.clientX - mv.x0;
+    var dy = e.clientY - mv.y0;
+    var r = mv.w.rect;
+    var r0 = mv.r0;
+    var a = area();
+    var k = mv.kind;
+    if (k === 'move') {
+      r.x = r0.x + dx;
+      r.y = Math.max(a.top, Math.min(r0.y + dy, window.innerHeight - 48));
+      setSnap(e.clientY <= a.top + 3 ? 'max' : e.clientX <= 6 ? 'left' : e.clientX >= window.innerWidth - 7 ? 'right' : null);
+    } else {
+      if (k.indexOf('e') !== -1) { r.w = Math.max(MINW, r0.w + dx); }
+      if (k.indexOf('s') !== -1) { r.h = Math.max(MINH, r0.h + dy); }
+      if (k.indexOf('w') !== -1) { var nw = Math.max(MINW, r0.w - dx); r.x = r0.x + r0.w - nw; r.w = nw; }
+      if (k.indexOf('n') !== -1) { var top = Math.min(Math.max(a.top, r0.y + dy), r0.y + r0.h - MINH); r.h = r0.y + r0.h - top; r.y = top; }
+    }
+    place(mv.w);
+  }, { passive: false });
+  document.addEventListener('pointerup', function (e) { if (mv && e.pointerId === mv.id) { endMove(); } });
+  document.addEventListener('pointercancel', function (e) { if (mv && e.pointerId === mv.id) { endMove(); } });
+
+  // Another size of the browser: every window keeps its bar on the screen, and a full one stays full.
+  window.addEventListener('resize', function () {
+    wins.forEach(function (w) { clampRect(w.rect); place(w); });
+  });
+
+  // A click into a page of another address (an installed app) tells nothing; the frame that took the focus does.
+  window.addEventListener('blur', function () {
+    setTimeout(function () {
+      var f = document.activeElement;
+      if (!f || f.tagName !== 'IFRAME') { return; }
+      var el = f.closest('.os-window');
+      var w = el ? byEl(el) : null;
+      closeMenus();
+      if (w && w !== active() && !w.min && !w.leaving) { show(w); }
+    }, 0);
+  });
+
+  // The dock's icon of a window: to the front, or away when it is in front.
+  document.addEventListener('click', function (e) {
+    var entry = e.target.closest ? e.target.closest('.os-dock__win') : null;
+    var w = entry ? byId(entry.getAttribute('data-win-id')) : null;
+    if (!w) { return; }
+    if (w === active()) { minimize(w); } else { show(w); }
+  });
+
+  // A page in a window asks to go home (a link to /): its window is put away; a page that landed on the home screen closes its window.
   window.addEventListener('message', function (e) {
-    if (e.origin === location.origin && e.data && e.data.type === 'mv-home') { home(false); }
+    if (e.origin !== location.origin || !e.data || e.data.type !== 'mv-home') { return; }
+    var w = wins.filter(function (o) { return o.frame.contentWindow === e.source; })[0];
+    if (!w) { return; }
+    if (e.data.close) { close(w); } else { minimize(w); }
   });
 
   // The browser's Back and Forward, and an address with a window in it (#/Store).
   function fromAddress() {
     var h = location.hash;
     if (h.length > 2 && h.charAt(1) === '/') {
-      var path = decodeURIComponent(h.slice(1));
-      // Closed, or open on another page (an address typed while a window is open): that page in the window.
-      if (!state.open || path !== currentPath()) { open(path, { fromAddress: true, title: '' }); }
-    } else if (state.open) {
-      home(false, true);
+      var path;
+      try { path = decodeURIComponent(h.slice(1)); } catch (e) { return; }
+      // a path of this Mattiverse only, never another address
+      if (path.charAt(1) === '/' || path.charAt(1) === '\\') { return; }
+      var w = wins.filter(function (o) { return !o.leaving && (pathOf(o) === path || o.url === path || o.start === path); })[0];
+      if (!w) { open(path, { fromAddress: true, title: '' }); } else if (w !== active()) { show(w, { fromAddress: true }); }
+    } else if (active()) {
+      showDesktop();
     }
   }
   window.addEventListener('popstate', fromAddress);
 
-  // The theme of the home screen is the theme of the window.
-  function syncTheme() {
-    var doc;
-    try { doc = frame.contentDocument; } catch (e) { return; }
-    if (!doc || !doc.documentElement) { return; }
-    var t = html.getAttribute('data-theme');
-    if (t) { doc.documentElement.setAttribute('data-theme', t); } else { doc.documentElement.removeAttribute('data-theme'); }
+  // The windows this tab had before a reload.
+  function restoreWindows() {
+    var kept = [];
+    try { kept = JSON.parse(sessionStorage.getItem(OPEN) || '[]'); } catch (e) { kept = []; }
+    if (!Array.isArray(kept)) { return; }
+    restoring = true;
+    kept.filter(function (k) { return k && typeof k.app === 'string' && typeof k.url === 'string' && k.url.charAt(0) === '/' && k.url.charAt(1) !== '/' && k.url.charAt(1) !== '\\'; })
+      .sort(function (a, b) { return (a.z || 0) - (b.z || 0); })
+      .slice(0, 12)
+      .forEach(function (k) {
+        create(k.app, k.url, { start: typeof k.start === 'string' ? k.start : k.url, title: typeof k.title === 'string' ? k.title : '', rect: validRect(k.rect) || defaultRect(), mode: validMode(k.mode), min: !!k.min });
+      });
+    restoring = false;
+    sync(false);
   }
-  new MutationObserver(syncTheme).observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+
+  // ------------------------------------------------------------------ the home screen refreshes itself, and the windows stay
+
+  // What changes by itself (the state of the apps, the values of the widgets) is fetched and put in place of the things; a reload would take the
+  // windows with it. Not while the person edits or drags, and never under a menu or a folder that is open (later(false): try again soon).
+  // The home screen says how often while something runs (data-autorefresh); a page that loads in a window (an install has begun, an app was
+  // removed) asks for it once.
+  var refreshTimer = null;
+  function refreshIn(ms) {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(function () {
+      refreshTimer = null;
+      refresh(function (done) {
+        var every = pagesEl ? parseInt(pagesEl.getAttribute('data-autorefresh'), 10) : 0;
+        if (!done) { refreshIn(3000); } else if (every > 0) { refreshIn(every); }
+      });
+    }, ms);
+  }
+  function refresh(later) {
+    var busy = function () { return editing || !!drag || !!appMenu || $$('.os-folder').some(function (f) { return !f.hidden; }); };
+    if (!pagesEl) { later(true); return; }
+    if (busy() || document.hidden) { later(false); return; }
+    fetch(location.pathname + location.search, { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
+      .then(function (r) {
+        // Signed out meanwhile (the answer is the sign-in page): the tab goes there.
+        if (r.redirected) { location.reload(); return null; }
+        return r.ok ? r.text() : '';
+      })
+      .then(function (text) {
+        if (text === null) { return; }
+        if (busy()) { later(false); return; }
+        var doc = new DOMParser().parseFromString(text, 'text/html');
+        var fresh = doc.querySelector('[data-os-pages]');
+        if (!fresh) { later(true); return; }
+        var now = currentPage();
+        pagesEl.innerHTML = fresh.innerHTML;
+        if (fresh.hasAttribute('data-autorefresh')) { pagesEl.setAttribute('data-autorefresh', fresh.getAttribute('data-autorefresh')); } else { pagesEl.removeAttribute('data-autorefresh'); }
+        var freshHidden = doc.querySelector('[data-os-hidden]');
+        if (hiddenBox && freshHidden) { hiddenBox.innerHTML = freshHidden.innerHTML; }
+        $$('.os-folder').forEach(function (f) {
+          var same = f.id ? doc.getElementById(f.id) : null;
+          if (same) { f.innerHTML = same.innerHTML; }
+        });
+        var busyOld = $('.os-status__busy');
+        var busyNow = doc.querySelector('.os-status__busy');
+        if (busyOld) { busyOld.remove(); }
+        var end = $('.os-status__end');
+        if (busyNow && end) { end.insertBefore(document.importNode(busyNow, true), end.firstChild); }
+        var search = $('[data-os-search]');
+        if (search && search.value) { search.dispatchEvent(new Event('input')); } else { flow(); }
+        goToPage(Math.min(now, pages().length - 1), false);
+        updateDots();
+        markRunning(active());
+        tick();
+        later(true);
+      }).catch(function () { later(true); });
+  }
+  window.MattiverseOs = { refresh: refresh };
 
   // ------------------------------------------------------------------ the pages of the home screen
 
@@ -678,7 +1141,7 @@
   }
 
   document.addEventListener('pointerdown', function (e) {
-    if (state.open || drag || (e.pointerType === 'mouse' && e.button !== 0)) { return; }
+    if (drag || mv || (e.pointerType === 'mouse' && e.button !== 0)) { return; }
     var el = e.target.closest ? e.target.closest(thing) : null;
     if (!el || !pagesEl || pagesEl.classList.contains('is-searching') || e.target.closest('.os-remove')) { return; }
     // A finger drags only while editing; else it swipes the pages and scrolls.
@@ -726,13 +1189,17 @@
     if (!el || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) { return; }
     if (el.getAttribute('target') === '_blank' && !prefersWindow(el)) { return; }
     e.preventDefault();
+    var url = el.getAttribute('data-window');
+    // The dock is the taskbar too: a click on the app whose window is in front puts that window away.
+    var has = el.classList.contains('os-dock__app') ? windowOf(url) : null;
+    if (has && has === active()) { minimize(has); return; }
     // From the person's menu the window grows out of the person's button.
-    open(el.getAttribute('data-window'), { source: el.closest('.os-menu') ? $('[data-os-menu]') : el, title: el.getAttribute('data-title') });
+    open(url, { source: el.closest('.os-menu') ? $('[data-os-menu]') : el, title: el.getAttribute('data-title') });
   });
 
-  // The logo in the status bar is the way home.
+  // The logo in the status bar shows the desktop: every window is put away.
   var brand = $('.os-status__brand');
-  if (brand) { brand.addEventListener('click', function (e) { if (state.open) { e.preventDefault(); home(false); } }); }
+  if (brand) { brand.addEventListener('click', function (e) { if (active()) { e.preventDefault(); showDesktop(); } }); }
 
   // ------------------------------------------------------------------ menus: the person's, and the one of everything else (a right click, a long press)
 
@@ -823,7 +1290,9 @@
     var tab = el.getAttribute('data-tab') || '';
     var key = el.getAttribute('data-app-key');
     var target = el.getAttribute('data-window');
-    menu.appendChild(item('monitor', 'Open in the window', { run: function () { open(target, { source: el, title: name }); } }));
+    var has = windowOf(target);
+    menu.appendChild(item('monitor', has ? 'Show its window' : 'Open', { run: function () { open(target, { source: el, title: name }); } }));
+    if (has) { menu.appendChild(item('plus', 'New window', { run: function () { open(target, { source: el, title: name, fresh: true }); } })); }
     menu.appendChild(item('external', 'Open in a new tab', { run: function () { window.open(tab || target, '_blank', 'noopener'); } }));
     if (key && tab) {
       var inTab = !prefersWindow(el);
@@ -843,7 +1312,7 @@
         var qtab = typeof q.tab === 'string' && /^https?:\/\//.test(q.tab) ? q.tab : null;
         menu.appendChild(item(qicon, q.label, {
           run: function () {
-            if (qtab && !prefersWindow(el)) { window.open(qtab, '_blank', 'noopener'); } else { open(q.window, { source: el, title: name }); }
+            if (qtab && !prefersWindow(el)) { window.open(qtab, '_blank', 'noopener'); } else { open(q.window, { app: target, navigate: true, source: el, title: name }); }
           }
         }));
       });
@@ -933,28 +1402,44 @@
       menu.appendChild(item('store', 'Install an app', { run: function () { open('/Store', { title: 'Store' }); } }));
       menu.appendChild(item('settings', 'Settings', { run: function () { open('/Settings', { title: 'Settings' }); } }));
     }
+    if (wins.length) {
+      sep(menu);
+      if (active()) { menu.appendChild(item('home', 'Show the desktop', { run: showDesktop })); }
+      menu.appendChild(item('x', wins.length === 1 ? 'Close the window' : 'Close all ' + wins.length + ' windows', { run: closeAll }));
+    }
     sep(menu);
     menu.appendChild(item('refresh', 'Reload', { run: function () { location.reload(); } }));
     if (pagesEl) { menu.appendChild(item('restore', 'Reset the home screen', { danger: true, run: resetLayout })); }
     showMenu(menu, x, y);
   }
 
-  // The bar of the window: what its buttons do.
-  function openWindowMenu(x, y) {
-    var menu = newMenu(titleEl.textContent || 'Window', iconEl.firstElementChild, 'Window');
-    if (!backBtn.disabled) { menu.appendChild(item('chevron-left', 'Back', { run: goBack })); }
-    menu.appendChild(item('refresh', 'Reload', { run: reloadWindow }));
-    menu.appendChild(item('external', 'Open in a new tab', { run: windowInTab }));
-    menu.appendChild(item('monitor', 'Full screen', { check: win.classList.contains('is-max'), run: toggleMax }));
+  // A window (its bar, its icon in the dock): what its buttons do, and where it goes.
+  function openWindowMenu(w, x, y) {
+    var menu = newMenu(w.title || 'Window', w.iconEl.firstElementChild, 'Window');
+    if (w.min || w !== active()) { menu.appendChild(item('monitor', 'Bring to the front', { run: function () { show(w); } })); sep(menu); }
+    if (!w.backBtn.disabled) { menu.appendChild(item('chevron-left', 'Back', { run: function () { goBack(w); } })); }
+    menu.appendChild(item('refresh', 'Reload', { run: function () { reloadWindow(w); } }));
+    menu.appendChild(item('external', 'Open in a new tab', { run: function () { windowInTab(w); } }));
+    if (!phone.matches) {
+      sep(menu);
+      heading(menu, 'Place');
+      menu.appendChild(item(null, 'Fill the screen', { check: w.mode === 'max', run: function () { setMode(w, 'max'); } }));
+      menu.appendChild(item(null, 'Left half', { check: w.mode === 'left', run: function () { setMode(w, 'left'); } }));
+      menu.appendChild(item(null, 'Right half', { check: w.mode === 'right', run: function () { setMode(w, 'right'); } }));
+    }
     sep(menu);
-    menu.appendChild(item('home', 'Home screen (the app stays open)', { run: function () { home(false); } }));
-    menu.appendChild(item('x', 'Close', { run: function () { home(true); } }));
+    if (!w.min) { menu.appendChild(item('minus', 'Put away (the app stays open)', { run: function () { minimize(w); } })); }
+    menu.appendChild(item('x', 'Close', { run: function () { close(w); } }));
+    if (wins.length > 1) { menu.appendChild(item('x', 'Close all ' + wins.length + ' windows', { danger: true, run: closeAll })); }
     showMenu(menu, x, y);
   }
 
   var appSelector = '.os-app[data-window], .os-dock__app[data-window]';
   function openMenuFor(target, x, y) {
-    if (target.closest('.os-window__bar')) { openWindowMenu(x, y); return; }
+    var bar = target.closest('.os-window__bar');
+    var entry = target.closest('.os-dock__win');
+    var ofWindow = bar ? byEl(bar.closest('.os-window')) : entry ? byId(entry.getAttribute('data-win-id')) : null;
+    if (ofWindow) { openWindowMenu(ofWindow, x, y); return; }
     var el = target.closest(thing) || target.closest(appSelector) || target.closest('.os-folderbtn');
     if (!el) { openScreenMenu(x, y); return; }
     var isApp = el.matches(appSelector);
@@ -1028,10 +1513,10 @@
       if (drag) { endDrag(true); return; }
       var hadMenu = !!appMenu || $$('.os-menu').some(function (m) { return !m.hidden; });
       closeMenus();
-      if (!hadMenu && editing && !state.open) { setEditing(false); }
+      if (!hadMenu && editing) { setEditing(false); }
       return;
     }
-    if (state.open || !pagesEl || e.ctrlKey || e.metaKey || e.altKey || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) { return; }
+    if (!pagesEl || (t && t.closest && t.closest('.os-window')) || e.ctrlKey || e.metaKey || e.altKey || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) { return; }
     // While editing, Delete takes the thing that has the focus off the screen.
     if (editing && (e.key === 'Delete' || e.key === 'Backspace') && t.closest && t.closest(thing) === t) { e.preventDefault(); var nextOne = t.nextElementSibling; hide(t); if (nextOne && nextOne.focus) { nextOne.focus(); } return; }
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && pages().length > 1 && !inMenu) {
@@ -1090,7 +1575,7 @@
       }
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || state.open) { return; }
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) { return; }
       var t = e.target;
       if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) { return; }
       e.preventDefault();
@@ -1123,6 +1608,8 @@
   tick();
   setInterval(tick, 10000);
 
-  // An address with a window in it opens that window (last: everything above is ready).
+  // The windows of before a reload, then an address with a window in it (last: everything above is ready).
+  restoreWindows();
   fromAddress();
+  if (pagesEl && parseInt(pagesEl.getAttribute('data-autorefresh'), 10) > 0) { refreshIn(parseInt(pagesEl.getAttribute('data-autorefresh'), 10)); }
 })();

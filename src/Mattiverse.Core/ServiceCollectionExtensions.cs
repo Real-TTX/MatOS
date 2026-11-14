@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PortPlanner>();
         services.AddScoped<EngineLocator>();
         services.AddScoped<MatDockClient>();
+        services.AddScoped<RuntimeReader>();
         services.AddScoped<LocalComposeEngine>();
         services.AddScoped<MatDockEngine>();
         services.AddScoped<StackEngines>();

@@ -31,7 +31,7 @@ function expectEqual(actual, expected, what) {
 }
 
 const pages = [
-  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs',
+  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
   '/Users', '/Users/Edit', '/Settings', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password',
 ];
 
@@ -89,8 +89,17 @@ const pages = [
     expectTrue(new Set(seen.slice(0, 3)).size === 3 && seen[3] === seen[0], 'system, light and dark, then the first again: ' + seen.join(' > '));
   });
   console.log('The home screen (Mattiverse OS)');
-  const win = () => page.frameLocator('#os-window .os-window__frame');
-  const winTitle = () => page.locator('#os-window [data-win-title]').innerText();
+  const win = () => page.frameLocator('.os-window.is-active .os-window__frame');
+  const winTitle = () => page.locator('.os-window.is-active [data-win-title]').innerText();
+  const titled = title => page.waitForFunction(t => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === t; }, title);
+  const windows = () => page.locator('.os-window').count();
+  const noWindows = () => page.waitForFunction(() => document.querySelectorAll('.os-window').length === 0);
+  // a window that grows out of its icon, or glides to a place, has its size only when that is over
+  const settled = () => page.waitForFunction(() => !document.querySelector('.os-window.is-opening, .os-window.is-closing, .os-window.is-appearing, .os-window.is-leaving, .os-window.is-settling'));
+  const box = async selector => {
+    await settled();
+    const b = await page.locator(selector).boundingBox(); return [b.x, b.y, b.width, b.height].map(Math.round);
+  };
   await check('the home screen is its own system: a status bar, the dock, the engines in a widget and in the folder System', async () => {
     await page.goto(BASE + '/');
     expectEqual(await page.locator('.mat-nav').count(), 0, 'no menu of the toolkit');
@@ -99,7 +108,7 @@ const pages = [
     for (const href of ['/Store', '/Apps', '/Backups', '/Settings']) {
       expectEqual(await page.locator(`.os-dock a[data-window="${href}"]`).count(), 1, href + ' in the dock');
     }
-    for (const href of ['/Jobs', '/People']) {
+    for (const href of ['/Jobs', '/Tasks', '/People']) {
       expectEqual(await page.locator(`.os-grid .os-app[data-window="${href}"]`).count(), 1, href + ' on the screen');
     }
     expectEqual(await page.locator('.os-engines .os-engine').count(), 5, 'the five engines in their widget');
@@ -109,40 +118,135 @@ const pages = [
     await page.keyboard.press('Escape');
     expectTrue(!(await page.locator('#os-folder-system').isVisible()), 'Escape closes it');
   });
-  await check('a part of Mattiverse opens in the one window: a title, the page without its menu, Back', async () => {
+  await check('a part of Mattiverse opens in a window: a title, the page without its menu, Back', async () => {
     await page.goto(BASE + '/');
     await page.click('.os-dock a[data-window="/Store"]');
-    await page.waitForFunction(() => document.querySelector('#os-window [data-win-title]').textContent === 'Store');
-    expectTrue(await page.locator('#os-window').isVisible(), 'the window is open');
+    await titled('Store');
+    expectTrue(await page.locator('.os-window.is-active').isVisible(), 'the window is open');
     expectEqual(new URL(page.url()).hash, '#/Store', 'the address names its page');
+    expectEqual(await page.locator('.os-status__app').innerText(), 'Store', 'the status bar names the window in front');
     expectEqual(await win().locator('html.mv-in-window').count(), 1, 'the page knows it is in the window');
     expectTrue(!(await win().locator('.mat-nav').isVisible()), 'without the menu of the toolkit');
-    expectTrue(await page.locator('[data-win-back]').isDisabled(), 'nothing to go back to yet');
+    expectTrue(await page.locator('.os-window.is-active [data-win-back]').isDisabled(), 'nothing to go back to yet');
     await win().locator('a[href^="/Store/Install"]').first().click();
-    await page.waitForFunction(() => !document.querySelector('[data-win-back]').disabled);
-    await page.click('[data-win-back]');
-    await page.waitForFunction(() => document.querySelector('#os-window [data-win-title]').textContent === 'Store');
+    await page.waitForFunction(() => !document.querySelector('.os-window.is-active [data-win-back]').disabled);
+    await page.click('.os-window.is-active [data-win-back]');
+    await titled('Store');
   });
-  await check('yellow goes home and keeps the app, red closes it', async () => {
-    await page.click('#os-window [data-win-home]');
-    await page.waitForFunction(() => document.getElementById('os-window').hidden);
+  await check('yellow puts the window away and keeps the app, red closes it', async () => {
+    await page.click('.os-window.is-active [data-win-min]');
+    await page.waitForFunction(() => document.querySelector('.os-window').hidden);
     expectEqual(new URL(page.url()).hash, '', 'the address is the home screen again');
     expectEqual(await page.locator('.os-dock a[data-window="/Store"].is-running').count(), 1, 'the store still runs: a dot under it');
     await page.click('.os-dock a[data-window="/Store"]');
-    await page.waitForFunction(() => !document.getElementById('os-window').hidden);
+    await page.waitForFunction(() => !document.querySelector('.os-window').hidden);
     expectEqual(await winTitle(), 'Store', 'it comes back as it was');
-    await page.click('#os-window .os-lights [data-win-close]');
-    await page.waitForFunction(() => document.getElementById('os-window').hidden);
+    await page.click('.os-dock a[data-window="/Store"]');
+    await page.waitForFunction(() => document.querySelector('.os-window').hidden);
+    await page.click('.os-dock a[data-window="/Store"]');
+    await page.waitForFunction(() => !document.querySelector('.os-window').hidden);
+    await page.click('.os-window.is-active .os-lights [data-win-close]');
+    await noWindows();
     expectEqual(await page.locator('.is-running').count(), 0, 'closed: no dot');
   });
-  await check('a reload keeps the window, and the settings have their tabs inside it', async () => {
+  await check('several windows: the bar moves one, an edge sizes it, a click brings one to the front, the edge of the screen takes a half', async () => {
+    await page.goto(BASE + '/');
+    await page.evaluate(() => { Object.keys(localStorage).filter(k => k.startsWith('mattiverse.os.geo.')).forEach(k => localStorage.removeItem(k)); });
+    await page.click('.os-dock a[data-window="/Store"]');
+    await titled('Store');
+    await page.click('.os-dock a[data-window="/Settings"]');
+    await titled('Settings');
+    expectEqual(await windows(), 2, 'two windows side by side');
+    const store = await box('.os-window:not(.is-active)');
+    const before = await box('.os-window.is-active');
+    expectTrue(before[0] > store[0] && before[1] > store[1], 'the second one opens a step beside the first');
+
+    // the bar moves it
+    await page.mouse.move(before[0] + 300, before[1] + 20);
+    await page.mouse.down();
+    await page.mouse.move(before[0] + 400, before[1] + 80, { steps: 6 });
+    await page.mouse.up();
+    const moved = await box('.os-window.is-active');
+    expectTrue(moved[0] > before[0] + 60 && moved[1] > before[1] + 30, 'moved: ' + before + ' > ' + moved);
+    expectEqual(moved.slice(2), before.slice(2), 'its size stays');
+
+    // its left edge sizes it
+    await page.mouse.move(moved[0] - 1, moved[1] + 300);
+    await page.mouse.down();
+    await page.mouse.move(moved[0] + 200, moved[1] + 300, { steps: 6 });
+    await page.mouse.up();
+    const sized = await box('.os-window.is-active');
+    expectTrue(Math.abs(sized[2] - (moved[2] - 201)) <= 3 && sized[0] > moved[0] + 190, 'narrower from the left: ' + moved + ' > ' + sized);
+
+    // a click into the page of the other one brings it to the front
+    await page.mouse.click(store[0] + 12, store[1] + 300);
+    await titled('Store');
+    expectEqual(new URL(page.url()).hash, '#/Store', 'the address follows the window in front');
+    expectEqual(await page.locator('.os-dock a[data-window="/Store"].is-front').count(), 1, 'the dock marks it');
+
+    // a double click on the bar fills the screen, another one gives its size back
+    await page.dblclick('.os-window.is-active .os-window__bar', { position: { x: 300, y: 20 } });
+    const full = await box('.os-window.is-active');
+    expectEqual([full[0], full[2]], [0, 1360], 'as wide as the screen');
+    expectTrue(full[1] + full[3] < (await box('.os-dock'))[1], 'above the dock');
+    await page.dblclick('.os-window.is-active .os-window__bar', { position: { x: 300, y: 20 } });
+    expectEqual(await box('.os-window.is-active'), store, 'its own place again');
+
+    // let go at the left edge of the screen: the left half
+    await page.mouse.move(store[0] + 300, store[1] + 20);
+    await page.mouse.down();
+    await page.mouse.move(200, 300, { steps: 5 });
+    await page.mouse.move(2, 300, { steps: 3 });
+    expectTrue(await page.locator('.os-snap').isVisible(), 'the place it will take is shown');
+    await page.mouse.up();
+    const half = await box('.os-window.is-active');
+    expectTrue(half[0] < 12 && Math.abs(half[2] - 668) < 6, 'the left half: ' + half);
+  });
+  await check('the dock is the taskbar, a reload keeps the windows, the logo shows the desktop', async () => {
+    // Activity has no icon in the dock: its window gets one
+    await page.evaluate(() => document.querySelector('.os-grid .os-app[data-window="/Jobs"]').click());
+    await titled('Activity');
+    expectEqual(await page.locator('.os-dock__win').count(), 1, 'an icon in the dock for the window of Activity');
+    await page.click('.os-dock__win');
+    await page.waitForFunction(() => document.querySelector('.os-window.is-active [data-win-title]').textContent !== 'Activity');
+    await page.click('.os-dock__win');
+    await titled('Activity');
+
+    await page.reload();
+    await titled('Activity');
+    expectEqual(await windows(), 3, 'the three windows are back');
+    const half = await box('.os-window:has([data-win-title]:text-is("Store"))');
+    expectTrue(half[0] < 12 && Math.abs(half[2] - 668) < 6, 'the store is still the left half: ' + half);
+
+    // the home screen refreshes itself and the windows stay
+    await page.evaluate(() => new Promise(done => window.MattiverseOs.refresh(done)));
+    expectEqual(await windows(), 3, 'a refresh of the home screen keeps the windows');
+    expectTrue((await page.locator('.os-page [data-home-key]').count()) > 5, 'and its things are there');
+
+    await page.click('.os-status__brand');
+    await page.waitForFunction(() => [...document.querySelectorAll('.os-window')].every(w => w.hidden));
+    expectEqual(new URL(page.url()).hash, '', 'the desktop: the address is the home screen');
+    expectEqual(await page.locator('.is-running').count(), 4, 'the three apps still run (Activity on the screen and in the dock)');
+
+    await page.locator('.os-dock__win').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Close all 3 windows' }).click();
+    await noWindows();
+    expectEqual(await page.locator('.os-dock__win').count(), 0, 'its icon left the dock');
+    await page.reload();
+    expectEqual(await windows(), 0, 'closed windows do not come back');
+  });
+  await check('an address with a page opens its window, and the settings have their tabs inside it', async () => {
     await page.goto(BASE + '/#/Settings/Engines');
-    await page.waitForFunction(() => document.querySelector('#os-window [data-win-title]').textContent === 'Engines');
+    await titled('Engines');
     expectTrue(await win().locator('.mv-window-only .mat-tabs').isVisible(), 'the tabs of the settings');
     await page.evaluate(() => { location.hash = '#/Jobs'; });
-    await page.waitForFunction(() => document.querySelector('#os-window [data-win-title]').textContent === 'Activity');
-    expectEqual(new URL(page.url()).hash, '#/Jobs', 'another address while the window is open: that page in it');
-    await page.click('#os-window .os-lights [data-win-close]');
+    await titled('Activity');
+    expectEqual(new URL(page.url()).hash, '#/Jobs', 'another address: that page in a window of its own');
+    expectEqual(await windows(), 2, 'beside the first one');
+    await page.click('.os-window.is-active .os-lights [data-win-close]');
+    await titled('Engines');
+    await page.click('.os-window.is-active .os-lights [data-win-close]');
+    await noWindows();
   });
   await check('an engine opens its own window in Mattiverse', async () => {
     await page.goto(BASE + '/');
@@ -150,10 +254,11 @@ const pages = [
     const first = page.locator('#os-folder-system .os-app[href^="/Engines?id="]').first();
     const name = await first.getAttribute('data-title');
     await first.click();
-    await page.waitForFunction(n => document.querySelector('#os-window [data-win-title]').textContent === n, name);
+    await titled(name);
     expectEqual(await win().locator('h1').innerText(), name, 'the page of the engine');
     expectTrue(!(await page.locator('#os-folder-system').isVisible()), 'the folder closed');
-    await page.click('#os-window .os-lights [data-win-close]');
+    await page.click('.os-window.is-active .os-lights [data-win-close]');
+    await noWindows();
   });
   await check('the search: / focuses it, it narrows the apps and the widgets step aside', async () => {
     await page.goto(BASE + '/');
@@ -212,7 +317,7 @@ const pages = [
     await put;
     const order = await keys(0);
     expectTrue(order.indexOf('s:people') < order.indexOf('s:jobs'), 'People is before Activity: ' + order.join(' '));
-    expectTrue(!(await page.locator('#os-window').isVisible()), 'the drag opened nothing');
+    expectEqual(await page.locator('.os-window').count(), 0, 'the drag opened nothing');
 
     await page.locator('[data-home-key="s:jobs"]').click({ button: 'right' });
     put = saved();

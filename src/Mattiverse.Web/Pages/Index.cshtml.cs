@@ -22,7 +22,7 @@ public class IndexModel : PageModel
     private readonly AppService _apps;
     private readonly SystemConfigService _config;
     private readonly JobService _jobs;
-    private readonly DockerService _docker;
+    private readonly RuntimeReader _docker;
     private readonly BackupService _backups;
     private readonly BackupHub _backupHub;
     private readonly CatalogService _catalog;
@@ -32,7 +32,7 @@ public class IndexModel : PageModel
     private readonly UserService _users;
     private readonly Mattiverse.Core.Integrations.PersonAccess _person;
 
-    public IndexModel(AppService apps, SystemConfigService config, JobService jobs, DockerService docker, BackupService backups, BackupHub backupHub, CatalogService catalog, AppUrls urls, EngineOverview engines, HomeContributions home, UserService users,
+    public IndexModel(AppService apps, SystemConfigService config, JobService jobs, RuntimeReader docker, BackupService backups, BackupHub backupHub, CatalogService catalog, AppUrls urls, EngineOverview engines, HomeContributions home, UserService users,
         Mattiverse.Core.Integrations.PersonAccess person)
     {
         _home = home;

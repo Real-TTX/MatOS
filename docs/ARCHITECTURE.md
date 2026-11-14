@@ -53,9 +53,11 @@ whose install failed does not depend on what is missing: an app without containe
 warning, a route or DNS record that cannot be removed is a warning, and when the engine cannot remove the stack but no container of the app is left, Mattiverse
 removes the app all the same (and its volumes when the data is to go). A job that Mattiverse's restart interrupted leaves the app *failed*, not *installing*.
 
-**Reading is not going through the engines.** Status, containers and logs always come straight from Docker (every container carries the
-labels `mattiverse.managed`, `mattiverse.app`, `mattiverse.instance`, `mattiverse.service`), so the launcher stays correct and fast even
-when an engine is down. Only *changes* go through an engine.
+**Reading goes through MatDock too** (the owner's rule of 2026-11-14: Mattiverse asks the engine and does nothing itself; before that every read went
+straight to Docker). What the pages show of the runtime comes from `RuntimeReader`: the containers and the state of the apps (`GET /stacks`, the stacks named
+`<prefix>-<app>`), the log of a container (`GET /containers/{name}/logs`) and the host (`GET /environments`: the version of Docker, processor, memory, disk).
+Docker is read directly (the labels `mattiverse.managed`, `mattiverse.app`, `mattiverse.instance`, `mattiverse.service`) only while there is nobody to ask:
+before MatDock is installed, while it does not answer, and inside a job (the runner checks what it just deployed), so the launcher never goes blind.
 
 **The user may change the stack in MatDock.** Mattiverse stores a semantic hash of the compose it deployed (`ComposeSha`: parsed YAML, key order
 and formatting do not matter). An update compares it with the stack as MatDock has it now; if they differ the update **keeps the user's version**
@@ -184,14 +186,28 @@ The home screen is a **small operating system** (the owner's choice of 2026-11-0
   the whole screen, widgets of glass, app icons, a search and a dock of glass. Glass, colour gradients on the icons of the system and the system font are allowed there on
   purpose; the colours are the `--os-*` properties of `os.css`. This is a deliberate exception to MatDesign (SHELL-01, SHELL-03, COLOR-06) for the home screen,
   approved by the owner like the logo: do not bring the menu of the toolkit back to it.
-- **One window at a time.** Anything with `data-window` opens that page of Mattiverse in THE window over the home screen: an iframe of the same origin. In there the page
-  keeps MatUi for its content and drops the menu, the header and the breadcrumb (`js/window-mode.js` sets `mv-in-window` on `<html>` before the page is drawn;
-  `mv-window-only` shows what only makes sense there, such as the tabs of the settings). The window has a title (the page's), Back (inside the window), Reload,
-  Open in a new tab, and three lights: red closes it, yellow goes home and keeps the app as it is (a dot under its icon; a tap brings it back), green fills the screen.
-  On a phone it fills the screen with a bar at the bottom to go home. The address keeps the page of the window (`/#/Store`): a reload opens it again, the browser's
-  Back goes home. It is not a window manager: there is never a second window.
-- **Pages that belong to the whole tab** (sign-in, a shared link, an error: `_Bare`, `<html data-top-level>`) leave the window; a link to `/` inside it, or a page that
-  lands on the home screen, closes it. Opened directly (a new tab), every page still has the shell of the toolkit with its menu.
+- **Windows, like a desktop** (the owner's choice of 2026-11-11; before that there was one window at a time). Anything with `data-window` opens that page in a window
+  of its own over the home screen: an iframe (`js/os.js` makes it from the template in `_Launcher`). In there a page of Mattiverse keeps MatUi for its content and drops
+  the menu, the header and the breadcrumb (`js/window-mode.js` sets `mv-in-window` on `<html>` before the page is drawn; `mv-window-only` shows what only makes sense
+  there, such as the tabs of the settings). A window has a title (the page's), Back (inside the window), Reload, Open in a new tab, and three lights: red closes it,
+  yellow puts it away and keeps the app as it is, green fills the screen.
+  - **A page looks like a part of its window** (`css/mattiverse.css`, under `.mv-in-window`): rounder and tighter through the tokens of the toolkit, the title of the layout is
+    left to the bar of the window (it stays for a screen reader), tabs are a segmented control, and the tabs of the settings and of the account (`mv-winnav`) are the
+    sidebar of a window at least 720 px wide, like the settings of a desktop.
+  - **Several at once.** The bar moves a window, its edges and corners size it, a click anywhere in it (also inside its page) brings it to the front; a double click on
+    the bar fills the screen. Let go at the top of the screen it fills it, at the left or right edge it takes that half (the place is shown while dragging); dragged
+    away it has its own size again. A new window opens a step beside the last one. A window that fills the screen ends above the dock.
+  - **The dock is the taskbar** and stays above the windows: a dot under an app that has a window (a longer one for the window in front), and an icon for every
+    window whose app is not in the dock, for as long as it is open. A click brings the window to the front; a click on the one in front puts it away. The logo in the
+    status bar shows the desktop (every window is put away), and the status bar names the window in front.
+  - **What is kept.** Every app remembers the place and size of its window in this browser (`localStorage`), and the windows of a tab come back after a reload
+    (`sessionStorage`: page, place, order, put away or not). The address keeps the page of the window in front (`/#/Store`), so a link with it opens that window; the
+    browser's Back shows the desktop. An address in the hash is a path of this Mattiverse only.
+  - **The home screen refreshes itself in place** (`refresh()` in `js/os.js`: the things are fetched and exchanged; the rate is `data-autorefresh` while something
+    runs, and a page that loads in a window asks for it once): a reload would take the windows with it.
+  - **On a phone** a window fills the screen, with a bar at the bottom to go home; the windows are switched with the dock.
+- **Pages that belong to the whole tab** (sign-in, a shared link, an error: `_Bare`, `<html data-top-level>`) leave the window; a link to `/` inside it puts the window away, and a page that
+  lands on the home screen closes it. Opened directly (a new tab), every page still has the shell of the toolkit with its menu.
 - **Everything is an app.** The parts of Mattiverse (`Support/Launcher.cs`): Activity and Users on the screen, Store, Apps, Backups and Settings in the dock (a user gets
   Apps and the account). An installed app opens in a new tab by default (its own address); its menu (a right click, a long press) opens it in the window instead
   (`/Apps/Open`, which falls back to a button when the app forbids a frame) and can make that its default in this browser (localStorage).
@@ -220,7 +236,7 @@ The home screen is a **small operating system** (the owner's choice of 2026-11-0
   home screen as it comes. What is off the screen is drawn out of sight (`.os-hidden`), so that it comes back without a reload.
   - **A right click everywhere** (a long press on a touch screen; Shift with the right click is the browser's own menu, a field keeps the browser's menu): an app (open, its quick
     actions, details), a widget (open it or the row under the pointer, its size: small, medium, wide as far as it offers them), every thing of a page (one place back or on,
-    to another page or a new one, off the screen, edit the home screen), the dock, the bar of the window (back, reload, a tab, full screen, home, close) and the empty screen
+    to another page or a new one, off the screen, edit the home screen), the dock, the bar of a window and its icon in the dock (back, reload, a tab, fill the screen, a half, put away, close, close all) and the empty screen
     (edit, add a page, show again what is off it, the wallpaper, the store and the settings for an administrator, reload, reset).
   - **Dragging**: the mouse drags a thing at once (a copy follows the pointer, the others glide out of the way); a finger drags while editing, else it swipes the pages.
     Waiting at the edge of the screen or over a dot turns the page and takes the thing along; past the last page a new one begins.
