@@ -6,8 +6,8 @@ x-matos:
   description: Scheduled backups and file sync between hosts, with a worker that can also back up Docker volumes.
   category: Tools
   role: app
-  state: alpha
-  stateNote: The integration was only on dev; the release is coming.
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matbu.svg
   homepage: https://github.com/Real-TTX/MatBu
   # The platform contract (/api): MatOS fills MAT_API_KEY.

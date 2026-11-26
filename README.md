@@ -315,22 +315,22 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | [MatIdentity](https://github.com/Real-TTX/MatIdentity) | Integrated | One sign-in for all apps. |
 | [MatSMTP](https://github.com/Real-TTX/MatSMTP) | Integrated | Sends the mail of the apps. |
 | [MatBoard](https://github.com/Real-TTX/MatBoard) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatBu](https://github.com/Real-TTX/MatBu) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatCloud](https://github.com/Real-TTX/MatCloud) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
-| [Matddns](https://github.com/Real-TTX/Matddns) | Beta | Opens in the MatOS window only after the merge of feature/frame-ancestors. |
+| [Matddns](https://github.com/Real-TTX/Matddns) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatDo](https://github.com/Real-TTX/MatDo) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatDrive](https://github.com/Real-TTX/MatDrive) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatFile](https://github.com/Real-TTX/MatFile) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatMail](https://github.com/Real-TTX/MatMail) | Beta | Not shown in the MatOS window yet. |
 | [MatOffice](https://github.com/Real-TTX/MatOffice) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatPaper](https://github.com/Real-TTX/MatPaper) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatPlay](https://github.com/Real-TTX/MatPlay) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatShape](https://github.com/Real-TTX/MatShape) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
-| [MatBu](https://github.com/Real-TTX/MatBu) | Alpha | The integration was only on dev; the release is coming. |
+| [MatSplit](https://github.com/Real-TTX/MatSplit) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatTrakr](https://github.com/Real-TTX/MatTrakr) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatCMS](https://github.com/Real-TTX/MatCMS) | Alpha | Installs, no MatOS integration yet. |
 | [MatDesign](https://github.com/Real-TTX/MatDesign) | Alpha | Installs, no MatOS integration yet. |
-| [MatFile](https://github.com/Real-TTX/MatFile) | Alpha | The integration was only on dev; the release is coming. |
 | [Matmon](https://github.com/Real-TTX/Matmon) | Alpha | Installs, no MatOS integration yet. |
-| [MatPlay](https://github.com/Real-TTX/MatPlay) | Alpha | The integration was only on dev; the release is coming. |
-| [MatSplit](https://github.com/Real-TTX/MatSplit) | Alpha | The integration was only on dev; the release is coming. |
-| [MatTrakr](https://github.com/Real-TTX/MatTrakr) | Alpha | The integration was only on dev; the release is coming. |
 | [MatAi](https://github.com/Real-TTX/MatAi) | Preview | The image is not published yet. |
 | [Nginx Proxy Manager](https://nginxproxymanager.com) | Third-party | Needs the ports 80 and 443 that Matcad uses. |
 | [Portainer](https://www.portainer.io) | Third-party |  |

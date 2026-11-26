@@ -45,8 +45,8 @@ public class AppStateTests
     /// <summary>The table the owner approved on 2026-11-26.</summary>
     [Theory]
     [InlineData(AppStates.Integrated, "matcad matdock matidentity matsmtp")]
-    [InlineData(AppStates.Beta, "matboard matcloud matddns matdo matdrive matmail matoffice matpaper matshape")]
-    [InlineData(AppStates.Alpha, "matbu matfile matplay matsplit mattrakr matcms matdesign matmon")]
+    [InlineData(AppStates.Beta, "matboard matbu matcloud matddns matdo matdrive matfile matmail matoffice matpaper matplay matshape matsplit mattrakr")]
+    [InlineData(AppStates.Alpha, "matcms matdesign matmon")]
     [InlineData(AppStates.Preview, "matai")]
     [InlineData(AppStates.ThirdParty, "nginx-proxy-manager portainer")]
     public void BuiltInCatalog_HasTheApprovedStates(string state, string ids)

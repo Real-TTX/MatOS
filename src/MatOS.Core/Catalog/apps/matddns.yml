@@ -9,7 +9,7 @@ x-matos:
   category: Infrastructure
   role: ddns
   state: beta
-  stateNote: Opens in the MatOS window only after the merge of feature/frame-ancestors.
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matddns.svg
   homepage: https://github.com/Real-TTX/Matddns
   recommended: true

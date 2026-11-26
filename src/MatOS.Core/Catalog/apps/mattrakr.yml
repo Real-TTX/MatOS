@@ -6,8 +6,8 @@ x-matos:
   description: Keep track of what you watched, what you read and what is next, with posters and ratings from TMDB and Google Books.
   category: Fun
   role: app
-  state: alpha
-  stateNote: The integration was only on dev; the release is coming.
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: mattrakr.png
   homepage: https://github.com/Real-TTX/MatTrakr
   # The platform contract (/api): MatOS fills MAT_API_KEY.

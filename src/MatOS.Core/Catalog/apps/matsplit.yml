@@ -6,8 +6,8 @@ x-matos:
   description: Track who paid what in a group, attach receipts with the camera and settle up with a click. Guests join through a link.
   category: Fun
   role: app
-  state: alpha
-  stateNote: The integration was only on dev; the release is coming.
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matsplit.svg
   homepage: https://github.com/Real-TTX/MatSplit
   # The platform contract (/api): MatOS fills MAT_API_KEY.
