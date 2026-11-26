@@ -21,8 +21,8 @@
         <input type="hidden" asp-for="ReturnUrl" />
         <partial name="_ValidationSummary" />
 
-        <mat-field label="Username" asp-for="Input.Username">
-            <input asp-for="Input.Username" class="mat-input" autocomplete="username" autofocus required data-msg-required="Please enter your username." />
+        <mat-field label="E-mail or user name" asp-for="Input.Username">
+            <input asp-for="Input.Username" class="mat-input" autocomplete="username" autofocus required data-msg-required="Please enter your e-mail or user name." />
         </mat-field>
 
         <mat-field label="Password" asp-for="Input.Password">
@@ -41,6 +41,6 @@
 
     @if (Model.IdentityAvailable)
     {
-        <a class="mat-btn mat-btn--secondary mat-btn--block" href="/Account/Login?returnUrl=@Uri.EscapeDataString(Model.ReturnUrl ?? "/")"><icon name="key" /><span>Sign in with MatIdentity</span></a>
+        <a class="mat-btn mat-btn--secondary mat-btn--block" href="/Account/Login?via=identity&amp;returnUrl=@Uri.EscapeDataString(Model.ReturnUrl ?? "/")"><icon name="key" /><span>Sign in with MatIdentity</span></a>
     }
 </div>

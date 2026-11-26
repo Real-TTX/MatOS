@@ -6,6 +6,7 @@ x-matos:
   description: Containers, images, volumes and networks of this host in a web UI.
   category: Infrastructure
   role: docker
+  state: third-party
   homepage: https://www.portainer.io
   ui:
     service: portainer

@@ -177,4 +177,67 @@
     var frame = document.getElementById(btn.getAttribute('data-frame-reload'));
     if (frame) { frame.src = frame.src; }
   });
+
+  // ------------------------------------------------------------------ the name of a free address, checked while typing: <input data-name-check="/api/address/name">
+  // The setup assistant and Settings, Address. The answer {available, reason, address, message} goes to the field around the input: a free name marks
+  // it valid and says so in the hint, anything else (taken, reserved, invalid, the address service cannot be reached) is the field's error line.
+  // The input then raises "name-checked" with the answer, for a page that wants more. The server checks again when the form is sent.
+
+  // The answer is spoken too: the hint and the address after the field describe the input, and the hint is a polite live region (the error line is one already).
+  // An address service that cannot be asked is no verdict on the name (data-name-state="unreachable"): "name-recheck" on the input asks again (the first start
+  // sends it on Next).
+
+  var nameChecks = 0;
+  $$('[data-name-check]').forEach(function (input) {
+    var field = input.closest('.mat-field');
+    if (!field) { return; }
+    var hint = $('.mat-hint', field);
+    var error = $('.mat-error', field);
+    var addon = $('.mat-input-addon', field);
+    var plain = hint ? hint.textContent : '';
+    var timer = null;
+    var seq = 0;
+    var unreachable = 'The name cannot be checked right now. Try again in a moment.';
+
+    nameChecks += 1;
+    var described = (input.getAttribute('aria-describedby') || '').split(' ').filter(Boolean);
+    [hint, addon].forEach(function (el, i) {
+      if (!el) { return; }
+      if (!el.id) { el.id = 'name-check-' + nameChecks + '-' + (i === 0 ? 'hint' : 'addon'); }
+      if (described.indexOf(el.id) < 0) { described.push(el.id); }
+    });
+    if (described.length) { input.setAttribute('aria-describedby', described.join(' ')); }
+    if (hint) { hint.setAttribute('aria-live', 'polite'); }
+
+    function show(state, text) {
+      field.classList.toggle('is-valid', state === 'ok');
+      field.classList.toggle('is-invalid', state === 'bad' || state === 'unreachable');
+      input.setAttribute('data-name-state', state || 'none');
+      if (state === 'bad' || state === 'unreachable') { input.setAttribute('aria-invalid', 'true'); } else { input.removeAttribute('aria-invalid'); }
+      if (error) { error.textContent = state === 'bad' || state === 'unreachable' ? text : ''; }
+      if (hint) { hint.textContent = state === 'ok' || state === 'busy' ? text : plain; }
+    }
+
+    function check() {
+      var name = input.value.trim().toLowerCase();
+      var mine = ++seq;
+      if (name.length < 3) { show('', ''); return; }
+      show('busy', 'Checking ' + name + ' ...');
+      fetch(input.getAttribute('data-name-check') + '?name=' + encodeURIComponent(name), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (mine !== seq) { return; }
+          if (!d) { show('unreachable', unreachable); return; }
+          // data-name-free="{address} is yours.": the words of a free name on this page (the first start says it its own way)
+          var free = d.available && input.getAttribute('data-name-free') ? input.getAttribute('data-name-free').replace('{address}', d.address || name) : d.message;
+          show(d.available ? 'ok' : d.reason === 'unreachable' ? 'unreachable' : 'bad', free);
+          input.dispatchEvent(new CustomEvent('name-checked', { bubbles: true, detail: d }));
+        })
+        .catch(function () { if (mine === seq) { show('unreachable', unreachable); } });
+    }
+
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(check, 350); });
+    input.addEventListener('name-recheck', function () { clearTimeout(timer); check(); });
+    if (input.value) { check(); }
+  });
 })();

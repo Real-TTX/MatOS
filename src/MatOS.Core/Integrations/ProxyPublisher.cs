@@ -3,6 +3,7 @@ using MatOS.Core.Catalog;
 using MatOS.Core.Configuration;
 using MatOS.Core.Data;
 using MatOS.Core.Docker;
+using MatOS.Core.Engines;
 using MatOS.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -76,7 +77,8 @@ public sealed class ProxyPublisher
     /// </summary>
     public async Task<bool> RoutesAreBindingsAsync(CancellationToken ct = default)
     {
-        var matcad = await _db.InstalledApps.AsNoTracking().FirstOrDefaultAsync(a => a.Role == AppRoles.Proxy && a.Lifecycle == AppLifecycle.Installed, ct);
+        // Matcad by its catalog id, not by the role: another proxy of the store (Nginx Proxy Manager, role proxy too) is no provider of web.route.
+        var matcad = await _db.InstalledApps.AsNoTracking().FirstOrDefaultAsync(a => a.CatalogId == EngineIds.Matcad && a.Lifecycle == AppLifecycle.Installed, ct);
         return matcad is not null && (await _manifests.GetAsync(matcad, ct: ct))?.Provides?.Any(c => c.Capability == Capabilities.WebRoute) == true;
     }
 
@@ -231,10 +233,17 @@ public sealed class ProxyPublisher
 
     /// <summary>
     /// Gives Matcad the DNS account (for certificates through the DNS challenge). Returns the id of the provider, or <c>null</c> when there is
-    /// no (complete) DNS account.
+    /// no (complete) DNS account. The free address of the address service never has one: Matcad gets a route per host and Caddy a certificate for
+    /// each through the HTTP or TLS challenge (in tunnel mode through the tunnel).
     /// </summary>
     private async Task<long?> EnsureProviderAsync(SystemConfig config, Action<string> log, CancellationToken ct)
     {
+        if (config.UsesHostedAddress)
+        {
+            log($"The free address {config.BaseDomain} needs no DNS account: Caddy gets a certificate for every address itself.");
+            return null;
+        }
+
         try
         {
             if (DnsProviders.Find(config.Dns.Provider) is not { } provider)

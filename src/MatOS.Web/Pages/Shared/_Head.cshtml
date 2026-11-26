@@ -26,4 +26,9 @@
         @* The home screen is its own small operating system, not a page of the toolkit (docs/ARCHITECTURE.md, "The home screen"). *@
         <link rel="stylesheet" href="~/css/os.css" asp-append-version="true" />
     }
+    @if (ViewData["Onboarding"] is true)
+    {
+        @* The first start and the tour of the home screen: the look of MatOS OS around the toolkit's controls (docs/ARCHITECTURE.md, "The first start"). *@
+        <link rel="stylesheet" href="~/css/onboarding.css" asp-append-version="true" />
+    }
 </head>

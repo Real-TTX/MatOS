@@ -72,20 +72,26 @@ src/MatOS.Core        domain, no web types
                              BindingBroker (the bindings between the apps and of the engines: identity.oidc, mail.smtp, web.route (a host under the domain, else a port of
                              this machine: every app behind Matcad; PortsAsync); one class for every capability, AppBinding;
                              catalog consumes + /api + implicit web.route; AdoptAsync takes over the variables of an earlier MatOS), AppManifests + ManifestCache (definitions and values, short
-                             timeouts, kept a while), ShellRules (who sees a contribution: `audience`, and `roles` by the person's role in the app; which addresses it may open)
+                             timeouts, kept a while), ShellRules (who sees a contribution: `audience`, and `roles` by the person's role in the app; which addresses it may open);
+                             the free address (docs/SERVICES.md, docs/ARCHITECTURE.md "The free address"): ServicesClient (the address service, short timeouts, `Unreachable` instead of
+                             exceptions), HostedAddressService (register, use, the mode switch with Matddns's DynDns group, give back; SyncAsync in ConnectEngines),
+                             TunnelClient (hosted service: the control WebSocket, the streams to Caddy via TunnelTarget) + TunnelProtocol (messages, back-off) + TunnelPipe (the bytes both ways)
   Jobs/                      JobService/Queue/RunnerService, AppJobs (the work per job kind), JobContext/log
+  Setup/                     the first start (docs/ARCHITECTURE.md "The first start"): SetupPlan (plain names of the engines, the pickable apps, the checks, the steps in order), SetupService
+                             ("Set up MatOS": the way to the apps, one job per line, Try again), SetupRun/SetupProgress (the lines in SystemConfig.Setup, the progress screen), DockerAdvice
+                             (the check of Docker in plain words), AccountRules (e-mail as user name, MatIdentity's password rules); Integrations/OwnerHandover gives MatIdentity the same account
   Auth/ Users/ Security/     login, sessions (EndIdentitySessionsAsync: the back-channel logout), LogoutToken (the check of a logout token of MatIdentity), PBKDF2 hasher, secret protector; Wallpapers (the pictures of the home screen); HomeLayout (how a person arranged the home screen: pages, what is off it, sizes; User.HomeLayout)
   Configuration/             options (MatOSConfiguration: the sections MatOS and Mattiverse), AppPaths, JsonConfigStore, SystemConfig; RenameUpgrade (the first start of an install of Mattiverse: its database, its names), RenameFollowUp (the job after it: the marks in MatDock and Matcad, the own route, the frame addresses), Mattiverse (the old names)
 src/MatOS.Web         Razor Pages, controls, JS/CSS, Program.cs
   Controls/                  tag helpers icon (a use of the sprite), app-icon, mat-field (label, control, hint, error), tab-bar; ListModels (ToolbarModel, PagerModel, ListView, ListQuery)
-  Pages/                     Index (MatOS), Engines/ (one engine in the window), Apps/, Store/, Backups/, Jobs/, Settings/, Wizard/, People/ (the people, groups and grants of MatIdentity:
+  Pages/                     Index (MatOS, with the tour of the first visit), Setup/ (the first start: Index = Welcome + account, Choose, Progress), Engines/ (one engine in the window), Apps/, Store/, Backups/, Jobs/, Settings/, Wizard/ (changes later), People/ (the people, groups and grants of MatIdentity:
                              Index, Edit, Access, Groups, Group), Users/ (MatOS's own accounts, a tab of People), Account/, Share/
-  Pages/Shared/              _Layout (the shell: menus, switcher, user, theme, breadcrumb), _Launcher (MatOS: status bar, wallpaper, the windows, no menu), _Bare (no menu), _Head, _Toolbar, _Pager, _ValidationSummary, _StatusPill, _DnsFields
-  Infrastructure/            cookie session validation, setup guard, DB bootstrap, API endpoints (the job log, the theme, PUT/DELETE /api/home: the arrangement of the home screen), health check, MatIdentitySignIn, BackchannelLogout (POST /signout-backchannel)
+  Pages/Shared/              _Layout (the shell: menus, switcher, user, theme, breadcrumb), _Launcher (MatOS: status bar, wallpaper, the windows, no menu), _Onboarding (the first start: wallpaper, a card of glass), _Bare (no menu), _Head, _Toolbar, _Pager, _ValidationSummary, _StatusPill, _DnsFields
+  Infrastructure/            cookie session validation, setup guard, DB bootstrap, API endpoints (the job log, the theme, PUT/DELETE /api/home: the arrangement of the home screen), AddressEndpoints (GET /api/address/name: the live check of a free address, open during the first-run setup), OnboardingEndpoints (GET /api/setup/progress, POST /api/home/tour), health check, MatIdentitySignIn, BackchannelLogout (POST /signout-backchannel)
   Support/                   Toolkit (the icon sprite), Ui (Icon, Logo), Navigation (the menus: NavSet, NavItem, NavBadge), Launcher (the parts of MatOS as apps on the home screen and in its dock), EngineOverview (the five engines for the settings, the home screen and /Engines), HomeContributions (the launchers, quick actions and widgets of the apps for the home screen), Crumbs, AppUrls, FrameProbe, AppStatus, Format
-  wwwroot/matui/             the toolkit, a copy of MatDesign's; wwwroot/css/matos.css the few classes only this app has (mv-*, mv-in-window); css/os.css the home screen (os-*); js/matos.js its behaviour, js/os.js the home screen, js/window-mode.js a page in the window
+  wwwroot/matui/             the toolkit, a copy of MatDesign's; wwwroot/css/matos.css the few classes only this app has (mv-*, mv-in-window); css/os.css the home screen (os-*); css/onboarding.css the first start and the tour (ob-*, tokens only); js/matos.js its behaviour, js/os.js the home screen, js/onboarding.js the first start and the tour, js/window-mode.js a page in the window
 tests/MatOS.Tests       unit tests + WebUiTests (they read the source of the pages)
-tests/e2e                    run.js: the pages in a real browser against the running dev stack
+tests/e2e                    run.js: the pages in a real browser against the running dev stack; run.js --first-start: the first start on a MatOS without an account
 ```
 
 ## Conventions

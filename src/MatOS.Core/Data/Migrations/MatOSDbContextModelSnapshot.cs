@@ -446,6 +446,9 @@ namespace MatOS.Core.Data.Migrations
                     b.Property<string>("HomeLayout")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("HomeTourSeenAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 

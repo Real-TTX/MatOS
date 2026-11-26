@@ -6,6 +6,8 @@ x-matos:
   description: Keep the score of card and board games, with player statistics and history. Works offline as an installed web app.
   category: Fun
   role: app
+  state: alpha
+  stateNote: The integration was only on dev; the release is coming.
   icon: matplay.svg
   homepage: https://github.com/Real-TTX/MatPlay
   # The platform contract (/api): MatOS fills MAT_API_KEY.

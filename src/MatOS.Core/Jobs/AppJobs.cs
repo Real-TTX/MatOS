@@ -1,5 +1,6 @@
 using MatOS.Core.Apps;
 using MatOS.Core.Backups;
+using MatOS.Core.Configuration;
 using MatOS.Core.Data;
 using MatOS.Core.Entities;
 using MatOS.Core.Integrations;
@@ -42,6 +43,16 @@ public static class AppJobs
             await ctx.Services.GetRequiredService<DnsPublisher>().PublishAllAsync(ctx.Log, null, ctx.Cancellation);
             try
             {
+                // The free address: Matddns keeps it only in direct mode, the tunnel follows the settings.
+                await ctx.Services.GetRequiredService<HostedAddressService>().SyncAsync(ctx.Log, ctx.Cancellation);
+            }
+            catch (InvalidOperationException ex)
+            {
+                ctx.Log($"Warning: Matddns could not be set up for the free address: {ex.Message}");
+            }
+
+            try
+            {
                 await ctx.Services.GetRequiredService<MailLink>().ConfigureRelayAsync(ctx.Log, ctx.Cancellation);
             }
             catch (InvalidOperationException ex)
@@ -51,6 +62,85 @@ public static class AppJobs
 
             // MatOS's own sign-in, then every binding of every app (MatDesign docs/PLATFORM.md "Bindings"): the engines' capabilities too.
             await ctx.Services.GetRequiredService<AppService>().ConnectEnginesAsync(ctx.Log, ctx.Cancellation);
+        };
+
+    /// <summary>
+    /// The line "Your sign-in for all apps" of the first start (<see cref="OwnerHandover"/>): MatOS signs in through MatIdentity, and MatIdentity knows the
+    /// person who set up MatOS. MatIdentity may still be busy right after its install, so it is asked a few times; when it still does not know them the step
+    /// fails with the reason, so the progress screen shows it and "Try again" asks once more (until then the person signs in to MatOS with the local form).
+    /// </summary>
+    public static Func<JobContext, Task> HandOverOwner(int attempts = 12, TimeSpan? pause = null)
+        => async ctx =>
+        {
+            var config = ctx.Services.GetRequiredService<SystemConfigService>();
+            if ((await config.GetAsync(ctx.Cancellation)).Owner is null)
+            {
+                ctx.Log("MatIdentity knows you: you sign in to MatOS and every app with your e-mail and password.");
+                return;
+            }
+
+            var db = ctx.Services.GetRequiredService<MatOSDbContext>();
+            if (!await db.InstalledApps.AnyAsync(a => a.CatalogId == MatIdentityClient.CatalogIdValue && a.Lifecycle == AppLifecycle.Installed, ctx.Cancellation))
+            {
+                throw new InvalidOperationException("MatIdentity is not installed yet. Try its line first, then this one.");
+            }
+
+            var identity = ctx.Services.GetRequiredService<IdentityLink>();
+            var owner = ctx.Services.GetRequiredService<OwnerHandover>();
+            var reason = string.Empty;
+            for (var attempt = 1; attempt <= attempts; attempt++)
+            {
+                if (attempt > 1)
+                {
+                    ctx.Log($"{reason} Asking again in a moment ...");
+                    await Task.Delay(pause ?? TimeSpan.FromSeconds(10), ctx.Cancellation);
+                }
+
+                try
+                {
+                    if (!await identity.ConnectSelfAsync(origin: null, ctx.Log, ctx.Cancellation))
+                    {
+                        reason = "MatIdentity does not answer yet.";
+                        continue;
+                    }
+                }
+                catch (InvalidOperationException ex)
+                {
+                    reason = ex.Message;
+                    continue;
+                }
+
+                if (await owner.HandOverAsync(ctx.Log, ctx.Cancellation))
+                {
+                    return;
+                }
+
+                if ((await config.GetAsync(ctx.Cancellation)).Owner is null)
+                {
+                    // The password could not be read any more (the keys of MatOS were lost): nothing to hand over, and asking again does not change that.
+                    throw new InvalidOperationException("Your password could not be handed over to MatIdentity. Sign in at /Account/Login?local=1 with your e-mail and password, then set a password for yourself in People.");
+                }
+
+                reason = "MatIdentity did not take your account yet.";
+            }
+
+            throw new InvalidOperationException($"{reason} Until it works, you sign in to MatOS with your e-mail and password as before; Try again asks MatIdentity once more.");
+        };
+
+    /// <summary>Switches the free address between the tunnel and the direct way (<see cref="HostedAddress.Tunnel"/>, <see cref="HostedAddress.Direct"/>).</summary>
+    public static Func<JobContext, Task> SetAddressMode(string mode)
+        => ctx => ctx.Services.GetRequiredService<HostedAddressService>().SetModeAsync(mode, ctx.Log, ctx.Cancellation);
+
+    /// <summary>The last step of the first start with a free address: the tunnel to the address service is up (<see cref="HostedAddressService.WaitUntilReachableAsync"/>).</summary>
+    public static Func<JobContext, Task> FreeAddress()
+        => ctx => ctx.Services.GetRequiredService<HostedAddressService>().WaitUntilReachableAsync(ctx.Log, ctx.Cancellation);
+
+    /// <summary>Gives the free address back; the apps lose their routes under it and get a port of this machine again.</summary>
+    public static Func<JobContext, Task> ReleaseAddress()
+        => async ctx =>
+        {
+            await ctx.Services.GetRequiredService<HostedAddressService>().ReleaseAsync(ctx.Log, ctx.Cancellation);
+            await ConnectEngines()(ctx);
         };
 
     public static Func<JobContext, Task> Restore(string backupId, bool backupCurrentFirst)

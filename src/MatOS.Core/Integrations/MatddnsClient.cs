@@ -85,12 +85,47 @@ public sealed class MatddnsClient : EngineClient
             });
         }
 
+        return await UpsertGroupAsync(name, formerName, provider.MatddnsKind, provider.MatddnsSettings, settings, entries, records.Select(r => r.Hostname), ct);
+    }
+
+    /// <summary>
+    /// Creates or updates a group of kind <c>DynDns</c> (an update address with a user and a password, the DynDNS2 protocol) with exactly these A records:
+    /// the free address of the address service in direct mode. Returns the id of the group and the id of each record by host name.
+    /// </summary>
+    public Task<(string GroupId, Dictionary<string, string> EntryIds)> UpsertDynDnsGroupAsync(
+        string name,
+        string updateUrl,
+        string username,
+        string password,
+        IReadOnlyList<string> hostnames,
+        CancellationToken ct = default)
+    {
+        var settings = new JsonObject { ["updateUrl"] = updateUrl, ["username"] = username, ["password"] = password };
+        var entries = new JsonArray();
+        foreach (var host in hostnames)
+        {
+            entries.Add(new JsonObject { ["hostname"] = host, ["type"] = "A" });
+        }
+
+        return UpsertGroupAsync(name, null, "DynDns", "dynDns", settings, entries, hostnames, ct);
+    }
+
+    private async Task<(string GroupId, Dictionary<string, string> EntryIds)> UpsertGroupAsync(
+        string name,
+        string? formerName,
+        string kind,
+        string settingsKey,
+        JsonObject settings,
+        JsonArray entries,
+        IEnumerable<string> hostnames,
+        CancellationToken ct)
+    {
         // Matddns refuses (409) to drop a record that a rule still uses, and never removes a rule on its own: the rules of the
         // records that leave the list go first.
         var existing = await FindGroupAsync(name, formerName, ct);
         if (existing is not null)
         {
-            var staying = records.Select(r => r.Hostname).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var staying = hostnames.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var leaving = existing.Entries.Where(e => !staying.Contains(e.Key)).Select(e => e.Value).ToHashSet();
             await DeleteRulesAsync(existing.Id, leaving.Contains, ct);
         }
@@ -98,8 +133,8 @@ public sealed class MatddnsClient : EngineClient
         var body = new JsonObject
         {
             ["name"] = name,
-            ["kind"] = provider.MatddnsKind,
-            [provider.MatddnsSettings] = settings,
+            ["kind"] = kind,
+            [settingsKey] = settings,
             ["entries"] = entries,
             ["managedBy"] = Owner.Name,
         };

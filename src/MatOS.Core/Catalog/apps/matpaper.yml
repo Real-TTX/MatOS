@@ -6,6 +6,8 @@ x-matos:
   description: Scan or upload documents, let them be recognised and filed, and find them again in seconds.
   category: Files
   role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matpaper.svg
   homepage: https://github.com/Real-TTX/MatPaper
   # The platform contract (/api): MatOS fills MAT_API_KEY.

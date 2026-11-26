@@ -6,6 +6,8 @@ x-matos:
   description: Build and publish websites from blocks, with plugins, multi-site support and built-in backups.
   category: Websites
   role: app
+  state: alpha
+  stateNote: Installs, no MatOS integration yet.
   icon: matcms.svg
   homepage: https://github.com/Real-TTX/MatCMS
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.

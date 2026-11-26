@@ -5,6 +5,9 @@
     ViewData["Title"] = "Home";
     Layout = "_Launcher";
     var isAdmin = User.IsAdmin();
+    // The tour of the first visit: the layout loads css/onboarding.css and js/onboarding.js for it.
+    ViewData["Tour"] = Model.ShowTour;
+    ViewData["Onboarding"] = Model.ShowTour;
     // While the things off the screen are drawn: the greeting of Today is no heading there (the page has its h1 for a screen reader instead).
     var offScreen = false;
 
@@ -128,11 +131,25 @@
                 break;
 
             case Kind.Setup:
-                <a class="os-widget @size os-widget--warn" href="/Wizard" data-window="/Wizard" data-title="Setup" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("sparkles")Setup</span>
-                    <span class="os-widget__value">Not set up yet</span>
-                    <span class="os-widget__note">Install the engines and give your apps a domain</span>
-                </a>
+                @* The first start takes the whole tab (its pages are top-level): a plain link, no window. While it works, or when a line failed, it leads back to
+                   the progress screen and its "Try again". *@
+                if (Model.SetupProgress is { } setup)
+                {
+                    var failed = setup.Steps.Count(s => s.State == "failed");
+                    <a class="os-widget @size@(setup.Finished ? " os-widget--warn" : string.Empty)" href="/Setup/Progress" data-widget @Home(item)>
+                        <span class="os-widget__head">@Ui.Icon("sparkles")Setup</span>
+                        <span class="os-widget__value">@(setup.Finished ? "Almost there" : "Setting up")</span>
+                        <span class="os-widget__note">@(setup.Finished ? $"{failed} step{(failed == 1 ? " needs" : "s need")} another try" : $"{setup.Percent} % · {setup.Estimate}")</span>
+                    </a>
+                }
+                else
+                {
+                    <a class="os-widget @size os-widget--warn" href="/Setup/Choose" data-widget @Home(item)>
+                        <span class="os-widget__head">@Ui.Icon("sparkles")Setup</span>
+                        <span class="os-widget__value">Not set up yet</span>
+                        <span class="os-widget__note">Choose how you reach your apps and your first apps</span>
+                    </a>
+                }
                 break;
 
             case Kind.Start when isAdmin:
@@ -166,7 +183,9 @@
                         <span class="os-app__icon">
                             @if (l.IconUrl is not null)
                             {
-                                <span class="mv-appicon" aria-hidden="true"><img src="@l.IconUrl" alt="" loading="lazy" /></span>
+                                @* The app serves this icon at its address; when the browser cannot reach that, js/os.js puts the catalog's icon in its place (data-fallback). *@
+                                var fallback = Model.IconOf(tile.App) is { Length: > 0 } own ? (own.StartsWith("http", StringComparison.OrdinalIgnoreCase) || own.StartsWith('/') ? own : Url.Content("~/img/apps/" + own)) : null;
+                                <span class="mv-appicon" aria-hidden="true"><img src="@l.IconUrl" alt="" loading="lazy" data-fallback="@fallback" /></span>
                             }
                             else
                             {
@@ -357,3 +376,51 @@
         }
     </nav>
 </div>
+
+@if (Model.ShowTour)
+{
+    @* The tour of the first visit (js/onboarding.js): one mark at a time over the home screen, skippable; once through or skipped it is not shown to this
+       account again (POST /api/home/tour). data-target names what a mark points at (the first one that is on the screen). Without the script it stays hidden. *@
+    <div class="ob-tour" data-ob-tour="@OnboardingEndpoints.TourPath" hidden>
+        <div class="ob-tour__ring" data-ob-tour-ring aria-hidden="true"></div>
+        <section class="ob-tour__card" role="dialog" aria-modal="false" aria-labelledby="ob-tour-title" data-ob-tour-card>
+            <ol class="ob-tour__steps">
+                <li data-ob-tour-step data-target=".os-dock">
+                    <h2 class="ob-tour__title">Your dock</h2>
+                    <p>@(isAdmin ? "The parts of MatOS you need most stay down here: the store, your apps, backups and settings." : "Your apps and your account stay down here.")</p>
+                </li>
+                @if (isAdmin)
+                {
+                    <li data-ob-tour-step data-target=".os-dock [data-window='/Store']">
+                        <h2 class="ob-tour__title">The store</h2>
+                        <p>Add more apps whenever you like. One click installs an app, with its address and its sign-in.</p>
+                    </li>
+                }
+                <li data-ob-tour-step data-target=".os-page .os-app, .os-page .os-widget">
+                    <h2 class="ob-tour__title">Windows</h2>
+                    <p>Apps open in windows, like on a desktop. Drag a window by its bar, or to the side of the screen to fill half of it. A right click shows more.</p>
+                </li>
+                @if (isAdmin)
+                {
+                    <li data-ob-tour-step data-target=".os-dock [data-window='/Settings']">
+                        <h2 class="ob-tour__title">Settings</h2>
+                        <p>Your address, the engines and your backups. Change how you reach your apps here at any time.</p>
+                    </li>
+                }
+                else
+                {
+                    <li data-ob-tour-step data-target=".os-dock [data-window='/Account/Profile']">
+                        <h2 class="ob-tour__title">Your account</h2>
+                        <p>Your password, the theme and the picture behind your home screen.</p>
+                    </li>
+                }
+            </ol>
+            <div class="ob-tour__foot">
+                <span class="ob-tour__count" data-ob-tour-count aria-live="polite"></span>
+                <button type="button" class="ob-tour__btn" data-ob-tour-skip>Skip</button>
+                <button type="button" class="ob-tour__btn ob-tour__btn--next" data-ob-tour-next>Next</button>
+            </div>
+            <span class="mat-sr-only" id="ob-tour-title">A short tour of your home screen</span>
+        </section>
+    </div>
+}

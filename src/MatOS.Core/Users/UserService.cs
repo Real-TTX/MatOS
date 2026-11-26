@@ -152,6 +152,24 @@ public sealed class UserService
         return true;
     }
 
+    /// <summary>Whether the short tour of the home screen is due for the user (they never went through it nor skipped it). False for an unknown user.</summary>
+    public Task<bool> TourDueAsync(long id, CancellationToken ct = default)
+        => _db.Users.AnyAsync(u => u.Id == id && u.HomeTourSeenAt == null, ct);
+
+    /// <summary>The user went through the tour of the home screen, or skipped it: it is not shown again. False for an unknown user.</summary>
+    public async Task<bool> MarkTourSeenAsync(long id, CancellationToken ct = default)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+        {
+            return false;
+        }
+
+        user.HomeTourSeenAt ??= DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     /// <summary>
     /// The local account of a person who signed in through MatIdentity: found by the claim <c>sub</c>, else the local account with the same user name that is
     /// not linked yet (the administrator who set MatOS up is the administrator of MatIdentity too), else a new account. The role follows the claim

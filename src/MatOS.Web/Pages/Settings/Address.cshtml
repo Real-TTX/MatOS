@@ -1,0 +1,222 @@
+@page
+@using MatOS.Core.Configuration
+@using MatOS.Core.Integrations
+@using MatOS.Web.Infrastructure
+@model MatOS.Web.Pages.Settings.AddressModel
+@{
+    ViewData["Title"] = "Address";
+    ViewData["PageSub"] = "How you reach your apps from anywhere.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Address", null));
+    ViewData["Width"] = "narrow";
+    var hosted = Model.Hosted;
+    var tunnel = Model.Tunnel;
+}
+
+<partial name="_SettingsTabs" model="@("address")" />
+
+@if (hosted is null)
+{
+    @* ------------------------------------------------------------ no free address yet *@
+    <form method="post" asp-page-handler="Register" class="mat-form" novalidate>
+        <partial name="_ValidationSummary" />
+
+        <div class="mat-card">
+            <div class="mat-card__head"><icon name="globe" /><span class="mat-card__title">A free address</span></div>
+            <div class="mat-card__body mat-stack">
+                <p>
+                    Reach your apps from anywhere under an address like <code>notes.anna.@Model.Zone</code>, with HTTPS, without a domain of your own
+                    and without changing anything on your router.
+                </p>
+                @if (!string.IsNullOrWhiteSpace(Model.Config.BaseDomain))
+                {
+                    <div class="mat-alert mat-alert--info" role="status"><icon name="info" /><div class="mat-alert__body">Your apps use <strong>@Model.Config.BaseDomain</strong> now. A free address takes its place.</div></div>
+                }
+                <mat-field label="Name" asp-for="Name" required="true" hint="3 to 32 letters, digits and dashes. Checked while you type.">
+                    <div class="mat-input-group">
+                        <input asp-for="Name" class="mat-input" required minlength="3" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false"
+                               data-msg-required="Please choose a name." data-msg-range="Use 3 to 32 letters, digits and dashes."
+                               data-name-check="@AddressEndpoints.NameCheckPath" />
+                        <span class="mat-input-addon">.@Model.Zone</span>
+                    </div>
+                </mat-field>
+            </div>
+        </div>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="check" /><span>Get this address</span></button>
+        </div>
+    </form>
+
+    <p class="mat-muted">
+        Do you have a domain of your own? Enter it with its DNS account in <a href="/Settings">General</a>. Without any address every app gets a port of this machine.
+    </p>
+}
+else
+{
+    @* ------------------------------------------------------------ the free address *@
+    @if (!Model.KeyReadable)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@HostedAddressService.KeyLostMessage</div></div>
+    }
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="globe" /><span class="mat-card__title">Your address</span></div>
+        <div class="mat-card__body mat-stack">
+            <dl class="mat-kv">
+                <dt>Address</dt>
+                <dd>
+                    <code>@hosted.Address</code>
+                    @if (Model.Config.UsesHostedAddress)
+                    {
+                        <span class="mat-pill mat-pill--ok">In use</span>
+                    }
+                    else
+                    {
+                        <span class="mat-pill mat-pill--warn">Not in use</span>
+                    }
+                </dd>
+                <dt>MatOS</dt>
+                <dd><a href="@ProxyPublisher.UrlFor(ProxyPublisher.SelfHost(hosted.Address))" target="_blank" rel="noopener">@ProxyPublisher.SelfHost(hosted.Address)</a></dd>
+                <dt>Your apps</dt>
+                <dd><code>https://&lt;app&gt;.@hosted.Address</code></dd>
+                <dt>Way in</dt>
+                <dd>@(hosted.IsDirect ? "Direct: visitors come straight to this machine, your router forwards the ports 80 and 443." : "Tunnel: visitors come through the MatOS address service. Works behind every router.")</dd>
+                <dt>Since</dt>
+                <dd>@Format.DateTimeLocal(hosted.RegisteredAt)</dd>
+                @if (Model.Remote is { } remote)
+                {
+                    @if (remote.Ok)
+                    {
+                        <dt>Public IP</dt>
+                        <dd>@(remote.Value!.PublicIp ?? "not known yet")</dd>
+                    }
+                    else
+                    {
+                        <dt>Address service</dt>
+                        <dd class="mat-text-warning">@remote.Message</dd>
+                    }
+                }
+            </dl>
+            @if (!Model.Config.UsesHostedAddress)
+            {
+                <div class="mat-alert mat-alert--warning" role="status">
+                    <icon name="alert" />
+                    <div class="mat-alert__body">
+                        @(string.IsNullOrWhiteSpace(Model.Config.BaseDomain) ? "Your apps do not use this address now: each one has a port of this machine." : $"Your apps use {Model.Config.BaseDomain} now, not this address.")
+                    </div>
+                </div>
+                <form method="post" asp-page-handler="Use">
+                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="check" /><span>Use it for my apps</span></button>
+                </form>
+            }
+        </div>
+    </div>
+
+    @if (!hosted.IsDirect)
+    {
+        @* The state of the tunnel moves: this part is fetched again every few seconds (js/matos.js, data-live). *@
+        <div class="mat-card" id="address-tunnel" data-live="5000">
+            <div class="mat-card__head"><icon name="network" /><span class="mat-card__title">Tunnel</span></div>
+            <div class="mat-card__body">
+                <dl class="mat-kv">
+                    <dt>State</dt>
+                    <dd>
+                        @if (!tunnel.Wanted && Model.Config.UsesHostedAddress && Model.KeyReadable)
+                        {
+                            <span class="mat-pill mat-pill--busy">Starting</span>
+                        }
+                        else if (!tunnel.Wanted)
+                        {
+                            <span class="mat-pill mat-pill--plain">Off</span> <span class="mat-muted">it runs while your apps use this address</span>
+                        }
+                        else if (tunnel.Connected)
+                        {
+                            <span class="mat-pill mat-pill--ok">Connected</span> <span class="mat-muted">since @Format.DateTimeLocal(tunnel.ConnectedSince!.Value)</span>
+                        }
+                        else if (tunnel.LastError is null)
+                        {
+                            <span class="mat-pill mat-pill--busy">Connecting</span>
+                        }
+                        else
+                        {
+                            <span class="mat-pill mat-pill--error">Not connected</span>
+                        }
+                    </dd>
+                    @if (tunnel.Wanted && !tunnel.Connected && tunnel.LastError is not null)
+                    {
+                        <dt>Last problem</dt>
+                        <dd>@tunnel.LastError <span class="mat-muted">@(tunnel.NextAttemptAt is { } next && next > DateTime.UtcNow ? $"(next try in {Math.Max(1, (int)(next - DateTime.UtcNow).TotalSeconds)} s)" : "")</span></dd>
+                    }
+                    <dt>Visitors</dt>
+                    <dd>@tunnel.StreamsOpen now, @tunnel.StreamsTotal since MatOS started</dd>
+                </dl>
+            </div>
+        </div>
+    }
+
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="route" /><span class="mat-card__title">Direct access</span></div>
+        <div class="mat-card__body mat-stack">
+            @if (hosted.IsDirect)
+            {
+                <p>Visitors come straight to this machine and Matddns keeps <code>@hosted.Address</code> on its public IP. Your router must keep forwarding the ports 80 and 443 to it.</p>
+                <form method="post" asp-page-handler="Mode" data-confirm="Go back to the tunnel? Visitors then come through the MatOS address service again; the router setting is no longer needed." data-confirm-ok="Use the tunnel">
+                    <input type="hidden" name="mode" value="@HostedAddress.Tunnel" />
+                    <button type="submit" class="mat-btn mat-btn--secondary"><icon name="network" /><span>Switch back to the tunnel</span></button>
+                </form>
+            }
+            else
+            {
+                <p>
+                    If your router forwards the ports 80 and 443 to this machine, visitors can come straight here instead of through the address service:
+                    a little faster, and nothing passes through it. The check asks the address service to reach this machine from outside.
+                </p>
+                @if (Model.CheckError is not null)
+                {
+                    <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@Model.CheckError</div></div>
+                }
+                @if (Model.Check is { } check)
+                {
+                    <dl class="mat-kv">
+                        <dt>Public IP</dt><dd>@(check.PublicIp ?? "not known")</dd>
+                        <dt>Port 80</dt><dd><partial name="_AddressPort" model="check.Http" /></dd>
+                        <dt>Port 443</dt><dd><partial name="_AddressPort" model="check.Https" /></dd>
+                        @if (!string.IsNullOrEmpty(check.Detail))
+                        {
+                            <dt>Details</dt><dd>@check.Detail</dd>
+                        }
+                    </dl>
+                    @if (check.Reachable)
+                    {
+                        <div class="mat-alert mat-alert--success" role="status"><icon name="check-circle" /><div class="mat-alert__body">This machine can be reached directly.</div></div>
+                    }
+                    else
+                    {
+                        <div class="mat-alert mat-alert--warning" role="status"><icon name="alert" /><div class="mat-alert__body">This machine cannot be reached directly. Forward the ports 80 and 443 of your router to it and check again, or keep the tunnel.</div></div>
+                    }
+                }
+                <div class="mat-actions">
+                    <form method="post" asp-page-handler="Check">
+                        <button type="submit" class="mat-btn mat-btn--secondary"><icon name="refresh" /><span>Check direct access</span></button>
+                    </form>
+                    @if (Model.Check is { Reachable: true })
+                    {
+                        <form method="post" asp-page-handler="Mode" data-confirm="Switch to direct access? Visitors then come straight to this machine, so your router must keep forwarding the ports 80 and 443." data-confirm-ok="Switch">
+                            <input type="hidden" name="mode" value="@HostedAddress.Direct" />
+                            <button type="submit" class="mat-btn mat-btn--primary"><icon name="arrow-right" /><span>Switch to direct</span></button>
+                        </form>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="trash" /><span class="mat-card__title">Give the name back</span></div>
+        <div class="mat-card__body mat-stack">
+            <p>The address stops working and the name becomes free for others. Your apps keep running and each one gets a port of this machine again.</p>
+            <form method="post" asp-page-handler="Release" data-confirm="Give @hosted.Address back? Its links stop working for everybody." data-confirm-ok="Give it back" data-confirm-danger>
+                <button type="submit" class="mat-btn mat-btn--danger"><icon name="trash" /><span>Give the name back</span></button>
+            </form>
+        </div>
+    </div>
+}

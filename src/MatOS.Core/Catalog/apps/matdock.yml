@@ -8,6 +8,8 @@ x-matos:
     Use it where MatOS stops: managing other servers, migrating volumes and backups to a NAS.
   category: Infrastructure
   role: docker
+  state: integrated
+  stateNote: Runs and backs up the apps; platform contract 1, no home-screen contributions yet.
   icon: matdock.svg
   homepage: https://github.com/Real-TTX/MatDock
   recommended: true

@@ -6,6 +6,8 @@ x-matos:
   description: My Drive and shared drives, sharing with people and links, versions, trash, WebDAV, the storage locations of your NAS (SMB, SFTP, FTP, WebDAV) and office files in MatOffice.
   category: Files
   role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matdrive.svg
   homepage: https://github.com/Real-TTX/MatDrive
   # The platform contract (/api): MatOS fills MAT_API_KEY.

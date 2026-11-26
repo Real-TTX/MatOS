@@ -1,0 +1,14 @@
+@model int
+@*
+    Where the person is in the first start: five dots for Welcome, the account, the address, the apps and "Set up". The model is the first step of the page
+    (0 on /Setup, 2 on /Setup/Choose); js/onboarding.js marks the dot of the step that is shown (data-ob-offset on the form).
+*@
+@{
+    var names = new[] { "Welcome", "Your account", "How you reach your apps", "Your first apps", "Set up" };
+}
+<ol class="ob-dots" aria-label="Steps of the setup" data-ob-dots>
+    @for (var i = 0; i < names.Length; i++)
+    {
+        <li class="@(i < Model ? "is-done" : i == Model ? "is-active" : null)" aria-current="@(i == Model ? "step" : null)"><span class="mat-sr-only">@names[i]</span></li>
+    }
+</ol>

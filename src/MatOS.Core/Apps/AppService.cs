@@ -49,6 +49,7 @@ public sealed partial class AppService
     private readonly FrameLink _frames;
     private readonly BindingBroker _broker;
     private readonly ImagePreflight _images;
+    private readonly OwnerHandover _owner;
     private readonly ILogger<AppService> _logger;
 
     public AppService(
@@ -70,6 +71,7 @@ public sealed partial class AppService
         FrameLink frames,
         BindingBroker broker,
         ImagePreflight images,
+        OwnerHandover owner,
         ILogger<AppService> logger)
     {
         _db = db;
@@ -90,6 +92,7 @@ public sealed partial class AppService
         _frames = frames;
         _broker = broker;
         _images = images;
+        _owner = owner;
         _logger = logger;
     }
 
@@ -139,6 +142,12 @@ public sealed partial class AppService
         if (catalog is null)
         {
             return new PrepareResult(null, [$"The app '{request.CatalogId}' is not in the catalog."], []);
+        }
+
+        // A preview app is only announced (its image is not published yet): nothing to install.
+        if (!AppStates.CanInstall(catalog.State))
+        {
+            return new PrepareResult(null, [$"{catalog.Name} is a preview: it cannot be installed yet."], []);
         }
 
         // An engine (core) exists once: MatOS finds it by its catalog id. A second install would be a second MatDock or MatSMTP that nothing talks to;
@@ -586,12 +595,18 @@ public sealed partial class AppService
         await ConnectAllBindingsAsync(log, ct);
     }
 
-    /// <summary>MatOS's own sign-in through MatIdentity (its client `matos`), or no more when MatIdentity is gone.</summary>
+    /// <summary>
+    /// MatOS's own sign-in through MatIdentity (its client `matos`), or no more when MatIdentity is gone. Once it signs in through MatIdentity, the person who set
+    /// up MatOS gets a person there with the same e-mail and password, when they still wait for one (<see cref="OwnerHandover"/>).
+    /// </summary>
     private async Task ConnectSelfAsync(Action<string> log, CancellationToken ct)
     {
         try
         {
-            await _identity.ConnectSelfAsync(origin: null, log, ct);
+            if (await _identity.ConnectSelfAsync(origin: null, log, ct))
+            {
+                await _owner.HandOverAsync(log, ct);
+            }
         }
         catch (InvalidOperationException ex)
         {

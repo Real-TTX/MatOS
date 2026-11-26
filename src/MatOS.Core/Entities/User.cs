@@ -31,5 +31,8 @@ public class User : AuditableEntity
     /// <summary>How the person arranged the home screen (the JSON of <c>MatOS.Core.Users.HomeLayout</c>: pages, what is off the screen, sizes of widgets); null = as it comes.</summary>
     public string? HomeLayout { get; set; }
 
+    /// <summary>When the person went through (or skipped) the short tour of the home screen; null = it is shown on their next visit of the home screen.</summary>
+    public DateTime? HomeTourSeenAt { get; set; }
+
     public ICollection<UserSession> Sessions { get; set; } = new List<UserSession>();
 }

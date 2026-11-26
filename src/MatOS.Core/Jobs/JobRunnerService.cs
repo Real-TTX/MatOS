@@ -10,7 +10,8 @@ namespace MatOS.Core.Jobs;
 
 /// <summary>
 /// The background worker: runs the queued jobs one after the other (Docker operations on the same host must not overlap),
-/// keeps their log, and records how they ended. Jobs that were still running when the container stopped are marked failed.
+/// keeps their log, and records how they ended. Jobs that were still running when the container stopped are marked failed; the ones of the first start
+/// are queued again (<see cref="Setup.SetupService.ResumeAsync"/>).
 /// </summary>
 public sealed class JobRunnerService : BackgroundService
 {
@@ -74,6 +75,23 @@ public sealed class JobRunnerService : BackgroundService
         {
             await db.SaveChangesAsync(ct);
             _logger.LogWarning("Marked {Jobs} job(s) and {Apps} app(s) as interrupted after a restart.", interrupted.Count, stuckApps.Count);
+        }
+
+        // The first start goes on by itself: its lines that were waiting or running are queued again, in the order of its plan.
+        if (interrupted.Count > 0)
+        {
+            try
+            {
+                var resumed = await scope.ServiceProvider.GetRequiredService<Setup.SetupService>().ResumeAsync(interrupted.Select(j => j.Id).ToHashSet(), ct);
+                if (resumed > 0)
+                {
+                    _logger.LogInformation("Queued {Count} step(s) of the first start again after a restart.", resumed);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "The first start could not be resumed after a restart; its lines offer Try again.");
+            }
         }
     }
 

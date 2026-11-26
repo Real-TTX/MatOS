@@ -40,6 +40,12 @@ public sealed class MatOSOptions
     public string? DockerHost { get; set; }
 
     public AdminSeedOptions Admin { get; set; } = new();
+
+    /// <summary>
+    /// The address service that gives an install without a domain a free address <c>&lt;name&gt;.my.mattiverse.de</c> and the tunnel to it
+    /// (docs/SERVICES.md; <c>MatOS__ServicesUrl</c>).
+    /// </summary>
+    public string ServicesUrl { get; set; } = "https://services.mattiverse.de";
 }
 
 /// <summary>Credentials used to seed the first administrator on an empty database (headless setups).</summary>

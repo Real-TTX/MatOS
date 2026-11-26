@@ -1,0 +1,85 @@
+@page
+@model MatOS.Web.Pages.Setup.IndexModel
+@{
+    Layout = "_Onboarding";
+    ViewData["Title"] = "Welcome";
+    var docker = Model.Docker;
+}
+
+@* The first start, steps 1 and 2: Welcome (with the check of Docker), then the account. One form; js/onboarding.js shows one step at a time (without the script both are shown). *@
+<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="0" data-ob-start="@(Model.AtAccount ? 1 : 0)">
+    <partial name="_Steps" model="0" />
+
+    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-welcome">
+        <div class="ob-hero">
+            <span class="ob-planet" aria-hidden="true"><img src="/img/logo.svg" alt="" width="128" height="128" /></span>
+            <h1 class="ob-title" id="ob-welcome">Welcome to MatOS</h1>
+            <p class="ob-lead">Your own apps, on your own computer. Answer a few questions and MatOS sets up everything else by itself.</p>
+        </div>
+
+        <div class="ob-check @(docker.Ready ? "ob-check--ok" : "ob-check--bad")" role="status">
+            <span class="ob-check__icon" aria-hidden="true">@Ui.Icon(docker.Ready ? "check" : "alert")</span>
+            <div class="ob-check__body">
+                <strong>@docker.Title</strong>
+                <p>@docker.Text</p>
+                @if (docker.Fix is { } fix)
+                {
+                    <p class="ob-check__where">The line goes @docker.FixWhere:</p>
+                    <div class="ob-fix">
+                        <code id="ob-fix">@fix</code>
+                        <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-copy="#ob-fix"><icon name="copy" /><span>Copy</span></button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            @if (docker.Ready)
+            {
+                <button type="button" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-next><span>Let's start</span><icon name="arrow-right" /></button>
+            }
+            else
+            {
+                <a href="/Setup" class="mat-btn mat-btn--primary mat-btn--lg"><icon name="refresh" /><span>Check again</span></a>
+                <button type="button" class="mat-btn mat-btn--ghost" data-ob-next><span>Continue anyway</span></button>
+            }
+        </div>
+    </section>
+
+    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-account">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("user")</span>
+            <h2 class="ob-title ob-title--step" id="ob-account">Your account</h2>
+            <p class="ob-lead">You sign in with it to MatOS and to every app you add later.</p>
+        </div>
+
+        <partial name="_ValidationSummary" />
+
+        <div class="mat-stack">
+            <mat-field label="Your name" asp-for="Input.Name" required="true">
+                <input asp-for="Input.Name" class="mat-input mat-input--lg" autocomplete="name" required maxlength="80" data-msg-required="Please tell us your name." />
+            </mat-field>
+            <mat-field label="E-mail" asp-for="Input.Email" required="true" hint="This is your user name.">
+                <input asp-for="Input.Email" type="email" class="mat-input mat-input--lg" autocomplete="username" inputmode="email" spellcheck="false" required maxlength="254"
+                       data-msg-required="Please enter your e-mail address." data-msg-type="Enter an e-mail address like anna@example.com." />
+            </mat-field>
+            <mat-field label="Password" asp-for="Input.Password" required="true" hint="At least 8 characters, and not your e-mail address.">
+                <input asp-for="Input.Password" type="password" class="mat-input mat-input--lg" autocomplete="new-password" required minlength="8" maxlength="128" value=""
+                       data-ob-password data-msg-required="Please choose a password." data-msg-range="Use at least 8 characters." />
+            </mat-field>
+            <mat-field label="Repeat the password" asp-for="Input.ConfirmPassword" required="true">
+                <input asp-for="Input.ConfirmPassword" type="password" class="mat-input mat-input--lg" autocomplete="new-password" required maxlength="128" value=""
+                       data-ob-password data-ob-same-as="Input_Password" data-msg-required="Please repeat the password." />
+            </mat-field>
+            <label class="mat-check">
+                <input type="checkbox" data-ob-show-passwords />
+                <span class="mat-check__text">Show the password</span>
+            </label>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg"><span>Create my account</span><icon name="arrow-right" /></button>
+            <button type="button" class="mat-btn mat-btn--ghost" data-ob-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+</form>

@@ -116,7 +116,8 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
-    options.Conventions.AllowAnonymousToPage("/Setup");
+    // The first start: Welcome and the account before there is any; the rest of it (/Setup/Choose, /Setup/Progress) is for the administrator it made.
+    options.Conventions.AllowAnonymousToPage("/Setup/Index");
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/Account/External");
     options.Conventions.AllowAnonymousToPage("/Account/Logout");
@@ -124,7 +125,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Share/View");
 
     // Roles: Admin manages everything; User opens apps and looks at them; Anonymous only sees a shared link.
-    foreach (var folder in new[] { "/Store", "/Backups", "/Jobs", "/Tasks", "/Users", "/People", "/Settings", "/Wizard", "/Engines" })
+    foreach (var folder in new[] { "/Store", "/Backups", "/Jobs", "/Tasks", "/Users", "/People", "/Settings", "/Wizard", "/Engines", "/Setup" })
     {
         options.Conventions.AuthorizeFolder(folder, "AdminOnly");
     }
@@ -173,6 +174,10 @@ app.MapRazorPages();
 
 app.MapGet("/healthz", () => Results.Text("ok " + AppVersion.Current)).AllowAnonymous();
 app.MapJobsApi();
+// The live check of a name for the free address (the setup assistant, Settings, Address).
+app.MapAddressApi();
+// The progress screen of the first start and the tour of the home screen.
+app.MapOnboardingApi();
 // MatIdentity ends the sessions of a person who signed out there (server to server).
 app.MapBackchannelLogout();
 

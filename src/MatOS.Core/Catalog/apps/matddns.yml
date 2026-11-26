@@ -8,6 +8,8 @@ x-matos:
     writes it to Cloudflare, Netcup, Hetzner, GoDaddy or any DynDNS provider and fails over to the next reachable source.
   category: Infrastructure
   role: ddns
+  state: beta
+  stateNote: Opens in the MatOS window only after the merge of feature/frame-ancestors.
   icon: matddns.svg
   homepage: https://github.com/Real-TTX/Matddns
   recommended: true

@@ -49,15 +49,15 @@ public class FrameTests
         };
 
         Assert.Equal(
-            ["https://matos.example.com", "http://localhost:8030", "http://192.168.1.5:8030", "http://nas.local:8030"],
+            ["https://matos.example.com", "http://localhost:8030", "http://127.0.0.1:8030", "http://192.168.1.5:8030", "http://nas.local:8030"],
             FrameLink.Origins(config, 8030, proxied: true));
     }
 
     [Fact]
-    public void Without_the_proxy_there_is_no_route_and_without_an_address_only_localhost()
+    public void Without_the_proxy_there_is_no_route_and_without_an_address_only_this_machine()
     {
-        Assert.Equal(["http://localhost:8130"], FrameLink.Origins(new SystemConfig { BaseDomain = "example.com" }, 8130, proxied: false));
-        Assert.Equal(["http://localhost:8030"], FrameLink.Origins(new SystemConfig { PublicHost = "localhost" }, 8030, proxied: false));
+        Assert.Equal(["http://localhost:8130", "http://127.0.0.1:8130"], FrameLink.Origins(new SystemConfig { BaseDomain = "example.com" }, 8130, proxied: false));
+        Assert.Equal(["http://localhost:8030", "http://127.0.0.1:8030"], FrameLink.Origins(new SystemConfig { PublicHost = "localhost" }, 8030, proxied: false));
     }
 
     [Fact]

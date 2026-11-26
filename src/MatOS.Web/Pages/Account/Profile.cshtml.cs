@@ -14,11 +14,13 @@ public class ProfileModel : PageModel
 {
     private readonly UserService _userService;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly MatOS.Core.Integrations.OwnerHandover _owner;
 
-    public ProfileModel(UserService userService, IPasswordHasher passwordHasher)
+    public ProfileModel(UserService userService, IPasswordHasher passwordHasher, MatOS.Core.Integrations.OwnerHandover owner)
     {
         _userService = userService;
         _passwordHasher = passwordHasher;
+        _owner = owner;
     }
 
     [BindProperty]
@@ -96,7 +98,17 @@ public class ProfileModel : PageModel
             return Page();
         }
 
+        // The person who set up MatOS, before MatIdentity came: MatIdentity gets this password, so it must be one MatIdentity takes (the rules of /Setup).
+        if (await _owner.PasswordProblemAsync(userId, Input.NewPassword, HttpContext.RequestAborted) is { } problem)
+        {
+            ModelState.AddModelError("Input.NewPassword", problem);
+            return Page();
+        }
+
         await _userService.ChangePasswordAsync(userId, Input.NewPassword, HttpContext.RequestAborted);
+
+        // The person who set up MatOS, before MatIdentity came: MatIdentity gets the new password, not the old one.
+        await _owner.PasswordChangedAsync(userId, Input.NewPassword, HttpContext.RequestAborted);
 
         // Re-issue the cookie so the "must change password" flag is cleared immediately.
         user.MustChangePassword = false;

@@ -1,0 +1,112 @@
+@page
+@using MatOS.Core.Setup
+@model MatOS.Web.Pages.Setup.ProgressModel
+@{
+    Layout = "_Onboarding";
+    var v = Model.View;
+    ViewData["Title"] = v.Headline;
+    var email = User.GetUsername();
+    var phase = !v.Finished ? "working" : v.AnyFailed ? "partial" : "ready";
+
+    string StateText(SetupStepView step) => step.State switch
+    {
+        SetupProgress.Waiting => "Waiting",
+        SetupProgress.Working => "Working on it",
+        SetupProgress.Done => "Done",
+        _ => step.Error ?? "This did not work.",
+    };
+}
+
+@* The first start, step 6: one line per step, live (js/onboarding.js polls /api/setup/progress and changes only what changed). Without the script, Reload shows the state. *@
+<div class="ob-flow" data-ob-progress="/api/setup/progress" data-ob-phase="@phase">
+    <partial name="_Steps" model="5" />
+
+    <section class="ob-card ob-card--wide ob-progress" aria-labelledby="ob-progress-title">
+        <div class="ob-hero ob-hero--progress">
+            <span class="ob-planet ob-planet--sm ob-planet--orbit" aria-hidden="true"><img src="/img/logo.svg" alt="" width="128" height="128" /></span>
+            <h1 class="ob-title ob-title--step" id="ob-progress-title" data-ob-headline>@v.Headline</h1>
+            <p class="ob-lead" data-ob-when="working" hidden="@(phase != "working")">MatOS is installing what it needs, one thing after the other. You can leave this page: it goes on by itself, and the Setup widget on your home screen brings you back here.</p>
+            <p class="ob-lead" data-ob-when="ready" hidden="@(phase != "ready")">
+                @(Model.WithIdentity
+                    ? $"From now on you sign in with {email} and your password, to MatOS and to every app."
+                    : $"You sign in with {email} and your password.")
+            </p>
+            <p class="ob-lead" data-ob-when="partial" hidden="@(phase != "partial")">Most of it is ready. Try the steps that did not work again. You can also go on: the Setup widget on your home screen brings you back here.</p>
+        </div>
+
+        @* MatOS stopped answering the page (it keeps working): said after a few failed rounds, and the way in again when the session ended (js/onboarding.js). *@
+        <div class="mat-alert mat-alert--warning" role="alert" data-ob-offline hidden>
+            <icon name="alert" />
+            <div class="mat-alert__body">
+                MatOS does not answer this page right now. It keeps working: reload the page in a moment.
+                @if (Model.LoopbackUrl is { } loopback)
+                {
+                    <text>If it stays like this, open <a href="@loopback">@loopback</a> instead.</text>
+                }
+            </div>
+        </div>
+        <div class="mat-alert mat-alert--warning" role="alert" data-ob-signedout hidden>
+            <icon name="alert" />
+            <div class="mat-alert__body">You are signed out. MatOS keeps working; <a href="/Account/Login?returnUrl=%2FSetup%2FProgress">sign in again</a> to watch it.</div>
+        </div>
+
+        @* What changed, for a screen reader: a line that failed or is done, and the end (js/onboarding.js writes it). *@
+        <p class="mat-sr-only" role="status" aria-live="polite" data-ob-announce></p>
+
+        <div class="ob-meter-row">
+            <progress class="ob-meter" max="100" value="@v.Percent" aria-labelledby="ob-progress-title" data-ob-bar>@v.Percent %</progress>
+            <span class="ob-meter-row__text" aria-live="polite"><span><span data-ob-percent>@v.Percent</span> %</span><span class="ob-meter-row__estimate" data-ob-estimate>@v.Estimate</span></span>
+        </div>
+
+        <ol class="ob-tasks" data-ob-tasks>
+            @for (var i = 0; i < v.Steps.Count; i++)
+            {
+                var step = v.Steps[i];
+                <li class="ob-task" data-ob-task="@step.Key" data-state="@step.State" data-job="@step.JobId">
+                    <span class="ob-task__mark" aria-hidden="true">
+                        <span class="ob-task__dot"></span>
+                        <span class="ob-task__spin"></span>
+                        <span class="ob-task__ok">@Ui.Icon("check")</span>
+                        <span class="ob-task__bad">@Ui.Icon("x")</span>
+                    </span>
+                    <span class="ob-task__text">
+                        <span class="ob-task__label">@step.Label</span>
+                        <span class="ob-task__state" data-ob-state-text>@StateText(step)</span>
+                    </span>
+                    <span class="ob-task__actions">
+                        <form method="post" asp-page-handler="Retry" data-ob-retry>
+                            <input type="hidden" name="key" value="@step.Key" />
+                            <button type="submit" class="mat-btn mat-btn--secondary mat-btn--sm"><icon name="refresh" /><span>Try again</span></button>
+                        </form>
+                        <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-ob-details aria-expanded="false" aria-controls="ob-log-@i"><span>Show details</span></button>
+                    </span>
+                    <pre class="ob-task__log" id="ob-log-@i" data-ob-log hidden></pre>
+                </li>
+            }
+        </ol>
+
+        <div class="ob-done" data-ob-when="ready partial" hidden="@(phase == "working")">
+            @if (Model.SelfUrl is { } self)
+            {
+                @* The address people open from anywhere: MatOS is a host below the address (the bare name has no route). *@
+                <div class="ob-address">
+                    <p class="ob-small">Open MatOS from anywhere, also on your phone (bookmark it):</p>
+                    <div class="ob-fix">
+                        <code><a href="@self" target="_blank" rel="noopener">@self</a></code>
+                        <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-copy="@self"><icon name="copy" /><span>Copy</span></button>
+                    </div>
+                </div>
+            }
+            <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
+                <form method="post" asp-page-handler="RetryAll" data-ob-when="partial" hidden="@(phase != "partial")" data-ob-retry-all>
+                    <button type="submit" class="mat-btn mat-btn--secondary mat-btn--lg"><icon name="refresh" /><span>Try all again</span></button>
+                </form>
+                <a href="/" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-home><icon name="home" /><span>Go to my home screen</span></a>
+            </div>
+            <p class="ob-small ob-countdown" data-ob-countdown hidden>
+                <span>Your home screen opens in <span data-ob-seconds>20</span> seconds.</span>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-ob-stay>Stay here</button>
+            </p>
+        </div>
+    </section>
+</div>

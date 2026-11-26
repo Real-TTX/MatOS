@@ -8,6 +8,8 @@ x-matos:
     patterns and MatUi, the UI toolkit that all Mat apps are built from. A website with nothing to configure and nothing to back up.
   category: Tools
   role: app
+  state: alpha
+  stateNote: Installs, no MatOS integration yet.
   icon: matdesign.svg
   homepage: https://github.com/Real-TTX/MatDesign
   ui:

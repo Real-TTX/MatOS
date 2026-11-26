@@ -53,6 +53,7 @@ public static partial class CatalogParser
             throw new FormatException($"{source}: 'name' is missing.");
         }
 
+        ReadState(app, source);
         app.ComposeYaml = yaml;
         app.Source = source;
         ReadServices(app, yaml, source);
@@ -125,6 +126,34 @@ public static partial class CatalogParser
 
         AddManagedVariables(app);
         return app;
+    }
+
+    /// <summary>
+    /// The state of the app (<see cref="AppStates"/>): a known one, or none (a catalog copy in <c>/data/catalog</c>, an entry of Mattiverse), which is
+    /// <see cref="AppStates.Default"/>. The note is one sentence on one line.
+    /// </summary>
+    private static void ReadState(CatalogApp app, string source)
+    {
+        var state = app.State?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(state))
+        {
+            app.State = AppStates.Default;
+            app.StateDefaulted = true;
+        }
+        else if (AppStates.IsKnown(state))
+        {
+            app.State = state;
+        }
+        else
+        {
+            throw new FormatException($"{source}: 'state' must be one of {string.Join(", ", AppStates.All)} (got '{app.State}').");
+        }
+
+        app.StateNote = string.IsNullOrWhiteSpace(app.StateNote) ? null : app.StateNote.Trim();
+        if (app.StateNote is { } note && note.Contains('\n'))
+        {
+            throw new FormatException($"{source}: 'stateNote' is one sentence on one line.");
+        }
     }
 
     /// <summary>

@@ -52,7 +52,8 @@ public sealed class DnsPublisher
     public async Task<bool> IsActiveAsync(CancellationToken ct = default)
     {
         var config = await _config.GetAsync(ct);
-        return !string.IsNullOrWhiteSpace(config.BaseDomain) && config.Dns.IsConfigured && await _matddns.IsInstalledAsync(ct);
+        // The free address of the address service has no DNS account: in direct mode its one record is HostedAddressService's (DynDNS), in tunnel mode there is none.
+        return !string.IsNullOrWhiteSpace(config.BaseDomain) && config.Dns.IsConfigured && !config.UsesHostedAddress && await _matddns.IsInstalledAsync(ct);
     }
 
     /// <summary>

@@ -8,6 +8,8 @@ x-matos:
     retries and a history of every message. MatOS gives every app that sends mail its own relay user there.
   category: Infrastructure
   role: mail
+  state: integrated
+  stateNote: Sends the mail of the apps.
   icon: matsmtp.svg
   homepage: https://github.com/Real-TTX/MatSMTP
   recommended: true

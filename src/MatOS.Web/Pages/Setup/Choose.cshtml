@@ -1,0 +1,249 @@
+@page
+@using MatOS.Core.Catalog
+@using MatOS.Core.Engines
+@using MatOS.Core.Setup
+@model MatOS.Web.Pages.Setup.ChooseModel
+@{
+    Layout = "_Onboarding";
+    ViewData["Title"] = "Set up MatOS";
+
+    // A card of the store, as a box to tick: the icon, the name, what it is for and how far it is along. What the state means is written out (a tooltip does
+    // not exist on touch): its own note, or the meaning of a beta; the alphas have theirs above their group.
+    async Task AppChoice(CatalogApp app)
+    {
+        var note = app.StateNote ?? (app.State == AppStates.Beta ? AppStates.Meaning(app.State) : null);
+        <label class="mat-choice ob-app" data-ob-app="@app.Name">
+            <input type="checkbox" name="Apps" value="@app.Id" checked="@Model.Apps.Contains(app.Id)" />
+            <app-icon name="@app.Name" icon="@app.Icon" />
+            <span class="mat-choice__text">
+                <strong>@app.Name</strong>
+                <small>@app.Tagline</small>
+                <span><span class="mat-pill @AppStatePill.Css(app.State)">@AppStates.Label(app.State)</span></span>
+                @if (note is not null)
+                {
+                    <small class="ob-app__note">@note</small>
+                }
+            </span>
+        </label>
+    }
+}
+
+@* The first start, steps 3 to 5: the way to the apps, the first apps, "Set up MatOS". One form; js/onboarding.js shows one step at a time. *@
+<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="2" data-ob-start="@Model.StartAt" data-ob-zone="@Model.Zone" data-ob-self="@MatOS.Core.Integrations.ProxyPublisher.SelfSlug">
+    <partial name="_Steps" model="2" />
+
+    @* ------------------------------------------------------------ 3. how the apps are reached *@
+    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-reach">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("globe")</span>
+            <h1 class="ob-title ob-title--step" id="ob-reach">How do you reach your apps?</h1>
+            <p class="ob-lead">You can change this later in the settings.</p>
+        </div>
+
+        <partial name="_ValidationSummary" />
+
+        <fieldset class="ob-reach">
+            <legend class="mat-sr-only">How do you reach your apps?</legend>
+            <label class="ob-choice">
+                <input class="ob-choice__radio" type="radio" name="Reach" value="@Reach.Free" checked="@(Model.Reach == Reach.Free)" />
+                <span class="ob-choice__icon" aria-hidden="true">@Ui.Icon("globe")</span>
+                <span class="ob-choice__text">
+                    <strong>A free address <span class="mat-pill mat-pill--accent">Recommended</span></strong>
+                    <small>Your own name below my.mattiverse.de. Works from anywhere, HTTPS included, no router settings.</small>
+                </span>
+            </label>
+            <label class="ob-choice">
+                <input class="ob-choice__radio" type="radio" name="Reach" value="@Reach.Domain" checked="@(Model.Reach == Reach.Domain)" />
+                <span class="ob-choice__icon" aria-hidden="true">@Ui.Icon("link")</span>
+                <span class="ob-choice__text">
+                    <strong>My own domain</strong>
+                    <small>Every app gets an address below your domain, with HTTPS. You need the account of your domain's DNS provider.</small>
+                </span>
+            </label>
+            <label class="ob-choice">
+                <input class="ob-choice__radio" type="radio" name="Reach" value="@Reach.Home" checked="@(Model.Reach == Reach.Home)" />
+                <span class="ob-choice__icon" aria-hidden="true">@Ui.Icon("home")</span>
+                <span class="ob-choice__text">
+                    <strong>Only here at home</strong>
+                    <small>No address on the internet. You open your apps from devices in your home network.</small>
+                </span>
+            </label>
+        </fieldset>
+
+        <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Free" hidden="@(Model.Reach != Reach.Free)">
+            @if (Model.OwnAddress is { } own)
+            {
+                @* This MatOS has its free address already (Settings, Address): it is its own, so it is not checked again (the check would say "taken"). *@
+                <mat-field label="Your address" asp-for="Name" hint="@($"{own} is yours already. Give it back in Settings, Address to choose another name.")">
+                    <div class="mat-input-group">
+                        <input asp-for="Name" class="mat-input mat-input--lg" readonly aria-describedby="ob-name-zone" />
+                        <span class="mat-input-addon" id="ob-name-zone">.@Model.Zone</span>
+                    </div>
+                </mat-field>
+            }
+            else
+            {
+                <mat-field label="Your address" asp-for="Name" required="true" hint="Choose a name: 3 to 32 letters, digits and dashes. We check it while you type.">
+                    <div class="mat-input-group">
+                        <input asp-for="Name" class="mat-input mat-input--lg" required minlength="3" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="anna"
+                               data-msg-required="Please choose a name for your address." data-msg-range="Use 3 to 32 letters, digits and dashes."
+                               data-name-check="@AddressEndpoints.NameCheckPath" data-name-free="{address} is yours." />
+                        <span class="mat-input-addon">.@Model.Zone</span>
+                    </div>
+                </mat-field>
+            }
+        </div>
+
+        <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Domain" hidden="@(Model.Reach != Reach.Domain)">
+            <div class="mat-stack">
+                <mat-field label="Your domain" asp-for="BaseDomain" required="true" hint="Your apps get addresses like files.example.com.">
+                    <input asp-for="BaseDomain" class="mat-input mat-input--lg" required placeholder="example.com" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false"
+                           data-msg-required="Please enter your domain, like example.com." />
+                </mat-field>
+                <partial name="_DnsFields" model="Model.Dns" />
+            </div>
+        </div>
+
+        <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Home" hidden="@(Model.Reach != Reach.Home)">
+            @if (Model.LocalBrowser)
+            {
+                @* Opened as localhost: no address for the phone. The address of this computer is asked here, not hidden under Advanced. *@
+                <div class="mat-stack">
+                    <p class="ob-note">@Ui.Icon("info")<span>You opened MatOS as <code>@Request.Host.Host</code>, a name only this computer knows. Your phone and your other devices need the address of this computer in your home network.</span></p>
+                    <mat-field label="The address of this computer" asp-for="PublicHost" hint="How your phone and other devices reach this computer, like 192.168.1.20 or nas.local. Your router's list of devices shows it.">
+                        <input asp-for="PublicHost" class="mat-input mat-input--lg" placeholder="192.168.1.20" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
+                    </mat-field>
+                </div>
+            }
+            else
+            {
+                <p class="ob-note">@Ui.Icon("info")<span>Every app gets a port of this computer, like <code>@(Model.PublicHost ?? "192.168.1.20"):8100</code>. You can add an address later in the settings.</span></p>
+            }
+        </div>
+
+        @if (Model.BusyPorts.Count > 0)
+        {
+            <div class="mat-alert mat-alert--warning" role="status">
+                <icon name="alert" />
+                <div class="mat-alert__body">
+                    @(Model.BusyPorts.Count == 1 ? "Port" : "Ports") @string.Join(" and ", Model.BusyPorts.Select(p => p.Port)) of this computer @(Model.BusyPorts.Count == 1 ? "is" : "are") used by @string.Join(" and ", Model.BusyPorts.Select(p => p.Holder).Distinct()) already.
+                    @SetupPlan.EngineLabel(EngineIds.Matcad) needs the ports @string.Join(" and ", Model.WebPorts): stop that program first, or choose "Only here at home" and turn off Web addresses under Advanced.
+                </div>
+            </div>
+        }
+
+        <details class="mat-collapse ob-advanced" open="@(Model.BusyPorts.Count > 0)">
+            <summary><span>Advanced</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+            <div class="mat-accordion__body mat-stack">
+                @if (!Model.LocalBrowser)
+                {
+                    <mat-field label="The address of this computer" asp-for="PublicHost" hint="How your devices at home reach it, like nas.local or 192.168.1.20.">
+                        <input asp-for="PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
+                    </mat-field>
+                }
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-legend">The engines MatOS installs</legend>
+                    <div class="mat-choices ob-engines">
+                        @foreach (var id in EngineIds.All)
+                        {
+                            var fixedOn = id == EngineIds.MatDock || Model.InstalledEngines.Contains(id);
+                            <label class="mat-choice" data-ob-engine="@SetupPlan.EngineLabel(id)">
+                                @if (id == EngineIds.Matcad)
+                                {
+                                    <input asp-for="InstallMatcad" type="checkbox" disabled="@fixedOn" />
+                                }
+                                else if (id == EngineIds.Matddns)
+                                {
+                                    <input asp-for="InstallMatddns" type="checkbox" disabled="@fixedOn" />
+                                }
+                                else if (id == EngineIds.MatIdentity)
+                                {
+                                    <input asp-for="InstallMatIdentity" type="checkbox" disabled="@fixedOn" />
+                                }
+                                else if (id == EngineIds.MatSmtp)
+                                {
+                                    <input asp-for="InstallMatSmtp" type="checkbox" disabled="@fixedOn" />
+                                }
+                                else
+                                {
+                                    <input type="checkbox" id="engine-@id" checked disabled />
+                                }
+                                <span class="mat-choice__text">
+                                    <strong>@SetupPlan.EngineLabel(id)</strong>
+                                    <small>@SetupPlan.EngineDoes(id)</small>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+            </div>
+        </details>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            <button type="button" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-next><span>Next</span><icon name="arrow-right" /></button>
+        </div>
+    </section>
+
+    @* ------------------------------------------------------------ 4. the first apps *@
+    <section class="ob-card ob-card--wide ob-step" data-ob-step aria-labelledby="ob-apps">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("apps")</span>
+            <h2 class="ob-title ob-title--step" id="ob-apps">Pick your first apps</h2>
+            <p class="ob-lead">They are installed right after MatOS itself. The store has them all, any time.</p>
+        </div>
+
+        <span class="mat-error" asp-validation-for="Apps"></span>
+        @if (Model.Featured.Count == 0 && Model.More.Count == 0)
+        {
+            <p class="ob-note">@Ui.Icon("info")<span>There is nothing to pick yet: the store has every app once MatOS is set up.</span></p>
+        }
+        else
+        {
+            <fieldset class="ob-apps">
+                <legend class="mat-sr-only">Your first apps</legend>
+                <div class="mat-choices">
+                    @foreach (var app in Model.Featured)
+                    {
+                        await AppChoice(app);
+                    }
+                </div>
+                @if (Model.More.Count > 0)
+                {
+                    <details class="mat-collapse ob-more" open="@Model.More.Any(a => Model.Apps.Contains(a.Id))">
+                        <summary><span>Show more: early versions (@Model.More.Count)</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+                        <div class="mat-accordion__body">
+                            <p class="ob-note">@Ui.Icon("info")<span>@AppStates.Meaning(AppStates.Alpha)</span></p>
+                            <div class="mat-choices">
+                                @foreach (var app in Model.More)
+                                {
+                                    await AppChoice(app);
+                                }
+                            </div>
+                        </div>
+                    </details>
+                }
+            </fieldset>
+        }
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            <button type="button" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-next><span data-ob-apps-next>Next</span><icon name="arrow-right" /></button>
+            <button type="button" class="mat-btn mat-btn--ghost" data-ob-prev><icon name="chevron-left" /><span>Back</span></button>
+            <span class="mat-btn-row__spacer"></span>
+            <button type="button" class="mat-btn mat-btn--ghost" data-ob-next data-ob-skip><span>Skip</span></button>
+        </div>
+    </section>
+
+    @* ------------------------------------------------------------ 5. one button *@
+    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-go">
+        <div class="ob-hero ob-hero--go">
+            <span class="ob-planet ob-planet--sm" aria-hidden="true"><img src="/img/logo.svg" alt="" width="128" height="128" /></span>
+            <h2 class="ob-title ob-title--step" id="ob-go">Ready when you are</h2>
+            <p class="ob-lead ob-summary" data-ob-summary>@Model.Summary</p>
+            <p class="ob-small">This takes a few minutes. You can watch, or come back later: it goes on by itself.</p>
+        </div>
+        <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg ob-go" data-ob-go><icon name="rocket" /><span>Set up MatOS</span></button>
+            <button type="button" class="mat-btn mat-btn--ghost" data-ob-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+</form>

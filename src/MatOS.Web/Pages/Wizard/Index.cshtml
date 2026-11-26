@@ -6,7 +6,7 @@
     ViewData["PageSub"] = Model.AlreadyCompleted ? "Run it again to change the addresses, the engines or the DNS account." : "A few questions, then MatOS installs what it needs.";
     ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Setup wizard", null));
     ViewData["Width"] = "narrow";
-    var steps = 5; // welcome, addresses, engines, DNS, review
+    var steps = 4; // welcome, addresses (the engines under Advanced), DNS, review
 }
 
 <form method="post" class="mat-form mv-wizard" data-wizard novalidate>
@@ -58,17 +58,69 @@
     <section class="mv-step" data-step aria-labelledby="step-addresses">
         <div class="mv-step__head">
             <h2 id="step-addresses">Where do your apps live?</h2>
-            <p>Both are optional. You can change them later in the settings.</p>
+            <p>Optional. You can change it later in the settings.</p>
         </div>
 
         <div class="mat-card">
             <div class="mat-card__body mat-stack">
-                <mat-field label="Address of this machine" asp-for="PublicHost" hint="How you reach this host from your devices, like nas.local or 192.168.1.20.">
-                    <input asp-for="PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" />
-                </mat-field>
-                <mat-field label="Domain for your apps" asp-for="BaseDomain" hint="Every app gets its own address below this domain, like mail.example.com, with a certificate. Leave empty: every app gets a port of this machine, served by Matcad.">
+                <mat-field label="Domain for your apps" asp-for="BaseDomain" hint="Every app gets its own address below this domain, like mail.example.com, with a certificate. Leave empty: every app gets a port of this machine, served by Matcad. No domain? Settings, Address gives you a free one.">
                     <input asp-for="BaseDomain" class="mat-input" placeholder="example.com" inputmode="url" autocomplete="off" />
                 </mat-field>
+                <details class="mat-collapse" data-wizard-advanced>
+                    <summary><span>Advanced</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <mat-field label="Address of this machine" asp-for="PublicHost" hint="How you reach this host from your devices, like nas.local or 192.168.1.20.">
+                            <input asp-for="PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" />
+                        </mat-field>
+                        <p class="mat-muted">MatDock is needed for everything else. Skip one of the other engines only if something else on this machine already does its job.</p>
+                        <fieldset class="mat-field mat-fieldset">
+                            <legend class="mat-legend">Engines to install</legend>
+                            <div class="mat-choices">
+                                @foreach (var card in Model.Engines)
+                                {
+                                    var app = card.App;
+                                    var locked = card.Required || card.Installed is not null;
+                                    <label class="mat-choice" data-engine="@app.Id">
+                                        @if (app.Id == EngineIds.Matcad)
+                                        {
+                                            <input asp-for="InstallMatcad" type="checkbox" disabled="@locked" />
+                                        }
+                                        else if (app.Id == EngineIds.Matddns)
+                                        {
+                                            <input asp-for="InstallMatddns" type="checkbox" disabled="@locked" />
+                                        }
+                                        else if (app.Id == EngineIds.MatIdentity)
+                                        {
+                                            <input asp-for="InstallMatIdentity" type="checkbox" disabled="@locked" />
+                                        }
+                                        else if (app.Id == EngineIds.MatSmtp)
+                                        {
+                                            <input asp-for="InstallMatSmtp" type="checkbox" disabled="@locked" />
+                                        }
+                                        else
+                                        {
+                                            <input type="checkbox" id="engine-@app.Id" checked disabled />
+                                        }
+                                        <app-icon name="@app.Name" icon="@app.Icon" />
+                                        <span class="mat-choice__text">
+                                            <strong data-engine-name>@app.Name</strong>
+                                            <small>@card.Owns</small>
+                                            <span>
+                                                @if (card.Installed is not null) { <span class="mat-pill mat-pill--ok">Installed</span> }
+                                                else if (card.Required) { <span class="mat-pill mat-pill--plain">Required</span> }
+                                            </span>
+                                            @foreach (var conflict in card.Conflicts)
+                                            {
+                                                <small class="mv-engine__warn">Port @conflict.Port is used by <code>@conflict.Container</code>.</small>
+                                            }
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+                        </fieldset>
+                        <p class="mat-muted">Other tools, like Nginx Proxy Manager or Portainer, are in the store as plain apps.</p>
+                    </div>
+                </details>
             </div>
         </div>
 
@@ -78,67 +130,7 @@
         </div>
     </section>
 
-    @* ---------------------------------------------------------------- 3. the engines *@
-    <section class="mv-step" data-step aria-labelledby="step-engines">
-        <div class="mv-step__head">
-            <h2 id="step-engines">The engines</h2>
-            <p>MatDock is needed for everything else. Skip one of the others if something else on this machine already does its job.</p>
-        </div>
-
-        <fieldset class="mat-field mat-fieldset">
-            <legend class="mat-legend">Engines to install</legend>
-            <div class="mat-choices">
-                @foreach (var card in Model.Engines)
-                {
-                    var app = card.App;
-                    var locked = card.Required || card.Installed is not null;
-                    <label class="mat-choice" data-engine="@app.Id">
-                        @if (app.Id == EngineIds.Matcad)
-                        {
-                            <input asp-for="InstallMatcad" type="checkbox" disabled="@locked" />
-                        }
-                        else if (app.Id == EngineIds.Matddns)
-                        {
-                            <input asp-for="InstallMatddns" type="checkbox" disabled="@locked" />
-                        }
-                        else if (app.Id == EngineIds.MatIdentity)
-                        {
-                            <input asp-for="InstallMatIdentity" type="checkbox" disabled="@locked" />
-                        }
-                        else if (app.Id == EngineIds.MatSmtp)
-                        {
-                            <input asp-for="InstallMatSmtp" type="checkbox" disabled="@locked" />
-                        }
-                        else
-                        {
-                            <input type="checkbox" id="engine-@app.Id" checked disabled />
-                        }
-                        <app-icon name="@app.Name" icon="@app.Icon" />
-                        <span class="mat-choice__text">
-                            <strong data-engine-name>@app.Name</strong>
-                            <small>@card.Owns</small>
-                            <span>
-                                @if (card.Installed is not null) { <span class="mat-pill mat-pill--ok">Installed</span> }
-                                else if (card.Required) { <span class="mat-pill mat-pill--plain">Required</span> }
-                            </span>
-                            @foreach (var conflict in card.Conflicts)
-                            {
-                                <small class="mv-engine__warn">Port @conflict.Port is used by <code>@conflict.Container</code>.</small>
-                            }
-                        </span>
-                    </label>
-                }
-            </div>
-        </fieldset>
-        <p class="mat-muted">Other tools, like Nginx Proxy Manager or Portainer, are in the store as plain apps.</p>
-
-        <div class="mat-btn-row mat-btn-row--plain">
-            <button type="button" class="mat-btn mat-btn--primary" data-next><span>Next</span><icon name="chevron-right" /></button>
-            <button type="button" class="mat-btn mat-btn--secondary" data-prev><icon name="chevron-left" /><span>Back</span></button>
-        </div>
-    </section>
-
-    @* ---------------------------------------------------------------- 4. DNS account *@
+    @* ---------------------------------------------------------------- 3. DNS account *@
     <section class="mv-step" data-step aria-labelledby="step-dns">
         <div class="mv-step__head">
             <h2 id="step-dns">Where is your domain hosted?</h2>
@@ -160,7 +152,7 @@
         </div>
     </section>
 
-    @* ---------------------------------------------------------------- 5. review *@
+    @* ---------------------------------------------------------------- 4. review *@
     <section class="mv-step" data-step aria-labelledby="step-review">
         <div class="mv-step__head">
             <h2 id="step-review">Ready to go</h2>

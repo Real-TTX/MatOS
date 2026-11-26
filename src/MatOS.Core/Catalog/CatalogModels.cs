@@ -18,6 +18,74 @@ public static class AppRoles
 }
 
 /// <summary>
+/// How far an app is along in MatOS (the catalog's <c>state</c>): shown in the store and listed in the README (the owner's table of 2026-11-26).
+/// </summary>
+public static class AppStates
+{
+    /// <summary>Fully part of MatOS: it does its part for every app, or uses the engines and is tested end to end.</summary>
+    public const string Integrated = "integrated";
+
+    /// <summary>Uses the engines (the one sign-in, ...), not yet tested end to end through MatOS.</summary>
+    public const string Beta = "beta";
+
+    /// <summary>Installs and runs; what makes it part of MatOS is not released yet.</summary>
+    public const string Alpha = "alpha";
+
+    /// <summary>Announced, not installable yet (its image is not published).</summary>
+    public const string Preview = "preview";
+
+    /// <summary>Not a Mat app: it runs as it is, without the one sign-in or anything else of MatOS.</summary>
+    public const string ThirdParty = "third-party";
+
+    /// <summary>From the most to the least part of MatOS: the order of the store's filter and of the README table.</summary>
+    public static readonly IReadOnlyList<string> All = [Integrated, Beta, Alpha, Preview, ThirdParty];
+
+    /// <summary>The state of a catalog copy in <c>/data/catalog</c> that does not name one.</summary>
+    public const string Default = Beta;
+
+    public static bool IsKnown(string? state) => state is not null && All.Contains(state);
+
+    /// <summary>The name shown in the store and the README.</summary>
+    public static string Label(string state) => state switch
+    {
+        Integrated => "Integrated",
+        Beta => "Beta",
+        Alpha => "Alpha",
+        Preview => "Preview",
+        ThirdParty => "Third-party",
+        _ => state,
+    };
+
+    /// <summary>What the state means, in plain words (the install page and the README).</summary>
+    public static string Meaning(string state) => state switch
+    {
+        Integrated => "Fully part of MatOS and tested through it: an engine that does its part for every app, or an app that uses all of them.",
+        Beta => "Works with MatOS and its one sign-in, but is not yet tested from start to end through MatOS.",
+        Alpha => "Installs and runs, but is not yet tied into MatOS: expect rough edges, and do not keep anything important only in it yet.",
+        Preview => "Announced, not ready to install yet.",
+        ThirdParty => "Not a Mat app: it runs as it is, without the one sign-in or the other parts of MatOS.",
+        _ => string.Empty,
+    };
+
+    /// <summary>The position in <see cref="All"/>; an unknown state comes last.</summary>
+    public static int Rank(string state)
+    {
+        for (var i = 0; i < All.Count; i++)
+        {
+            if (All[i] == state)
+            {
+                return i;
+            }
+        }
+
+        return All.Count;
+    }
+
+    /// <summary>A preview app is only announced: MatOS does not install it.</summary>
+    public static bool CanInstall(string state) => state != Preview;
+}
+
+/// <summary>
 /// One entry of the app catalog. A catalog entry is a normal <c>docker compose</c> file plus a top-level
 /// <c>x-matos</c> block with what the store and the installer need (name, icon, which service has the UI, the
 /// install questions). Compose ignores <c>x-*</c> keys, so the same file also runs with plain <c>docker compose</c>.
@@ -47,6 +115,19 @@ public sealed class CatalogApp
 
     /// <summary>An engine (MatDock, Matcad, Matddns, MatIdentity, MatSMTP): installed by the setup wizard as part of MatOS and not removable from the app list.</summary>
     public bool Core { get; set; }
+
+    /// <summary>
+    /// How far the app is along in MatOS: one of <see cref="AppStates"/>. Every built-in entry names it (a test checks); a catalog copy in
+    /// <c>/data/catalog</c> without it is <see cref="AppStates.Default"/>.
+    /// </summary>
+    public string State { get; set; } = string.Empty;
+
+    /// <summary>One sentence: what is missing for the next state (for an integrated app: what it does for MatOS).</summary>
+    public string? StateNote { get; set; }
+
+    /// <summary>The entry did not name its state: the parser gave it <see cref="AppStates.Default"/>.</summary>
+    [YamlIgnore]
+    public bool StateDefaulted { get; set; }
 
     /// <summary>Short notes shown on the install page (limits, hints).</summary>
     public List<string> Notes { get; set; } = new();

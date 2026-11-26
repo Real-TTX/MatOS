@@ -6,6 +6,8 @@ x-matos:
   description: An endless board like Miro - sticky notes, shapes, connectors, frames, templates for workshops, comments, voting stamps and presenting, live with everybody at once, shared with people or by a link.
   category: Productivity
   role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matboard.svg
   homepage: https://github.com/Real-TTX/MatBoard
   # The platform contract (/api): MatOS fills MAT_API_KEY.

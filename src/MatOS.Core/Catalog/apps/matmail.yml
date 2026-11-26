@@ -8,6 +8,8 @@ x-matos:
     or send through MatMail as a smart host. Tenants keep the provider credentials off your customers' devices.
   category: Communication
   role: app
+  state: beta
+  stateNote: Not shown in the MatOS window yet.
   icon: matmail.svg
   homepage: https://github.com/Real-TTX/MatMail
   # The platform contract (/api): MatOS fills MAT_API_KEY.

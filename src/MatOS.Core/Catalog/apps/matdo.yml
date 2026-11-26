@@ -6,6 +6,8 @@ x-matos:
   description: Tasks like Todoist - a quick add in German and English, projects with sections and sub-tasks, teams, notifications and a webhook for dictation.
   category: Productivity
   role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matdo.svg
   homepage: https://github.com/Real-TTX/MatDo
   # The platform contract (/api): MatOS fills MAT_API_KEY.

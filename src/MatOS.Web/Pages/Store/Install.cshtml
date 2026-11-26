@@ -1,5 +1,6 @@
 @page
 @model MatOS.Web.Pages.Store.InstallModel
+@using MatOS.Core.Catalog
 @{
     var app = Model.App!;
     ViewData["Title"] = $"Install {app.Name}";
@@ -16,9 +17,37 @@
         <div class="mv-apphead__text">
             <h1>@app.Name</h1>
             <p class="mat-page__sub">@app.Tagline</p>
+            <div class="mv-apphead__sub">
+                <span class="mat-pill @AppStatePill.Css(app.State)">@AppStates.Label(app.State)</span>
+                @if (app.State != AppStates.Alpha && AppStates.CanInstall(app.State) && app.StateNote is { } stateNote)
+                {
+                    <span>@stateNote</span>
+                }
+            </div>
         </div>
     </div>
 </div>
+
+@if (!AppStates.CanInstall(app.State))
+{
+    <div class="mat-alert mat-alert--warning" id="install-state">
+        <icon name="alert" />
+        <div class="mat-alert__body">
+            <strong>@app.Name is a preview: it cannot be installed yet.</strong>
+            @AppStates.Meaning(app.State) @app.StateNote
+        </div>
+    </div>
+}
+else if (app.State == AppStates.Alpha)
+{
+    <div class="mat-alert mat-alert--warning">
+        <icon name="alert" />
+        <div class="mat-alert__body">
+            <strong>@app.Name is an alpha.</strong>
+            @AppStates.Meaning(app.State) @app.StateNote
+        </div>
+    </div>
+}
 
 <div class="mat-prose">
     <p>@app.Description</p>
@@ -111,7 +140,14 @@
     </div>
 
     <div class="mat-btn-row">
-        <button type="submit" class="mat-btn mat-btn--primary"><icon name="download" /><span>Install</span></button>
+        @if (AppStates.CanInstall(app.State))
+        {
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="download" /><span>Install</span></button>
+        }
+        else
+        {
+            <button type="submit" class="mat-btn mat-btn--primary" disabled aria-describedby="install-state"><icon name="download" /><span>Install</span></button>
+        }
         <a href="/Store" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
     </div>
 </form>

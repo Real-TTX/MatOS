@@ -10,8 +10,8 @@ public sealed class SetupState
 }
 
 /// <summary>
-/// On a fresh install (no users yet) every request is redirected to the first-run setup wizard
-/// (<c>/Setup</c>), which creates the first administrator. Once a user exists this becomes a no-op.
+/// On a fresh install (no users yet) every request is redirected to the first start
+/// (<c>/Setup</c>: Welcome and the account), which creates the first administrator. Once a user exists this becomes a no-op.
 /// </summary>
 public sealed class SetupGuardMiddleware
 {
@@ -41,6 +41,7 @@ public sealed class SetupGuardMiddleware
                     !path.StartsWithSegments("/js") &&
                     !path.StartsWithSegments("/img") &&
                     !path.StartsWithSegments("/lib") &&
+                    !path.StartsWithSegments(AddressEndpoints.NameCheckPath) &&
                     !path.StartsWithSegments("/healthz"))
                 {
                     context.Response.Redirect(SetupPath);

@@ -94,14 +94,25 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ManifestCache>();
         services.AddScoped<IAppProvisioner, MatSmtpProvisioner>();
 
+        // The free address of the address service (docs/SERVICES.md): its client, the switch of its mode and the target of the tunnel.
+        services.AddHttpClient(ServicesClient.HttpClientName);
+        services.AddScoped<ServicesClient>();
+        services.AddScoped<HostedAddressService>();
+        services.AddScoped<MatOS.Core.Integrations.OwnerHandover>();
+        services.AddScoped<MatOS.Core.Setup.SetupService>();
+        services.AddScoped<TunnelTarget>();
+        services.AddSingleton<TunnelClient>();
+
         return services;
     }
 
-    /// <summary>The background workers: the job runner and the backup scheduler.</summary>
+    /// <summary>The background workers: the job runner, the backup scheduler and the tunnel of the free address.</summary>
     public static IServiceCollection AddMatOSWorkers(this IServiceCollection services)
     {
         services.AddHostedService<JobRunnerService>();
         services.AddHostedService<BackupSchedulerService>();
+        // The tunnel of the free address: up while it is used in tunnel mode.
+        services.AddHostedService(sp => sp.GetRequiredService<TunnelClient>());
         return services;
     }
 }

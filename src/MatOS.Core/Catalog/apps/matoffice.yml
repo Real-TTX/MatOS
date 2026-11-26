@@ -6,6 +6,8 @@ x-matos:
   description: Four apps in one, like the office suites you know – with Word, Excel and PowerPoint files, sharing, versions and offline use. MatDrive opens its office files in it.
   category: Productivity
   role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matoffice.svg
   homepage: https://github.com/Real-TTX/MatOffice
   # The platform contract (/api): MatOS fills MAT_API_KEY.

@@ -1,3 +1,4 @@
+using System.Globalization;
 using MatOS.Core.Catalog;
 using MatOS.Core.Data;
 using MatOS.Web.Controls;
@@ -11,7 +12,7 @@ public class IndexModel : PageModel
 {
     private const int PageSize = 12;
     private static readonly StringComparison Ic = StringComparison.OrdinalIgnoreCase;
-    private static readonly string[] SortKeys = ["name", "category"];
+    private static readonly string[] SortKeys = ["name", "category", "state"];
 
     private readonly CatalogService _catalog;
     private readonly MatOSDbContext _db;
@@ -37,10 +38,16 @@ public class IndexModel : PageModel
 
         var q = ListQuery.Text(Request, "q");
         var category = ListQuery.Text(Request, "category");
+        var state = ListQuery.Text(Request, "state") is { } st && AppStates.IsKnown(st) ? st : null;
         var sort = ListQuery.Text(Request, "sort") is { } s && SortKeys.Contains(s) ? s : "name";
         var descending = ListQuery.Descending(Request, defaultDescending: false);
 
         IEnumerable<CatalogApp> query = all;
+        if (state is not null)
+        {
+            query = query.Where(a => a.State == state);
+        }
+
         if (category is not null)
         {
             query = query.Where(a => a.Category.Equals(category, Ic));
@@ -48,10 +55,15 @@ public class IndexModel : PageModel
 
         if (q is not null)
         {
-            query = query.Where(a => a.Name.Contains(q, Ic) || a.Tagline.Contains(q, Ic) || a.Description.Contains(q, Ic) || a.Category.Contains(q, Ic));
+            query = query.Where(a => a.Name.Contains(q, Ic) || a.Tagline.Contains(q, Ic) || a.Description.Contains(q, Ic) || a.Category.Contains(q, Ic) || AppStates.Label(a.State).Contains(q, Ic));
         }
 
-        Func<CatalogApp, string> key = sort == "category" ? a => a.Category.ToLowerInvariant() : a => a.Name.ToLowerInvariant();
+        Func<CatalogApp, string> key = sort switch
+        {
+            "category" => a => a.Category.ToLowerInvariant(),
+            "state" => a => AppStates.Rank(a.State).ToString("D2", CultureInfo.InvariantCulture),
+            _ => a => a.Name.ToLowerInvariant(),
+        };
         var list = (descending ? query.OrderByDescending(key) : query.OrderBy(key)).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
         var toolbar = new ToolbarModel
@@ -62,8 +74,12 @@ public class IndexModel : PageModel
             Search = q,
             SearchPlaceholder = "Search apps",
             SearchField = true,
-            Filters = [new FilterField("category", "Category", categories.Select(c => new FilterOption(c, c)).ToList(), category)],
-            SortOptions = [new("name", "Name"), new("category", "Category")],
+            Filters =
+            [
+                new FilterField("category", "Category", categories.Select(c => new FilterOption(c, c)).ToList(), category),
+                new FilterField("state", "State", AppStates.All.Select(s => new FilterOption(s, AppStates.Label(s))).ToList(), state),
+            ],
+            SortOptions = [new("name", "Name"), new("category", "Category"), new("state", "State")],
             Sort = sort,
             Descending = descending,
             DefaultSort = "name",

@@ -115,6 +115,11 @@
     <script src="~/matui/matui.js" asp-append-version="true"></script>
     <script src="~/js/matos.js" asp-append-version="true"></script>
     <script src="~/js/os.js" asp-append-version="true"></script>
+    @if (ViewData["Tour"] is true)
+    {
+        @* The tour of the first visit (Pages/Index.cshtml, docs/ARCHITECTURE.md "The first start"). *@
+        <script src="~/js/onboarding.js" asp-append-version="true"></script>
+    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

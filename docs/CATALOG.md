@@ -21,6 +21,8 @@ x-matos:
   homepage: https://example.com/wiki
   recommended: false          # offered first in the store (infrastructure roles only)
   core: false                 # true for the five engines: installed by the wizard, cannot be uninstalled
+  state: beta                 # integrated | beta | alpha | preview | third-party: how far the app is along in MatOS (see "App states")
+  stateNote: Not yet tested end to end through MatOS.   # optional, one sentence: what is missing for the next state
   ui:
     service: wiki             # the compose service with the web UI
     port: 3000                # its port inside the container
@@ -85,6 +87,22 @@ volumes:
   implementing `IAppProvisioner`. An engine also needs its API key as a generated, hidden variable (`MATCAD_API_KEY`, `MATDDNS_API_KEY`,
   `MATDOCK_API_KEY`, `MATSMTP_API_KEY`; MatIdentity uses `MAT_API_KEY`) that the compose file passes to the container the way the engine expects it (see [ENGINES.md](ENGINES.md)).
   The five engines are `core: true` (the wizard installs them, the app list cannot remove them); `EngineIds.All` names them in the order they are installed.
+
+## App states
+
+Every app has a `state`; the store shows it as a pill and filters by it, and the README lists every built-in app with it (`AppStateTests` keeps the table in step
+with the catalog: run the tests with `MATOS_WRITE_README=1` after a change). The values are `AppStates` in `CatalogModels.cs`:
+
+| State | Meaning |
+|---|---|
+| `integrated` | fully part of MatOS and tested through it (the engines, an app that uses all of them) |
+| `beta` | uses the engines (the one sign-in, ...), not yet tested end to end through MatOS |
+| `alpha` | installs and runs, its integration is not released yet: the install page warns |
+| `preview` | announced only (its image is not published): the store does not install it |
+| `third-party` | not a Mat app: it runs as it is |
+
+Every built-in entry names its state (a unit test checks); an entry in `/data/catalog` (or of Mattiverse) without one is `beta`. An unknown state is an error of the entry.
+`stateNote` is one sentence on one line: what is missing for the next state (for an integrated app, what it does).
 
 ## The platform contract and what an app uses
 

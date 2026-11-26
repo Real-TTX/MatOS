@@ -22,8 +22,8 @@ They live in the folder *System*; open one and you see what MatOS set up there.
 ## What this is about
 
 Self-hosting usually means a terminal, a pile of `docker-compose.yml` files and a browser full of `:8080` tabs. MatOS is a calm
-layer on top: a **home screen** that feels like a phone or a tablet, a **store** with one-click installs, a **setup wizard** that asks for your
-domain and DNS account once and wires the engines together, and **backups** you can actually restore.
+layer on top: a **home screen** that feels like a phone or a tablet, a **store** with one-click installs, a **first start** that needs no Docker knowledge (an account, how you reach
+your apps, your first apps, one button) and wires the engines together, and **backups** you can actually restore.
 
 It replaces **matOS**, the older desktop for the Docker host (now [Real-TTX/MatOS-legacy](https://github.com/Real-TTX/MatOS-legacy), retired), and was called **Mattiverse** until November 2026. Its home screen is a phone's, its windows are a desktop's: several open side by side over the home screen, and the dock is the taskbar. Every app is a plain `docker compose` stack in MatDock:
 you can edit it there, and MatOS keeps your change when it updates the app.
@@ -50,8 +50,11 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - Inside a window MatOS looks and behaves like every other Mat app: it is built on **MatUi**, the toolkit of
   [MatDesign](https://github.com/Real-TTX/MatDesign), with its lists, forms, dialogs and dark mode
 
-**Setup wizard** (first start, and again whenever you like)
-- Installs the five **engines**: MatDock (required), Matcad, Matddns, MatIdentity (one sign-in) and MatSMTP (the mail of all apps); skip one if something else on the host does its job
+**First start**, and the **setup wizard** to change it later
+- One calm assistant: Welcome (is this computer ready?), your account, how you reach your apps (a free address `<name>.my.mattiverse.de`, your own domain, or only at home), your first apps, one button, and a live progress screen with *Try again*
+- Installs the five **engines** by itself: MatDock (required), Matcad, Matddns, MatIdentity (one sign-in) and MatSMTP (the mail of all apps); under *Advanced* you can skip one if something else on the host does its job
+- The account of the first start is the one sign-in afterwards: MatIdentity gets the same e-mail and password
+- A short tour of the home screen on the first visit
 - Your **domain** and your **DNS provider** (Cloudflare, Hetzner, Netcup), asked once: Matcad gets one wildcard certificate through the
   DNS challenge and a route `app.example.com` per app, Matddns keeps the DNS records on your home IP
 - Everything the wizard created carries a **Managed by matos** badge in the engine
@@ -59,6 +62,7 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 **Store**
 - Catalog of the Mat apps (MatMail, MatFile, MatDrive, MatOffice, MatPaper, MatPlay, MatSplit, MatTrakr, Matmon, MatCMS, MatDo, MatBoard, MatShape, MatBu),
   [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all of them) and a few infrastructure apps
+- Every app shows its **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state))
 - **Passwords are generated** and shown (hidden until you ask) on the app's page
 - Add your **own apps** by dropping a compose file into `/data/catalog` (see [docs/CATALOG.md](docs/CATALOG.md))
 
@@ -161,7 +165,8 @@ alone what is installed already. The DNS account is asked once and handed to Mat
 
 ## Quick start
 
-One command. The Docker socket is how MatOS installs and manages your apps.
+MatOS is for people who do not want to deal with Docker: you start **one** container, and MatOS sets up everything else itself (its
+five engines, then your apps). One command; the Docker socket is how MatOS installs and manages your apps.
 
 ```bash
 docker run -d --name matos --restart unless-stopped -p 8030:8030 \
@@ -190,8 +195,19 @@ volumes:
   matos-data:
 ```
 
-Open **http://localhost:8030**. The first start asks for the administrator account and then walks you through the
-setup wizard. An update is `docker compose pull && docker compose up -d`; everything lives in the `matos-data` volume.
+Open **http://localhost:8030** and the assistant of the first start takes over, in plain words:
+
+1. **Welcome**: it checks that this computer is ready (and says the one line to add when the Docker socket is missing).
+2. **Your account**: your name, your e-mail (it is your user name) and a password.
+3. **How do you reach your apps?** A free address `<name>.my.mattiverse.de` (recommended: from anywhere, HTTPS included, no router settings),
+   your own domain with the account of its DNS provider, or only at home. *Advanced* has the engines and the address of this computer.
+4. **Pick your first apps** (or skip it: the store has them all).
+5. **Set up MatOS**: one button. A calm screen shows every step (the app manager, web addresses and HTTPS, the address updater, one sign-in
+   for all apps, mail, your apps, your address) as it happens, with *Try again* and the details for a step that did not work.
+
+Then your home screen opens with a short tour. The same e-mail and password sign you in afterwards, also when MatIdentity (the one sign-in) is
+there. To change the setup later: Settings, *Setup wizard*. An update is `docker compose pull && docker compose up -d`; everything lives in the
+`matos-data` volume.
 
 | Tag | Built from | Use it for |
 |---|---|---|
@@ -277,6 +293,49 @@ browser keeps the places of the windows per address, so at `matos.<domain>` they
 - The design decisions (what the engines own, where the compose files are, the home screen, how this relates to the older matOS desktop) are in
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the contract with the engines is [docs/ENGINES.md](docs/ENGINES.md).
 
+## Apps and their state
+
+Every app of the store has a state: how far it is along in MatOS. The store shows it on every app and filters by it; an alpha says so
+before you install it, and a preview cannot be installed yet. Your own apps in `/data/catalog` are a beta unless their entry says otherwise
+(`state` in the `x-matos` block, see [docs/CATALOG.md](docs/CATALOG.md)). The note says what is missing for the next state.
+
+<!-- app-states:begin (generated from the catalog by AppStateTests; run the tests with MATOS_WRITE_README=1 to write it) -->
+| State | Meaning |
+|---|---|
+| **Integrated** | Fully part of MatOS and tested through it: an engine that does its part for every app, or an app that uses all of them. |
+| **Beta** | Works with MatOS and its one sign-in, but is not yet tested from start to end through MatOS. |
+| **Alpha** | Installs and runs, but is not yet tied into MatOS: expect rough edges, and do not keep anything important only in it yet. |
+| **Preview** | Announced, not ready to install yet. |
+| **Third-party** | Not a Mat app: it runs as it is, without the one sign-in or the other parts of MatOS. |
+
+| App | State | Note |
+|---|---|---|
+| [Matcad](https://github.com/Real-TTX/Matcad) | Integrated | Runs every route of MatOS. |
+| [MatDock](https://github.com/Real-TTX/MatDock) | Integrated | Runs and backs up the apps; platform contract 1, no home-screen contributions yet. |
+| [MatIdentity](https://github.com/Real-TTX/MatIdentity) | Integrated | One sign-in for all apps. |
+| [MatSMTP](https://github.com/Real-TTX/MatSMTP) | Integrated | Sends the mail of the apps. |
+| [MatBoard](https://github.com/Real-TTX/MatBoard) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatCloud](https://github.com/Real-TTX/MatCloud) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [Matddns](https://github.com/Real-TTX/Matddns) | Beta | Opens in the MatOS window only after the merge of feature/frame-ancestors. |
+| [MatDo](https://github.com/Real-TTX/MatDo) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatDrive](https://github.com/Real-TTX/MatDrive) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatMail](https://github.com/Real-TTX/MatMail) | Beta | Not shown in the MatOS window yet. |
+| [MatOffice](https://github.com/Real-TTX/MatOffice) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatPaper](https://github.com/Real-TTX/MatPaper) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatShape](https://github.com/Real-TTX/MatShape) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatBu](https://github.com/Real-TTX/MatBu) | Alpha | The integration was only on dev; the release is coming. |
+| [MatCMS](https://github.com/Real-TTX/MatCMS) | Alpha | Installs, no MatOS integration yet. |
+| [MatDesign](https://github.com/Real-TTX/MatDesign) | Alpha | Installs, no MatOS integration yet. |
+| [MatFile](https://github.com/Real-TTX/MatFile) | Alpha | The integration was only on dev; the release is coming. |
+| [Matmon](https://github.com/Real-TTX/Matmon) | Alpha | Installs, no MatOS integration yet. |
+| [MatPlay](https://github.com/Real-TTX/MatPlay) | Alpha | The integration was only on dev; the release is coming. |
+| [MatSplit](https://github.com/Real-TTX/MatSplit) | Alpha | The integration was only on dev; the release is coming. |
+| [MatTrakr](https://github.com/Real-TTX/MatTrakr) | Alpha | The integration was only on dev; the release is coming. |
+| [MatAi](https://github.com/Real-TTX/MatAi) | Preview | The image is not published yet. |
+| [Nginx Proxy Manager](https://nginxproxymanager.com) | Third-party | Needs the ports 80 and 443 that Matcad uses. |
+| [Portainer](https://www.portainer.io) | Third-party |  |
+<!-- app-states:end -->
+
 ## Roles
 
 | Role | Can |
@@ -323,7 +382,7 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 |---|---|
 | MatOS: home screen, widgets, windows (move, size, halves, taskbar), the folder *System*, wallpapers, phone layout | ✅ |
 | The look of the Mat family inside a window (MatUi of MatDesign: lists, forms, dialogs, dark mode) | ✅ |
-| Store, setup wizard, themes | ✅ |
+| Store, the first start (assistant, live progress, tour), setup wizard, themes | ✅ |
 | Install / update / uninstall / start / stop with live logs | ✅ |
 | Backups: manual, scheduled, retention, restore, download (MatDock's, merged with MatOS's own) | ✅ |
 | Local users, roles, persistent sessions, shared links | ✅ |

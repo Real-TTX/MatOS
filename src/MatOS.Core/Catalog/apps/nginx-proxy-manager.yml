@@ -8,6 +8,8 @@ x-matos:
     MatOS cannot create the routes for you; add a proxy host that forwards to the container name shown on the app page.
   category: Infrastructure
   role: proxy
+  state: third-party
+  stateNote: Needs the ports 80 and 443 that Matcad uses.
   homepage: https://nginxproxymanager.com
   ui:
     service: app

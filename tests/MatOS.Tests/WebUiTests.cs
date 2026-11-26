@@ -172,6 +172,50 @@ public partial class WebUiTests
         Assert.All(selectors, c => Assert.True(c.StartsWith("mv-") || c.StartsWith("mat-") || c is "is-active" or "is-invalid", $".{c} is neither of the app nor of the toolkit"));
     }
 
+    /// <summary>The look of the first start (css/onboarding.css) is made of tokens too: the --os-* of the home screen and the --mat-* of the toolkit.</summary>
+    [Fact]
+    public void The_stylesheet_of_the_first_start_uses_tokens_and_no_literal_colours()
+    {
+        var css = Regex.Replace(Read("wwwroot", "css", "onboarding.css"), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        Assert.DoesNotMatch(@"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(", css);
+        Assert.DoesNotMatch(@":\s*(white|black|red|green|blue|gray|grey)\b", css);
+        Assert.Contains("prefers-reduced-motion", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_classes_of_the_first_start_start_with_ob()
+    {
+        // Its own prefix (ob-), beside the home screen's (os-) and the toolkit's (mat-), whose classes it reuses.
+        var css = Regex.Replace(Read("wwwroot", "css", "onboarding.css"), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        var selectors = Regex.Matches(css, @"(?<![\w-])\.([a-z][a-z0-9_-]*)").Select(m => m.Groups[1].Value).Distinct().ToList();
+        Assert.Contains("ob-card", selectors);
+        Assert.All(selectors, c => Assert.True(
+            c.StartsWith("ob-") || c.StartsWith("os-") || c.StartsWith("mat-") || c is "os" || c.StartsWith("is-"),
+            $".{c} is neither of the first start, of the home screen nor of the toolkit"));
+    }
+
+    [Fact]
+    public void The_pages_of_the_first_start_are_in_its_own_look()
+    {
+        var setup = Directory.EnumerateFiles(Path.Combine(Web, "Pages", "Setup"), "*.cshtml").Where(f => !Path.GetFileName(f).StartsWith('_')).ToList();
+        Assert.Equal(["Choose.cshtml", "Index.cshtml", "Progress.cshtml"], setup.Select(Path.GetFileName).Order());
+        Assert.All(setup, f => Assert.Contains("Layout = \"_Onboarding\"", File.ReadAllText(f), StringComparison.Ordinal));
+
+        var layout = Read("Pages", "Shared", "_Onboarding.cshtml");
+        Assert.Contains("js/onboarding.js", layout, StringComparison.Ordinal);
+        Assert.Contains("data-top-level", layout, StringComparison.Ordinal);
+        Assert.Contains("data-wallpaper", layout, StringComparison.Ordinal);
+        Assert.Contains("onboarding.css", Read("Pages", "Shared", "_Head.cshtml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_tour_of_the_home_screen_is_loaded_only_when_it_is_due()
+    {
+        var launcher = Read("Pages", "Shared", "_Launcher.cshtml");
+        Assert.Matches(@"ViewData\[""Tour""\] is true\)\s*\{[^}]*js/onboarding\.js", launcher);
+        Assert.Contains("data-ob-tour", Read("Pages", "Index.cshtml"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Every_form_of_the_toolkit_is_novalidate()
     {

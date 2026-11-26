@@ -32,7 +32,7 @@ public sealed class FrameLink
     }
 
     /// <summary>
-    /// The addresses for a configuration: <c>https://matos.&lt;domain&gt;</c> when the proxy publishes it, <c>http://localhost:&lt;port&gt;</c>, the configured
+    /// The addresses for a configuration: <c>https://matos.&lt;domain&gt;</c> when the proxy publishes it, <c>http://localhost:&lt;port&gt;</c> and <c>http://127.0.0.1:&lt;port&gt;</c>, the configured
     /// address of this machine with that port, and the addresses MatOS was signed in from (<c>Identity.Origins</c>); each as an origin, without repeats.
     /// </summary>
     public static IReadOnlyList<string> Origins(SystemConfig config, int port, bool proxied)
@@ -43,7 +43,9 @@ public sealed class FrameLink
             candidates.Add(ProxyPublisher.UrlFor(ProxyPublisher.SelfHost(config.BaseDomain)));
         }
 
+        // This machine by both of its loopback names: a browser on it opens MatOS as localhost or as 127.0.0.1 (the setup counts both as "this computer").
         candidates.Add($"http://localhost:{port}");
+        candidates.Add($"http://127.0.0.1:{port}");
         var host = config.PublicHost?.Trim();
         if (!string.IsNullOrEmpty(host))
         {

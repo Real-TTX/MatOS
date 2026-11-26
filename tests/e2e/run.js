@@ -1,10 +1,14 @@
 // End-to-end checks of the pages of MatOS in a real browser (the installed Edge, or Chrome) against a running stack.
 //   ./scripts/redeploy.ps1 && cd tests/e2e && npm install && node run.js [http://localhost:8030]
+// The first start (Welcome, the account, the way to the apps, the first apps) needs a MatOS without any account: a throwaway stack (./scripts/redeploy.ps1 -Fresh,
+// in Production, or a second MatOS with its own volume), then  node run.js --first-start [url]. It creates the account anna@example.com and stops before
+// "Set up MatOS" (MATOS_FIRST_START_INSTALL=1 presses it too, and the engines are installed).
 // It signs in with the account of the development stack (admin@example.com / Start12345, set MATOS_USER and MATOS_PASSWORD for another one) and
 // changes nothing that it does not remove again: the one schedule it creates is deleted at the end. Exit code 1 when a check fails.
 const { chromium } = require('playwright-core');
 
-const BASE = (process.argv[2] || process.env.BASE || 'http://localhost:8030').replace(/\/$/, '');
+const FIRST_START = process.argv.includes('--first-start');
+const BASE = (process.argv.slice(2).find(a => !a.startsWith('--')) || process.env.BASE || 'http://localhost:8030').replace(/\/$/, '');
 const USER = process.env.MATOS_USER || 'admin@example.com';
 const PASSWORD = process.env.MATOS_PASSWORD || 'Start12345';
 const results = [];
@@ -32,19 +36,25 @@ function expectEqual(actual, expected, what) {
 
 const pages = [
   '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
-  '/Users', '/Users/Edit', '/Settings', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password',
+  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password',
 ];
 
 (async () => {
   const browser = await chromium.launch({ channel: 'msedge', headless: true }).catch(() => chromium.launch({ channel: 'chrome', headless: true }));
   const errors = [];
 
+  if (FIRST_START) {
+    await firstStart(browser, errors);
+    return;
+  }
+
   async function signedIn(options) {
     const ctx = await browser.newContext(options);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(page.url() + ': ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/status of 40[34]/.test(m.text())) { errors.push(page.url() + ': ' + m.text()); } });
-    await page.goto(BASE + '/Account/Login');
+    // MatOS's own form (?local=1): with MatIdentity connected the page would go there, and its address may not be reachable from this browser
+    await page.goto(BASE + '/Account/Login?local=1');
     await page.fill('#Input_Username', USER);
     await page.fill('#Input_Password', PASSWORD);
     await Promise.all([page.waitForURL(u => !u.pathname.startsWith('/Account/Login')), page.click('button[type=submit]')]);
@@ -480,16 +490,34 @@ const pages = [
     await page.waitForURL(/tab=schedules/);
     expectEqual(await page.locator('table.mat-table tbody tr', { hasText: 'E2E schedule' }).count(), 0, 'the schedule is gone');
   });
-  await check('the wizard walks through five steps and shows what it will do', async () => {
+  await check('the wizard (to change the setup later) walks through four steps, the engines under Advanced', async () => {
     await page.goto(BASE + '/Wizard');
-    expectEqual(await page.locator('.mv-step').count(), 5, 'steps');
-    for (let i = 0; i < 4; i++) {
+    expectEqual(await page.locator('.mv-step').count(), 4, 'steps');
+    await page.locator('.mv-step.is-active [data-next]').click();
+    expectTrue(!(await page.locator('[data-wizard-advanced]').evaluate(d => d.open)), 'Advanced is closed');
+    await page.locator('[data-wizard-advanced] summary').click();
+    expectEqual(await page.locator('[data-wizard-advanced] [data-engine]').count(), 5, 'the five engines under Advanced');
+    for (let i = 0; i < 2; i++) {
       await page.locator('.mv-step.is-active [data-next]').click();
       await page.waitForTimeout(120);
     }
     expectEqual(await page.locator('[data-wizard-summary] dt').count(), 4, 'rows of the summary');
     await page.locator('.mv-step.is-active [data-prev]').click();
-    expectEqual(await page.locator('[data-step-label]').innerText(), 'Step 4 of 5', 'back goes one step');
+    expectEqual(await page.locator('[data-step-label]').innerText(), 'Step 3 of 4', 'back goes one step');
+  });
+  await check('the tour of the home screen: marks one after the other, Escape ends it', async () => {
+    await page.goto(BASE + '/?tour=1');
+    await page.waitForSelector('[data-ob-tour]:not([hidden])', { timeout: 5000 });
+    expectEqual(await page.locator('[data-ob-tour-count]').innerText(), '1 of 4', 'the first of four marks');
+    const ring = await page.locator('[data-ob-tour-ring]').boundingBox();
+    const dock = await page.locator('.os-dock').boundingBox();
+    expectTrue(ring && dock && ring.x <= dock.x && ring.y <= dock.y && ring.width >= dock.width, 'the ring is around the dock');
+    await page.click('[data-ob-tour-next]');
+    expectEqual(await page.locator('[data-ob-tour-count]').innerText(), '2 of 4', 'Next goes on');
+    await page.keyboard.press('Escape');
+    expectTrue(await page.locator('[data-ob-tour]').isHidden(), 'Escape ends it');
+    await page.goto(BASE + '/');
+    expectEqual(await page.locator('[data-ob-tour]').count(), 0, 'not shown again');
   });
   await ctx.close();
 
@@ -520,3 +548,84 @@ const pages = [
   console.log(`\n${results.length - failed} of ${results.length} checks passed`);
   process.exit(failed ? 1 : 0);
 })();
+
+// The first start on a MatOS without any account (--first-start): Welcome, the account, the way to the apps, the first apps, the one button.
+async function firstStart(browser, errors) {
+  console.log('The first start');
+  const looks = [
+    ['light', { viewport: { width: 1360, height: 900 }, colorScheme: 'light' }],
+    ['dark', { viewport: { width: 1360, height: 900 }, colorScheme: 'dark' }],
+    ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
+  ];
+  for (const [mode, options] of looks) {
+    const ctx = await browser.newContext(options);
+    const page = await ctx.newPage();
+    page.on('pageerror', e => errors.push(page.url() + ': ' + e.message));
+    await check(mode + ': every request goes to Welcome, one card at a time, nothing sideways', async () => {
+      await page.goto(BASE + '/Apps');
+      expectEqual(new URL(page.url()).pathname, '/Setup', 'went to Welcome');
+      expectEqual(await page.locator('h1').count(), 1, 'h1');
+      expectEqual(await page.locator('.ob-step.is-active').count(), 1, 'one step shown');
+      expectEqual(await page.locator('.ob-desktop[data-wallpaper]').count(), 1, 'the wallpaper');
+      expectEqual(await page.locator('[style]').count(), 0, 'elements with an inline style');
+      const wide = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expectTrue(wide <= 1, 'scrolls sideways by ' + wide + 'px');
+    });
+    await ctx.close();
+  }
+
+  const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const page = await ctx.newPage();
+  page.on('pageerror', e => errors.push(page.url() + ': ' + e.message));
+  await check('the account: the browser checks the fields, the server the password, then the way to the apps', async () => {
+    await page.goto(BASE + '/Setup');
+    await page.click('.ob-step.is-active [data-ob-next]');
+    await page.click('button[type=submit]');
+    expectTrue(await page.locator('.mat-field.is-invalid').count() >= 3, 'empty fields are marked');
+    await page.fill('#Input_Name', 'Anna');
+    await page.fill('#Input_Email', 'anna@example.com');
+    await page.fill('#Input_Password', 'anna-secret-1');
+    await page.fill('#Input_ConfirmPassword', 'anna-secret-1');
+    await Promise.all([page.waitForLoadState('load'), page.click('button[type=submit]')]);
+    expectTrue((await page.locator('[data-validation-summary]').innerText()).includes('e-mail'), 'a password with the e-mail in it is refused');
+    expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Your account', 'back at the account');
+    await page.fill('#Input_Password', 'blue-river-42');
+    await page.fill('#Input_ConfirmPassword', 'blue-river-42');
+    await Promise.all([page.waitForURL(/\/Setup\/Choose/), page.click('button[type=submit]')]);
+  });
+  await check('the way to the apps: three choices, the name checked while typing, the engines under Advanced', async () => {
+    expectEqual(await page.locator('.ob-choice input[name=Reach]').count(), 3, 'three choices');
+    expectTrue(await page.locator('input[name=Reach][value=free]').isChecked(), 'the free address is the default');
+    await page.fill('#Name', 'e2e-' + Date.now().toString(36));
+    await page.waitForFunction(() => { const f = document.querySelector('#Name').closest('.mat-field'); return f.classList.contains('is-valid') || f.classList.contains('is-invalid'); }, null, { timeout: 15000 });
+    await page.locator('label.ob-choice', { has: page.locator('input[value=home]') }).click();
+    expectTrue(await page.locator('#Name').isDisabled(), 'the name is not sent for "at home"');
+    await page.click('.ob-advanced summary');
+    expectEqual(await page.locator('.ob-engines input[type=checkbox]').count(), 5, 'the five engines');
+    await page.click('.ob-step.is-active [data-ob-next]');
+    expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Pick your first apps', 'on to the apps');
+  });
+  await check('the first apps: no engine, no preview; the alphas behind Show more; Skip; one sentence above the button', async () => {
+    const names = await page.locator('.ob-step.is-active [data-ob-app]').evaluateAll(l => l.map(e => e.getAttribute('data-ob-app')));
+    expectTrue(names.length > 0 && !names.some(n => /^(MatDock|Matcad|Matddns|MatIdentity|MatSMTP|MatAI|Portainer)$/.test(n)), 'apps: ' + names.join(', '));
+    expectEqual(await page.locator('.ob-more').count(), 1, 'Show more');
+    await page.click('.ob-step.is-active [data-ob-skip]');
+    expectEqual(await page.locator('[data-ob-summary]').innerText(), 'MatOS sets up its five engines for use here at home.', 'the summary');
+  });
+  if (process.env.MATOS_FIRST_START_INSTALL === '1') {
+    await check('Set up MatOS: a line per engine in plain words, followed live until MatOS is ready', async () => {
+      await Promise.all([page.waitForURL(/\/Setup\/Progress/), page.click('[data-ob-go]')]);
+      expectEqual(await page.locator('[data-ob-task]').count(), 5, 'five lines');
+      expectEqual(await page.locator('[data-ob-task] .ob-task__label').first().innerText(), 'App manager (MatDock)', 'MatDock first, in plain words');
+      await page.waitForFunction(() => document.querySelector('[data-ob-progress]').getAttribute('data-ob-phase') !== 'working', null, { timeout: 15 * 60 * 1000 });
+      expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
+    });
+  }
+  await ctx.close();
+
+  await check('no script errors in the first start', async () => { expectEqual(errors, [], 'errors'); });
+  await browser.close();
+  const failed = results.filter(r => !r.ok).length;
+  console.log('\n' + (results.length - failed) + ' of ' + results.length + ' checks passed');
+  process.exit(failed ? 1 : 0);
+}

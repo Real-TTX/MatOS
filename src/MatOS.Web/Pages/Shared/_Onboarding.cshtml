@@ -1,0 +1,42 @@
+@inject Toolkit Toolkit
+@{
+    // The first start (docs/ARCHITECTURE.md "The first start"): Welcome, the account, the way to the apps, the first apps and the progress, in the look of MatOS OS
+    // (the wallpaper, a card of glass: css/os.css and css/onboarding.css) with the toolkit's controls inside the card. No menu; the page takes the whole tab
+    // (data-top-level: opened in a window of the home screen it leaves the window). Its behaviour is js/onboarding.js.
+    ViewData["Os"] = true;
+    ViewData["Onboarding"] = true;
+    var title = ViewData["Title"] as string;
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var theme = signedIn ? User.GetTheme() : "system";
+}
+<!DOCTYPE html>
+<html lang="en" data-app="@Ui.App.Id" data-top-level @(theme is "light" or "dark" ? Html.Raw($"data-theme=\"{theme}\"") : null)>
+<partial name="_Head" model="@(string.IsNullOrEmpty(title) ? Ui.App.Name : $"{title} · {Ui.App.Name}")" />
+<body class="os ob-body">
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+    <div class="os-desktop ob-desktop" data-wallpaper="orbit">
+        <header class="ob-top">
+            <span class="ob-top__brand"><img src="/img/logo.svg" alt="" width="22" height="22" /><span>@Ui.App.Name</span></span>
+            @* The theme of the toolkit's button; an account keeps it once there is one (before that the browser does). *@
+            <button type="button" class="os-status__btn os-theme ob-top__theme" data-theme-toggle @(signedIn ? Html.Raw("data-theme-save-url=\"/api/theme\"") : null) data-theme-state="system" aria-label="Theme: System. Click for Light." title="Theme: System. Click for Light.">
+                <svg class="mat-icon" data-theme-icon="system" aria-hidden="true" focusable="false"><use href="#mat-i-monitor"></use></svg>
+                <svg class="mat-icon" data-theme-icon="light" aria-hidden="true" focusable="false"><use href="#mat-i-sun"></use></svg>
+                <svg class="mat-icon" data-theme-icon="dark" aria-hidden="true" focusable="false"><use href="#mat-i-moon"></use></svg>
+            </button>
+        </header>
+        <main class="ob-main" id="main">
+            @RenderBody()
+        </main>
+        <footer class="ob-foot">@Ui.App.Name @AppVersion.Current</footer>
+    </div>
+    @if (signedIn)
+    {
+        @Html.AntiForgeryToken()
+    }
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
+    <script src="~/js/matos.js" asp-append-version="true"></script>
+    <script src="~/js/onboarding.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

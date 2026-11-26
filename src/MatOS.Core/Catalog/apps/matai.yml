@@ -6,6 +6,8 @@ x-matos:
   description: One place for the AI of your apps - an OpenAI-compatible gateway in front of OpenAI, Anthropic, Gemini, Mistral, Azure OpenAI and your own Ollama, with routes, fallbacks, limits and costs, a chat for the people of this MatOS and public assistants for websites.
   category: Productivity
   role: app
+  state: preview
+  stateNote: The image is not published yet.
   icon: matai.svg
   homepage: https://github.com/Real-TTX/MatAi
   # The platform contract (/api): MatOS fills MAT_API_KEY. MatAi sends no mail, so there is no mail.smtp.

@@ -8,6 +8,8 @@ x-matos:
     MatOS registers every app it installs there and gives it its sign-in.
   category: Infrastructure
   role: identity
+  state: integrated
+  stateNote: One sign-in for all apps.
   icon: matidentity.svg
   homepage: https://github.com/Real-TTX/MatIdentity
   recommended: true

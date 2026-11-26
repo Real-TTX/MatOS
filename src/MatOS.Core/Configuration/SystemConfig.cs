@@ -36,8 +36,27 @@ public sealed class SystemConfig
     /// <summary>The DNS account of the domain (the credentials themselves are in <see cref="ProtectedSecrets"/> under <c>dns</c>).</summary>
     public DnsSettings Dns { get; set; } = new();
 
+    /// <summary>The free address of the address service (<c>&lt;name&gt;.my.mattiverse.de</c>, docs/SERVICES.md); null without one.</summary>
+    public HostedAddress? Hosted { get; set; }
+
+    /// <summary>
+    /// Whether the apps live under the free address: it is registered and it is the base domain (else the apps use another domain or their ports, and the
+    /// free address waits in Settings, Address).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool UsesHostedAddress => Hosted is { } hosted && string.Equals(BaseDomain?.Trim().Trim('.'), hosted.Address, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>MatOS's own sign-in through MatIdentity (set when MatIdentity is installed and MatOS registered itself there); null without it.</summary>
     public IdentitySignIn? Identity { get; set; }
+
+    /// <summary>The first start (<c>/Setup</c>, docs/ARCHITECTURE.md "The first start"): what "Set up MatOS" queued, for its progress screen; null before.</summary>
+    public Setup.SetupRun? Setup { get; set; }
+
+    /// <summary>
+    /// The person who set up MatOS, until MatIdentity is there and has them as a person with the same e-mail and password (<c>OwnerHandover</c>); the password
+    /// waits in <see cref="ProtectedSecrets"/> under <c>owner</c>. Null once handed over, or when no MatIdentity is wanted.
+    /// </summary>
+    public Setup.PendingOwner? Owner { get; set; }
 
     /// <summary>Default theme for new users: system, light or dark.</summary>
     public string DefaultTheme { get; set; } = "system";
@@ -73,6 +92,38 @@ public sealed class InstallNaming
 
     /// <summary>The names of an install of Mattiverse.</summary>
     public static InstallNaming Legacy() => new() { NetworkName = Mattiverse.Name, ProjectPrefix = Mattiverse.Name, IdentityClientId = Mattiverse.Name };
+}
+
+/// <summary>
+/// A free address of the address service (docs/SERVICES.md): the install is <c>&lt;Name&gt;.&lt;Zone&gt;</c>, MatOS <c>matos.&lt;Name&gt;.&lt;Zone&gt;</c> and every app
+/// <c>&lt;app&gt;.&lt;Name&gt;.&lt;Zone&gt;</c>. It is a base domain without a DNS account: Matcad gets one route per host and Caddy gets the certificates
+/// itself (HTTP or TLS challenge, through the tunnel in tunnel mode).
+/// </summary>
+public sealed class HostedAddress
+{
+    public const string Tunnel = "tunnel";
+    public const string Direct = "direct";
+
+    /// <summary>The zone of the names when the service does not say otherwise.</summary>
+    public const string DefaultZone = "my.mattiverse.de";
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Zone { get; set; } = DefaultZone;
+
+    /// <summary>The key of the install at the service, protected with Data Protection (<see cref="SystemConfigService.GetHostedKeyAsync"/>).</summary>
+    public string Key { get; set; } = string.Empty;
+
+    /// <summary><see cref="Tunnel"/> (the default: through the service, behind any router) or <see cref="Direct"/> (the router forwards 80 and 443 to this host).</summary>
+    public string Mode { get; set; } = Tunnel;
+
+    public DateTime RegisteredAt { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Address => $"{Name}.{Zone}";
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsDirect => string.Equals(Mode, Direct, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>The three infrastructure questions of the wizard.</summary>

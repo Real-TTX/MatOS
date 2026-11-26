@@ -22,7 +22,7 @@
                 <mat-field label="Address of this machine" asp-for="Input.PublicHost" hint="How you reach this host, like nas.local or 192.168.1.20. Empty: whatever the browser used.">
                     <input asp-for="Input.PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" />
                 </mat-field>
-                <mat-field label="Domain for your apps" asp-for="Input.BaseDomain" hint="Every app gets app.example.com, with a certificate from Matcad. Empty: apps use their port.">
+                <mat-field label="Domain for your apps" asp-for="Input.BaseDomain" hint="Every app gets app.example.com, with a certificate from Matcad. Empty: apps use their port. No domain? Address gives you a free one.">
                     <input asp-for="Input.BaseDomain" class="mat-input" placeholder="example.com" inputmode="url" autocomplete="off" />
                 </mat-field>
             </div>

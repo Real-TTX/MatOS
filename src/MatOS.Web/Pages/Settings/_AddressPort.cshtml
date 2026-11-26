@@ -1,0 +1,10 @@
+@model bool
+@* Whether the address service reached this machine on a port (Settings, Address: Check direct access). *@
+@if (Model)
+{
+    <span class="mat-pill mat-pill--ok">Answers</span>
+}
+else
+{
+    <span class="mat-pill mat-pill--error">No answer</span>
+}

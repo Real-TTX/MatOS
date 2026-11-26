@@ -31,13 +31,15 @@ public class IndexModel : PageModel
     private readonly HomeContributions _home;
     private readonly UserService _users;
     private readonly MatOS.Core.Integrations.PersonAccess _person;
+    private readonly MatOS.Core.Setup.SetupService _setup;
 
     public IndexModel(AppService apps, SystemConfigService config, JobService jobs, RuntimeReader docker, BackupService backups, BackupHub backupHub, CatalogService catalog, AppUrls urls, EngineOverview engines, HomeContributions home, UserService users,
-        MatOS.Core.Integrations.PersonAccess person)
+        MatOS.Core.Integrations.PersonAccess person, MatOS.Core.Setup.SetupService setup)
     {
         _home = home;
         _users = users;
         _person = person;
+        _setup = setup;
         _backupHub = backupHub;
         _engines = engines;
         _apps = apps;
@@ -66,6 +68,15 @@ public class IndexModel : PageModel
     public int ActiveJobs { get; private set; }
     public DateTime? LastBackup { get; private set; }
     public bool Busy => Tiles.Any(t => t.App.Lifecycle is AppLifecycle.Installing or AppLifecycle.Removing);
+
+    /// <summary>
+    /// The first start, for the widget Setup (an administrator's): null before "Set up MatOS" (the widget leads to the choices while the setup is not done),
+    /// else its progress; the widget leads back to the progress screen while it works or a line failed, and goes once all is done.
+    /// </summary>
+    public MatOS.Core.Setup.SetupProgressView? SetupProgress { get; private set; }
+
+    /// <summary>The widget Setup is on the home screen: nothing chosen yet, or the first start still works or has lines to try again.</summary>
+    public bool SetupOpen => SetupProgress is { } p ? !p.Finished || p.AnyFailed : !Config.WizardCompleted;
 
     /// <summary>No backup at all, or the newest one is older than <see cref="BackupIsOld"/>.</summary>
     public bool BackupNeedsLook => LastBackup is not { } last || DateTime.UtcNow - last > BackupIsOld;
@@ -129,10 +140,18 @@ public class IndexModel : PageModel
     private static readonly IReadOnlyList<string> SmallOrMedium = ["small", "medium"];
     private static readonly IReadOnlyList<string> MediumOrWide = ["medium", "wide"];
 
+    /// <summary>
+    /// The short tour of the home screen (coach marks, js/onboarding.js): on the first visit of an account (<c>User.HomeTourSeenAt</c>), or asked for with
+    /// <c>?tour=1</c>. The page says so to the layout (<c>ViewData["Tour"]</c>), which then loads its style and script.
+    /// </summary>
+    public bool ShowTour { get; private set; }
+
     public async Task OnGetAsync()
     {
         await LoadAsync();
         await ArrangeAsync();
+        ShowTour = Request.Query["tour"] == "1"
+            || (User.GetUserId() is { } userId && Request.Headers["X-Requested-With"] != "fetch" && await _users.TourDueAsync(userId, HttpContext.RequestAborted));
     }
 
     private async Task LoadAsync()
@@ -164,6 +183,7 @@ public class IndexModel : PageModel
         {
             ActiveJobs = await _jobs.CountActiveAsync(ct);
             LastBackup = await LastBackupAsync(ct);
+            SetupProgress = Config.Setup is null ? null : await _setup.ProgressAsync(ct);
         }
 
         if (isAdmin)
@@ -203,7 +223,7 @@ public class IndexModel : PageModel
         }
 
         Widget("w:docker", HomeKind.Docker, "Docker", SmallOrMedium, "small");
-        if (isAdmin && !Config.WizardCompleted)
+        if (isAdmin && SetupOpen)
         {
             Widget("w:setup", HomeKind.Setup, "Setup", SmallOrMedium, "small");
         }

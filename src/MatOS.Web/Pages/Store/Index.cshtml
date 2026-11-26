@@ -1,5 +1,6 @@
 @page
 @model MatOS.Web.Pages.Store.IndexModel
+@using MatOS.Core.Catalog
 @{
     ViewData["Title"] = "Store";
     ViewData["PageSub"] = "Your Mat apps and a few more, installed with one click.";
@@ -37,6 +38,7 @@
                         </span>
                         <span class="mv-store-card__tagline">@app.Tagline</span>
                         <span class="mv-store-card__meta">
+                            <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@(app.StateNote ?? AppStates.Meaning(app.State))">@AppStates.Label(app.State)</span>
                             <span class="mat-pill mat-pill--plain">@app.Category</span>
                             @if (installed > 0)
                             {

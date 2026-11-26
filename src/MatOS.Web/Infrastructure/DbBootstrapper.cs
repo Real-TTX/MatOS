@@ -45,7 +45,10 @@ public static class DbBootstrapper
         // the real admin. Automatic, no configuration flag needed. It is the test account of every Mat app.
         if (environment.IsDevelopment() && !await users.UsernameExistsAsync(TestAccount.Username))
         {
-            await users.CreateAsync(TestAccount.Username, "Admin", TestAccount.Password, UserRole.Admin, mustChangePassword: false);
+            var test = await users.CreateAsync(TestAccount.Username, "Admin", TestAccount.Password, UserRole.Admin, mustChangePassword: false);
+
+            // The checks in the browser (tests/e2e) click on the home screen: the tour would stand in their way. /?tour=1 shows it to them anyway.
+            await users.MarkTourSeenAsync(test.Id);
             logger.LogWarning("Seeded local test account '{Username}' / '{Password}' (Development only).", TestAccount.Username, TestAccount.Password);
         }
     }

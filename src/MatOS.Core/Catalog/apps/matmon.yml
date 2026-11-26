@@ -6,6 +6,8 @@ x-matos:
   description: Sensors, status pages and alerts for the services in your network, with remote probes for other sites.
   category: Monitoring
   role: app
+  state: alpha
+  stateNote: Installs, no MatOS integration yet.
   icon: matmon.svg
   homepage: https://github.com/Real-TTX/Matmon
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.

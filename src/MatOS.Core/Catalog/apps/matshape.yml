@@ -6,6 +6,8 @@ x-matos:
   description: Parametric parts from constraint sketches and features (fillet, chamfer, hole, shell, sweep, loft ...), drawings and assemblies, STEP export, versions, sharing and an AI assistant.
   category: Productivity
   role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matshape.svg
   homepage: https://github.com/Real-TTX/MatShape
   # The platform contract (/api): MatOS fills MAT_API_KEY.

@@ -42,8 +42,18 @@ public class LoginModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Reconnected { get; set; }
 
+    /// <summary><c>?via=identity</c>: the button "Sign in with MatIdentity", which goes there even while the page keeps its own form.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Via { get; set; }
+
     /// <summary><c>?local=1</c> (or <c>true</c>), as the platform contract writes it.</summary>
     public bool WantsLocal => Local is "1" or "true" or "True";
+
+    /// <summary>
+    /// The person who set up MatOS still waits for MatIdentity to know them (<see cref="OwnerHandover"/>): the page does not go to MatIdentity by itself, which
+    /// would not know them, and shows MatOS's own form with the way to MatIdentity beside it.
+    /// </summary>
+    public bool OwnerWaits { get; private set; }
 
     /// <summary>MatIdentity is connected: the page offers it (and, without <see cref="Local"/>, goes there right away).</summary>
     public bool IdentityAvailable { get; private set; }
@@ -70,9 +80,11 @@ public class LoginModel : PageModel
             return LocalRedirect(SafeReturnUrl());
         }
 
-        var identity = (await _config.GetAsync(HttpContext.RequestAborted)).Identity;
+        var config = await _config.GetAsync(HttpContext.RequestAborted);
+        var identity = config.Identity;
         IdentityAvailable = identity is not null;
-        if (identity is null || WantsLocal)
+        OwnerWaits = config.Owner is not null;
+        if (identity is null || WantsLocal || (OwnerWaits && Via != "identity"))
         {
             return Page();
         }
@@ -114,7 +126,7 @@ public class LoginModel : PageModel
             if (again && (await _config.GetAsync(HttpContext.RequestAborted)).Identity is not null)
             {
                 MatIdentitySignIn.Refresh(HttpContext.RequestServices);
-                return LocalRedirect("/Account/Login?reconnected=1&returnUrl=" + Uri.EscapeDataString(SafeReturnUrl()));
+                return LocalRedirect("/Account/Login?reconnected=1" + (Via == "identity" ? "&via=identity" : string.Empty) + "&returnUrl=" + Uri.EscapeDataString(SafeReturnUrl()));
             }
 
             ErrorMessage = "MatIdentity does not answer. Sign in with a local account.";

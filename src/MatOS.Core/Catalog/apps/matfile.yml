@@ -6,6 +6,8 @@ x-matos:
   description: Browse, upload, edit and share the files on your server from the browser.
   category: Files
   role: app
+  state: alpha
+  stateNote: The integration was only on dev; the release is coming.
   icon: matfile.svg
   homepage: https://github.com/Real-TTX/MatFile
   # The platform contract (/api): MatOS fills MAT_API_KEY.

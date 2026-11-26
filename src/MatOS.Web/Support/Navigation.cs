@@ -105,6 +105,7 @@ public static class Navigation
                 new("Settings", null, "settings", Children:
                 [
                     new("General", "/Settings", null),
+                    new("Address", "/Settings/Address", null),
                     new("Engines", "/Settings/Engines", null),
                     new("System", "/Settings/System", null),
                     new("Setup wizard", "/Wizard", null),

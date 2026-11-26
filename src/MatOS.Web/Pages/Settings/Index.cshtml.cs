@@ -95,6 +95,12 @@ public class IndexModel : PageModel
             }
         }
 
+        // A free address of the address service is a domain without a DNS account, and only this install's own (Settings, Address gets it).
+        if (HostedAddressService.CheckDomain(before, baseDomain, provider?.Id) is { } hostedProblem)
+        {
+            ModelState.AddModelError("Input.BaseDomain", hostedProblem);
+        }
+
         if (!ModelState.IsValid)
         {
             Dns = DnsFormModel.From(before, await _config.GetDnsCredentialsAsync(ct));

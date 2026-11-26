@@ -8,6 +8,8 @@ x-matos:
     and can protect apps with a login. MatOS creates a route for every app you install.
   category: Infrastructure
   role: proxy
+  state: integrated
+  stateNote: Runs every route of MatOS.
   icon: matcad.svg
   homepage: https://github.com/Real-TTX/Matcad
   recommended: true

@@ -47,6 +47,19 @@
   var PAGE = 'matos.os.page';
   var LEGACY = 'mattiverse.os.';
 
+  // An icon an app serves itself (its launcher, <img data-fallback>) comes from the app's address, which this browser may not reach (yet): before the
+  // certificate is there, or from a device at home without the internet. Then the icon of the catalog takes its place, once. An image that failed
+  // before this ran is caught too; the error of an image does not bubble, so it is heard on the way down.
+  function iconFallback(img) {
+    var other = img.getAttribute('data-fallback');
+    img.removeAttribute('data-fallback');
+    if (other && img.getAttribute('src') !== other) { img.src = other; }
+  }
+  document.addEventListener('error', function (e) {
+    if (e.target && e.target.tagName === 'IMG' && e.target.hasAttribute('data-fallback')) { iconFallback(e.target); }
+  }, true);
+  $$('img[data-fallback]').forEach(function (img) { if (img.complete && img.naturalWidth === 0) { iconFallback(img); } });
+
   // MatOS was called Mattiverse until 2026-11 and kept the places of the windows (localStorage) and the open windows of a tab (sessionStorage) under
   // mattiverse.os.*: they move to matos.os.* once (a key that is there already wins), so the windows come back where they were. The browser keeps them per
   // address: this helps where the address stays (host:port); at matos.<domain> nothing of mattiverse.<domain> can be read (docs/ARCHITECTURE.md).

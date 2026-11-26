@@ -69,6 +69,57 @@ Engines tab in the settings says which engine is connected.
 **After a lost database or a restore in MatDock**, `AppReconciler` takes the stacks that MatDock holds with `managedBy: matos` back as apps:
 the stack carries everything (catalog block, compose, variables).
 
+## The first start
+
+MatOS is for people who cannot use Docker: the release compose file has only MatOS, and everything else comes from **one continuous assistant**
+in the browser (the owner's choice of 2026-11-26). It replaced the old path (`/Setup` for the account, then the five steps of the wizard, then a list of jobs).
+
+| Step | Page | What happens |
+|---|---|---|
+| 1. Welcome | `/Setup` | The check of Docker in plain words (`Core/Setup/DockerAdvice.cs`): "This computer is ready", or what is wrong and the one line that fixes it (the socket line of the compose file when the socket is missing, the socket of rootless Docker or Podman when the path is an empty folder, `label=disable` for SELinux, starting Docker). |
+| 2. Your account | `/Setup` | Name, e-mail (the user name), password twice, "Show the password". The password follows MatIdentity's rules (`AccountRules`: 8 to 128 characters, not one of the passwords tried first, not the e-mail), so MatIdentity takes it later. Creates the administrator and signs them in. |
+| 3. How do you reach your apps? | `/Setup/Choose` | Three big choices (radio buttons): a **free address** (recommended; the name is checked while typing through `/api/address/name`), **my own domain** (the domain and `_DnsFields`), **only here at home**. *Advanced*: the engines (MatDock and the ones that are there already fixed) and the address of this machine (prefilled from the browser; opened as `localhost` it is asked for in *Only here at home* instead). A free address this MatOS has already is shown as its own, not checked again; an address service that cannot be asked does not block *Next* (the server asks again). A container that holds the ports 80 or 443 is warned about here (Matcad needs them). |
+| 4. Pick your first apps | `/Setup/Choose` | The catalog without engines, previews, third-party tools and apps that ask something before they install (`SetupPlan.Pickable`); integrated and beta at once, alpha behind *Show more*. Skip is fine. |
+| 5. Set up MatOS | `/Setup/Choose` | One sentence of what will happen (`SetupPlan.Summary`, js/onboarding.js says the same while the person chooses) and one button. |
+| 6. Progress | `/Setup/Progress` | One line per step in plain words, live, an overall bar and an estimate; a failed line has *Try again* and *Show details* (its job log), and *Try all again* retries every failed line in the order of the plan; at the end "Your MatOS is ready", the address MatOS is opened at from anywhere (`SetupPlan.SelfUrl`, with a copy button), the button home and, after 20 seconds (said, the focus on *Stay here*), the home screen. A screen reader hears every line that ends (a polite live region); when MatOS does not answer a few rounds in a row, or the session ended, the card says so (and offers `127.0.0.1` when the browser came as `localhost`). |
+| 7. The tour | `/` | Four coach marks on the first visit of the home screen: the dock, the store, windows, the settings (a user: the dock, windows, the account). |
+
+- **Set up MatOS** (`Core/Setup/SetupService.StartAsync`) first settles the way to the apps: a free address is **registered now** at the address service
+  (`HostedAddressService.RegisterAsync`: the base domain, no DNS account, the tunnel starts); a name taken meanwhile or a service that cannot be reached keeps
+  the person on step 3 with the message. Then it keeps what the wizard keeps (the address of this machine, the engines, `WizardCompleted`) and queues
+  **one job per line** (`SetupPlan.Steps`): the engines that are missing in the order of `EngineIds.All`, the first apps (prepared like the store does:
+  `AppService.PrepareInstallAsync` and `JobKind.Install`; the single worker runs them after the engines), engines that were there already are connected
+  (`ConnectEngines`), the sign-in of the person when MatIdentity is part of it (`AppJobs.HandOverOwner`, below), and the free address last
+  (`AppJobs.FreeAddress`: the tunnel is up). The lines and their jobs are `SystemConfig.Setup` (`SetupRun`). An engine that is there already counts as chosen
+  (its box is fixed, and a fixed box is not sent).
+- **The progress screen** asks `GET /api/setup/progress` (administrators) every two seconds and exchanges only what changed (`SetupProgress.Of`: waiting,
+  working, done, failed; the percent and the estimate come from what a step usually takes). A failure is said in plain words with what to do
+  (`SetupProgress.Plain`: a restart, Docker did not answer, a program that is not available for download, no internet, a busy download service, which port of
+  this computer is taken, it did not start in time; the free address has its own words); the technical rest is in the details. *Try again* queues the line
+  once more (`SetupService.RetryAsync`, an install the way the store's *Try again* does it) and keeps the line.
+- **It goes on by itself.** The *Setup* widget of the home screen (an administrator's, a plain link: the first start takes the whole tab) leads to the choices
+  before *Set up MatOS*, back to the progress screen while it works or a line failed, and goes once all is done. A restart of MatOS in the middle (the worker
+  marks waiting and running jobs failed) queues the interrupted lines again in the order of the plan (`SetupService.ResumeAsync`, from `JobRunnerService`).
+- **The same sign-in afterwards.** MatIdentity seeds only its own `admin` with a generated password, and once it is connected MatOS's sign-in page goes
+  there: the person who created the account would stand before a sign-in without an account. So the first start keeps the e-mail and the password (protected,
+  `SystemConfig.Owner` and the secret `owner`) until MatIdentity signs people in to MatOS; then `OwnerHandover` (called by `AppService` right after
+  `IdentityLink.ConnectSelfAsync`) creates the person through SCIM (an administrator, the same e-mail and password, no change asked), links the local account
+  (`ExternalSubject`) and forgets the password. A person with that user name or e-mail in MatIdentity already is only linked. A failure is a warning in the
+  job's log and is tried again with the next `ConnectEngines`; so that it cannot go unnoticed, the first start has a line of its own for it ("Your sign-in for
+  all apps", `AppJobs.HandOverOwner`: asks MatIdentity a few times and fails with the reason when it still does not know the person). While the person waits,
+  the sign-in page does not go to MatIdentity by itself (it shows MatOS's own form and *Sign in with MatIdentity*, `?via=identity`). A new password chosen
+  before (Account, Password) goes along and must follow `AccountRules` too. Without MatIdentity the password is forgotten at once. The last screen says it in
+  one sentence.
+- **The tour** is `User.HomeTourSeenAt` (null: due; the accounts that existed before the column have seen it). `Pages/Index.cshtml` draws the marks, the layout
+  loads js/onboarding.js and css/onboarding.css only then, and `POST /api/home/tour` records it (Next to the end, Skip or Escape). `/?tour=1` shows it again.
+  The test account of the development stack has seen it, so the browser checks are not in its way.
+- **The look** is MatOS OS (`Pages/Shared/_Onboarding.cshtml`): the wallpaper *Orbit*, a card of glass, the planet of the logo slowly floating, one step at a
+  time with dots for the five steps; the toolkit's controls inside the card. Its classes are `ob-*` in `css/onboarding.css` (tokens only: `--os-*` and
+  `--mat-*`, `WebUiTests`), its behaviour `js/onboarding.js`; every animation stops with `prefers-reduced-motion`. The pages are `data-top-level` (opened in a
+  window of the home screen they take the whole tab).
+- **Later changes** are the setup wizard's (`/Wizard`, Settings): welcome, the addresses with the engines under *Advanced*, the DNS account, the summary.
+  `/Setup/Choose` opens the wizard once the first start ran (its progress screen while it has lines to finish).
+
 ## Domain and DNS
 
 The wizard asks **once** for the domain of the apps and the account of the DNS provider (Cloudflare, Hetzner, Netcup: the providers that both Matcad and
@@ -93,6 +144,24 @@ the window of the home screen (`js/os.js`; *Always open in a new tab* in the men
 When the domain or the account changes (also when the domain is removed), or from the Engines tab (*Connect again*), the job `ConnectEngines` brings both in line
 again and removes what MatOS created earlier and does not want any more (routes of an old domain; without a domain every route MatOS made, and the bindings
 of `web.route` move from hosts to ports and back; the old cleanup leaves routes that are bindings alone).
+
+### The free address
+
+Who has no domain gets one from the address service (`services.mattiverse.de`, docs/SERVICES.md; `MatOS__ServicesUrl`): a name, checked while typing
+(`GET /api/address/name`, open during the first-run setup and to administrators; `data-name-check` in `js/matos.js`), becomes `<name>.my.mattiverse.de`.
+`SystemConfig.Hosted` keeps the name, the zone, the key (protected) and the mode. It is **a base domain without a DNS account**: the base domain is set to
+it and the DNS provider to none, so Matcad gets one route per host and Caddy gets every certificate itself (HTTP or TLS challenge); `ProxyPublisher` never
+gives Matcad a DNS account for it, `DnsPublisher` never writes records for it, and the wizard and the settings refuse a DNS account for it and any other name
+below the zone. `SystemConfig.UsesHostedAddress` says whether the apps use it (it is the base domain); another domain in General leaves it registered and unused.
+
+- **Tunnel** (the default): `TunnelClient` (a hosted service) keeps the control WebSocket while the address is used in tunnel mode, answers the pings, reconnects
+  after 1, 2, 5, 10, 30, 60 s, and for every `open` connects the stream WebSocket to Caddy on the shared network (`TunnelTarget`: the route service of the proxy,
+  ports 80/443 inside) through `TunnelPipe`. Nothing goes to Matddns.
+- **Direct**: only after the service reached the install on 80 and 443 (*Check direct access*). Matddns gets a domain group `MatOS address` of kind `DynDns`
+  (the service's `/nic/update`, the name and the key), the record follows the public IP, the tunnel stops; going back removes the group. `ConnectEngines` keeps
+  Matddns in line with the mode (`HostedAddressService.SyncAsync`).
+
+*Settings → Address* shows it all; the switch and *Give the name back* run as jobs.
 
 ## Where are the backups?
 
@@ -215,7 +284,7 @@ The home screen is a **small operating system** (the owner's choice of 2026-11-0
   An engine opens its own window in MatOS (`/Engines?id=`, `Support/EngineOverview.cs`): its state and version (its API), what it keeps for MatOS and which of
   your apps it serves (a stack, a route, a DNS record, the sign-in, a relay user), and its own pages: **here in the window** when the engine lets MatOS frame it,
   else in a new tab. An engine allows the addresses in `MAT_FRAME_ANCESTORS` (MatDesign docs/PLATFORM.md, "Shown inside another app"), which MatOS fills before
-  it deploys an app whose compose file names it (`Core/Integrations/FrameLink.cs`: the route behind the proxy, `localhost` and the configured address with the port
+  it deploys an app whose compose file names it (`Core/Integrations/FrameLink.cs`: the route behind the proxy, `localhost`, `127.0.0.1` and the configured address with the port
   MatOS is published on, the addresses people signed in from). `Support/FrameProbe.cs` asks the app first (`FramePolicy`: `frame-ancestors` wins over
   `X-Frame-Options`, judged for the address of the page) and offers a new tab otherwise. Older engine images refuse frames: they show it after an update.
 - **Widgets** are cards in the grid of the apps (two cells, or two by two): today (the time, the greeting: the page's h1), the engines, apps running, the last backup
@@ -284,7 +353,7 @@ class for every capability and no code that knows an app (`Core/Integrations/Bin
 
 ## MatIdentity, the single sign-on
 
-MatIdentity is an engine (the fourth card of the wizard, `core: true`), and **MatOS manages all of it**. People, groups and who may open which app live in
+MatIdentity is an engine (the fourth line of the first start, `core: true`), and **MatOS manages all of it**. People, groups and who may open which app live in
 MatIdentity; MatOS administers them in its area **People** (below) and MatIdentity's own pages do the same.
 
 - **Its address.** MatOS gives MatIdentity its public address as the fixed issuer (`MATIDENTITY_ISSUER`: the route of the proxy, else this host and
@@ -300,7 +369,7 @@ MatIdentity; MatOS administers them in its area **People** (below) and MatIdenti
   server; an app without a web service or port gets none. The
   apps on MatPlatform 1.4.0 answer it (MatDesign `src/MatPlatform`, `IMatIdentitySessions`); an older app answers 404 and keeps its session until it expires.
   MatOS registers its own as `http://<its container>:<its port>/signout-backchannel` (`SelfBackchannelLogoutUriOf`; none when it runs outside Docker).
-- **MatOS itself** is the client `matos` (it may call every app). The login page goes straight to MatIdentity when it is connected (`?local=1`
+- **MatOS itself** is the client `matos` (it may call every app). The person who set MatOS up becomes a person of MatIdentity with the same e-mail and password once it is connected (`OwnerHandover`, "The first start"). The login page goes straight to MatIdentity when it is connected and the person who set MatOS up is there (`?local=1`
   keeps the local form); `/Account/External` turns the answer into a session: the person is found by `sub` (`User.ExternalSubject`), else by the user
   name, else created, and the role follows the claim `role`. Signing out ends the session at MatIdentity too. The OpenID Connect options are read from the
   settings when they are built, so nothing needs a restart (`MatIdentitySignIn`). **The sign-in follows MatIdentity's address:** MatIdentity's issuer is its public
