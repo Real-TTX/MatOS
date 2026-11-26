@@ -37,7 +37,7 @@ public sealed class DnsPublisher
     {
         try
         {
-            if (await _matddns.IsInstalledAsync(ct) && await _matddns.DeleteGroupAsync(GroupName, ct))
+            if (await _matddns.IsInstalledAsync(ct) && await _matddns.DeleteGroupAsync(GroupName, Mattiverse.GroupName, ct))
             {
                 log("Removed the DNS records of MatOS from Matddns: there is no domain with a DNS account any more.");
             }
@@ -77,7 +77,7 @@ public sealed class DnsPublisher
             .Where(a => a.Lifecycle == AppLifecycle.Installed && a.PublicUrl != null && a.Slug != excludeSlug)
             .Select(a => a.Slug)
             .ToListAsync(ct);
-        slugs.Add("matos");
+        slugs.Add(ProxyPublisher.SelfSlug);
 
         var records = slugs
             .Select(slug => ProxyPublisher.HostFor(slug, baseDomain))
@@ -93,8 +93,8 @@ public sealed class DnsPublisher
 
         try
         {
-            var sourceEntryId = await _matddns.EnsurePublicIpSourceAsync(SourceName, ct);
-            var (groupId, entryIds) = await _matddns.UpsertGroupAsync(GroupName, provider, credentials, records, ct);
+            var sourceEntryId = await _matddns.EnsurePublicIpSourceAsync(SourceName, Mattiverse.SourceName, ct);
+            var (groupId, entryIds) = await _matddns.UpsertGroupAsync(GroupName, provider, credentials, records, Mattiverse.GroupName, ct);
             foreach (var record in records.Where(r => entryIds.ContainsKey(r.Hostname)))
             {
                 await _matddns.UpsertRuleAsync(groupId, entryIds[record.Hostname], sourceEntryId, ct);

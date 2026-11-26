@@ -49,7 +49,7 @@ x-matos:
       value: ${MATCAD_ADMIN_PASSWORD}
       secret: true
     - label: Note
-      value: The routes of your apps are managed by MatOS and carry a "Managed by MatOS" badge in Matcad.
+      value: The routes of your apps are managed by MatOS and carry a "Managed by matos" badge in Matcad.
 
 services:
   caddy:

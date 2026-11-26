@@ -25,7 +25,7 @@ Self-hosting usually means a terminal, a pile of `docker-compose.yml` files and 
 layer on top: a **home screen** that feels like a phone or a tablet, a **store** with one-click installs, a **setup wizard** that asks for your
 domain and DNS account once and wires the engines together, and **backups** you can actually restore.
 
-It is the small, mobile-friendly sibling of **MatOS**. Its home screen is a phone's, its windows are a desktop's: several open side by side over the home screen, and the dock is the taskbar. Every app is a plain `docker compose` stack in MatDock:
+It replaces **matOS**, the older desktop for the Docker host (now [Real-TTX/MatOS-legacy](https://github.com/Real-TTX/MatOS-legacy), retired), and was called **Mattiverse** until November 2026. Its home screen is a phone's, its windows are a desktop's: several open side by side over the home screen, and the dock is the taskbar. Every app is a plain `docker compose` stack in MatDock:
 you can edit it there, and MatOS keeps your change when it updates the app.
 
 ## At a glance
@@ -54,7 +54,7 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - Installs the five **engines**: MatDock (required), Matcad, Matddns, MatIdentity (one sign-in) and MatSMTP (the mail of all apps); skip one if something else on the host does its job
 - Your **domain** and your **DNS provider** (Cloudflare, Hetzner, Netcup), asked once: Matcad gets one wildcard certificate through the
   DNS challenge and a route `app.example.com` per app, Matddns keeps the DNS records on your home IP
-- Everything the wizard created carries a **Managed by MatOS** badge in the engine
+- Everything the wizard created carries a **Managed by matos** badge in the engine
 
 **Store**
 - Catalog of the Mat apps (MatMail, MatFile, MatDrive, MatOffice, MatPaper, MatPlay, MatSplit, MatTrakr, Matmon, MatCMS, MatDo, MatBoard, MatShape, MatBu),
@@ -207,14 +207,42 @@ setup wizard. An update is `docker compose pull && docker compose up -d`; everyt
 |---|---|---|
 | `MatOS__DataPath` | `/data` | Data folder: database, settings, compose files, backups |
 | `MatOS__SessionLifetimeDays` | `30` | How long a sign-in stays valid |
-| `MatOS__NetworkName` | `matos` | Shared Docker network of the engines and the apps' UIs |
+| `MatOS__NetworkName` | `matos` | Shared Docker network of the engines and the apps' UIs (an install of Mattiverse keeps `mattiverse`) |
 | `MatOS__NetworkSubnet` | – | Subnet (like `10.253.200.0/24`) for that network, if Docker's default address pools are used up |
-| `MatOS__ProjectPrefix` | `matos` | The start of the compose project names (`matos-<app>`); a second MatOS on the same host needs its own |
+| `MatOS__ProjectPrefix` | `matos` | The start of the compose project names (`matos-<app>`; an install of Mattiverse keeps `mattiverse`); a second MatOS on the same host needs its own |
 | `MatOS__HostPortRangeStart` / `End` | `8100` / `8999` | Pool for app ports when the preferred port is taken |
 | `MatOS__Admin__Seed` | `false` | Create the admin from `__Username` / `__Password` (headless installs; the password must be changed at the first sign-in) |
 | `MatOS__DockerHost` | – | Use another Docker endpoint than the mounted socket |
 | `MATOS_PORT` | `8030` | Host port in the compose files |
 | `TZ` | – | Time zone for schedules and the apps |
+
+### Upgrading from Mattiverse
+
+MatOS was called Mattiverse until November 2026. An install of Mattiverse keeps working: MatOS takes over its data volume and keeps the
+names its apps run under (the Docker network and the projects `mattiverse-<app>`), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#renamed-from-mattiverse).
+Only the data volume has a new name: copy the old one once (it stays as it is, as a backup) and start MatOS on the copy.
+
+With Compose, in the folder of the new `docker-compose.yml`:
+
+```bash
+docker stop mattiverse && docker rm mattiverse   # Mattiverse must be gone before the copy; its volume and the apps stay
+docker compose up --no-start                     # creates the volume of MatOS (matos_matos-data)
+docker run --rm -v mattiverse_mattiverse-data:/from -v matos_matos-data:/to busybox cp -a /from/. /to/
+docker compose up -d
+```
+
+(`docker compose -p mattiverse down` in this folder would not stop it: the new file has no service `mattiverse`, so Compose leaves the old
+container running as an orphan.)
+
+Started with `docker run`: `docker stop mattiverse && docker rm mattiverse`, then
+`docker run --rm -v mattiverse-data:/from -v matos-data:/to busybox cp -a /from/. /to/`, then the command above.
+
+At the first start MatOS moves `mattiverse.db` to `matos.db`. Variables of the old name (`Mattiverse__NetworkSubnet`, ...) still count
+(`MatOS__...` wins); the host port variable is `MATOS_PORT` now. Then a job brings the engines along once they answer (Jobs shows it): the
+stacks, schedules and routes of Mattiverse get the mark of MatOS, MatOS's own address under your domain becomes `matos.<domain>` (the route
+and the DNS record of `mattiverse.<domain>` go), and the apps learn the new address that may show them in a window. Under a domain the
+browser keeps the places of the windows per address, so at `matos.<domain>` they open in their default places once. Once everything runs,
+`docker volume rm mattiverse_mattiverse-data` frees the old volume.
 
 ## How it works
 
@@ -246,7 +274,7 @@ setup wizard. An update is `docker compose pull && docker compose up -d`; everyt
   what it provides and consumes (`office.edit`, ...). After an install MatOS asks a provider for the binding of every consumer (`PUT /api/bindings/...`)
   and passes the answer to the consumer as variables (`MAT_OFFICE_EDIT_URL`, `_KEY`, ...), with no code for any app. The same description gives the icons,
   widgets and menu entries of the app on the home screen.
-- The design decisions (what the engines own, where the compose files are, the home screen, how this relates to MatOS) are in
+- The design decisions (what the engines own, where the compose files are, the home screen, how this relates to the older matOS desktop) are in
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the contract with the engines is [docs/ENGINES.md](docs/ENGINES.md).
 
 ## Roles

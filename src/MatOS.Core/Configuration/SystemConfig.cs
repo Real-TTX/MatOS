@@ -41,6 +41,38 @@ public sealed class SystemConfig
 
     /// <summary>Default theme for new users: system, light or dark.</summary>
     public string DefaultTheme { get; set; } = "system";
+
+    /// <summary>
+    /// The names this install runs under, fixed at its first start (<see cref="RenameUpgrade"/>): <c>matos</c> for a new install, <c>mattiverse</c> for
+    /// one that was installed as Mattiverse, whose apps and engines are on that network and in those projects.
+    /// </summary>
+    public InstallNaming? Naming { get; set; }
+
+    /// <summary>The client id of MatOS itself in MatIdentity: the one it is registered under, else the one of its naming.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string SelfClientId => Identity?.ClientId is { Length: > 0 } registered ? registered : Naming?.IdentityClientId ?? IdentitySignIn.DefaultClientId;
+}
+
+/// <summary>The names of an install (<see cref="SystemConfig.Naming"/>); an explicit option (<c>MatOS__NetworkName</c>, <c>MatOS__ProjectPrefix</c>) still wins.</summary>
+public sealed class InstallNaming
+{
+    /// <summary>The shared Docker network of the apps and engines.</summary>
+    public string NetworkName { get; set; } = "matos";
+
+    /// <summary>The prefix of the compose projects and containers (<c>&lt;prefix&gt;-&lt;app&gt;</c>).</summary>
+    public string ProjectPrefix { get; set; } = "matos";
+
+    /// <summary>The client of MatOS itself in MatIdentity.</summary>
+    public string IdentityClientId { get; set; } = IdentitySignIn.DefaultClientId;
+
+    /// <summary>
+    /// An install of Mattiverse whose things in the engines have not followed the new name yet: the marks in MatDock and Matcad, its own route and the
+    /// back-channel address (the container is <c>matos</c> now), the addresses the apps may frame it from. <see cref="RenameFollowUp"/> does it once and clears it.
+    /// </summary>
+    public bool FinishRename { get; set; }
+
+    /// <summary>The names of an install of Mattiverse.</summary>
+    public static InstallNaming Legacy() => new() { NetworkName = Mattiverse.Name, ProjectPrefix = Mattiverse.Name, IdentityClientId = Mattiverse.Name };
 }
 
 /// <summary>The three infrastructure questions of the wizard.</summary>
@@ -90,11 +122,14 @@ public sealed class DnsSettings
 /// </summary>
 public sealed class IdentitySignIn
 {
+    /// <summary>The client id of a new install (an install of Mattiverse is registered as <c>mattiverse</c> and keeps it).</summary>
+    public const string DefaultClientId = "matos";
+
     public string Authority { get; set; } = string.Empty;
 
     public string? InternalUrl { get; set; }
 
-    public string ClientId { get; set; } = "matos";
+    public string ClientId { get; set; } = DefaultClientId;
 
     /// <summary>The addresses of MatOS that are registered as redirect addresses (a new one is added when someone signs in from it).</summary>
     public List<string> Origins { get; set; } = new();

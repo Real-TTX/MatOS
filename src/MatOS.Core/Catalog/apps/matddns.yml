@@ -45,7 +45,7 @@ x-matos:
       value: ${ADMIN_PASSWORD}
       secret: true
     - label: Note
-      value: MatOS adds the source, the DNS records of your apps and the rules itself. They carry a "Managed by MatOS" badge.
+      value: MatOS adds the source, the DNS records of your apps and the rules itself. They carry a "Managed by matos" badge.
 
 services:
   matddns:

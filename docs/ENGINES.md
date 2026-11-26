@@ -29,8 +29,9 @@ This page is the **contract**: what every engine offers to MatOS. All five speak
   `apiVersion` does not have.
 - **Idempotent writes:** `PUT` and the `POST` upserts can be repeated with the same body without a side effect.
 - **`managedBy`:** every object that MatOS creates carries `"managedBy": "matos"` (a free string, stored, returned in lists). The engine's own UI
-  shows a small **"Managed by MatOS"** badge on such objects with the hint that MatOS writes them and that manual changes may be
-  overwritten. This is how a user who opens the engine sees where a setting came from.
+  shows a small badge on such objects, `Managed by <value>` (the engines name `mattiverse` *Mattiverse* and show any other value as it is, so
+  MatOS's objects read **"Managed by matos"**; an object an install of Mattiverse wrote reads *Managed by Mattiverse* until MatOS writes it again),
+  with the hint that the tool writes them and that manual changes may be overwritten. This is how a user who opens the engine sees where a setting came from.
 - **Long operations** (MatDock only) are asynchronous: the request answers `202 {"operationId": "..."}` and the output is polled from
   `GET /api/v1/operations/{id}?offset=<chars already read>` →
   `{"id","kind","status":"running|succeeded|failed","output":"<new text>","offset":<next offset>,"finished":bool,"error":null|"text","result":{...}}`.
@@ -85,7 +86,7 @@ Ids are the existing 32-character hex ids. Validation is the same as in the UI. 
 | `GET /api/v1/rules`, `POST /api/v1/rules`, `DELETE /api/v1/rules/{id}` | Upsert by `id`, else by the pair (`domainGroupId`, `domainEntryId`). Body as in the UI: `enabled`, `onChange`, `intervalSeconds`, `validatePing`, `validateTcp`, `validationPort`, `domainGroupId`, `domainEntryId`, `sourceEntryIdsInOrder`, `managedBy`. |
 | `POST /api/v1/run` | evaluates all rules now (like the periodic check); answers `{"ok":true}` |
 
-The UI marks objects with `managedBy` with the badge ("Managed by MatOS") on the sources, domains and rules lists.
+The UI marks objects with `managedBy` with the badge ("Managed by matos", the value as it is) on the sources, domains and rules lists.
 
 What was built, and where it differs from the sketch above (branch `mattiverse-integration`):
 

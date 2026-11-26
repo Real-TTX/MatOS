@@ -17,13 +17,13 @@ that each **own** one part of the configuration:
 
 MatOS itself keeps what no engine knows: users, roles and sessions, shared links, the catalog, the wizard's choices, which catalog
 entry an app came from, and where it sits on the home screen. Everything else lives in the engines and **is visible and editable there**: open
-MatDock and the apps are stacks marked *Managed by MatOS*, open Matcad and they are routes, open Matddns and they are records, open MatIdentity and they are apps, open MatSMTP and they are relay users.
+MatDock and the apps are stacks marked *Managed by matos* (`managedBy: matos`), open Matcad and they are routes, open Matddns and they are records, open MatIdentity and they are apps, open MatSMTP and they are relay users.
 
 The five are **fixed parts** of MatOS (`EngineIds.All`, `core: true`; the wizard installs them in that order, MatDock first because it deploys the others; they cannot be uninstalled from MatOS except a failed install, to start over).
 Other tools in the store (Nginx Proxy Manager, Portainer, ...) are plain apps without deep integration. The contract between MatOS and the
 engines is [ENGINES.md](ENGINES.md).
 
-| | MatOS | MatOS | MatDock |
+| | MatOS (this app) | matOS (the older desktop, Real-TTX/MatOS) | MatDock |
 |---|---|---|---|
 | Idea | A launcher: one app at a time, like a phone | A desktop in the browser: windows, taskbar | A Docker manager for many hosts over SSH |
 | Strength | Installing the Mat apps, the setup wizard, mobile | Rich desktop, file explorer, task manager | Stacks, volumes, backups, terminal, many hosts |
@@ -122,7 +122,7 @@ path would resolve inside that container and not on the host.
 ## Where does the catalog live?
 
 **In MatOS** (`src/MatOS.Core/catalog/apps/*.yml`, embedded, plus `/data/catalog/*.yml`). A catalog entry is a compose file with an
-`x-matos` block ([CATALOG.md](CATALOG.md)): data, not code. MatOS keeps its catalog in C# code, which makes every new app a release; here it is a file.
+`x-matos` block ([CATALOG.md](CATALOG.md)): data, not code. The older matOS desktop (Real-TTX/MatOS) keeps its catalog in C# code, which makes every new app a release; here it is a file.
 A user file with the same `id` replaces the built-in entry. The three engines carry `core: true` and a `provision` key that names what connects them.
 
 All apps and engines share the Docker network `matos` with MatOS itself (it attaches itself on start), so they reach each other by container name
@@ -180,7 +180,7 @@ MatOS uses **MatUi**, the UI toolkit of [MatDesign](https://github.com/Real-TTX/
 
 ### The home screen: MatOS
 
-The home screen is a **small operating system** (the owner's choice of 2026-11-08/09, modelled on iOS, umbrelOS and MatOS), not a page of the toolkit:
+The home screen is a **small operating system** (the owner's choice of 2026-11-08/09, modelled on iOS, umbrelOS and the older matOS desktop), not a page of the toolkit:
 
 - **Its own look.** `Pages/Shared/_Launcher.cshtml` with `css/os.css` and `js/os.js`: a status bar (logo, running tasks, theme, the person, date and time), the wallpaper over
   the whole screen, widgets of glass, app icons, a search and a dock of glass. Glass, colour gradients on the icons of the system and the system font are allowed there on
@@ -279,7 +279,7 @@ class for every capability and no code that knows an app (`Core/Integrations/Bin
 
 - **No `mssql-server` / `pgadmin` service.** The project template names them; with SQLite neither is needed. The release
   stack is the single service `matos`; the dev stack adds a SQLite web viewer.
-- No multi-host management (that is MatDock), no file explorer or terminal (MatOS / MatDock).
+- No multi-host management (that is MatDock), no file explorer or terminal (the older matOS desktop / MatDock).
 - No deep integration of alternatives (Nginx Proxy Manager, Portainer): they are installed as plain apps.
 
 ## MatIdentity, the single sign-on
@@ -344,3 +344,59 @@ API in [ENGINES.md](ENGINES.md)).
 - **The apps' side.** With the variables set an app sends all its mail through MatSMTP and shows its own SMTP settings as fixed (in its pages and with `fixed: true` in its
   `/api/configure`, which the Manage tab draws as disabled fields and never sends back). MatPlatform 1.3.0 (`MatSmtpSettings`) does this for the .NET apps.
 - **MatOS itself** sends no mail today, so it has nothing to connect.
+
+## Renamed from Mattiverse
+
+MatOS was called **Mattiverse** until 2026-11. Everything was renamed (projects, namespaces, image `ghcr.io/real-ttx/matos`, compose, variables, the mark on what is
+written to the engines), but an install of Mattiverse keeps working: what it persisted or sent over the wire under the old name is still accepted. The old names are in
+one place, `Core/Configuration/Mattiverse.cs`; the mark is `Core/Owner.cs`. Accepted from before, and why:
+
+- **The data volume.** At its first start, before the options and the database are used, MatOS takes over the volume (`Configuration/RenameUpgrade.cs`, called from
+  `Program.cs`): `mattiverse.db` (with `-wal`, `-shm`) becomes `matos.db` when there is no `matos.db` yet (an empty one, which a SQLite viewer on the same volume
+  creates, does not count), and the move is logged. The volume itself has a new name; the
+  README ("Upgrading from Mattiverse") copies it once.
+- **The names the apps run under.** The shared Docker network and the prefix of the compose projects stay `mattiverse` for an install of Mattiverse (its database or its
+  `system.json` was there, or apps are in `mattiverse-` projects), otherwise its apps and engines would be left on another network and in projects nobody knows; a new
+  install is `matos`. They are fixed once in `system.json` (`naming`) and every consumer reads them through the options (`MatOSOptions.NetworkName`, `ProjectPrefix`); an
+  explicit `MatOS__NetworkName` / `MatOS__ProjectPrefix` still wins.
+- **The options.** The section `MatOS` (`MatOS__X`) and the old section `Mattiverse` (`Mattiverse__X`) both bind; `MatOS` wins (`Configuration/MatOSConfiguration.cs`).
+- **The Docker labels.** New containers carry `matos.managed`, `matos.app`, `matos.instance`, `matos.service`. The containers of an upgraded install carry `mattiverse.*`
+  until they are deployed again, so everything that reads labels asks for both (`docker ps` cannot OR two filters: one call per set, merged by id).
+- **The catalog block.** A catalog file is `x-matos`; `x-mattiverse` (a catalog copy in `/data/catalog`, the compose file of a stack Mattiverse gave MatDock, which
+  `AppReconciler` adopts) is read the same way, and `x-matos` wins when a file has both. What MatOS writes (the compose file of an app, the stack in MatDock) carries
+  `x-matos`, in the place of the old block.
+- **`managedBy`.** What MatOS writes to an engine carries `matos`; every ownership check (what it may change or delete: routes and providers in Matcad, sources, domain
+  groups and rules in Matddns, stacks in MatDock, clients in MatIdentity, relay users in MatSMTP, the bindings of the broker) accepts `matos` and `mattiverse`
+  (`Owner.IsOurs`). A removal that names the mark (MatIdentity, MatSMTP, the bindings) tries `matos` and then `mattiverse`. The next write gives an object the new mark.
+  The engines are not changed: they show `mattiverse` as their badge and other values as they are (*Managed by matos*).
+  Where an engine compares the mark itself, mixed marks would break things, so the old marks are replaced once (below, *The engines follow*): MatDock backs up
+  with a schedule for all apps only the stacks whose mark is the schedule's, and Matcad turns a route made through `/api/v1` into the `web.route` binding
+  of an app only when both carry the same mark (`ProxyPublisher.PublishAllAsync` gives such routes the mark of MatOS before the broker binds them).
+- **The things it named.** The Matcad provider *Mattiverse DNS*, the Matddns source *Mattiverse public IP* and its domain group *Mattiverse* are taken over (by their id)
+  and renamed, so no second one with the same records is made; only those that carry the mark of MatOS.
+- **Its own address.** MatOS's host under the domain is `matos.<domain>`. The route and the record of `mattiverse.<domain>` carry the old mark, so the next publication
+  removes them like anything MatOS does not want any more; the redirect addresses in MatIdentity drop the old host (unless a person still comes from it).
+  The container is `matos` now (it was `mattiverse`); on the network of an install of Mattiverse it also answers to its old name (`mattiverse`, `mattiverse-dev`;
+  `DockerService.ConnectArguments`: `--alias`), so Matcad's route and MatIdentity's back-channel address keep reaching it until they are written again.
+- **The engines follow** (`Configuration/RenameFollowUp.cs`). An install of Mattiverse is marked once (`naming.finishRename`); at every start while the mark is there
+  a job waits for the engines (up to ten minutes; MatDock and Matcad must answer, else the next start tries again) and then: gives the stacks and schedules of
+  Mattiverse in MatDock the mark of MatOS together (written back as they are, `deploy: false`), connects the engines again (`AppJobs.ConnectEngines`: MatOS's own
+  route to the container `matos` under `matos.<domain>`, the DNS records, the back-channel address, the bindings), and with a domain deploys the apps of the
+  contract once more, so `MAT_FRAME_ANCESTORS` names the new address (Compose recreates only what changed). Then it clears the mark.
+- **Its client in MatIdentity.** An install that registered `mattiverse` keeps it (`system.json`: `identity.clientId`, `naming.identityClientId`); a new install is `matos`.
+  The sign-in always uses the stored one (`SystemConfig.SelfClientId`).
+- **The instance name.** A stored *Mattiverse* (the old default) becomes *MatOS*, once, with the upgrade; a name the person chose stays, and so does *Mattiverse*
+  given again later.
+- **The home screen.** The places of the windows (`localStorage`) and the open windows of a tab (`sessionStorage`) move from `mattiverse.os.*` to `matos.os.*` once
+  (`js/os.js`). The browser keeps them per address, so this works only where the address stays: `http://<host>:8030` keeps them, but under a domain MatOS moves
+  from `mattiverse.<domain>` to `matos.<domain>`, which cannot read what the old address kept: there the windows open in their default places once. Accepted.
+
+Kept on purpose: the Data Protection application name `Mattiverse` (`Program.cs`) and the purpose of the secret protector `Mattiverse.Secrets.v1`
+(`DataProtectionSecretProtector.Purpose`): both are part of the key derivation, another name would make every protected secret unreadable; the domain
+`mattiverse.de`, the branches `mattiverse-integration` of the engines and the repository `Real-TTX/Mattiverse`. Not carried over: the cookie names (`matos.auth`): a person
+signs in once more after the upgrade.
+
+Decided (the owner, 2026-11-26): the older matOS desktop is retired. Its repository becomes `Real-TTX/MatOS-legacy` (archived) and its images move to
+`ghcr.io/real-ttx/matos-legacy`; this app is `Real-TTX/MatOS` and publishes `ghcr.io/real-ttx/matos` (CI names it explicitly) and, for a while, the same
+build as `ghcr.io/real-ttx/mattiverse` too (`LEGACY_IMAGE_NAME` in `build.yml`), so an install that still runs the old image gets MatOS with its next update.
+The Docker names `matos` (project, container, volume, network) are this app's now; see [INTEGRATION.md](INTEGRATION.md).

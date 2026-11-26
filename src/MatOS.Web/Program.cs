@@ -21,21 +21,20 @@ var builder = WebApplication.CreateBuilder(args);
 // ---------------------------------------------------------------------------
 // Configuration / options
 // ---------------------------------------------------------------------------
-builder.Services.Configure<MatOSOptions>(builder.Configuration.GetSection(MatOSOptions.SectionName));
-
 // Resolve the data directory before the container is built (needed for keys + SQLite path).
-// In Docker the Dockerfile sets MatOS__DataPath=/data; local runs fall back to App_Data.
-var configuredDataPath = builder.Configuration[$"{MatOSOptions.SectionName}:DataPath"];
-var dataPath = !string.IsNullOrWhiteSpace(configuredDataPath)
-    ? configuredDataPath
-    : Path.Combine(builder.Environment.ContentRootPath, "App_Data");
+// In Docker the Dockerfile sets MatOS__DataPath=/data; local runs fall back to App_Data. The section Mattiverse (the name before 2026-11) still counts.
+var dataPath = MatOSConfiguration.Value(builder.Configuration, nameof(MatOSOptions.DataPath))
+    ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data");
 
 var appPaths = new AppPaths(dataPath);
 appPaths.EnsureCreated();
 builder.Services.AddSingleton(appPaths);
-builder.Services.PostConfigure<MatOSOptions>(options => options.DataPath = dataPath);
 
-var sessionLifetimeDays = builder.Configuration.GetValue($"{MatOSOptions.SectionName}:SessionLifetimeDays", 30);
+// What an install of Mattiverse left on the volume (its database, its names), before the options and the database are used.
+var upgrade = await RenameUpgrade.RunAsync(appPaths, builder.Configuration);
+builder.Services.AddMatOSOptions(builder.Configuration, upgrade, dataPath);
+
+var sessionLifetimeDays = MatOSConfiguration.Read(builder.Configuration).SessionLifetimeDays;
 
 // ---------------------------------------------------------------------------
 // Infrastructure services
@@ -137,6 +136,11 @@ builder.Services.AddRazorPages(options =>
 });
 
 var app = builder.Build();
+
+foreach (var line in upgrade.Log)
+{
+    app.Logger.LogInformation("Upgrade from Mattiverse: {Line}", line);
+}
 
 // ---------------------------------------------------------------------------
 // HTTP pipeline

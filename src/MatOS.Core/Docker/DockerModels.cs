@@ -59,3 +59,6 @@ public sealed record HostLoad(double CpuPercent, double MemoryPercent, double Di
 
 /// <summary>A host port that an existing container publishes.</summary>
 public sealed record PublishedPort(int HostPort, string Protocol, string Container);
+
+/// <summary>The labels that mark a container of MatOS: that it is one (<see cref="Managed"/> = <c>true</c>), its app instance (the slug), its service and catalog entry.</summary>
+public sealed record ContainerLabels(string Managed, string Instance, string Service, string App);

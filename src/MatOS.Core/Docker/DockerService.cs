@@ -8,7 +8,8 @@ namespace MatOS.Core.Docker;
 /// <summary>
 /// Typed Docker operations (containers, networks, volumes, ports) on top of <see cref="DockerCli"/>.
 /// MatOS finds "its" containers by the labels it sets (<c>matos.managed</c>, <c>matos.instance</c>)
-/// and by the compose project label, so Docker itself stays the source of truth for what runs.
+/// and by the compose project label, so Docker itself stays the source of truth for what runs. The containers of an install of
+/// Mattiverse carry <c>mattiverse.*</c> until they are deployed again: those count as well (<see cref="AllLabels"/>).
 /// </summary>
 public sealed partial class DockerService
 {
@@ -17,6 +18,16 @@ public sealed partial class DockerService
     public const string ServiceLabel = "matos.service";
     public const string AppLabel = "matos.app";
     private const string ComposeProjectLabel = "com.docker.compose.project";
+
+    /// <summary>The labels MatOS sets on the containers it creates.</summary>
+    public static readonly ContainerLabels Labels = new(ManagedLabel, InstanceLabel, ServiceLabel, AppLabel);
+
+    /// <summary>The labels Mattiverse set (the name before 2026-11).</summary>
+    public static readonly ContainerLabels LegacyLabels = new(
+        Mattiverse.LabelPrefix + "managed", Mattiverse.LabelPrefix + "instance", Mattiverse.LabelPrefix + "service", Mattiverse.LabelPrefix + "app");
+
+    /// <summary>Every set of labels that marks a container of MatOS, the current one first.</summary>
+    public static readonly IReadOnlyList<ContainerLabels> AllLabels = [Labels, LegacyLabels];
 
     private readonly DockerCli _cli;
     private readonly MatOSOptions _options;
@@ -103,11 +114,29 @@ public sealed partial class DockerService
             return;
         }
 
-        var connect = await _cli.RunAsync(["network", "connect", name, self], ct: ct);
+        var connect = await _cli.RunAsync(ConnectArguments(name, self), ct: ct);
         if (!connect.Success && !connect.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogWarning("Could not connect MatOS to the network '{Network}': {Message}", name, connect.Message);
         }
+    }
+
+    /// <summary>
+    /// The arguments that attach MatOS (<paramref name="self"/>) to the shared network. On the network of an install of Mattiverse it also answers to the name
+    /// its container had then (<c>matos</c> was <c>mattiverse</c>, <c>matos-dev</c> was <c>mattiverse-dev</c>): what the engines keep of it (Matcad's route to
+    /// <c>http://mattiverse:8030</c>, the back-channel address in MatIdentity) keeps working until the engines learn the new name (<see cref="Configuration.RenameFollowUp"/>).
+    /// </summary>
+    public static List<string> ConnectArguments(string network, string self)
+    {
+        const string ContainerName = "matos";
+        var arguments = new List<string> { "network", "connect" };
+        if (string.Equals(network, Mattiverse.Name, StringComparison.Ordinal) && self.StartsWith(ContainerName, StringComparison.Ordinal))
+        {
+            arguments.AddRange(["--alias", Mattiverse.Name + self[ContainerName.Length..]]);
+        }
+
+        arguments.AddRange([network, self]);
+        return arguments;
     }
 
     /// <summary>The name of the container MatOS runs in, or <c>null</c> when it does not run in Docker (local development).</summary>
@@ -180,26 +209,45 @@ public sealed partial class DockerService
 
     // ------------------------------------------------------------------ containers
 
-    /// <summary>All containers that carry the MatOS label, optionally only those of one instance.</summary>
+    /// <summary>
+    /// All containers that carry the MatOS label (or the one of Mattiverse), optionally only those of one instance. <c>docker ps</c> cannot OR two
+    /// filters, so each set of labels is asked on its own and the answers are merged.
+    /// </summary>
     public async Task<List<ContainerInfo>> ListContainersAsync(string? instance = null, CancellationToken ct = default)
     {
-        var args = new List<string> { "ps", "-a", "--no-trunc", "--filter", $"label={ManagedLabel}=true" };
-        if (instance is not null)
+        var outputs = new List<string>();
+        foreach (var labels in AllLabels)
         {
-            args.AddRange(["--filter", $"label={InstanceLabel}={instance}"]);
-        }
+            var result = await _cli.RunAsync(ListArguments(labels, instance), ct: ct);
+            if (!result.Success)
+            {
+                _logger.LogWarning("docker ps failed: {Message}", result.Message);
+                return [];
+            }
 
-        args.AddRange(["--format", $"{{{{.ID}}}}\t{{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.State}}}}\t{{{{.Status}}}}\t{{{{.Label \"{InstanceLabel}\"}}}}\t{{{{.Label \"{ServiceLabel}\"}}}}\t{{{{.Label \"{ComposeProjectLabel}\"}}}}\t{{{{.Ports}}}}"]);
-        var result = await _cli.RunAsync(args, ct: ct);
-        if (!result.Success)
-        {
-            _logger.LogWarning("docker ps failed: {Message}", result.Message);
-            return [];
+            outputs.Add(result.StdOut);
         }
 
         // A second MatOS on the same Docker (a test instance with its own prefix) uses the same labels and slugs: only this one's projects count.
-        return ParseContainers(result.StdOut).Where(c => IsOwn(c, _options.ProjectPrefix)).ToList();
+        return MergeContainers(outputs).Where(c => IsOwn(c, _options.ProjectPrefix)).ToList();
     }
+
+    /// <summary>The arguments of <c>docker ps</c> for the containers marked with <paramref name="labels"/> (of one instance), read with the same labels.</summary>
+    public static List<string> ListArguments(ContainerLabels labels, string? instance)
+    {
+        var args = new List<string> { "ps", "-a", "--no-trunc", "--filter", $"label={labels.Managed}=true" };
+        if (instance is not null)
+        {
+            args.AddRange(["--filter", $"label={labels.Instance}={instance}"]);
+        }
+
+        args.AddRange(["--format", $"{{{{.ID}}}}\t{{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.State}}}}\t{{{{.Status}}}}\t{{{{.Label \"{labels.Instance}\"}}}}\t{{{{.Label \"{labels.Service}\"}}}}\t{{{{.Label \"{ComposeProjectLabel}\"}}}}\t{{{{.Ports}}}}"]);
+        return args;
+    }
+
+    /// <summary>The containers of several answers of <c>docker ps</c>, each once (a container with both sets of labels is in two answers).</summary>
+    public static List<ContainerInfo> MergeContainers(IEnumerable<string> outputs)
+        => outputs.SelectMany(ParseContainers).DistinctBy(c => c.Id).ToList();
 
     /// <summary>A container of this MatOS: its compose project starts with the prefix (one without a project is kept, as before).</summary>
     public static bool IsOwn(ContainerInfo container, string prefix)

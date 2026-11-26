@@ -35,7 +35,7 @@ x-matos:
       generate: true
       help: The initial password of the user "admin" (MatDock asks to change it on the first sign-in). Leave empty to generate one.
   notes:
-    - MatOS deploys, updates and backs up its apps as stacks in MatDock. You see them there with a "Managed by MatOS" badge and can change them.
+    - MatOS deploys, updates and backs up its apps as stacks in MatDock. You see them there with a "Managed by matos" badge and can change them.
   credentials:
     - label: Username
       value: admin

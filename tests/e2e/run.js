@@ -149,6 +149,15 @@ const pages = [
     await noWindows();
     expectEqual(await page.locator('.is-running').count(), 0, 'closed: no dot');
   });
+  await check('the places of the windows that Mattiverse kept (mattiverse.os.*) move to matos.os.* once', async () => {
+    await page.goto(BASE + '/');
+    await page.evaluate(() => { localStorage.setItem('mattiverse.os.geo.e2e-legacy', '{"x":1}'); localStorage.removeItem('matos.os.geo.e2e-legacy'); });
+    await page.goto(BASE + '/');
+    const keys = await page.evaluate(() => [localStorage.getItem('matos.os.geo.e2e-legacy'), localStorage.getItem('mattiverse.os.geo.e2e-legacy')]);
+    expectEqual(keys[0], '{"x":1}', 'moved to matos.os.geo.*');
+    expectEqual(keys[1], null, 'the old key is gone');
+    await page.evaluate(() => localStorage.removeItem('matos.os.geo.e2e-legacy'));
+  });
   await check('several windows: the bar moves one, an edge sizes it, a click brings one to the front, the edge of the screen takes a half', async () => {
     await page.goto(BASE + '/');
     await page.evaluate(() => { Object.keys(localStorage).filter(k => k.startsWith('matos.os.geo.')).forEach(k => localStorage.removeItem(k)); });

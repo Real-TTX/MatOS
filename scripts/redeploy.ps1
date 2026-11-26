@@ -32,6 +32,16 @@ try {
     # Windows PowerShell 5.1 turns the progress lines docker writes to stderr into errors; judge by the exit code instead.
     $ErrorActionPreference = 'Continue'
 
+    # The dev stack was "mattiverse-dev" until the rename: its containers hold the ports and its network the subnet. They go once; the volume stays
+    # (docker-compose.dev.yml uses it).
+    docker container inspect mattiverse-dev *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host 'Removing the old dev stack of Mattiverse (its volume stays) ...' -ForegroundColor Yellow
+        docker stop mattiverse-dev mattiverse-dev-sqlite-web
+        docker rm mattiverse-dev mattiverse-dev-sqlite-web
+        docker network rm mattiverse-dev_default
+    }
+
     if ($Fresh) {
         Write-Host 'Removing the stack and its volume ...' -ForegroundColor Yellow
         docker @compose down -v

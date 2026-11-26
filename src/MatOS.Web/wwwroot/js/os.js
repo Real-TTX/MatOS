@@ -45,6 +45,28 @@
   var GEO = 'matos.os.geo.';
   var OPEN = 'matos.os.windows';
   var PAGE = 'matos.os.page';
+  var LEGACY = 'mattiverse.os.';
+
+  // MatOS was called Mattiverse until 2026-11 and kept the places of the windows (localStorage) and the open windows of a tab (sessionStorage) under
+  // mattiverse.os.*: they move to matos.os.* once (a key that is there already wins), so the windows come back where they were. The browser keeps them per
+  // address: this helps where the address stays (host:port); at matos.<domain> nothing of mattiverse.<domain> can be read (docs/ARCHITECTURE.md).
+  function moveLegacyKeys(storage) {
+    try {
+      var store = storage();
+      var old = [];
+      for (var i = 0; i < store.length; i++) {
+        var key = store.key(i);
+        if (key && key.indexOf(LEGACY) === 0) { old.push(key); }
+      }
+      old.forEach(function (key) {
+        var now = 'matos.os.' + key.slice(LEGACY.length);
+        if (store.getItem(now) === null) { store.setItem(now, store.getItem(key)); }
+        store.removeItem(key);
+      });
+    } catch (e) { /* private mode, or no storage */ }
+  }
+  moveLegacyKeys(function () { return window.localStorage; });
+  moveLegacyKeys(function () { return window.sessionStorage; });
   var MINW = 380;
   var MINH = 260;
 

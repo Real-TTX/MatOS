@@ -7,6 +7,14 @@
 #     ghcr.io/real-ttx/matos:latest
 #
 # Web: http://localhost:8030  (the first start opens the setup wizard)
+#
+# Coming from Mattiverse (the name until 2026-11, volume mattiverse_mattiverse-data)? Remove its container (it must be gone before the copy;
+# "docker compose -p mattiverse down" here would leave it running as an orphan), copy its volume once, then start this file:
+#   docker stop mattiverse && docker rm mattiverse
+#   docker compose up --no-start
+#   docker run --rm -v mattiverse_mattiverse-data:/from -v matos_matos-data:/to busybox cp -a /from/. /to/
+#   docker compose up -d
+# MatOS takes over the database and keeps the network and the project names of the apps (README, "Upgrading from Mattiverse").
 name: matos
 
 services:

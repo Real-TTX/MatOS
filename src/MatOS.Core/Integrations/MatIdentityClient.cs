@@ -14,7 +14,6 @@ public sealed record IdentityRegistration(string ClientId, string? Secret);
 public sealed class MatIdentityClient : EngineClient
 {
     public const string CatalogIdValue = EngineIds.MatIdentity;
-    public const string ManagedBy = "matos";
 
     public MatIdentityClient(EngineLocator locator, IHttpClientFactory http)
         : base(locator, http)
@@ -52,7 +51,7 @@ public sealed class MatIdentityClient : EngineClient
             ["allowSignIn"] = redirectUris.Count > 0,
             ["allowMachine"] = callsAllApps,
             ["callsAllApps"] = callsAllApps,
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
             ["renewSecret"] = renewSecret,
         };
         if (backchannelLogoutUri is not null)
@@ -69,7 +68,7 @@ public sealed class MatIdentityClient : EngineClient
     {
         try
         {
-            await SendAsync(HttpMethod.Delete, $"clients/{Uri.EscapeDataString(clientId)}?managedBy={ManagedBy}", null, null, ct);
+            await DeleteOwnedAsync($"clients/{Uri.EscapeDataString(clientId)}", ct);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
         {

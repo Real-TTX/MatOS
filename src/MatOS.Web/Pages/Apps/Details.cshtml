@@ -1,5 +1,6 @@
 @page
 @model MatOS.Web.Pages.Apps.DetailsModel
+@inject Microsoft.Extensions.Options.IOptions<MatOS.Core.Configuration.MatOSOptions> MatOSOptions
 @{
     var app = Model.App;
     ViewData["Title"] = app.Name;
@@ -269,14 +270,14 @@
                         @if (!string.IsNullOrEmpty(Model.InternalAddress))
                         {
                             <dt>Address for other apps</dt>
-                            <dd><code>@Model.InternalAddress</code> <span class="mat-muted">(on the Docker network "matos")</span></dd>
+                            <dd><code>@Model.InternalAddress</code> <span class="mat-muted">(on the Docker network "@MatOSOptions.Value.NetworkName")</span></dd>
                         }
                         <dt>Installed from</dt>
                         <dd>@(Model.Catalog?.Name ?? app.CatalogId) <span class="mat-muted">· project <code>@app.ProjectName</code></span></dd>
                         @foreach (var link in Model.EngineLinks)
                         {
                             <dt>@link.Label</dt>
-                            <dd><a href="@link.Url" target="_blank" rel="noopener">@link.Engine</a> <span class="mat-muted">· marked "Managed by MatOS" there</span></dd>
+                            <dd><a href="@link.Url" target="_blank" rel="noopener">@link.Engine</a> <span class="mat-muted">· marked "Managed by matos" there</span></dd>
                         }
                         <dt>Installed</dt>
                         <dd><span class="mat-mono">@Format.DateTimeLocal(app.CreateDate)</span> <span class="mat-muted">· @Format.Ago(app.CreateDate)</span></dd>

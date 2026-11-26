@@ -21,6 +21,9 @@ public partial class WebUiTests
         return dir?.FullName ?? throw new InvalidOperationException("MatOS.slnx was not found above " + AppContext.BaseDirectory);
     }
 
+    /// <summary>The folder of the web project (src/MatOS.Web).</summary>
+    internal static string WebRoot() => Web;
+
     private static IEnumerable<string> Pages() => Directory.EnumerateFiles(Path.Combine(Web, "Pages"), "*.cshtml", SearchOption.AllDirectories);
 
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([Web, .. parts]));

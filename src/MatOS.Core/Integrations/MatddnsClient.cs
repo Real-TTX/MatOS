@@ -13,7 +13,6 @@ public sealed record DnsRecord(string Hostname, string RecordName, string Zone);
 /// </summary>
 public sealed class MatddnsClient : EngineClient
 {
-    public const string ManagedBy = "matos";
 
     public MatddnsClient(EngineLocator locator, IHttpClientFactory http)
         : base(locator, http)
@@ -26,16 +25,26 @@ public sealed class MatddnsClient : EngineClient
 
     protected override string DisplayName => "Matddns";
 
-    /// <summary>Makes sure there is a source "public IP" (the IP this host reaches the internet with) and returns the id of its entry.</summary>
-    public async Task<string> EnsurePublicIpSourceAsync(string name, CancellationToken ct = default)
+    /// <summary>
+    /// Makes sure there is a source "public IP" (the IP this host reaches the internet with) and returns the id of its entry. Without a source of this
+    /// name, the one MatOS made under <paramref name="formerName"/> (its name while MatOS was called Mattiverse) is taken over and renamed: its entry,
+    /// and with it the rules that use it, stay.
+    /// </summary>
+    public async Task<string> EnsurePublicIpSourceAsync(string name, string? formerName = null, CancellationToken ct = default)
     {
         var body = new JsonObject
         {
             ["name"] = name,
             ["kind"] = "PublicIp",
             ["intervalSeconds"] = 300,
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
         };
+        if (formerName is not null && FindByName(await GetAsync("sources", ct) as JsonArray, name, formerName) is { } existing
+            && existing["id"]?.GetValue<string>() is { } existingId)
+        {
+            body["id"] = existingId;
+        }
+
         var source = await SendAsync(HttpMethod.Post, "sources", body, null, ct) as JsonObject
             ?? throw new InvalidOperationException("Matddns did not return the source.");
         return (source["entries"] as JsonArray)?.OfType<JsonObject>().Select(e => e["id"]?.GetValue<string>()).FirstOrDefault(id => id is not null)
@@ -44,13 +53,15 @@ public sealed class MatddnsClient : EngineClient
 
     /// <summary>
     /// Creates or updates the group of records at the provider with exactly these <paramref name="records"/> (the list is complete: records
-    /// that are not in it are removed). Returns the id of the group and the id of each record by host name.
+    /// that are not in it are removed). Returns the id of the group and the id of each record by host name. Without a group of this name, the one MatOS
+    /// made under <paramref name="formerName"/> (its name while MatOS was called Mattiverse) is taken over and renamed, so no second group holds the same records.
     /// </summary>
     public async Task<(string GroupId, Dictionary<string, string> EntryIds)> UpsertGroupAsync(
         string name,
         DnsProvider provider,
         IReadOnlyDictionary<string, string> credentials,
         IReadOnlyList<DnsRecord> records,
+        string? formerName = null,
         CancellationToken ct = default)
     {
         var settings = new JsonObject { ["allowDynamic"] = true }; // create the records that do not exist yet
@@ -76,7 +87,8 @@ public sealed class MatddnsClient : EngineClient
 
         // Matddns refuses (409) to drop a record that a rule still uses, and never removes a rule on its own: the rules of the
         // records that leave the list go first.
-        if (await FindGroupAsync(name, ct) is { } existing)
+        var existing = await FindGroupAsync(name, formerName, ct);
+        if (existing is not null)
         {
             var staying = records.Select(r => r.Hostname).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var leaving = existing.Entries.Where(e => !staying.Contains(e.Key)).Select(e => e.Value).ToHashSet();
@@ -89,8 +101,14 @@ public sealed class MatddnsClient : EngineClient
             ["kind"] = provider.MatddnsKind,
             [provider.MatddnsSettings] = settings,
             ["entries"] = entries,
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
         };
+        if (existing is not null)
+        {
+            // By its id: a group of the former name gets the new one.
+            body["id"] = existing.Id;
+        }
+
         var group = await SendAsync(HttpMethod.Post, "domains", body, null, ct) as JsonObject
             ?? throw new InvalidOperationException("Matddns did not return the domain group.");
 
@@ -119,7 +137,7 @@ public sealed class MatddnsClient : EngineClient
             ["domainGroupId"] = groupId,
             ["domainEntryId"] = entryId,
             ["sourceEntryIdsInOrder"] = new JsonArray(sourceEntryId),
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
         };
         return SendAsync(HttpMethod.Post, "rules", body, null, ct);
     }
@@ -127,10 +145,13 @@ public sealed class MatddnsClient : EngineClient
     /// <summary>Evaluates all rules now, so a new record is written right away.</summary>
     public Task RunNowAsync(CancellationToken ct = default) => SendAsync(HttpMethod.Post, "run", new JsonObject(), null, ct);
 
-    /// <summary>Removes the group of records. Matddns refuses (409) while rules use the group, so its rules are removed first. Returns whether the group existed.</summary>
-    public async Task<bool> DeleteGroupAsync(string name, CancellationToken ct = default)
+    /// <summary>
+    /// Removes the group of records (or the one MatOS made under <paramref name="formerName"/>). Matddns refuses (409) while rules use the group, so its
+    /// rules are removed first. Returns whether the group existed.
+    /// </summary>
+    public async Task<bool> DeleteGroupAsync(string name, string? formerName = null, CancellationToken ct = default)
     {
-        if (await FindGroupAsync(name, ct) is not { } group)
+        if (await FindGroupAsync(name, formerName, ct) is not { } group)
         {
             return false;
         }
@@ -145,28 +166,37 @@ public sealed class MatddnsClient : EngineClient
     /// <summary>A domain group by name: its id and the id of each record by host name.</summary>
     private sealed record GroupInfo(string Id, Dictionary<string, string> Entries);
 
-    private async Task<GroupInfo?> FindGroupAsync(string name, CancellationToken ct)
+    private async Task<GroupInfo?> FindGroupAsync(string name, string? formerName, CancellationToken ct)
     {
-        foreach (var group in (await GetAsync("domains", ct) as JsonArray ?? []).OfType<JsonObject>())
+        if (FindByName(await GetAsync("domains", ct) as JsonArray, name, formerName) is not { } group || group["id"]?.GetValue<string>() is not { } id)
         {
-            if (!string.Equals(group["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase) || group["id"]?.GetValue<string>() is not { } id)
-            {
-                continue;
-            }
-
-            var entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in (group["entries"] as JsonArray)?.OfType<JsonObject>() ?? [])
-            {
-                if (entry["hostname"]?.GetValue<string>() is { } host && entry["id"]?.GetValue<string>() is { } entryId)
-                {
-                    entries[host] = entryId;
-                }
-            }
-
-            return new GroupInfo(id, entries);
+            return null;
         }
 
-        return null;
+        var entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in (group["entries"] as JsonArray)?.OfType<JsonObject>() ?? [])
+        {
+            if (entry["hostname"]?.GetValue<string>() is { } host && entry["id"]?.GetValue<string>() is { } entryId)
+            {
+                entries[host] = entryId;
+            }
+        }
+
+        return new GroupInfo(id, entries);
+    }
+
+    /// <summary>
+    /// The item of <paramref name="items"/> named <paramref name="name"/> (case-insensitive, like Matddns itself); without one, the item named
+    /// <paramref name="formerName"/> that carries the mark of MatOS (<see cref="Owner"/>): what MatOS made while it was called Mattiverse.
+    /// </summary>
+    public static JsonObject? FindByName(JsonArray? items, string name, string? formerName)
+    {
+        var all = items?.OfType<JsonObject>().ToList() ?? [];
+        return all.FirstOrDefault(i => string.Equals(i["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase))
+            ?? (formerName is null
+                ? null
+                : all.FirstOrDefault(i => string.Equals(i["name"]?.GetValue<string>(), formerName, StringComparison.OrdinalIgnoreCase)
+                    && Owner.IsOurs(i["managedBy"]?.GetValue<string>())));
     }
 
     /// <summary>Deletes the rules of a group whose record matches <paramref name="entryIs"/>.</summary>

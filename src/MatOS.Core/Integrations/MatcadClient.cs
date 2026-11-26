@@ -16,7 +16,6 @@ public sealed record MatcadProvider(long Id, string Name, string Type, string? M
 /// </summary>
 public sealed class MatcadClient : EngineClient
 {
-    public const string ManagedBy = "matos";
 
     public MatcadClient(EngineLocator locator, IHttpClientFactory http)
         : base(locator, http)
@@ -82,7 +81,7 @@ public sealed class MatcadClient : EngineClient
             ["upstream"] = upstream,
             ["enabled"] = true,
             ["name"] = name,
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
         };
         if (existing is not null)
         {
@@ -110,7 +109,7 @@ public sealed class MatcadClient : EngineClient
             ["redirectPermanent"] = false,
             ["enabled"] = true,
             ["name"] = name,
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
         };
         if (existing is not null)
         {
@@ -139,7 +138,7 @@ public sealed class MatcadClient : EngineClient
         foreach (var route in await ListRoutesAsync(ct))
         {
             // A binding is the broker's: it moves the route itself (under a domain to a host, without one to a port) and keeps what an administrator set on it.
-            if (route.ManagedBy == ManagedBy && route.Binding is null && !wantedHosts.Contains(route.Host))
+            if (Owner.IsOurs(route.ManagedBy) && route.Binding is null && !wantedHosts.Contains(route.Host))
             {
                 await SendAsync(HttpMethod.Delete, $"routes/{route.Id}", null, null, ct);
                 removed.Add(route.Host);
@@ -149,31 +148,84 @@ public sealed class MatcadClient : EngineClient
         return removed;
     }
 
+    /// <summary>
+    /// Gives the routes of <paramref name="hosts"/> that Mattiverse made through <c>/api/v1</c> (<c>managedBy: mattiverse</c>, no binding) the mark of MatOS.
+    /// Matcad turns such a route into the <c>web.route</c> binding of the app only when the binding carries the same mark (it does not take over another
+    /// tool's route): with the old mark every binding of an upgraded install would be refused. The route is written back as it is; Matcad keeps what the
+    /// call does not carry (its access fields and options). Returns the hosts that were re-marked.
+    /// </summary>
+    public async Task<List<string>> RemarkLegacyRoutesAsync(IReadOnlySet<string> hosts, CancellationToken ct = default)
+    {
+        var remarked = new List<string>();
+        foreach (var route in (await GetAsync("routes/manual", ct) as JsonArray ?? []).OfType<JsonObject>())
+        {
+            if (route["host"]?.GetValue<string>() is not { Length: > 0 } host || !hosts.Contains(host)
+                || !string.Equals(route["managedBy"]?.GetValue<string>(), Owner.Legacy, StringComparison.OrdinalIgnoreCase)
+                || route["binding"]?.GetValue<string>() is { Length: > 0 })
+            {
+                continue;
+            }
+
+            await SendAsync(HttpMethod.Post, "routes", RemarkedRoute(route), null, ct);
+            remarked.Add(host);
+        }
+
+        return remarked;
+    }
+
+    /// <summary>The body of <c>POST routes</c> that writes a route of <c>GET routes/manual</c> back unchanged, with the mark of MatOS.</summary>
+    public static JsonObject RemarkedRoute(JsonObject route)
+    {
+        var body = new JsonObject();
+        foreach (var field in (string[])["id", "name", "host", "wildcard", "upstream", "insecureSkipVerify", "fallbackUrl", "redirectPermanent", "authenticationId",
+                     "providerId", "acmeEmail", "enabled", "allowEmbedding", "listenPort"])
+        {
+            body[field] = route[field]?.DeepClone();
+        }
+
+        // The list does not name the target: a route without an upstream that sends on to an address is a redirect.
+        var redirect = string.IsNullOrEmpty(route["upstream"]?.GetValue<string>()) && !string.IsNullOrEmpty(route["fallbackUrl"]?.GetValue<string>());
+        body["target"] = redirect ? "redirect" : "proxy";
+        body["managedBy"] = Owner.Name;
+        return body;
+    }
+
     // ------------------------------------------------------------------ DNS providers (for the certificates)
 
-    public async Task<MatcadProvider?> FindProviderAsync(string name, CancellationToken ct = default)
+    /// <summary>
+    /// The provider named <paramref name="name"/>; without one, the provider MatOS made under <paramref name="formerName"/> (its name while MatOS was
+    /// called Mattiverse; only one that carries the mark of MatOS, <see cref="Owner"/>).
+    /// </summary>
+    public async Task<MatcadProvider?> FindProviderAsync(string name, string? formerName = null, CancellationToken ct = default)
     {
+        var providers = new List<MatcadProvider>();
         foreach (var node in (await GetAsync("providers", ct) as JsonArray ?? []).OfType<JsonObject>())
         {
-            if (string.Equals(node["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase) && node["id"]?.GetValue<long>() is { } id)
+            if (node["name"]?.GetValue<string>() is { } found && node["id"]?.GetValue<long>() is { } id)
             {
-                return new MatcadProvider(id, name, node["type"]?.GetValue<string>() ?? string.Empty, node["managedBy"]?.GetValue<string>());
+                providers.Add(new MatcadProvider(id, found, node["type"]?.GetValue<string>() ?? string.Empty, node["managedBy"]?.GetValue<string>()));
             }
         }
 
-        return null;
+        return providers.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? (formerName is null
+                ? null
+                : providers.FirstOrDefault(p => string.Equals(p.Name, formerName, StringComparison.OrdinalIgnoreCase) && Owner.IsOurs(p.ManagedBy)));
     }
 
-    /// <summary>Creates or updates the provider with this name and returns its id.</summary>
-    public async Task<long> UpsertProviderAsync(string name, string type, IReadOnlyDictionary<string, string> credentials, CancellationToken ct = default)
+    /// <summary>
+    /// Creates or updates the provider with this name and returns its id. The one of <paramref name="formerName"/> (see <see cref="FindProviderAsync"/>)
+    /// is taken over and renamed, so the routes that use it keep it and no second one is made.
+    /// </summary>
+    public async Task<long> UpsertProviderAsync(string name, string type, IReadOnlyDictionary<string, string> credentials, string? formerName = null, CancellationToken ct = default)
     {
-        var existing = await FindProviderAsync(name, ct);
+        var existing = await FindProviderAsync(name, formerName, ct);
         var body = new JsonObject
         {
             ["name"] = name,
             ["type"] = type,
             ["credentials"] = JsonSerializer(credentials),
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
         };
         if (existing is not null)
         {
@@ -181,16 +233,20 @@ public sealed class MatcadClient : EngineClient
         }
 
         var answer = await SendAsync(HttpMethod.Post, "providers", body, null, ct);
-        return answer?["id"]?.GetValue<long>() ?? (await FindProviderAsync(name, ct))?.Id
+        return answer?["id"]?.GetValue<long>() ?? (await FindProviderAsync(name, ct: ct))?.Id
             ?? throw new InvalidOperationException("Matcad did not return the id of the DNS provider.");
     }
 
-    public async Task DeleteProviderAsync(string name, CancellationToken ct = default)
+    /// <summary>Removes the provider of this name (or the one MatOS made under <paramref name="formerName"/>). Returns whether there was one.</summary>
+    public async Task<bool> DeleteProviderAsync(string name, string? formerName = null, CancellationToken ct = default)
     {
-        if (await FindProviderAsync(name, ct) is { } provider)
+        if (await FindProviderAsync(name, formerName, ct) is not { } provider)
         {
-            await SendAsync(HttpMethod.Delete, $"providers/{provider.Id}", null, null, ct);
+            return false;
         }
+
+        await SendAsync(HttpMethod.Delete, $"providers/{provider.Id}", null, null, ct);
+        return true;
     }
 
     private static JsonObject JsonSerializer(IReadOnlyDictionary<string, string> values)

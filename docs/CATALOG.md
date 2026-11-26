@@ -94,7 +94,7 @@ volumes:
   (`MATIDENTITY_*`, `MATSMTP_*`, ...) to the app's web service and its `.env`; without a provider they are empty and the app does it itself. An app whose image says what it
   consumes in its own `/api` needs no entry (what the `/api` says is added; it wins for the same capability). `identity.oidc` needs a `ui`.
 - The old keys `identity: {}` (with `callback`, `signedOut`, `backchannel`) and `mail: {}` (with `sender`) are read as `identity.oidc` and `mail.smtp` with those parameters, so a
-  catalog copy of an earlier MatOS keeps working. The variables an earlier MatOS filled for them are taken over as the app's bindings at its next deploy.
+  catalog copy of an earlier MatOS (or of Mattiverse) keeps working. The variables an earlier MatOS filled for them are taken over as the app's bindings at its next deploy.
 - A service other than the web service that needs the variables (the one that sends the mail) names them in the compose file (`MATSMTP_HOST: ${MATSMTP_HOST:-}`): the values are in the
   `.env`. The web service gets them by itself.
 

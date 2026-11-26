@@ -664,6 +664,20 @@ public sealed partial class AppService
         await PublishDnsAsync(log, ct);
     }
 
+    /// <summary>
+    /// Deploys every app of the contract once more, so it gets the broker's variables of now. An app learns the addresses MatOS may frame it from
+    /// (<c>MAT_FRAME_ANCESTORS</c>, <see cref="FrameLink"/>) only with a deploy: after MatOS's own address changed (the rename, <see cref="Configuration.RenameFollowUp"/>)
+    /// they would refuse the window of the new one until each is updated. Compose only recreates what changed; the images stay.
+    /// </summary>
+    public async Task RedeployContractAppsAsync(Action<string> log, CancellationToken ct)
+    {
+        var ids = (await _db.InstalledApps.Where(a => a.Lifecycle == AppLifecycle.Installed && a.UiService != null).ToListAsync(ct))
+            .Where(a => _catalog.Get(a.CatalogId)?.Platform == true)
+            .Select(a => a.Id)
+            .ToList();
+        await RedeployAsync(ids, log, ct);
+    }
+
     /// <summary>Waits until the providers among <paramref name="apps"/> run again (a binding asked too early would fail and keep the old values).</summary>
     private async Task WaitForProvidersAsync(IReadOnlySet<long> apps, Action<string> log, CancellationToken ct)
     {

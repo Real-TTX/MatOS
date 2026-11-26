@@ -13,7 +13,11 @@ permissions:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
+  # The image is MatOS (fixed: the repository was called Mattiverse until 2026-11).
+  IMAGE_NAME: ghcr.io/real-ttx/matos
+  # For a while every build is pushed under the old name too, so an install that still runs ghcr.io/real-ttx/mattiverse gets MatOS with its next update
+  # (MatOS takes over a Mattiverse install, docs/ARCHITECTURE.md "Renamed from Mattiverse"). Empty: no second push.
+  LEGACY_IMAGE_NAME: ghcr.io/real-ttx/mattiverse
 
 jobs:
   build:
@@ -100,6 +104,10 @@ jobs:
             nightly) tags="$image:$version"$'\n'"$image:nightly" ;;
             *)       tags="$image:$version" ;;
           esac
+          legacy="${LEGACY_IMAGE_NAME}"
+          if [ -n "$legacy" ] && [ "${{ steps.ver.outputs.channel }}" != "local" ]; then
+            tags="$tags"$'\n'"$(echo "$tags" | sed "s|^$image:|$legacy:|")"
+          fi
           {
             echo "tags<<EOF"
             echo "$tags"

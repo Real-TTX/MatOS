@@ -19,6 +19,15 @@ export MATOS_CHANNEL=local
 export MATOS_BUILD_DATE="$(date -u +%Y%m%d)"
 export MATOS_PORT="$port"
 
+# The dev stack was "mattiverse-dev" until the rename: its containers hold the ports and its network the subnet. They go once; the volume stays
+# (docker-compose.dev.yml uses it).
+if docker container inspect mattiverse-dev >/dev/null 2>&1; then
+  echo "Removing the old dev stack of Mattiverse (its volume stays) ..."
+  docker stop mattiverse-dev mattiverse-dev-sqlite-web || true
+  docker rm mattiverse-dev mattiverse-dev-sqlite-web || true
+  docker network rm mattiverse-dev_default || true
+fi
+
 if [[ $fresh -eq 1 ]]; then
   echo "Removing the stack and its volume ..."
   docker compose -f docker-compose.dev.yml down -v

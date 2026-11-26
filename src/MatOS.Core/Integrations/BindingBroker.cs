@@ -19,7 +19,6 @@ namespace MatOS.Core.Integrations;
 /// </summary>
 public sealed class BindingBroker
 {
-    public const string ManagedBy = "matos";
 
     /// <summary>The variables every app of the contract gets from the broker: its own addresses (the app shows them as fixed).</summary>
     public const string PublicUrlVariable = "MAT_PUBLIC_URL";
@@ -515,7 +514,7 @@ public sealed class BindingBroker
     private async Task<object> BodyAsync(InstalledApp consumer, InstalledApp provider, PlatformCapability wanted, bool renew, CancellationToken ct) => new
     {
         version = wanted.Version,
-        managedBy = ManagedBy,
+        managedBy = Owner.Name,
         consumer = new
         {
             id = consumer.Slug,

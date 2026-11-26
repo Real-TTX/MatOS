@@ -250,14 +250,25 @@ public sealed class PlatformClient
         }
     }
 
-    /// <summary>Removes a binding MatOS made at <paramref name="provider"/>; false when it did not answer or knew none.</summary>
+    /// <summary>
+    /// Removes a binding MatOS made at <paramref name="provider"/>; false when it did not answer or knew none. The provider only removes a binding with the
+    /// mark it carries: one Mattiverse made (<c>mattiverse</c>) is removed with that mark (<see cref="Owner.All"/>).
+    /// </summary>
     public async Task<bool> UnbindAsync(InstalledApp provider, string capability, string consumer, CancellationToken ct = default)
     {
         try
         {
-            var path = $"/api/bindings/{Uri.EscapeDataString(capability)}/{Uri.EscapeDataString(consumer)}?managedBy=matos";
-            using var response = await SendAsync(provider, HttpMethod.Delete, path, null, withKey: true, ct);
-            return response.IsSuccessStatusCode;
+            foreach (var owner in Owner.All)
+            {
+                var path = $"/api/bindings/{Uri.EscapeDataString(capability)}/{Uri.EscapeDataString(consumer)}?managedBy={owner}";
+                using var response = await SendAsync(provider, HttpMethod.Delete, path, null, withKey: true, ct);
+                if (response.IsSuccessStatusCode)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {

@@ -44,8 +44,20 @@ public sealed class ProxyPublisher
         _logger = logger;
     }
 
+    /// <summary>The first label of MatOS's own host below the base domain (<c>matos.&lt;domain&gt;</c>).</summary>
+    public const string SelfSlug = "matos";
+
     /// <summary>The host name of an app below the base domain.</summary>
     public static string HostFor(string slug, string baseDomain) => $"{slug}.{baseDomain.Trim().Trim('.')}";
+
+    /// <summary>
+    /// MatOS's own host below the base domain. Mattiverse was <c>mattiverse.&lt;domain&gt;</c> (<see cref="FormerSelfHost"/>): that route carries the
+    /// mark of Mattiverse, which is MatOS's own (<see cref="Owner"/>), so the next publication removes it like any route MatOS does not want any more.
+    /// </summary>
+    public static string SelfHost(string baseDomain) => HostFor(SelfSlug, baseDomain);
+
+    /// <summary>The host of Mattiverse below the base domain (the name before 2026-11).</summary>
+    public static string FormerSelfHost(string baseDomain) => HostFor(Mattiverse.Name, baseDomain);
 
     /// <summary>The public URL of a host; plain http for development domains (<c>*.localhost</c>) that cannot get a certificate.</summary>
     public static string UrlFor(string host)
@@ -164,7 +176,7 @@ public sealed class ProxyPublisher
 
         if (await PublishSelfAsync(baseDomain, log, ct))
         {
-            wanted.Add(HostFor("matos", baseDomain));
+            wanted.Add(SelfHost(baseDomain));
         }
 
         var apps = await _db.InstalledApps.AsNoTracking()
@@ -181,6 +193,23 @@ public sealed class ProxyPublisher
             }
         }
 
+        // The routes Mattiverse made the old way carry its mark, and Matcad turns a route into a binding only for the same mark: they get MatOS's first.
+        if (asBindings)
+        {
+            try
+            {
+                var hosts = apps.Select(a => HostFor(a.Slug, baseDomain)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var host in await _matcad.RemarkLegacyRoutesAsync(hosts, ct))
+                {
+                    log($"The route {host} that Mattiverse made is MatOS's now.");
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                log($"Warning: the routes of Mattiverse in Matcad could not be taken over: {ex.Message}");
+            }
+        }
+
         try
         {
             foreach (var host in await _matcad.RemoveManagedExceptAsync(wanted, ct))
@@ -189,9 +218,8 @@ public sealed class ProxyPublisher
             }
 
             // Matcad refuses to drop a provider that a route still uses: the wildcard route went first.
-            if (providerId is null && await _matcad.FindProviderAsync(ProviderName, ct) is not null)
+            if (providerId is null && await _matcad.DeleteProviderAsync(ProviderName, Mattiverse.ProviderName, ct))
             {
-                await _matcad.DeleteProviderAsync(ProviderName, ct);
                 log("Removed the DNS account from Matcad.");
             }
         }
@@ -221,7 +249,7 @@ public sealed class ProxyPublisher
                 return null;
             }
 
-            var id = await _matcad.UpsertProviderAsync(ProviderName, provider.MatcadType, DnsProviders.ToMatcad(provider, credentials), ct);
+            var id = await _matcad.UpsertProviderAsync(ProviderName, provider.MatcadType, DnsProviders.ToMatcad(provider, credentials), Mattiverse.ProviderName, ct);
             log($"Matcad uses your {provider.Name} account for the certificates.");
             return id;
         }
@@ -237,7 +265,7 @@ public sealed class ProxyPublisher
     {
         try
         {
-            var target = UrlFor(HostFor("matos", baseDomain));
+            var target = UrlFor(SelfHost(baseDomain));
             await _matcad.UpsertWildcardRouteAsync(baseDomain, providerId, target, "MatOS wildcard", ct);
             log($"One wildcard certificate for *.{baseDomain} (DNS challenge); other names on it lead to {target}.");
             return true;
@@ -257,7 +285,7 @@ public sealed class ProxyPublisher
             return false;
         }
 
-        var host = HostFor("matos", baseDomain);
+        var host = SelfHost(baseDomain);
         try
         {
             await _matcad.UpsertRouteAsync(host, $"http://{self}:{SelfPort()}", "MatOS", ct);

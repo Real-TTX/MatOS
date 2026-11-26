@@ -10,7 +10,7 @@ namespace MatOS.Core.Integrations;
 
 /// <summary>
 /// MatOS and MatIdentity, the single sign-on (MatDesign docs/PLATFORM.md, "Sign-in with MatIdentity"): MatOS's OWN sign-in through it (the client
-/// <c>matos</c>, <see cref="ConnectSelfAsync"/>) and the issuer of MatIdentity itself (its public address). The apps are not here: they consume
+/// <c>matos</c>, an install of Mattiverse keeps <c>mattiverse</c>: <see cref="SystemConfig.SelfClientId"/>; <see cref="ConnectSelfAsync"/>) and the issuer of MatIdentity itself (its public address). The apps are not here: they consume
 /// <c>identity.oidc</c> and the broker binds them like any capability (<see cref="BindingBroker"/>, MatIdentity is the provider).
 /// </summary>
 public sealed class IdentityLink
@@ -43,9 +43,6 @@ public sealed class IdentityLink
         }
     }
 
-    /// <summary>The client id of MatOS itself in MatIdentity.</summary>
-    public const string SelfClientId = "matos";
-
     /// <summary>
     /// Registers MatOS itself in MatIdentity, so people sign in to MatOS through it too, and keeps how in the settings. <paramref name="origin"/> is the
     /// address a person reaches MatOS at now (a new one is added to the redirect addresses); the route of the proxy is added on its own.
@@ -68,21 +65,15 @@ public sealed class IdentityLink
         }
 
         var config = await _config.GetAsync(ct);
-        var origins = new List<string>(config.Identity?.Origins ?? []);
-        if (!string.IsNullOrWhiteSpace(config.BaseDomain) && await _proxy.IsActiveAsync(ct))
-        {
-            origins.Add(ProxyPublisher.UrlFor(ProxyPublisher.HostFor("matos", config.BaseDomain)));
-        }
-
-        if (!string.IsNullOrWhiteSpace(origin))
-        {
-            origins.Add(origin.TrimEnd('/'));
-        }
-
-        origins = origins.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var clientId = config.SelfClientId;
+        var origins = OriginsFor(
+            config.Identity?.Origins ?? [],
+            config.BaseDomain,
+            !string.IsNullOrWhiteSpace(config.BaseDomain) && await _proxy.IsActiveAsync(ct),
+            origin);
         var secret = await _config.GetIdentitySecretAsync(ct);
         var registration = await _identity.UpsertClientAsync(
-            SelfClientId,
+            clientId,
             "MatOS",
             origins.FirstOrDefault(),
             origins.Select(o => o + "/signin-oidc").ToList(),
@@ -98,11 +89,34 @@ public sealed class IdentityLink
             Authority = await PublicUrlAsync(identityApp, ct) ?? endpoint.BaseUrl,
             // MatOS reaches MatIdentity like it reaches the engines (the shared network, or the host port during development).
             InternalUrl = endpoint.BaseUrl,
-            ClientId = SelfClientId,
+            ClientId = clientId,
             Origins = origins,
         }, registration.Secret, ct);
         log("MatOS signs people in through MatIdentity.");
         return true;
+    }
+
+    /// <summary>
+    /// The addresses MatOS registers in MatIdentity (the redirect addresses follow them): the ones it keeps, MatOS's own host when the proxy publishes it
+    /// (<paramref name="proxyActive"/>), and <paramref name="origin"/>, the one a person uses now. The host of Mattiverse (<c>mattiverse.&lt;domain&gt;</c>)
+    /// is dropped: the proxy removes its route. Only while a person still comes from it, it stays.
+    /// </summary>
+    public static List<string> OriginsFor(IEnumerable<string> stored, string? baseDomain, bool proxyActive, string? origin)
+    {
+        var current = string.IsNullOrWhiteSpace(origin) ? null : origin.TrimEnd('/');
+        var former = string.IsNullOrWhiteSpace(baseDomain) ? null : ProxyPublisher.UrlFor(ProxyPublisher.FormerSelfHost(baseDomain));
+        var origins = stored.Where(o => former is null || !string.Equals(o.TrimEnd('/'), former, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (proxyActive && !string.IsNullOrWhiteSpace(baseDomain))
+        {
+            origins.Add(ProxyPublisher.UrlFor(ProxyPublisher.SelfHost(baseDomain)));
+        }
+
+        if (current is not null)
+        {
+            origins.Add(current);
+        }
+
+        return origins.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>

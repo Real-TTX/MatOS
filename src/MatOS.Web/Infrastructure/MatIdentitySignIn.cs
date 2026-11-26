@@ -74,7 +74,7 @@ public sealed class MatIdentitySignIn : IConfigureNamedOptions<OpenIdConnectOpti
         {
             // Not connected: values that pass the checks of the handler; the login page never sends anyone here then.
             options.Authority = "http://matidentity.invalid";
-            options.ClientId = "matos";
+            options.ClientId = config.SelfClientId;
             options.RequireHttpsMetadata = false;
             return;
         }

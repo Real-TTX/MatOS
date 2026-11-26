@@ -92,6 +92,7 @@ public sealed partial class ComposeRenderer
         }
 
         AddSharedNetwork(root);
+        RenameCatalogBlock(root);
         SetMapping(root, "x-matdock", new Dictionary<string, string>
         {
             ["name"] = app.Name,
@@ -241,6 +242,38 @@ public sealed partial class ComposeRenderer
             { "external", new YamlScalarNode("true") },
         };
         root.Children[key] = networks;
+    }
+
+    /// <summary>
+    /// The catalog block of the written file is always <c>x-matos</c>: a catalog copy of Mattiverse (<c>x-mattiverse</c>) gets it renamed in its place, and
+    /// with both blocks the old one is dropped (<c>x-matos</c> wins, as in <see cref="CatalogParser"/>).
+    /// </summary>
+    private static void RenameCatalogBlock(YamlMappingNode root)
+    {
+        var legacy = new YamlScalarNode(Mattiverse.CatalogBlock);
+        if (!root.Children.ContainsKey(legacy))
+        {
+            return;
+        }
+
+        var current = new YamlScalarNode(CatalogParser.Block);
+        var hasCurrent = root.Children.ContainsKey(current);
+        var children = root.Children.ToList();
+        root.Children.Clear();
+        foreach (var (key, value) in children)
+        {
+            if (key.Equals(legacy))
+            {
+                if (!hasCurrent)
+                {
+                    root.Children.Add(current, value);
+                }
+            }
+            else
+            {
+                root.Children.Add(key, value);
+            }
+        }
     }
 
     private static void SetMapping(YamlMappingNode root, string key, IReadOnlyDictionary<string, string> values)

@@ -20,7 +20,6 @@ public class MatSmtpClient : EngineClient
 {
     public const string CatalogIdValue = EngineIds.MatSmtp;
     public const string KeyVariableName = "MATSMTP_API_KEY";
-    public const string ManagedBy = "matos";
 
     /// <summary>The SMTP port inside the container when the status does not name one.</summary>
     public const int DefaultSmtpPort = 2025;
@@ -76,7 +75,7 @@ public class MatSmtpClient : EngineClient
         {
             ["displayName"] = displayName,
             ["allowedSenders"] = new JsonArray(allowedSenders.Select(s => (JsonNode?)s).ToArray()),
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
             ["renewSecret"] = renewSecret,
         };
         var answer = await SendAsync(HttpMethod.Put, "relay-users/" + Uri.EscapeDataString(id), body, null, ct);
@@ -87,13 +86,13 @@ public class MatSmtpClient : EngineClient
             answer?["created"]?.GetValue<bool>() ?? false);
     }
 
-    /// <summary>The ids of the relay users that MatOS made (<c>GET /api/v1/relay-users</c>, those with <c>managedBy: matos</c>).</summary>
+    /// <summary>The ids of the relay users that MatOS made (<c>GET /api/v1/relay-users</c>, those with <c>managedBy: matos</c> or <c>mattiverse</c>).</summary>
     public async Task<IReadOnlyList<string>> ListRelayUsersAsync(CancellationToken ct)
     {
         var answer = await GetAsync("relay-users", ct);
         var items = answer as JsonArray ?? answer?["items"] as JsonArray ?? answer?["relayUsers"] as JsonArray ?? [];
         return items.OfType<JsonObject>()
-            .Where(u => u["managedBy"]?.GetValue<string>() == ManagedBy)
+            .Where(u => Owner.IsOurs(u["managedBy"]?.GetValue<string>()))
             .Select(u => u["id"]?.GetValue<string>())
             .OfType<string>()
             .ToList();
@@ -104,7 +103,7 @@ public class MatSmtpClient : EngineClient
     {
         try
         {
-            await SendAsync(HttpMethod.Delete, $"relay-users/{Uri.EscapeDataString(id)}?managedBy={ManagedBy}", null, null, ct);
+            await DeleteOwnedAsync($"relay-users/{Uri.EscapeDataString(id)}", ct);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
         {

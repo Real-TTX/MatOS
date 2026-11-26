@@ -12,6 +12,8 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.11" />
+    <!-- The options of the sections MatOS and Mattiverse (the name before 2026-11) bound in one place: Configuration/MatOSConfiguration.cs. -->
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
     <!-- The check of the logout tokens of MatIdentity (Auth/LogoutToken.cs); the same version the OpenID Connect handler of the web project brings. -->
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.19.2" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />

@@ -80,7 +80,7 @@ else
                             {
                                 <tr>
                                     <td data-label="App">@b.Name <code>@b.Consumer</code></td>
-                                    <td data-label="Managed by">@(b.ManagedBy == "manual" ? "by hand" : b.ManagedBy)</td>
+                                    <td data-label="Managed by">@(b.ManagedBy == "manual" ? "by hand" : MatOS.Core.Owner.IsOurs(b.ManagedBy) ? "MatOS" : b.ManagedBy)</td>
                                     <td class="mat-hide-sm" data-label="Since">@(b.Since is { } since ? Format.DateTimeLocal(since.UtcDateTime) : "–")</td>
                                     <td class="mat-hide-sm" data-label="Last used">@(b.LastUsed is { } used ? Format.Ago(used.UtcDateTime) : "–")</td>
                                 </tr>

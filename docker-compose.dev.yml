@@ -34,8 +34,10 @@ services:
     image: coleifer/sqlite-web:latest
     container_name: matos-dev-sqlite-web
     restart: unless-stopped
+    # After the app is healthy: the app moves the database of Mattiverse to matos.db at its first start, and the viewer would create an empty matos.db first.
     depends_on:
-      - matos
+      matos:
+        condition: service_healthy
     ports:
       - "${MATOS_DB_PORT:-8021}:8080"
     environment:
@@ -45,6 +47,8 @@ services:
 
 volumes:
   matos-data:
+    # The volume of the dev stack from when it was Mattiverse (project mattiverse-dev): its data stays in use (MatOS takes it over at its first start).
+    name: mattiverse-dev_mattiverse-data
 
 # An explicit subnet: on a machine with many stacks Docker can run out of its default address pools
 # ("all predefined address pools have been fully subnetted"). Override with MATOS_DEV_SUBNET if this range collides.

@@ -75,7 +75,7 @@ src/MatOS.Core        domain, no web types
                              timeouts, kept a while), ShellRules (who sees a contribution: `audience`, and `roles` by the person's role in the app; which addresses it may open)
   Jobs/                      JobService/Queue/RunnerService, AppJobs (the work per job kind), JobContext/log
   Auth/ Users/ Security/     login, sessions (EndIdentitySessionsAsync: the back-channel logout), LogoutToken (the check of a logout token of MatIdentity), PBKDF2 hasher, secret protector; Wallpapers (the pictures of the home screen); HomeLayout (how a person arranged the home screen: pages, what is off it, sizes; User.HomeLayout)
-  Configuration/             options, AppPaths, JsonConfigStore, SystemConfig
+  Configuration/             options (MatOSConfiguration: the sections MatOS and Mattiverse), AppPaths, JsonConfigStore, SystemConfig; RenameUpgrade (the first start of an install of Mattiverse: its database, its names), RenameFollowUp (the job after it: the marks in MatDock and Matcad, the own route, the frame addresses), Mattiverse (the old names)
 src/MatOS.Web         Razor Pages, controls, JS/CSS, Program.cs
   Controls/                  tag helpers icon (a use of the sprite), app-icon, mat-field (label, control, hint, error), tab-bar; ListModels (ToolbarModel, PagerModel, ListView, ListQuery)
   Pages/                     Index (MatOS), Engines/ (one engine in the window), Apps/, Store/, Backups/, Jobs/, Settings/, Wizard/, People/ (the people, groups and grants of MatIdentity:
@@ -95,7 +95,7 @@ tests/e2e                    run.js: the pages in a real browser against the run
 - Long Docker work never runs in a request: queue a `Job` (`AppJobs.*`) and let the pages poll `/api/jobs/<id>/log`.
 - **Read and change through the engines.** What a page shows of the runtime (status, containers, logs, the host) comes from MatDock through `Engines/RuntimeReader`
   (Docker directly only before MatDock is there, while it does not answer, and inside a job); installs, updates, backups, routes and
-  DNS records go through the engine's API with `managedBy: matos`. Never write to an engine without that marker; never delete what MatOS did not create.
+  DNS records go through the engine's API with `managedBy: matos` (`Core/Owner.cs`; `mattiverse`, the mark of an install of Mattiverse, is its own too: docs/ARCHITECTURE.md "Renamed from Mattiverse"). Never write to an engine without that marker; never delete what MatOS did not create.
 - Engine clients share the request's `DbContext` (the locator reads the app): never call two of them in parallel.
 - Anything that parses CLI output has a unit test (a stopped container has an empty last field: never `Trim` such lines).
 - Generated files use LF. A single quote must not appear in variable values (they are written single-quoted to `.env`).

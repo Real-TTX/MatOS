@@ -246,7 +246,7 @@ public class DetailsModel : PageModel
 
     /// <summary>
     /// The engines keep the configuration of the app: this links to where it can be seen and changed. The pages of the engines are
-    /// the lists (stacks, routes, domains); what MatOS wrote there is marked "Managed by MatOS".
+    /// the lists (stacks, routes, domains); what MatOS wrote there is marked "Managed by matos".
     /// </summary>
     private async Task<List<EngineLink>> FindEngineLinksAsync(InstalledApp app, CancellationToken ct)
     {

@@ -40,7 +40,7 @@ public sealed class FrameLink
         var candidates = new List<string>();
         if (proxied && !string.IsNullOrWhiteSpace(config.BaseDomain))
         {
-            candidates.Add(ProxyPublisher.UrlFor(ProxyPublisher.HostFor("matos", config.BaseDomain)));
+            candidates.Add(ProxyPublisher.UrlFor(ProxyPublisher.SelfHost(config.BaseDomain)));
         }
 
         candidates.Add($"http://localhost:{port}");

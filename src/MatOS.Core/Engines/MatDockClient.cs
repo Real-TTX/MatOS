@@ -10,7 +10,6 @@ namespace MatOS.Core.Engines;
 /// </summary>
 public sealed class MatDockClient : EngineClient
 {
-    public const string ManagedBy = "matos";
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromMinutes(45);
 
     public MatDockClient(EngineLocator locator, IHttpClientFactory http)
@@ -67,7 +66,7 @@ public sealed class MatDockClient : EngineClient
         {
             ["composeYaml"] = spec.Compose,
             ["envContent"] = spec.Env,
-            ["managedBy"] = ManagedBy,
+            ["managedBy"] = Owner.Name,
             ["deploy"] = deploy,
             ["pull"] = pull,
         };
@@ -75,14 +74,21 @@ public sealed class MatDockClient : EngineClient
         return answer?["operationId"]?.GetValue<string>();
     }
 
-    /// <summary>The names of the stacks that carry <c>managedBy</c>.</summary>
+    /// <summary>The names of the stacks that carry the mark of MatOS (or of Mattiverse before it: <see cref="Owner"/>).</summary>
     public async Task<List<string>> ListManagedStackNamesAsync(CancellationToken ct = default)
-        => ((await GetAsync($"stacks?managedBy={ManagedBy}", ct) as JsonArray) ?? [])
-            .OfType<JsonObject>()
-            .Select(s => s["name"]?.GetValue<string>())
-            .Where(n => !string.IsNullOrEmpty(n))
-            .Select(n => n!)
-            .ToList();
+    {
+        var names = new List<string>();
+        foreach (var owner in Owner.All)
+        {
+            names.AddRange(((await GetAsync($"stacks?managedBy={owner}", ct) as JsonArray) ?? [])
+                .OfType<JsonObject>()
+                .Select(s => s["name"]?.GetValue<string>())
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Select(n => n!));
+        }
+
+        return names.Distinct(StringComparer.Ordinal).ToList();
+    }
 
     public async Task<StackSpec?> GetStackAsync(string name, string slug, CancellationToken ct = default)
     {
@@ -141,12 +147,80 @@ public sealed class MatDockClient : EngineClient
 
     public Task PutScheduleAsync(string name, JsonObject body, CancellationToken ct = default)
     {
-        body["managedBy"] = ManagedBy;
+        body["managedBy"] = Owner.Name;
         return SendAsync(HttpMethod.Put, $"backup-schedules/{Uri.EscapeDataString(name)}", body, null, ct);
     }
 
     public Task DeleteScheduleAsync(string name, CancellationToken ct = default)
         => SendAsync(HttpMethod.Delete, $"backup-schedules/{Uri.EscapeDataString(name)}", null, null, ct);
+
+    // ------------------------------------------------------------------ the mark of Mattiverse
+
+    /// <summary>
+    /// Gives the stacks and the schedules Mattiverse marked (<c>managedBy: mattiverse</c>) the mark of MatOS, all at once. MatDock backs up with a schedule for
+    /// all apps (no stack) exactly the stacks whose mark is the schedule's: were the stacks re-marked one by one with their next deploy, and the schedules with
+    /// their next save, such a schedule would silently leave out part of the apps. A stack is written back as it is (<c>deploy: false</c>: nothing restarts),
+    /// a schedule with what it has. One that MatDock refuses is reported and left; the rest goes on. Returns how many were re-marked.
+    /// </summary>
+    public async Task<int> RemarkLegacyAsync(Action<string> log, CancellationToken ct = default)
+    {
+        var count = 0;
+        var stacks = ((await GetAsync($"stacks?managedBy={Owner.Legacy}", ct) as JsonArray) ?? [])
+            .OfType<JsonObject>()
+            .Where(s => string.Equals(s["managedBy"]?.GetValue<string>(), Owner.Legacy, StringComparison.OrdinalIgnoreCase))
+            .Select(s => s["name"]?.GetValue<string>())
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Select(n => n!)
+            .ToList();
+        foreach (var name in stacks)
+        {
+            try
+            {
+                if (await GetStackAsync(name, name, ct) is { } spec)
+                {
+                    await UpsertStackAsync(spec, deploy: false, pull: false, ct);
+                    count++;
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                log($"Warning: MatDock kept the mark of Mattiverse on the stack {name}: {ex.Message}");
+            }
+        }
+
+        foreach (var schedule in (await ListSchedulesAsync(ct)).OfType<JsonObject>())
+        {
+            if (!string.Equals(schedule["managedBy"]?.GetValue<string>(), Owner.Legacy, StringComparison.OrdinalIgnoreCase)
+                || schedule["name"]?.GetValue<string>() is not { Length: > 0 } name)
+            {
+                continue;
+            }
+
+            try
+            {
+                await PutScheduleAsync(name, ScheduleBodyOf(schedule), ct);
+                count++;
+            }
+            catch (InvalidOperationException ex)
+            {
+                log($"Warning: MatDock kept the mark of Mattiverse on the schedule {name}: {ex.Message}");
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>The body of <c>PUT backup-schedules/{name}</c> that keeps a schedule as MatDock listed it (the mark is set by <see cref="PutScheduleAsync"/>).</summary>
+    public static JsonObject ScheduleBodyOf(JsonObject schedule)
+    {
+        var body = new JsonObject();
+        foreach (var field in (string[])["stack", "frequency", "time", "weekday", "retention", "stopContainers", "enabled", "targetId"])
+        {
+            body[field] = schedule[field]?.DeepClone();
+        }
+
+        return body;
+    }
 
     // ------------------------------------------------------------------ operations
 

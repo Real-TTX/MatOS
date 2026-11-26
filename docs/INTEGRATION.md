@@ -4,15 +4,15 @@ MatOS sits on top of **MatDock**, **Matcad** and **Matddns** and talks to their 
 (MatDock, Matddns) or lacked a few things (Matcad), so they were added **on a local branch `mattiverse-integration` in each repository**.
 **Nothing was pushed or merged**: the branches are for you to review.
 
-Built and verified on 2026-10-10 against real containers (images built from the branches as `matdock:matos`, `matcad:matos`, `matddns:matos`).
+Built and verified on 2026-10-10 against real containers (images built from the branches as `matdock:mattiverse`, `matcad:mattiverse`, `matddns:mattiverse`).
 
 ## What the branches contain
 
 | Repository | Branch | Added |
 |---|---|---|
-| **MatDock** | `mattiverse-integration` (13 commits) | `/api/v1` with `X-Api-Key` (`MatDock__Api__Key`): environments (ensure *local*), stacks (list, get, upsert, start/stop/restart/pull/redeploy/update, delete, logs), asynchronous operations with live output, bundle backups (back up, list, restore, delete, download as `.tar`) and bundle schedules with retention. `ManagedBy` on stacks and the badge *Managed by MatOS*. Local stacks keep compose and `.env` below the data volume. The `.env` is part of a bundle. CI also pushes `latest`; README documents the API and `MatDock__Admin__Seed`. 81 new tests. |
-| **Matcad** | `mattiverse-integration` (4 commits) | `MATCAD_ADMIN_PASSWORD` (admin without the forced change, wizard done), `setupCompleted` in the settings API, anonymous `/healthz`, `app`/`version`/`apiVersion` in `/api/v1/status`, `managedBy` on routes, providers and authentications with the badge. README section *Provisioning (for MatOS)*. |
-| **Matddns** | `mattiverse-integration` (4 commits) | A management API under `/api/v1` with `MATDDNS_API_KEY`: `sources`, `domains` (provider accounts with their records), `rules`, `run`, all as idempotent upserts, atomic and without a restart. `managedBy` with the badge, credentials never returned. `scripts/api-test.sh` (83 checks). README section *Management API (for MatOS)*. |
+| **MatDock** | `mattiverse-integration` (13 commits) | `/api/v1` with `X-Api-Key` (`MatDock__Api__Key`): environments (ensure *local*), stacks (list, get, upsert, start/stop/restart/pull/redeploy/update, delete, logs), asynchronous operations with live output, bundle backups (back up, list, restore, delete, download as `.tar`) and bundle schedules with retention. `ManagedBy` on stacks and the badge *Managed by Mattiverse* (other values are shown as they are: *Managed by matos*). Local stacks keep compose and `.env` below the data volume. The `.env` is part of a bundle. CI also pushes `latest`; README documents the API and `MatDock__Admin__Seed`. 81 new tests. |
+| **Matcad** | `mattiverse-integration` (4 commits) | `MATCAD_ADMIN_PASSWORD` (admin without the forced change, wizard done), `setupCompleted` in the settings API, anonymous `/healthz`, `app`/`version`/`apiVersion` in `/api/v1/status`, `managedBy` on routes, providers and authentications with the badge. README section *Provisioning (for Mattiverse)*. |
+| **Matddns** | `mattiverse-integration` (4 commits) | A management API under `/api/v1` with `MATDDNS_API_KEY`: `sources`, `domains` (provider accounts with their records), `rules`, `run`, all as idempotent upserts, atomic and without a restart. `managedBy` with the badge, credentials never returned. `scripts/api-test.sh` (83 checks). README section *Management API (for Mattiverse)*. |
 | **MatSMTP** | `feature/engine` (2026-10-19, built at the same time as MatOS's side) | The engine API under `/api/v1` with `MATSMTP_API_KEY`: status (with the SMTP port and TLS mode for the apps), relay users as idempotent upserts with `managedBy`, settings (`setupCompleted`, `defaultSenderDomain`); `MATSMTP_ADMIN_PASSWORD` seeds the administrator. [ENGINES.md](ENGINES.md) "MatSMTP" is the contract MatOS is built against. Until an image (`nightly` from `dev`, `latest` from `main`) carries it, the apps keep sending their mail themselves. |
 
 Each branch keeps working without MatOS: nothing changes unless the new environment variables are set. Where the behaviour differs from the first sketch of the
@@ -79,10 +79,13 @@ Not in the catalog: **msBi** (no anonymously pullable image), **Matgate** (four 
 - **Port 8030**: the first choice, 8020, is the default of the *Schulio* project (`Schulio/docker-compose.yml`, `SCHULIO_PORT=8020`),
   which was running on the development PC. 8030 is used by no project in the development folder and was free on that PC.
   `MATOS_PORT` still changes the host port if it is ever taken.
-- `Prompt-Docker-Init-MatOS.txt` and `Prompt-Docker-Init-MatDock.txt` in the development folder are verbatim copies of the
+- `Prompt-Docker-Init-Mattiverse.txt` and `Prompt-Docker-Init-MatDock.txt` in the development folder are verbatim copies of the
   MatSplit prompt (port 4774, "Projektname: MatSplit"). MatDock really uses 4455.
 - Host ports used by more than one project (found while collecting the catalog): `9101` (MatCMS and Feusys.Web),
-  `9262` (TabSale and TapSale), `4433` (Matcad and the old Matcat), `80`/`443` (Matcad and the Caddy inside the MatOS stack).
+  `9262` (TabSale and TapSale), `4433` (Matcad and the old Matcat), `80`/`443` (Matcad and the Caddy inside the stack of the older matOS desktop).
   MatOS picks a free port from its pool when the preferred one is taken and warns about the fixed ones.
-- **MatOS** and MatOS overlap in purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)); they can run side by side because
-  neither needs the other's ports or networks (MatOS uses the network `matos`).
+- **The older matOS desktop** (repository Real-TTX/MatOS) and this app overlap in purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)). Since the rename
+  they share their Docker names and their image: both are the compose project `matos` with the service and container `matos`, the volume `matos_matos-data`
+  and the shared network `matos`, and both name `ghcr.io/real-ttx/matos` (the older desktop's workflows publish it). They **cannot run side by side** on
+  one host any more. **Decided (the owner, 2026-11-26): the older desktop is retired**: repository `Real-TTX/MatOS-legacy` (archived), images
+  `ghcr.io/real-ttx/matos-legacy`; this app publishes `ghcr.io/real-ttx/matos` (and for a while also `ghcr.io/real-ttx/mattiverse`, `LEGACY_IMAGE_NAME` in `build.yml`).

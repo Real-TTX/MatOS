@@ -4,9 +4,15 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace MatOS.Core.Catalog;
 
-/// <summary>Turns a catalog file (compose + <c>x-matos</c>) into a <see cref="CatalogApp"/>.</summary>
+/// <summary>
+/// Turns a catalog file (compose + <c>x-matos</c>) into a <see cref="CatalogApp"/>. A file of Mattiverse (<c>x-mattiverse</c>: a catalog copy in
+/// <c>/data/catalog</c>, the compose file of a stack it gave MatDock) is read the same way; with both blocks <c>x-matos</c> wins.
+/// </summary>
 public static partial class CatalogParser
 {
+    /// <summary>The block of a catalog entry.</summary>
+    public const string Block = "x-matos";
+
     private static readonly IDeserializer MetaDeserializer = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .IgnoreUnmatchedProperties()
@@ -16,8 +22,11 @@ public static partial class CatalogParser
 
     private sealed class Document
     {
-        [YamlMember(Alias = "x-matos", ApplyNamingConventions = false)]
+        [YamlMember(Alias = Block, ApplyNamingConventions = false)]
         public CatalogApp? Meta { get; set; }
+
+        [YamlMember(Alias = Configuration.Mattiverse.CatalogBlock, ApplyNamingConventions = false)]
+        public CatalogApp? LegacyMeta { get; set; }
     }
 
     /// <summary>Parses one file. Throws <see cref="FormatException"/> with a readable message when it is not a valid entry.</summary>
@@ -33,7 +42,7 @@ public static partial class CatalogParser
             throw new FormatException($"{source}: {ex.Message}", ex);
         }
 
-        var app = document.Meta ?? throw new FormatException($"{source}: the top-level 'x-matos' block is missing.");
+        var app = document.Meta ?? document.LegacyMeta ?? throw new FormatException($"{source}: the top-level '{Block}' block is missing.");
         if (!IdRegex().IsMatch(app.Id))
         {
             throw new FormatException($"{source}: 'id' must be lowercase letters, digits and dashes (got '{app.Id}').");

@@ -211,6 +211,29 @@ public abstract class EngineClient
 
     protected Task<JsonNode?> GetAsync(string path, CancellationToken ct) => SendAsync(HttpMethod.Get, path, null, null, ct);
 
+    /// <summary>
+    /// Deletes what MatOS made (<c>DELETE path?managedBy=&lt;mark&gt;</c>). The engine refuses (<c>409</c>) a mark that is not the one of the object, and an
+    /// install of Mattiverse marked it <c>mattiverse</c>: the marks of <see cref="Owner.All"/> are tried in turn; the refusal of the last one is thrown.
+    /// </summary>
+    protected async Task DeleteOwnedAsync(string path, CancellationToken ct)
+    {
+        InvalidOperationException? refused = null;
+        foreach (var owner in Owner.All)
+        {
+            try
+            {
+                await SendAsync(HttpMethod.Delete, $"{path}?managedBy={owner}", null, null, ct);
+                return;
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 409", StringComparison.Ordinal))
+            {
+                refused = ex;
+            }
+        }
+
+        throw refused!;
+    }
+
     /// <summary>Streams the body of a GET (a backup download) into <paramref name="destination"/> without holding it in memory.</summary>
     protected async Task CopyToAsync(string path, Stream destination, CancellationToken ct)
     {

@@ -53,7 +53,7 @@ x-matos:
       value: ${ADMIN_PASSWORD}
       secret: true
     - label: Note
-      value: The relay users of your apps carry a "Managed by MatOS" badge.
+      value: The relay users of your apps carry a "Managed by matos" badge.
 
 services:
   matsmtp:
