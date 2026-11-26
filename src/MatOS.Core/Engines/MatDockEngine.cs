@@ -63,7 +63,10 @@ public sealed class MatDockEngine : IStackEngine
 
         if (composeChanged)
         {
-            log("The app's definition changed: MatDock redeploys the stack.");
+            // A redeploy is only `up -d`: without a pull first it would start the new definition on the old images, and the update would bring no
+            // newer version at all.
+            log("The app's definition changed: MatDock pulls the images and redeploys the stack.");
+            await _client.WaitOperationAsync(await _client.StartActionAsync(app.ProjectName, "pull", ct), log, ct);
         }
 
         var operation = await _client.StartActionAsync(app.ProjectName, composeChanged ? "redeploy" : "update", ct);
