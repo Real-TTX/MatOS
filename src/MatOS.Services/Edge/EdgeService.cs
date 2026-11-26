@@ -19,7 +19,8 @@ namespace MatOS.Services.Edge;
 /// </para>
 /// </summary>
 public sealed class EdgeService(
-    ServicesOptions options, TunnelRegistry registry, InstanceDirectory directory, ILogger<EdgeService> logger) : BackgroundService
+    ServicesOptions options, TunnelRegistry registry, InstanceDirectory directory, CustomDomains domains, ILogger<EdgeService> logger)
+    : BackgroundService
 {
     /// <summary>How long a visitor may take to send the ClientHello or the request head: a slow client must not hold a slot.</summary>
     private static readonly TimeSpan PeekTimeout = TimeSpan.FromSeconds(5);
@@ -195,13 +196,19 @@ public sealed class EdgeService(
 
     /// <summary>
     /// Where a host goes: the installation's name, <see cref="FallbackRoute"/> (outside the zone, the zone itself, no host) or
-    /// <see cref="NowhereRoute"/> (a name in the zone that no installation can hold, such as one level too deep).
+    /// <see cref="NowhereRoute"/> (a name in the zone that no installation can hold, such as one level too deep). A host outside the zone
+    /// goes to an installation when it is a verified domain of its own or a name below one (<see cref="CustomDomains"/>).
     /// </summary>
     private string Route(string? host)
     {
-        if (host is null || !HostNames.InZone(host, options.Zone) || host == options.Zone)
+        if (host is null || host == options.Zone)
         {
             return FallbackRoute;
+        }
+
+        if (!HostNames.InZone(host, options.Zone))
+        {
+            return domains.Find(host) ?? FallbackRoute;
         }
 
         return HostNames.InstanceName(host, options.Zone) is { } name ? name : NowhereRoute;

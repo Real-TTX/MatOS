@@ -31,6 +31,13 @@ public static class TunnelEndpoints
             return;
         }
 
+        if (instance.DynDnsOnly)
+        {
+            // A DynDNS name only follows an address; the edge has nothing to pass to it.
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
         var name = instance.Name;
         if (!limits.TryConnect(name))
         {

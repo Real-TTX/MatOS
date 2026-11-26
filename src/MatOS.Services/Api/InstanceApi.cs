@@ -26,9 +26,6 @@ public static class InstanceApi
     public const string NamesPolicy = "names";
     public const string ApiPolicy = "api";
 
-    /// <summary>Registrations count an IPv6 address as its /48 (see <see cref="ServicesOptions.RegistrationsPerIpPerDay"/>).</summary>
-    public const int RegistrationPrefix = 48;
-
     public static void MapInstanceApi(this WebApplication app)
     {
         app.MapGet("/api/v1/names/{name}", CheckNameAsync).RequireRateLimiting(NamesPolicy);
@@ -57,71 +54,19 @@ public static class InstanceApi
     }
 
     private static async Task<IResult> RegisterAsync(
-        RegisterRequest? request, HttpContext context, ServicesDbContext db, ServicesOptions options, InstanceDirectory directory,
-        RegistrationLock registrationLock, TimeProvider time, ILoggerFactory loggers)
+        RegisterRequest? request, HttpContext context, ServicesDbContext db, ServicesOptions options, Registrar registrar)
     {
-        var name = NameRules.Normalize(request?.Name);
-        var problem = NameRules.Check(name);
-        if (problem == NameProblem.Invalid)
+        var result = await registrar.RegisterAsync(
+            db, request?.Name, request?.Version, context.ClientIp(), dynDnsOnly: false, context.RequestAborted);
+        return result.Status switch
         {
-            return Results.BadRequest(new ApiError("invalid"));
-        }
-
-        if (problem == NameProblem.Reserved)
-        {
-            return Results.Conflict(new ApiError("reserved"));
-        }
-
-        var ip = context.ClientIp().ToString();
-        var limitKey = Networks.LimitKey(context.ClientIp(), RegistrationPrefix);
-        string key;
-        using (await registrationLock.EnterAsync(context.RequestAborted))
-        {
-            var now = time.GetUtcNow().UtcDateTime;
-            var lastDay = now.AddDays(-1);
-            var lastHour = now.AddHours(-1);
-            var fromHere = await db.Registrations.CountAsync(r => r.Ip == limitKey && r.CreateDate > lastDay, context.RequestAborted);
-            var everybody = await db.Registrations.CountAsync(r => r.CreateDate > lastHour, context.RequestAborted);
-            if (fromHere >= options.RegistrationsPerIpPerDay || everybody >= options.RegistrationsPerHour)
-            {
-                return Results.Json(new ApiError("too-many-registrations"), statusCode: StatusCodes.Status429TooManyRequests);
-            }
-
-            if (await db.Instances.AnyAsync(i => i.Name == name, context.RequestAborted))
-            {
-                return Results.Conflict(new ApiError("taken"));
-            }
-
-            key = InstanceKeys.Create();
-            db.Instances.Add(new Instance
-            {
-                Name = name,
-                KeyHash = InstanceKeys.Hash(key),
-                Mode = InstanceMode.Tunnel,
-                Version = Truncate(request?.Version, 64),
-                CreateDate = now,
-                LastSeen = now,
-                CreatedFromIp = ip,
-            });
-            db.Registrations.Add(new Registration { Ip = limitKey, CreateDate = now });
-
-            // The log only needs the last day; older entries go with each registration rather than with a job of their own.
-            var old = now.AddDays(-2);
-            await db.Registrations.Where(r => r.CreateDate < old).ExecuteDeleteAsync(context.RequestAborted);
-            try
-            {
-                await db.SaveChangesAsync(context.RequestAborted);
-            }
-            catch (DbUpdateException)
-            {
-                // The unique index decides if a name came in some other way meanwhile; the loser hears "taken".
-                return Results.Conflict(new ApiError("taken"));
-            }
-        }
-
-        await directory.RefreshAsync(name);
-        loggers.CreateLogger(typeof(InstanceApi)).LogInformation("Registered {Name} from {Ip}", name, ip);
-        return Results.Created("/api/v1/instance", new RegisterResponse(name, options.Zone, key, ModeText(InstanceMode.Tunnel)));
+            RegistrationStatus.Created => Results.Created(
+                "/api/v1/instance", new RegisterResponse(result.Name, options.Zone, result.Key!, ModeText(InstanceMode.Tunnel))),
+            RegistrationStatus.Invalid => Results.BadRequest(new ApiError("invalid")),
+            RegistrationStatus.Reserved => Results.Conflict(new ApiError("reserved")),
+            RegistrationStatus.Taken => Results.Conflict(new ApiError("taken")),
+            _ => Results.Json(new ApiError("too-many-registrations"), statusCode: StatusCodes.Status429TooManyRequests),
+        };
     }
 
     private static async Task<IResult> GetAsync(
@@ -160,6 +105,11 @@ public static class InstanceApi
                 return Results.BadRequest(new ApiError("invalid-mode"));
         }
 
+        if (mode == InstanceMode.Tunnel && instance.DynDnsOnly)
+        {
+            return Results.Conflict(new ApiError("dyndns-only"));
+        }
+
         // Direct without an address would make the name resolve to nothing: the installation would vanish from the internet.
         if (mode == InstanceMode.Direct && instance.PublicIpv4 is null && instance.PublicIpv6 is null)
         {
@@ -174,9 +124,7 @@ public static class InstanceApi
         return Results.Ok(View(instance, options, registry));
     }
 
-    private static async Task<IResult> DeleteAsync(
-        HttpContext context, ServicesDbContext db, TunnelRegistry registry, InstanceDirectory directory, InstanceActivity activity,
-        ILoggerFactory loggers)
+    private static async Task<IResult> DeleteAsync(HttpContext context, ServicesDbContext db, Registrar registrar)
     {
         var instance = await InstanceAuth.AuthenticateAsync(context, db);
         if (instance is null)
@@ -184,12 +132,7 @@ public static class InstanceApi
             return Results.Unauthorized();
         }
 
-        db.Instances.Remove(instance);
-        await db.SaveChangesAsync(context.RequestAborted);
-        await directory.RefreshAsync(instance.Name);
-        activity.Forget(instance.Name);
-        await registry.CloseAsync(instance.Name);
-        loggers.CreateLogger(typeof(InstanceApi)).LogInformation("{Name} was given back", instance.Name);
+        await registrar.ReleaseAsync(db, instance, context.RequestAborted);
         return Results.NoContent();
     }
 
@@ -220,7 +163,4 @@ public static class InstanceApi
         instance.PublicIpv6,
         registry.Get(instance.Name) is not null,
         instance.LastSeen);
-
-    private static string? Truncate(string? value, int length) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim().Length <= length ? value.Trim() : value.Trim()[..length];
 }

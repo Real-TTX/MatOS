@@ -47,7 +47,10 @@ internal sealed class RunningService : IAsyncDisposable
 
     public TunnelRegistry Registry => App.Services.GetRequiredService<TunnelRegistry>();
 
-    public static async Task<RunningService> StartAsync(params string[] extra)
+    public static Task<RunningService> StartAsync(params string[] extra) => StartWithAsync(null, extra);
+
+    /// <summary>Starts with changes to the services (a resolver or a port check of the test's own).</summary>
+    public static async Task<RunningService> StartWithAsync(Action<IServiceCollection>? configure, params string[] extra)
     {
         var data = Path.Combine(Path.GetTempPath(), "matos-services-tests", Guid.NewGuid().ToString("n"));
         string[] args =
@@ -64,7 +67,7 @@ internal sealed class RunningService : IAsyncDisposable
             "--Logging:LogLevel:Default=Warning",
             .. extra,
         ];
-        var app = ServicesHost.Build(args);
+        var app = ServicesHost.Build(args, configure);
         await app.StartAsync();
         return new RunningService(app, data);
     }
@@ -264,6 +267,27 @@ internal sealed class LocalServer : IAsyncDisposable
             buffer.AsSpan(end + 4, length - end - 4).CopyTo(buffer);
             length -= end + 4;
         }
+    });
+
+    /// <summary>Answers every request head with <paramref name="answer"/> as it is, and closes.</summary>
+    public static LocalServer Raw(string answer) => new(async client =>
+    {
+        var stream = client.GetStream();
+        var buffer = new byte[16 * 1024];
+        var length = 0;
+        while (buffer.AsSpan(0, length).IndexOf("\r\n\r\n"u8) < 0)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(length));
+            if (read == 0)
+            {
+                return;
+            }
+
+            length += read;
+        }
+
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(answer));
+        client.Client.Shutdown(SocketShutdown.Send);
     });
 
     /// <summary>Keeps every connection open, says nothing, and hands over the first bytes of the first connection.</summary>

@@ -21,7 +21,8 @@ public static class ServicesHost
     /// <summary>The port of the HTTP API inside the container (Dockerfile.services); the health check asks it.</summary>
     public const int ContainerHttpPort = 8080;
 
-    public static WebApplication Build(string[] args)
+    /// <param name="configure">Changes to the services after the defaults (the tests put in a resolver of their own).</param>
+    public static WebApplication Build(string[] args, Action<IServiceCollection>? configure = null)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -58,11 +59,22 @@ public static class ServicesHost
         builder.Services.AddSingleton<ReachabilityCheck>();
         builder.Services.AddSingleton<EdgeService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<EdgeService>());
+        builder.Services.AddSingleton<Registrar>();
+        builder.Services.AddSingleton<PortCheck>();
+        builder.Services.AddSingleton<PortCheckLimits>();
+        builder.Services.AddSingleton<FormGuard>();
+        builder.Services.AddSingleton<IDomainResolver, SystemDomainResolver>();
+        builder.Services.AddSingleton<CustomDomains>();
+        builder.Services.AddHostedService<DomainChecker>();
         builder.Services.AddSingleton<DnsService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<DnsService>());
 
+        configure?.Invoke(builder.Services);
+
         var app = builder.Build();
         Migrate(app.Services);
+        // The edge looks up the verified domains synchronously: they are in memory before the first connection.
+        app.Services.GetRequiredService<CustomDomains>().ReloadAsync().GetAwaiter().GetResult();
 
         app.UseForwardedHeaders();
         app.UseRateLimiter();
@@ -72,6 +84,9 @@ public static class ServicesHost
         app.MapStatusPages();
         app.MapInstanceApi();
         app.MapDynDns();
+        app.MapDynDnsPages();
+        app.MapPortsApi();
+        app.MapDomainsApi();
         app.MapTunnel();
         return app;
     }
@@ -142,7 +157,7 @@ public static class ServicesHost
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             o.AddPolicy(InstanceApi.NamesPolicy, context => Window(context, 120));
             o.AddPolicy(InstanceApi.ApiPolicy, context => Window(context, 60));
-            o.AddPolicy(StatusPages.AdminPolicy, context => Window(context, 20, InstanceApi.RegistrationPrefix));
+            o.AddPolicy(StatusPages.AdminPolicy, context => Window(context, 20, Registrar.RegistrationPrefix));
         });
     }
 

@@ -17,6 +17,48 @@ namespace MatOS.Services.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
+            modelBuilder.Entity("MatOS.Services.Data.CustomDomain", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("CheckedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FailingSince")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("InstanceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Domain")
+                        .IsUnique();
+
+                    b.HasIndex("InstanceId");
+
+                    b.ToTable("CustomDomain", (string)null);
+                });
+
             modelBuilder.Entity("MatOS.Services.Data.Instance", b =>
                 {
                     b.Property<long>("Id")
@@ -31,12 +73,19 @@ namespace MatOS.Services.Data.Migrations
                         .HasMaxLength(45)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("DynDnsOnly")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("FirstTunnel")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("KeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastPortCheck")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("LastSeen")
@@ -97,6 +146,22 @@ namespace MatOS.Services.Data.Migrations
                     b.HasIndex("Ip", "CreateDate");
 
                     b.ToTable("Registration", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.CustomDomain", b =>
+                {
+                    b.HasOne("MatOS.Services.Data.Instance", "Instance")
+                        .WithMany("Domains")
+                        .HasForeignKey("InstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Instance");
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.Instance", b =>
+                {
+                    b.Navigation("Domains");
                 });
 #pragma warning restore 612, 618
         }

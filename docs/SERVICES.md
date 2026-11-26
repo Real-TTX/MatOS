@@ -51,6 +51,7 @@ Configuration (environment, section `Services`):
 | `Services__RegistrationsPerIpPerDay` | `5` | successful registrations in the last 24 h per IPv4 address, or per /48 of an IPv6 address (a home or a server usually holds a whole /56 or /48) |
 | `Services__RegistrationsPerHour` | `60` | successful registrations of everybody in the last hour: the ceiling for somebody with very many addresses |
 | `Services__ExpireUnusedAfterDays` | `7` | a name that was never used (no tunnel ever connected, no address ever came through `/nic/update`) is given back this many days after its registration; `0` keeps every name. Names in use never expire |
+| `Services__ProofOfWorkBits` | `16` | the proof of work the public DynDNS page asks for before it registers a name (about 65,000 SHA-256 hashes, a second in a browser); `0` asks for none |
 | `Services__DataPath` | `/data` | SQLite database `services.db` |
 | `Services__TrustedProxies` | `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7` | whose `X-Forwarded-For`/`-Proto` counts (the client address decides the rate limits and the address of `/nic/update`); a header from anybody else is ignored |
 | `Services__ListenAddress` | `::` | where the edge and the DNS bind (`::` takes IPv4 too and falls back to `0.0.0.0` without IPv6) |
@@ -64,7 +65,7 @@ Configuration (environment, section `Services`):
 | `Services__Dns__Enabled` / `Port` / `Ttl` | `true` / `5353` / `60` | |
 | `Services__Tunnel__PingSeconds` / `PongTimeoutSeconds` / `StreamTimeoutSeconds` | `30` / `90` / `10` | |
 
-Data: one volume (`/data`), tables `Instance` and `Registration` (EF Core migrations, applied on start). The key of an installation is stored as
+Data: one volume (`/data`), tables `Instance`, `Registration` and `CustomDomain` (EF Core migrations, applied on start). The key of an installation is stored as
 a SHA-256 hash only.
 
 Project: `src/MatOS.Services` (minimal APIs, no Razor), tests `tests/MatOS.Services.Tests`, image `Dockerfile.services`, server1 setup `deploy/services/`.
@@ -79,11 +80,16 @@ without a valid key the answer is `401`. Errors are `{error}` with the code name
 | `GET /api/v1/names/{name}` | anonymous. `200 {name, available, reason?, address?}`; `reason` is `invalid`, `reserved` or `taken`; `address` = `{name}.{zone}` (left out for an invalid name); `name` is the lowered form |
 | `POST /api/v1/instances` | anonymous, rate-limited. `{name, version?}` → `201 {name, zone, key, mode}`. The key is returned **once**. `409` `taken`/`reserved`, `400` `invalid`, `429` `too-many-registrations` from this address (or from everybody in the last hour) |
 | `GET /api/v1/instance` | `{name, zone, mode, publicIp, publicIpv4, publicIpv6, tunnelConnected, lastSeen}`; `publicIp` is the IPv4 address, else the IPv6 one; `lastSeen` is ISO 8601 in UTC with its `Z` (`2026-11-26T16:02:18.1234567Z`), as every time of the API |
-| `PUT /api/v1/instance` | `{mode: "tunnel" \| "direct"}` → the same as `GET`; direct is refused (`409` `no-public-ip`) while no public IP is known; another mode is `400` `invalid-mode` |
+| `PUT /api/v1/instance` | `{mode: "tunnel" \| "direct"}` → the same as `GET`; direct is refused (`409` `no-public-ip`) while no public IP is known; tunnel is refused for a DynDNS-only name (`409` `dyndns-only`); another mode is `400` `invalid-mode` |
 | `POST /api/v1/instance/check` | the service tries to reach the installation directly on 80 and 443 (the IP of the request if it is a public one, else the stored one): `{publicIp, http, https, detail}`; `http` is true only when the answer comes from Caddy (`Server: Caddy`), `https` when a TLS handshake for `{name}.{zone}` succeeds (`detail` says whether the certificate is valid yet). Addresses that are not public are never probed |
 | `DELETE /api/v1/instance` | `204`: gives the name back (the tunnel is closed, the records disappear) |
 | `GET /nic/update?hostname=…&myip=…` | the DynDNS2 protocol for Matddns: Basic auth `name:key` (the user may also be `{name}.{zone}`); answers `good <ip>`, `nochg <ip>`, `badauth`, `nohost`, `notfqdn` (one line per host name; `numhost` for more than 10), and `dnserr` for an address that is not a public one or not an address (also one line per host name: `dnserr` for the own names, `nohost`/`notfqdn` for the others). `myip` may hold an IPv4 and an IPv6 address (comma-separated), `myipv6` is accepted too; a family that is not sent stays as it is. Without either the IP of the request. `hostname` is `{name}.{zone}` or `*.{name}.{zone}`. Without credentials `401` with a Basic challenge |
 | `GET /healthz` | anonymous `ok` |
+| `POST /api/v1/ports/check` | anonymous, or with the Bearer key of an installation. "Check my ports" (below): optional body `{"port": 8443}` (one more port, 1–65535; else `400 invalid-port`). `200 {ipv4, ipv6, checkedAt, ports: [{port, ipv4, ipv6, web}]}`: 80 and 443 always first, then the extra port; per family `open`, `closed` (refused) or `filtered` (no answer in 3 s), `null` for the family that was not checked; `web` is `caddy`, `other` or `null`. Null fields are written (`"ipv6": null`). `422 not-public` when the caller's address is not a public one; `429 {error: "too-many-checks", retryAfter}` (seconds, also as `Retry-After`) beyond 6 checks per address (IPv6 /64) or 20 per installation in 10 minutes. With a key the result is kept as the installation's last check; a wrong key is `401` |
+| `GET /api/v1/instance/domains` | the installation's own domains on the tunnel: `[{domain, status, checkedAt, detail}]`, `status` `pending`, `verified` or `failed` |
+| `POST /api/v1/instance/domains` | `{domain}` → `201 {domain, status, checkedAt, detail}`, checked at once (a second POST of the same domain checks again). `400 invalid-domain` / `forbidden-domain` (the zone, its parent `mattiverse.de` and every name below them), `409 domain-taken` (verified by another installation), `too-many-domains` (5), `dyndns-only` |
+| `DELETE /api/v1/instance/domains/{domain}` | `204`; `404 unknown-domain` |
+| `GET /ip` | anonymous: the caller's address as plain text (for ddclient's `use=web` and scripts) |
 
 Rate limits per client address (an IPv6 address counts as its /64) and minute: 120 for the name check, 60 for the rest of the API and
 `/nic/update`; beyond that `429`. `/admin` allows 20 per minute per IPv4 address or IPv6 /48, and 30 wrong passwords per minute of everybody
@@ -92,7 +98,7 @@ together (then `429` without looking at the password). The tunnel endpoints have
 address gets `429` on both tunnel endpoints for the rest of the minute. The client address is the one the trusted proxy names; see
 `Services__TrustedProxies` and "Setting it up" for how it must reach the service.
 
-`GET /` is a short public page; `GET /admin` the list of installations (Basic auth with `Services__AdminPassword`, any user name; `404` when no
+`GET /` is a short public page (on the host of the zone itself, `my.mattiverse.de`, the DynDNS page below); `GET /admin` the list of installations (Basic auth with `Services__AdminPassword`, any user name; `404` when no
 password is set).
 
 **Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
@@ -148,16 +154,89 @@ holds a byte a name cannot (a `.` inside a label above all) matches no name. Nam
 The names and addresses are kept in memory (refreshed by every change through the API, reloaded every 5 minutes), so a flood of random names
 never reaches the database. TCP: at most 8 connections per address, each ends after 2 minutes or 100 queries.
 
+## DynDNS for everybody (`https://my.mattiverse.de`)
+
+The same names, for people **without MatOS**: a FritzBox, ddclient, Matddns, a script. The page is the zone itself, `https://my.mattiverse.de`
+(any request whose `Host` is `Services__Zone`; the same page is at `/dyndns` on every host, so `https://services.mattiverse.de/dyndns` works too).
+Plain HTML from code with one script of the service's own (`/dyndns/app.js`); the policy is `default-src 'none'; script-src 'self'; connect-src 'self';
+style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'`. No cookies, no third party, no captcha service.
+
+- **Pick a name**: a field with a live check (`GET /api/v1/names/{name}`, the same name rules); *Get my name* registers it through the same
+  registration as the API (the same limits per address and per hour). Such a name is marked **DynDNS-only** (`Instance.DynDnsOnly`), starts in
+  **direct** mode without an address (the DNS answers it with no data until the first update) and never uses the tunnel: the tunnel endpoint
+  answers `403`, `PUT /api/v1/instance {mode: "tunnel"}` `409 dyndns-only`, custom domains `409 dyndns-only`.
+- The answer shows the **key once** (with a copy button) and the settings:
+  - FritzBox (*Internet > Permit Access > DynDNS*, provider *User-defined*): Update URL
+    `https://services.mattiverse.de/nic/update?hostname=<domain>&myip=<ipaddr>&myipv6=<ip6addr>`, domain name `name.my.mattiverse.de`, user name
+    `name`, password the key. A FritzBox without IPv6 sends `myipv6=` empty; the stored IPv6 then stays.
+  - Matddns: a domain group of the kind `DynDns`, `updateUrl` `…/nic/update?hostname={hostname}&myip={ipv4}&myipv6={ipv6}`, user `name`, password the key.
+  - ddclient: `protocol=dyndns2`, `use=web, web=https://services.mattiverse.de/ip`, `server=services.mattiverse.de`, `ssl=yes`, `login`, `password`, the name.
+  - curl: `curl -u 'name:key' 'https://services.mattiverse.de/nic/update?hostname=name.my.mattiverse.de'`.
+- **Manage your name** (`/dyndns/manage`): name and key in a POST form, nothing kept after the page (each further form carries them again as hidden
+  fields; the page is `no-store`). It shows IPv4, IPv6, the last update and the last change, *Update now from this browser* (the browser's own
+  address, only a public one), the port check (only when the browser comes from the name's own address), and *Give the name back* (a checkbox
+  confirms). A name of a MatOS installation is refused there ("manage it in MatOS").
+- **Rules** (`/dyndns/rules`): what a name is, the limits, the expiry, no abuse, what is stored.
+
+**Abuse protection.** Every form is a POST that must pass the **same-origin check** (`Origin`, else `Referer`, must name the request's host; else
+`403`). The registration form carries a **signed one-time token** (HMAC with a key made at start, 30 minutes, used once) with a **proof of work** on
+it: SHA-256 of `token:nonce` must start with `Services__ProofOfWorkBits` zero bits (the page's script finds the nonce, about a second), and a
+**honeypot** field people never see. On top of that the registration limits of the API (5 names per address and day, 60 of everybody per hour)
+and the rate limits per minute. A name that receives **no address within 7 days** of its registration is given back automatically: the same
+`InstanceExpiry` as for MatOS names, whose "used" is a tunnel or an address through `/nic/update` (a DynDNS name has no tunnel, so it is its first
+address). A name that is used stays.
+
+**DNS.** A DynDNS-only name is an instance in direct mode, so the authoritative DNS answers `name.my.mattiverse.de` and `*.name.my.mattiverse.de`
+with its stored IPv4 (`A`) and IPv6 (`AAAA`); names in tunnel mode still answer the edge, and the zone itself (`my.mattiverse.de`, the page) the
+edge's address (server1) too. The page is reached through the normal reverse proxy (Matcad terminates TLS for `my.mattiverse.de` and proxies to
+port 8080): the edge's passthrough only takes names **with** a label below the zone (`anna.my…`, `x.anna.my…`), never the apex.
+
+## Check my ports
+
+"Is my router forwarding?" for everybody, on the page and as `POST /api/v1/ports/check` (MatOS's setup assistant calls it from the home server, so
+the caller is the home connection). The service connects to the **caller's own address** (the client address after the trusted-proxy rules; one
+request has one address, IPv4 or IPv6) and **never** to an address from the request, never to one that is not public (`422 not-public`). Ports 80
+and 443 always, plus one port the person chooses; a TCP connect with a 3 s timeout (`open`, `closed` when refused, `filtered` when nothing
+answers), and on 80/443 a `GET /` (over TLS on 443) whose `Server` header says whether a web server answers and whether it is Caddy (MatOS).
+Limits: 6 checks per address (IPv6 /64) in 10 minutes, 20 per installation when MatOS signs in with its key; the installation's last result is
+kept (`Instance.LastPortCheck`). The page explains the result in plain words and how to forward a port on a FritzBox.
+
+## Your own domain through the tunnel
+
+For people with a domain of their own whose router cannot forward ports: the domain's names reach the installation through the tunnel, like the
+free names. MatOS registers a **suffix** (`POST /api/v1/instance/domains {"domain": "apps.example.com"}`); the person sets at their DNS provider
+
+```
+*.apps.example.com.   CNAME   anna.my.mattiverse.de.
+```
+
+(the apex of a domain cannot be a CNAME; MatOS uses names below it: `matnote.apps.example.com`). The service then **verifies** the record: it
+asks for a name only a wildcard answers (`matos-check-<random>.apps.example.com`), else the domain itself, and follows up to 5 CNAMEs (DnsClient
+against the system's name servers, 3 s a question, 10 s in all); verified when the chain reaches `{name}.{zone}` of that installation. Only a
+verified domain is routed: the edge (SNI on 443, `Host` on 80) sends the domain and **every name below it** into the installation's tunnel
+(the longest verified suffix wins); everything else as before. The DNS of the service is not involved: the domain lives at the person's provider,
+its CNAME leads to the installation's free name, which in tunnel mode answers the edge. The certificates are the installation's (Caddy's
+TLS-ALPN-01/HTTP-01 through the tunnel).
+
+Checks run again every 6 hours (a pending domain every 15 minutes); a check that fails marks a verified domain `failed` (no longer routed), and a
+domain whose checks fail for **3 days** (or that is never verified in 3 days) is removed. At most **5** domains per installation; a domain belongs
+to one installation at most (unique). A verified domain cannot be taken by another installation; a pending or failed one goes to whoever proves
+the CNAME (nobody can block a domain by registering it first). Never the zone, its parent (`mattiverse.de`) or a name below them. A given-back
+name takes its domains with it.
+
+The traffic for these names must reach the edge on server1: with Option B (the container holds 80/443) it does; with Option A the layer-4 routing
+must send SNI it does not know to the edge (deploy/services/README.md, "Custom domains").
+
 ## Setting it up on server1 (once)
 
 1. DNS of `mattiverse.de` (at its provider): the wildcard `*.mattiverse.de → server1` exists already; it covers `services.mattiverse.de` **and every name
-   below `my.mattiverse.de`**, so the tunnel mode needs nothing more. For the direct mode add `my  NS  services.mattiverse.de` (the service answers for the zone
+   below `my.mattiverse.de`**, so the tunnel mode needs nothing more. For the direct mode and DynDNS for everybody add `my  NS  services.mattiverse.de` (the service answers for the zone
    from then on; the wildcard no longer applies below it).
 2. Run the container (`deploy/services/docker-compose.yml`) with `Services__Edge__PublicIpv4` = server1's IP.
-3. Publish `https://services.mattiverse.de` → container port 8080 through the existing proxy, and the names `*.my.mattiverse.de` on 80/443 **unencrypted
+3. Publish `https://services.mattiverse.de` **and `https://my.mattiverse.de`** (the DynDNS page; a normal route with TLS ending at the proxy, Matcad on server1) → container port 8080 through the existing proxy, and the names below `my.mattiverse.de` (not the apex) on 80/443 **unencrypted
    / passthrough** to 8081/8443: either the container takes 80/443 itself and passes every other name to the existing proxy (`FallbackHttps`/`FallbackHttp`),
    or the existing proxy routes by SNI (Caddy `layer4`, nginx `stream` with `ssl_preread`, Traefik `HostSNI`; examples in `deploy/services/README.md`).
-4. For the direct mode: 53/udp and 53/tcp → container port 5353.
+4. For the direct mode and the DynDNS names: 53/udp and 53/tcp → container port 5353.
 
 **The client address must survive the way in.** The registration limits, the API's rate limits and the address `/nic/update` stores all use the
 client address that the proxy in front of port 8080 reports in `X-Forwarded-For`. If that proxy only sees a constant address (`127.0.0.1` behind an

@@ -9,6 +9,8 @@ public sealed class ServicesDbContext(DbContextOptions<ServicesDbContext> option
 
     public DbSet<Registration> Registrations => Set<Registration>();
 
+    public DbSet<CustomDomain> Domains => Set<CustomDomain>();
+
     /// <summary>
     /// Every time is UTC, but SQLite stores text without a kind and EF Core reads it back as <see cref="DateTimeKind.Unspecified"/>, which
     /// JSON then writes without an offset (a client reads it as its local time). The converter marks what is read as UTC.
@@ -31,6 +33,17 @@ public sealed class ServicesDbContext(DbContextOptions<ServicesDbContext> option
             e.Property(i => i.PublicIpv6).HasMaxLength(45);
             e.Property(i => i.Version).HasMaxLength(64);
             e.Property(i => i.CreatedFromIp).HasMaxLength(45);
+            e.Property(i => i.LastPortCheck).HasMaxLength(2000);
+            e.HasMany(i => i.Domains).WithOne(d => d.Instance).HasForeignKey(d => d.InstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CustomDomain>(e =>
+        {
+            e.ToTable("CustomDomain");
+            e.Property(d => d.Domain).HasMaxLength(253).IsRequired();
+            e.HasIndex(d => d.Domain).IsUnique();
+            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(16);
+            e.Property(d => d.Detail).HasMaxLength(300);
         });
 
         modelBuilder.Entity<Registration>(e =>

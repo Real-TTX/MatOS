@@ -40,6 +40,18 @@ public sealed class Instance
     /// </summary>
     public DateTime? FirstTunnel { get; set; }
 
+    /// <summary>
+    /// Registered on the public DynDNS page (docs/SERVICES.md "DynDNS for everybody") rather than by MatOS: a name that only follows an
+    /// address. Always in direct mode; it never opens a tunnel.
+    /// </summary>
+    public bool DynDnsOnly { get; set; }
+
+    /// <summary>The last port check the installation asked for with its key (the JSON of <c>POST /api/v1/ports/check</c>).</summary>
+    public string? LastPortCheck { get; set; }
+
+    /// <summary>Its own domains on the tunnel (docs/SERVICES.md "Your own domain through the tunnel").</summary>
+    public List<CustomDomain> Domains { get; set; } = [];
+
     public DateTime CreateDate { get; set; }
 
     public DateTime? UpdateDate { get; set; }

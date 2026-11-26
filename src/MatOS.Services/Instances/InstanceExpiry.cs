@@ -13,6 +13,7 @@ namespace MatOS.Services.Instances;
 /// </summary>
 public sealed class InstanceExpiry(
     ServicesOptions options, IServiceScopeFactory scopes, InstanceDirectory directory, InstanceActivity activity, TunnelRegistry registry,
+    CustomDomains domains,
     TimeProvider time, ILogger<InstanceExpiry> logger) : BackgroundService
 {
     private static readonly TimeSpan Every = TimeSpan.FromHours(1);
@@ -68,6 +69,7 @@ public sealed class InstanceExpiry(
             logger.LogInformation("{Name} was never used and has been given back", instance.Name);
         }
 
+        await domains.ReloadAsync(cancellationToken);
         return unused.Select(i => i.Name).ToList();
     }
 }

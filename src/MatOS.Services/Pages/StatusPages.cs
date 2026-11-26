@@ -33,18 +33,27 @@ public static class StatusPages
     public static void MapStatusPages(this WebApplication app)
     {
         app.MapGet("/", Index);
+        // The caller's own address as plain text: what ddclient (use=web) and scripts ask before an update.
+        app.MapGet("/ip", (HttpContext context) => Results.Text(context.ClientIp().ToString())).RequireRateLimiting(InstanceApi.NamesPolicy);
         app.MapGet("/admin", AdminAsync).RequireRateLimiting(AdminPolicy);
         app.MapGet("/healthz", () => Results.Text("ok"));
     }
 
-    private static IResult Index(ServicesOptions options)
+    private static IResult Index(HttpContext context, ServicesOptions options, FormGuard guard)
     {
+        // The zone itself (my.mattiverse.de) is the public DynDNS page.
+        if (DynDnsPages.IsZoneHost(context, options))
+        {
+            return DynDnsPages.Home(context, options, guard);
+        }
+
         var zone = HtmlEncoder.Default.Encode(options.Zone);
         var body = $"""
             <h1>MatOS Services</h1>
             <p class="sub">Free addresses for <a href="{RepositoryUrl}">MatOS</a>.</p>
             <p>A MatOS installation without a domain of its own gets an address here, such as <code>anna.{zone}</code>, with its apps at
             <code>&lt;app&gt;.anna.{zone}</code>. It is chosen in the setup assistant of MatOS; there is nothing to do on this page.</p>
+            <p>Without MatOS: anybody can get a free DynDNS name for a router or a script at <a href="https://{zone}">https://{zone}</a>.</p>
             <p>The service runs. Installations reach it at <code>{HtmlEncoder.Default.Encode(options.PublicUrl)}</code>.</p>
             """;
         return Page("MatOS Services", body);
@@ -84,7 +93,7 @@ public static class StatusPages
             <h1>MatOS Services</h1>
             <p class="sub">{instances.Count} installations, {sessions.Count} tunnels connected, {edge.Connections} visitors at the edge.
             Zone <code>{E(options.Zone)}</code>.</p>
-            <table><thead><tr><th>Name</th><th>Mode</th><th>Tunnel</th><th>IPv4</th><th>IPv6</th><th>Last seen</th><th>Created</th><th>From</th><th>Version</th></tr></thead><tbody>
+            <table><thead><tr><th>Name</th><th>Kind</th><th>Mode</th><th>Tunnel</th><th>IPv4</th><th>IPv6</th><th>Last seen</th><th>Created</th><th>From</th><th>Version</th></tr></thead><tbody>
             """);
         foreach (var i in instances)
         {
@@ -92,7 +101,7 @@ public static class StatusPages
                 ? $"<span class=\"yes\">connected</span> ({s.ActiveStreams} streams)"
                 : "<span class=\"no\">no</span>";
             html.Append(CultureInfo.InvariantCulture, $"""
-                <tr><td>{E(i.Name)}</td><td>{InstanceApi.ModeText(i.Mode)}</td><td>{tunnel}</td><td>{E(i.PublicIpv4)}</td><td>{E(i.PublicIpv6)}</td>
+                <tr><td>{E(i.Name)}</td><td>{(i.DynDnsOnly ? "DynDNS" : "MatOS")}</td><td>{InstanceApi.ModeText(i.Mode)}</td><td>{tunnel}</td><td>{E(i.PublicIpv4)}</td><td>{E(i.PublicIpv6)}</td>
                 <td>{Date(i.LastSeen)}</td><td>{Date(i.CreateDate)}</td><td>{E(i.CreatedFromIp)}</td><td>{E(i.Version)}</td></tr>
                 """);
         }

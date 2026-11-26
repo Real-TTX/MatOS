@@ -16,7 +16,8 @@ installations share one cookie site and one Let's Encrypt quota with each other 
 | `https://services.mattiverse.de` (through the existing proxy, TLS ends there) | `8080` | the API, the tunnel (WebSockets) and the status page |
 | `*.my.mattiverse.de` on **443**, **passed through unencrypted** (no TLS termination) | `8443` | the edge for TLS: it reads the SNI and passes the bytes into the tunnel |
 | `*.my.mattiverse.de` on **80** | `8081` | the edge for HTTP (ACME HTTP-01, the redirect to https) |
-| `53/udp` and `53/tcp` (direct mode only) | `5353` | the DNS of the zone |
+| `https://my.mattiverse.de` (the zone itself: the public DynDNS page; through the existing proxy, TLS ends there) | `8080` | the same HTTP port: the service shows the DynDNS page for this host |
+| `53/udp` and `53/tcp` (direct mode and DynDNS names) | `5353` | the DNS of the zone |
 
 The important part is 443: the certificate of an installation lives in the installation (its Caddy). The proxy on server1 must **not** terminate TLS
 for `*.my.mattiverse.de`; it may only look at the SNI and pass the connection on. That is what the examples below do.
@@ -37,17 +38,23 @@ Three rules hold for every variant below:
 
 ## 1. DNS of mattiverse.de (at its provider)
 
-The wildcard `*.mattiverse.de → 203.0.113.10` exists already. It covers `services.mattiverse.de` and every name below `my.mattiverse.de`,
-so **the tunnel mode needs nothing more**.
+The wildcard `*.mattiverse.de → 203.0.113.10` exists already. It covers `services.mattiverse.de`, the zone `my.mattiverse.de` itself and every
+name below it, so **the tunnel mode and the DynDNS page need nothing more**.
 
-For the **direct mode** (later, optional) delegate the zone to the service:
+For the **direct mode** and **DynDNS for everybody** (the names then point to people's own addresses) delegate the zone to the service, once:
 
 ```
 my.mattiverse.de.   3600  IN  NS  services.mattiverse.de.
 ```
 
-From then on the service answers for everything below `my.mattiverse.de` (the wildcard no longer applies there): `Services__Edge__PublicIpv4` must be set,
-it is the answer for every installation in tunnel mode, and 53/udp+tcp must reach the container (step 4).
+(No glue record is needed: `services.mattiverse.de` lies outside the delegated zone and keeps resolving through the wildcard.) From then on the
+service answers for `my.mattiverse.de` and everything below it (the wildcard no longer applies there):
+
+- `my.mattiverse.de` itself (the DynDNS page) and every installation in tunnel mode: server1's address, `Services__Edge__PublicIpv4` (and
+  `PublicIpv6`), which must be set;
+- a DynDNS name or an installation in direct mode: the IPv4/IPv6 its router reported.
+
+**53/udp and 53/tcp must reach the container** (port 5353 inside; step 4). Check with `dig +short @203.0.113.10 my.mattiverse.de SOA`.
 
 ## 2. Run the container
 
@@ -75,14 +82,14 @@ covers a proxy on the host or in Docker). Make sure the proxy in front of 8080 *
 
 ## 3. Publish it
 
-### The API: `https://services.mattiverse.de` → 8080
+### The API and the DynDNS page: `https://services.mattiverse.de` and `https://my.mattiverse.de` → 8080
 
 An ordinary HTTPS site of the existing proxy. WebSockets must pass (the tunnel), and an idle timeout must be longer than the 30 s ping.
 
 Caddy:
 
 ```
-services.mattiverse.de {
+services.mattiverse.de, my.mattiverse.de {
 	reverse_proxy 127.0.0.1:8080
 }
 ```
@@ -92,7 +99,7 @@ nginx:
 ```nginx
 server {
     listen 443 ssl;   # in the nginx variant of option A: listen 127.0.0.1:7443 ssl proxy_protocol;
-    server_name services.mattiverse.de;
+    server_name services.mattiverse.de my.mattiverse.de;
     # ssl_certificate ... (as for the other sites)
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -110,7 +117,11 @@ server {
 
 Traefik: see the dynamic configuration under option A, router `matos-services-api`.
 
-### The edge: `*.my.mattiverse.de` on 80/443
+**Matcad** (when server1's proxy is a Matcad): two ordinary routes with TLS ending at Matcad, `services.mattiverse.de → matos-services:8080`
+and `my.mattiverse.de → matos-services:8080` (the same container port; the service shows the DynDNS page for the host `my.mattiverse.de`).
+Only the apex is such a route: the names below it (`anna.my.mattiverse.de`, `x.anna.my.mattiverse.de`) must stay passthrough to the edge (below).
+
+### The edge: the names below `my.mattiverse.de` on 80/443
 
 Two ways; pick one.
 
@@ -225,7 +236,7 @@ http:
       service: matos-edge-http
     matos-services-api:
       entryPoints: [websecure]
-      rule: "Host(`services.mattiverse.de`)"
+      rule: "Host(`services.mattiverse.de`) || Host(`my.mattiverse.de`)"
       service: matos-services-api
       tls:
         certResolver: letsencrypt   # the resolver the other sites use
@@ -281,7 +292,18 @@ the container's network:
 
 One more consequence: when the MatOS Services container is down, every site of server1 is down with it.
 
-## 4. Direct mode (optional): DNS
+#### The apex and custom domains
+
+- **The apex `my.mattiverse.de` is not the edge's.** Every pattern above matches one or two labels **below** the zone (`^([^.]+\.){1,2}my\...`),
+  never the zone itself, so `https://my.mattiverse.de` stays an ordinary site of the existing proxy (the route to 8080 above). In Option B the edge
+  passes the apex on to the fallback like any other name outside the zone.
+- **Custom domains** (docs/SERVICES.md, "Your own domain through the tunnel"): people's own names (`*.apps.example.com CNAME anna.my.mattiverse.de`)
+  arrive at server1 with SNI/`Host` of *their* domain. With Option B they reach the edge by themselves. With Option A the layer-4 routing must
+  send SNI it does not know to the edge (8443) instead of to the existing proxy, and list the existing proxy's own names instead (nginx: the
+  `map` with the own sites → 7443 and `default 127.0.0.1:8443`; port 80 the same with a catch-all server to 8081). The edge routes only domains
+  it has verified and passes anything else to its fallback, so set `Services__Edge__FallbackHttps`/`FallbackHttp` to the existing proxy then.
+
+## 4. DNS (direct mode and DynDNS for everybody)
 
 After the delegation (step 1), publish the DNS on server1's public address (systemd-resolved holds `127.0.0.53:53`, so not on all addresses):
 
@@ -296,6 +318,8 @@ After the delegation (step 1), publish the DNS on server1's public address (syst
 ```sh
 curl -s https://services.mattiverse.de/healthz                                  # ok
 curl -s https://services.mattiverse.de/api/v1/names/anna                        # {"name":"anna","available":true,...}
+curl -s https://my.mattiverse.de/ | grep -o "Pick a name"                      # the DynDNS page
+dig +short @203.0.113.10 my.mattiverse.de A                                     # the apex: server1 (the edge address)
 curl -si -H 'Host: x.nobody.my.mattiverse.de' http://203.0.113.10/ | head -1    # HTTP/1.1 404 (the edge answers)
 openssl s_client -connect 203.0.113.10:443 -servername example.mattiverse.de </dev/null | head -5   # an existing site's certificate
 dig +short @203.0.113.10 my.mattiverse.de SOA                                   # direct mode: the zone answers

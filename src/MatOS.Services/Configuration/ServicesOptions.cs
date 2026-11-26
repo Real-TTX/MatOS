@@ -37,6 +37,13 @@ public sealed class ServicesOptions
     /// </summary>
     public int ExpireUnusedAfterDays { get; set; } = 7;
 
+    /// <summary>
+    /// The leading zero bits of the proof of work the public DynDNS page asks for before it registers a name (docs/SERVICES.md "DynDNS for
+    /// everybody"): 16 bits are about 65,000 hashes, a second in a browser, and make a script that registers names in bulk pay for each.
+    /// 0 asks for none.
+    /// </summary>
+    public int ProofOfWorkBits { get; set; } = 16;
+
     /// <summary>Where <c>services.db</c> lives (the one volume of the container).</summary>
     public string DataPath { get; set; } = "/data";
 
@@ -115,6 +122,11 @@ public sealed class ServicesOptions
         if (RegistrationsPerIpPerDay < 0 || RegistrationsPerHour < 0 || ExpireUnusedAfterDays < 0)
         {
             problems.Add("Services:RegistrationsPerIpPerDay, RegistrationsPerHour and ExpireUnusedAfterDays must not be negative.");
+        }
+
+        if (ProofOfWorkBits is < 0 or > 28)
+        {
+            problems.Add("Services:ProofOfWorkBits must be between 0 and 28.");
         }
 
         if (Edge.IdleTimeoutSeconds < 1)
