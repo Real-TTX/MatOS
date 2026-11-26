@@ -86,6 +86,11 @@
         </ol>
 
         <div class="ob-done" data-ob-when="ready partial" hidden="@(phase == "working")">
+            @if (Model.Reach is { } reach)
+            {
+                @* Reached from anywhere or only at home, in one sentence (the route MatOS chose is its own business); js/matos.js asks again when this shows. *@
+                <partial name="_Reach" model="reach" />
+            }
             @if (Model.SelfUrl is { } self)
             {
                 @* The address people open from anywhere: MatOS is a host below the address (the bare name has no route). *@

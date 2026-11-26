@@ -141,14 +141,14 @@ public class SetupTests
     // ------------------------------------------------------------------ the steps "Set up MatOS" queues
 
     [Fact]
-    public void The_engines_come_first_then_the_apps_then_the_free_address()
+    public void The_engines_come_first_then_the_apps_then_the_free_address_then_the_check()
     {
         var steps = SetupPlan.Steps(Choices(Reach.Free, "anna", apps: ["matfile", "matdo"]), new HashSet<string>(), NameOf);
         Assert.Equal(
-            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "app:matdo", "address"],
+            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "app:matdo", "address", "reach"],
             steps.Select(s => s.Key));
         Assert.Equal(
-            ["App manager (MatDock)", "Web addresses and HTTPS (Matcad)", "Address updater (Matddns)", "One sign-in for all apps (MatIdentity)", "Mail (MatSMTP)", "MatFile", "MatDo", "Your free address"],
+            ["App manager (MatDock)", "Web addresses and HTTPS (Matcad)", "Address updater (Matddns)", "One sign-in for all apps (MatIdentity)", "Mail (MatSMTP)", "MatFile", "MatDo", "Your free address", SetupPlan.ReachLabel],
             steps.Select(s => s.Label));
     }
 
@@ -165,7 +165,7 @@ public class SetupTests
     {
         var steps = SetupPlan.Steps(Choices(Reach.Free, "anna", apps: ["matfile"]), new HashSet<string>(), NameOf, handOver: true);
         Assert.Equal(
-            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "signin", "address"],
+            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "signin", "address", "reach"],
             steps.Select(s => s.Key));
         Assert.Equal(SetupPlan.SignInKind, steps.Single(s => s.Key == SetupPlan.SignInKey).Kind);
         Assert.DoesNotContain(SetupPlan.Steps(Choices(Reach.Home), new HashSet<string>(), NameOf), s => s.Kind == SetupPlan.SignInKind);

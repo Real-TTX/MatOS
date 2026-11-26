@@ -56,7 +56,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - The account of the first start is the one sign-in afterwards: MatIdentity gets the same e-mail and password
 - A short tour of the home screen on the first visit
 - Your **domain** and your **DNS provider** (Cloudflare, Hetzner, Netcup), asked once: Matcad gets one wildcard certificate through the
-  DNS challenge and a route `app.example.com` per app, Matddns keeps the DNS records on your home IP
+  DNS challenge and a route `app.example.com` per app, Matddns keeps the DNS records on your home IP (or on your fixed IP, if you have one);
+  when the router does not let the connections in, MatOS takes the tunnel of MatOS Services instead, under the same addresses
 - Everything the wizard created carries a **Managed by matos** badge in the engine
 
 **Store**
@@ -203,7 +204,22 @@ Open **http://localhost:8030** and the assistant of the first start takes over, 
    your own domain with the account of its DNS provider, or only at home. *Advanced* has the engines and the address of this computer.
 4. **Pick your first apps** (or skip it: the store has them all).
 5. **Set up MatOS**: one button. A calm screen shows every step (the app manager, web addresses and HTTPS, the address updater, one sign-in
-   for all apps, mail, your apps, your address) as it happens, with *Try again* and the details for a step that did not work.
+   for all apps, mail, your apps, your address) as it happens, with *Try again* and the details for a step that did not work. The last step
+   checks whether your apps can be reached from the internet, and the end says it in one sentence.
+
+### Your own domain
+
+With your own domain (Cloudflare, Hetzner or Netcup; for Netcup the customer number, the API key and the API password of the CCP), the
+assistant asks one more question: **does your internet connection have a fixed IP address?** *No, it changes*, *I'm not sure* (the default)
+or *Yes, it is fixed*. Most home connections change their address now and then; unless you say *Yes*, MatOS keeps your domain on it by itself
+(Matddns is the DynDNS client: it notices a new address and updates the records). With *Yes* you enter the address (MatOS fills in the one
+it sees, when it knows it), and the records point there and stay put. Settings, General changes the answer at any time.
+
+Then MatOS checks whether your apps can be reached from the internet, and it **picks the way in by itself**: directly when your router lets
+the ports 80 and 443 through to this computer, else through the tunnel of MatOS Services, which needs no router settings. The addresses of your
+apps are the same either way, and MatOS checks again every day and switches when something changed. You see one status ("Your apps can be
+reached from anywhere", or "only at home" with what to do about it, a FRITZ!Box included); Settings, Address has the details and *Only
+through my router* for those who want to forward the ports themselves.
 
 Then your home screen opens with a short tour. The same e-mail and password sign you in afterwards, also when MatIdentity (the one sign-in) is
 there. To change the setup later: Settings, *Setup wizard*. An update is `docker compose pull && docker compose up -d`; everything lives in the

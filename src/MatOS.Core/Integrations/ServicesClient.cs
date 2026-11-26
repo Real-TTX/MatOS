@@ -179,6 +179,67 @@ public sealed partial class ServicesClient
         return result.Unreachable || result.Error is not null ? Fail<bool>(result) : ServicesResult<bool>.Of(true);
     }
 
+    // ------------------------------------------------------------------ reachability and own domains
+
+    /// <summary>
+    /// Lets the service try the web ports of this connection from outside (<c>POST /api/v1/ports/check</c>, anonymous; with the key when there is one):
+    /// which of 80 and 443 answer on IPv4 and IPv6, and whether Caddy answers. <c>429</c> is <c>too-many-checks</c>.
+    /// </summary>
+    public async Task<ServicesResult<PortCheck>> CheckPortsAsync(string? key, int? port = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject();
+        if (port is { } p)
+        {
+            body["port"] = p;
+        }
+
+        var result = await SendAsync(HttpMethod.Post, "api/v1/ports/check", body, key, TimeSpan.FromSeconds(30), ct);
+        if (result.Value is not JsonObject answer)
+        {
+            return Fail<PortCheck>(result);
+        }
+
+        var ports = (answer["ports"] as JsonArray)?.OfType<JsonObject>()
+            .Where(o => o["port"] is JsonValue)
+            .Select(o => new PortState(o["port"]!.GetValue<int>(), Text(o["ipv4"]), Text(o["ipv6"]), Text(o["web"])))
+            .ToList() ?? [];
+        return ServicesResult<PortCheck>.Of(new PortCheck(Text(answer["ipv4"]), Text(answer["ipv6"]),
+            answer["checkedAt"] is JsonValue at && at.TryGetValue<DateTime>(out var checkedAt) ? checkedAt : null, ports));
+    }
+
+    /// <summary>
+    /// Registers an own domain for the tunnel of this install (<c>POST /api/v1/instance/domains</c>): the service carries it once <c>*.domain</c> is a CNAME to
+    /// the tunnel name. Returns the status (<c>pending</c>, <c>verified</c>, <c>failed</c>).
+    /// </summary>
+    public async Task<ServicesResult<string>> AddDomainAsync(string key, string domain, CancellationToken ct = default)
+        => StatusOf(await SendAsync(HttpMethod.Post, "api/v1/instance/domains", new JsonObject { ["domain"] = domain }, key, TimeSpan.FromSeconds(10), ct), domain);
+
+    /// <summary>The status of an own domain at the service (<c>GET /api/v1/instance/domains/{domain}</c>).</summary>
+    public async Task<ServicesResult<string>> DomainStatusAsync(string key, string domain, CancellationToken ct = default)
+        => StatusOf(await SendAsync(HttpMethod.Get, $"api/v1/instance/domains/{Uri.EscapeDataString(domain)}", null, key, TimeSpan.FromSeconds(10), ct), domain);
+
+    /// <summary>Takes an own domain off the tunnel (<c>DELETE /api/v1/instance/domains/{domain}</c>); a domain the service does not know counts as removed.</summary>
+    public async Task<ServicesResult<bool>> RemoveDomainAsync(string key, string domain, CancellationToken ct = default)
+    {
+        var result = await SendAsync(HttpMethod.Delete, $"api/v1/instance/domains/{Uri.EscapeDataString(domain)}", null, key, TimeSpan.FromSeconds(10), ct);
+        return result.Status == HttpStatusCode.NotFound || (!result.Unreachable && result.Error is null) ? ServicesResult<bool>.Of(true) : Fail<bool>(result);
+    }
+
+    /// <summary>The status of a domain in an answer: <c>{status}</c>, <c>{domain, status}</c> or a list of them.</summary>
+    private static ServicesResult<string> StatusOf(ServicesResult<JsonNode> result, string domain)
+    {
+        var item = result.Value switch
+        {
+            JsonArray list => list.OfType<JsonObject>().FirstOrDefault(o => string.Equals(Text(o["domain"]), domain, StringComparison.OrdinalIgnoreCase)),
+            JsonObject { } o when o["domains"] is JsonArray list => list.OfType<JsonObject>().FirstOrDefault(d => string.Equals(Text(d["domain"]), domain, StringComparison.OrdinalIgnoreCase)),
+            JsonObject o => o,
+            _ => null,
+        };
+        return item is not null && Text(item["status"]) is { } status ? ServicesResult<string>.Of(status) : Fail<string>(result);
+    }
+
+    private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) && text.Length > 0 ? text : null;
+
     // ------------------------------------------------------------------ plumbing
 
     private static ServicesResult<HostedInstance> InstanceOf(ServicesResult<JsonNode> result)
@@ -289,6 +350,7 @@ public sealed partial class ServicesClient
         "too-many-requests" => "The address service is busy with requests from your connection. Please wait a minute and try again.",
         "no-public-ip" => "The address service does not know the public IP of this machine yet. Keep the tunnel for a few minutes and try again.",
         "invalid-mode" => "The address service does not know this mode.",
+        "too-many-checks" => "The address service checked this connection a moment ago. Please wait a minute and check again.",
         "unauthorized" => "The address service does not know this installation any more: its key was refused.",
         null => UnreachableMessage,
         _ => $"The address service refused it ({code}).",

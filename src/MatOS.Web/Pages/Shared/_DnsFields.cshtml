@@ -36,4 +36,27 @@
             <input id="DnsZone" name="DnsZone" class="mat-input" value="@Model.Zone" placeholder="example.com" />
         </mat-field>
     </div>
+
+    @* Where the records point (DnsIp): "I'm not sure" is the default and means the same as "No": MatOS keeps the address up to date (Matddns, the DynDNS client). *@
+    <div class="mat-stack" data-show-if="#DnsProvider" @(Model.Provider == "" ? "hidden" : "")>
+        <fieldset class="mat-field mat-fieldset">
+            <legend class="mat-legend">Does your internet connection have a fixed IP address?</legend>
+            <div class="mat-choices">
+                @foreach (var (value, label) in DnsIp.Answers)
+                {
+                    <label class="mat-choice">
+                        <input type="radio" name="@DnsFormModel.IpAnswerField" value="@value" checked="@(Model.IpAnswer == value)" />
+                        <span class="mat-choice__text"><strong>@label</strong></span>
+                    </label>
+                }
+            </div>
+            <span class="mat-hint">@DnsIp.Hint</span>
+        </fieldset>
+        <div data-show-if="@DnsFormModel.IpAnswerField" data-show-value="@DnsIp.Fixed" @(Model.IpAnswer == DnsIp.Fixed ? "" : "hidden")>
+            <mat-field label="Your fixed IP address" for-id="@DnsFormModel.FixedIpField" required="true"
+                       hint="@(Model.FixedIp is null ? "The public address of your internet connection, like your provider gave it to you." : "Filled in with the address MatOS sees. Check it against what your provider gave you.")">
+                <input id="@DnsFormModel.FixedIpField" name="@DnsFormModel.FixedIpField" class="mat-input" value="@Model.FixedIp" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="203.0.113.7" />
+            </mat-field>
+        </div>
+    </div>
 </div>

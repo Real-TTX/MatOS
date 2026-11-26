@@ -272,7 +272,7 @@ public sealed class HostedAddressService
     public async Task SyncAsync(Action<string> log, CancellationToken ct)
     {
         var config = await _config.GetAsync(ct);
-        var tunnelWanted = config.Hosted is { IsDirect: false } && config.UsesHostedAddress;
+        var tunnelWanted = config.TunnelWanted;
         if (_tunnel.State.Wanted != tunnelWanted)
         {
             _tunnel.Refresh();

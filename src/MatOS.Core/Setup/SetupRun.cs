@@ -70,6 +70,7 @@ public static partial class SetupProgress
     {
         SetupPlan.EngineKind => TimeSpan.FromSeconds(75),
         SetupPlan.AppKind => TimeSpan.FromSeconds(60),
+        SetupPlan.ReachKind => TimeSpan.FromSeconds(40),
         _ => TimeSpan.FromSeconds(20),
     };
 
@@ -156,7 +157,7 @@ public static partial class SetupProgress
                 : FirstSentence(text, Has);
         }
 
-        if (kind == SetupPlan.SignInKind)
+        if (kind is SetupPlan.SignInKind or SetupPlan.DnsKind or SetupPlan.ReachKind)
         {
             // Its own words already say what happened (AppJobs.HandOverOwner); no download or port is involved.
             return FirstSentence(text, Has);

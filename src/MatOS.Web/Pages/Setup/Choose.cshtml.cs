@@ -3,6 +3,7 @@ using MatOS.Core.Configuration;
 using MatOS.Core.Engines;
 using MatOS.Core.Entities;
 using MatOS.Core.Apps;
+using MatOS.Core.Integrations;
 using MatOS.Core.Setup;
 using MatOS.Web.Support;
 using Microsoft.AspNetCore.Mvc;
@@ -36,6 +37,11 @@ public class ChooseModel : PageModel
     [BindProperty] public string? DnsProvider { get; set; }
     [BindProperty] public string? DnsZone { get; set; }
     [BindProperty] public Dictionary<string, string?> DnsCredentials { get; set; } = new();
+    [BindProperty] public string? DnsIp { get; set; }
+    [BindProperty] public string? DnsFixedIp { get; set; }
+
+    /// <summary>An own domain under Advanced: MatOS chooses how it is reached from outside (the default), or only through the router.</summary>
+    [BindProperty] public string RoutePolicy { get; set; } = DomainRoute.Auto;
     [BindProperty] public bool InstallMatcad { get; set; } = true;
     [BindProperty] public bool InstallMatddns { get; set; } = true;
     [BindProperty] public bool InstallMatIdentity { get; set; } = true;
@@ -109,11 +115,11 @@ public class ChooseModel : PageModel
 
         // An engine that is there already has its box ticked and fixed, and a fixed box is not sent: it counts as chosen.
         await LoadInstalledAsync();
-        var choices = Choices();
         var provider = DnsProviders.Find(DnsProvider);
         var credentials = DnsForm.CredentialsOf(DnsProvider, DnsCredentials);
         if (Reach == MatOS.Core.Setup.Reach.Domain && provider is not null)
         {
+            DnsFormModel.ReadIp(provider.Id, DnsIp, DnsFixedIp, ModelState);
             var stored = string.Equals(config.Dns.Provider, provider.Id, StringComparison.OrdinalIgnoreCase)
                 ? await _config.GetDnsCredentialsAsync(ct)
                 : new Dictionary<string, string>();
@@ -123,6 +129,7 @@ public class ChooseModel : PageModel
             }
         }
 
+        var choices = Choices();
         if (ModelState.IsValid)
         {
             var started = await _setup.StartAsync(choices, new SetupDns(provider?.Id ?? "none", DnsZone, credentials), ct);
@@ -150,7 +157,12 @@ public class ChooseModel : PageModel
         if (InstallMatddns) { engines.Add(EngineIds.Matddns); }
         if (InstallMatIdentity) { engines.Add(EngineIds.MatIdentity); }
         if (InstallMatSmtp) { engines.Add(EngineIds.MatSmtp); }
-        return new SetupChoices(Reach, Name, BaseDomain, PublicHost, engines, Apps.Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().ToList());
+        // Where the records of an own domain point: only with a DNS account (without one, nothing writes records).
+        var ip = Reach == MatOS.Core.Setup.Reach.Domain && DnsProviders.Find(DnsProvider) is not null
+            ? MatOS.Core.Configuration.DnsIp.FromForm(DnsIp, DnsFixedIp).Ip ?? MatOS.Core.Configuration.DnsIp.Default
+            : null;
+        return new SetupChoices(Reach, Name, BaseDomain, PublicHost, engines, Apps.Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().ToList(), ip,
+            DomainRoute.NormalizePolicy(RoutePolicy));
     }
 
     private async Task LoadInstalledAsync()
@@ -166,8 +178,15 @@ public class ChooseModel : PageModel
         Featured = pickable.Where(SetupPlan.IsFeatured).ToList();
         More = pickable.Where(a => !SetupPlan.IsFeatured(a)).ToList();
         Dns = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct));
-        OwnAddress = config.Hosted?.Address;
-        if (config.Hosted is { } hosted)
+        if (Request.HasFormContentType)
+        {
+            // After a problem: what the person answered stays.
+            Dns = Dns.WithIp(DnsIp, DnsFixedIp);
+        }
+
+        // A tunnel name MatOS registered for an own domain is not an address the person chose.
+        OwnAddress = config.Hosted is { ForDomain: false } own ? own.Address : null;
+        if (config.Hosted is { ForDomain: false } hosted)
         {
             // The name is this MatOS's own: it stays (a check would answer "taken", it is taken by this MatOS).
             Name = hosted.Name;

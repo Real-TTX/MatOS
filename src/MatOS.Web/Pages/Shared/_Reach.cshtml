@@ -1,0 +1,42 @@
+@using MatOS.Web.Support
+@model ReachView
+
+@*
+    Whether the apps can be reached from the internet, in one sentence (docs/ARCHITECTURE.md "Reached from anywhere"). js/matos.js (data-reach) asks
+    /api/reach for the status, and "Check again" queues the check and asks until the status changed; the sentence is a live region. For an own domain that is
+    reached only at home: the ports to forward on the router, a short how-to for a FRITZ!Box, and why the certificates work anyway with a DNS account.
+*@
+<div class="mat-stack" data-reach="@MatOS.Web.Infrastructure.ReachEndpoints.StatusPath" data-reach-check="@MatOS.Web.Infrastructure.ReachEndpoints.CheckPath">
+    <div class="mat-alert mat-alert--@Model.Tone" data-reach-alert>
+        <icon name="globe" />
+        <div class="mat-alert__body" role="status" aria-live="polite" data-reach-sentence>@Model.Sentence</div>
+    </div>
+
+    <div class="mat-stack" data-reach-forward hidden="@(!Model.Forwarding)">
+        <p>
+            To reach them from anywhere, forward the ports 80 and 443 on your router to this computer,
+            <strong data-reach-lan>@(Model.Lan ?? "its address in your home network")</strong>.
+        </p>
+        <details class="mat-collapse">
+            <summary><span>How to do it on a FRITZ!Box</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+            <div class="mat-accordion__body">
+                <ol class="mat-stack">
+                    <li>Open <code>http://fritz.box</code> in your browser and sign in.</li>
+                    <li>Go to Internet, Permit Access, Port Sharing (Internet &gt; Freigaben &gt; Portfreigaben).</li>
+                    <li>Choose Add Device for Sharing (Gerät für Freigaben hinzufügen) and pick this computer.</li>
+                    <li>Choose New Sharing (Neue Freigabe), then Port Sharing (Portfreigabe): port 80, protocol TCP. Do the same for port 443.</li>
+                    <li>Save (OK, then Übernehmen), and press Check again below.</li>
+                </ol>
+            </div>
+        </details>
+        <p class="mat-hint" data-reach-dns hidden="@(!Model.DnsAccount)">
+            With the account of your DNS provider the HTTPS certificates work even without forwarding: only reaching your apps from outside needs it.
+        </p>
+    </div>
+
+    <div class="mat-btn-row mat-btn-row--plain">
+        <button type="button" class="mat-btn mat-btn--secondary" data-reach-again disabled="@Model.Checking">
+            <icon name="refresh" /><span data-reach-label>@(Model.Checking ? "Checking ..." : "Check again")</span>
+        </button>
+    </div>
+</div>

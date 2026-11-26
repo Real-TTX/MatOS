@@ -2,6 +2,7 @@
 @using MatOS.Core.Configuration
 @using MatOS.Core.Integrations
 @using MatOS.Web.Infrastructure
+@using MatOS.Web.Support
 @model MatOS.Web.Pages.Settings.AddressModel
 @{
     ViewData["Title"] = "Address";
@@ -14,7 +15,61 @@
 
 <partial name="_SettingsTabs" model="@("address")" />
 
-@if (hosted is null)
+@if (Model.Reach is { } reach)
+{
+    @* One status in plain words; how MatOS gets the visitors here (the route) is a detail. *@
+    <section class="mat-stack mat-stack--sm" aria-labelledby="group-reach">
+        <h2 class="mat-itemlist__header" id="group-reach">From the internet</h2>
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack">
+                <partial name="_Reach" model="reach" />
+                @if (reach.Kind == ReachView.Domain)
+                {
+                    <details class="mat-collapse">
+                        <summary><span>Details</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+                        <div class="mat-accordion__body mat-stack">
+                            <dl class="mat-kv">
+                                <dt>Route</dt>
+                                <dd>@reach.RouteText</dd>
+                                @if (hosted is not null && Model.TunnelNameOnly)
+                                {
+                                    <dt>Tunnel name</dt>
+                                    <dd><code>@hosted.Address</code></dd>
+                                }
+                            </dl>
+                            <form method="post" asp-page-handler="Policy" class="mat-form" novalidate>
+                                <fieldset class="mat-field mat-fieldset">
+                                    <legend class="mat-legend">Reaching your domain from outside</legend>
+                                    <div class="mat-choices">
+                                        <label class="mat-choice">
+                                            <input type="radio" name="policy" value="@DomainRoute.Auto" checked="@(Model.Config.RoutePolicy != DomainRoute.Direct)" />
+                                            <span class="mat-choice__text"><strong>MatOS takes care of it</strong><small>Through your router when it lets the connections in, else through MatOS Services.</small></span>
+                                        </label>
+                                        <label class="mat-choice">
+                                            <input type="radio" name="policy" value="@DomainRoute.Direct" checked="@(Model.Config.RoutePolicy == DomainRoute.Direct)" />
+                                            <span class="mat-choice__text"><strong>Only through my router</strong><small>You forward the ports 80 and 443 to this computer yourself.</small></span>
+                                        </label>
+                                    </div>
+                                </fieldset>
+                                <div class="mat-btn-row">
+                                    <button type="submit" class="mat-btn mat-btn--secondary"><icon name="check" /><span>Save</span></button>
+                                </div>
+                            </form>
+                        </div>
+                    </details>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@if (hosted is not null && Model.TunnelNameOnly)
+{
+    <p class="mat-muted">
+        Your apps live under @Model.Config.BaseDomain. MatOS keeps them reachable from anywhere by itself; the Details above say how.
+    </p>
+}
+else if (hosted is null)
 {
     @* ------------------------------------------------------------ no free address yet *@
     <form method="post" asp-page-handler="Register" class="mat-form" novalidate>
@@ -81,8 +136,6 @@ else
                     <dd><a href="@ProxyPublisher.UrlFor(ProxyPublisher.SelfHost(hosted.Address))" target="_blank" rel="noopener">@ProxyPublisher.SelfHost(hosted.Address)</a></dd>
                     <dt>Your apps</dt>
                     <dd><code>https://&lt;app&gt;.@hosted.Address</code></dd>
-                    <dt>Way in</dt>
-                    <dd>@(hosted.IsDirect ? "Direct: visitors come straight to this machine, your router forwards the ports 80 and 443." : "Tunnel: visitors come through the MatOS address service. Works behind every router.")</dd>
                     <dt>Since</dt>
                     <dd>@Format.DateTimeLocal(hosted.RegisteredAt)</dd>
                     @if (Model.Remote is { } remote)
@@ -115,6 +168,10 @@ else
         </div>
     </section>
 
+    @* How visitors come here (the tunnel or directly): MatOS picks it by itself after its check; the details are for the curious. *@
+    <details class="mat-collapse" open="@(Model.Check is not null || Model.CheckError is not null)">
+    <summary><span>Details: @(hosted.IsDirect ? "directly through your router" : "through the tunnel of MatOS Services")</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+    <div class="mat-accordion__body mat-stack">
     @if (!hosted.IsDirect)
     {
         @* The state of the tunnel moves: this part is fetched again every few seconds (js/matos.js, data-live). *@
@@ -217,6 +274,9 @@ else
             </div>
         </div>
     </section>
+
+    </div>
+    </details>
 
     <section class="mat-stack mat-stack--sm" aria-labelledby="group-give-the-name-back">
         <h2 class="mat-itemlist__header" id="group-give-the-name-back">Give the name back</h2>

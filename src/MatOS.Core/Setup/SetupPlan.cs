@@ -28,7 +28,17 @@ public static class Reach
 /// <param name="PublicHost">The address of this machine (Advanced); empty: the one of the browser.</param>
 /// <param name="Engines">The catalog ids of the engines to install; MatDock is always one of them.</param>
 /// <param name="Apps">The catalog ids of the first apps.</param>
-public sealed record SetupChoices(string Reach, string? Name, string? BaseDomain, string? PublicHost, IReadOnlySet<string> Engines, IReadOnlyList<string> Apps);
+/// <param name="Ip">An own domain with a DNS account: where its records point (<see cref="DnsIp"/>); null without a DNS account (no records are written).</param>
+/// <param name="RoutePolicy">An own domain: how it is reached from outside (<see cref="DomainRoute"/>: MatOS chooses, or only through the router).</param>
+public sealed record SetupChoices(
+    string Reach,
+    string? Name,
+    string? BaseDomain,
+    string? PublicHost,
+    IReadOnlySet<string> Engines,
+    IReadOnlyList<string> Apps,
+    DnsIp? Ip = null,
+    string RoutePolicy = DomainRoute.Auto);
 
 /// <summary>A problem of the choices: the field it belongs to (empty: the whole form) and what to do, in plain words.</summary>
 public sealed record SetupProblem(string Field, string Message);
@@ -47,6 +57,17 @@ public static partial class SetupPlan
     public const string AddressKind = "address";
     public const string ConnectKind = "connect";
     public const string SignInKind = "signin";
+    public const string DnsKind = "dns";
+    public const string ReachKind = "reach";
+
+    /// <summary>The key of the step that writes the DNS records of an own domain.</summary>
+    public const string DnsKey = "dns";
+
+    /// <summary>The key of the step that checks whether the apps can be reached from the internet (and picks the way in).</summary>
+    public const string ReachKey = "reach";
+
+    /// <summary>The line of <see cref="ReachKey"/>.</summary>
+    public const string ReachLabel = "Checking whether your apps can be reached from the internet";
 
     /// <summary>The key of the step of the free address.</summary>
     public const string AddressKey = "address";
@@ -208,9 +229,22 @@ public static partial class SetupPlan
             steps.Add(new PlannedStep(SignInKey, SignInKind, "Your sign-in for all apps", null));
         }
 
+        // An own domain with a DNS account: Matddns writes its records, pointing where the person said (DnsIp).
+        var engines = EnginesOf(choices.Engines).Concat(installed.Where(EngineIds.IsEngine)).ToHashSet();
+        if (choices.Reach == Reach.Domain && choices.Ip is { } ip && engines.Contains(EngineIds.Matddns))
+        {
+            steps.Add(new PlannedStep(DnsKey, DnsKind, ip.Sentence, null));
+        }
+
         if (choices.Reach == Reach.Free)
         {
             steps.Add(new PlannedStep(AddressKey, AddressKind, "Your free address", null));
+        }
+
+        // Last: whether the apps can be reached from outside. Only once Matcad is there (before, nothing answers on 80 and 443), and never at home.
+        if (choices.Reach is Reach.Free or Reach.Domain && engines.Contains(EngineIds.Matcad))
+        {
+            steps.Add(new PlannedStep(ReachKey, ReachKind, ReachLabel, null));
         }
 
         return steps;
@@ -247,7 +281,10 @@ public static partial class SetupPlan
             _ => string.Empty,
         };
         // "then MatFile, MatDo and MatDrive, and makes ...": a comma closes the list of the apps before the second half of the sentence.
-        return what + (apps.Count > 0 && where.StartsWith(" and ", StringComparison.Ordinal) ? "," : string.Empty) + where + ".";
+        var sentence = what + (apps.Count > 0 && where.StartsWith(" and ", StringComparison.Ordinal) ? "," : string.Empty) + where + ".";
+
+        // An own domain with a DNS account: where its records point, in a second sentence.
+        return choices.Reach == Reach.Domain && !string.IsNullOrWhiteSpace(choices.BaseDomain) && choices.Ip is { } ip ? $"{sentence} {ip.Sentence}." : sentence;
     }
 
     private static string Join(IReadOnlyList<string> names) => names.Count switch

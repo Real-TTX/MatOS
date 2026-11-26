@@ -141,6 +141,26 @@
                         <input asp-for="PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
                     </mat-field>
                 }
+                @* An own domain: MatOS picks the route itself (through your router when the ports answer, else through MatOS Services); the addresses are the same. *@
+                <fieldset class="mat-field mat-fieldset" data-show-if="Reach" data-show-value="@Reach.Domain" hidden="@(Model.Reach != Reach.Domain)">
+                    <legend class="mat-legend">Reaching your domain from outside</legend>
+                    <div class="mat-choices">
+                        <label class="mat-choice">
+                            <input type="radio" name="RoutePolicy" value="@MatOS.Core.Integrations.DomainRoute.Auto" checked="@(Model.RoutePolicy != MatOS.Core.Integrations.DomainRoute.Direct)" />
+                            <span class="mat-choice__text">
+                                <strong>MatOS takes care of it</strong>
+                                <small>Through your router when it lets the connections in, else through MatOS Services. Works without router settings.</small>
+                            </span>
+                        </label>
+                        <label class="mat-choice">
+                            <input type="radio" name="RoutePolicy" value="@MatOS.Core.Integrations.DomainRoute.Direct" checked="@(Model.RoutePolicy == MatOS.Core.Integrations.DomainRoute.Direct)" />
+                            <span class="mat-choice__text">
+                                <strong>Only through my router</strong>
+                                <small>You forward the ports 80 and 443 to this computer yourself.</small>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
                 <fieldset class="mat-field mat-fieldset">
                     <legend class="mat-legend">The engines MatOS installs</legend>
                     <div class="mat-choices ob-engines">

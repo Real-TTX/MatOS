@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using MatOS.Core.Configuration;
+using MatOS.Core.Data;
 using MatOS.Core.Entities;
 using MatOS.Core.Integrations;
 using MatOS.Core.Jobs;
@@ -15,9 +16,11 @@ public class IndexModel : PageModel
     private readonly JobService _jobs;
     private readonly ProxyPublisher _proxy;
     private readonly DnsPublisher _dns;
+    private readonly MatOSDbContext _db;
 
-    public IndexModel(SystemConfigService config, JobService jobs, ProxyPublisher proxy, DnsPublisher dns)
+    public IndexModel(SystemConfigService config, JobService jobs, ProxyPublisher proxy, DnsPublisher dns, MatOSDbContext db)
     {
+        _db = db;
         _config = config;
         _jobs = jobs;
         _proxy = proxy;
@@ -30,8 +33,13 @@ public class IndexModel : PageModel
     [BindProperty] public string? DnsProvider { get; set; }
     [BindProperty] public string? DnsZone { get; set; }
     [BindProperty] public Dictionary<string, string?> DnsCredentials { get; set; } = new();
+    [BindProperty] public string? DnsIp { get; set; }
+    [BindProperty] public string? DnsFixedIp { get; set; }
 
     public DnsFormModel Dns { get; private set; } = new();
+
+    /// <summary>Whether the apps can be reached from the internet; null without an address on the internet.</summary>
+    public ReachView? Reach { get; private set; }
 
     [TempData] public string? StatusMessage { get; set; }
 
@@ -67,7 +75,7 @@ public class IndexModel : PageModel
             BackupRetention = config.Backups.Retention,
             BackupStopContainers = config.Backups.StopContainers,
         };
-        Dns = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct));
+        Dns = await DnsFormAsync(config);
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -95,6 +103,8 @@ public class IndexModel : PageModel
             }
         }
 
+        var ip = DnsFormModel.ReadIp(provider?.Id, DnsIp, DnsFixedIp, ModelState);
+
         // A free address of the address service is a domain without a DNS account, and only this install's own (Settings, Address gets it).
         if (HostedAddressService.CheckDomain(before, baseDomain, provider?.Id) is { } hostedProblem)
         {
@@ -103,16 +113,18 @@ public class IndexModel : PageModel
 
         if (!ModelState.IsValid)
         {
-            Dns = DnsFormModel.From(before, await _config.GetDnsCredentialsAsync(ct));
+            Dns = await DnsFormAsync(before);
             return Page();
         }
 
         var dnsChanged = !string.Equals(before.Dns.Provider, provider?.Id ?? "none", StringComparison.OrdinalIgnoreCase)
             || !string.Equals(before.Dns.Zone, string.IsNullOrWhiteSpace(DnsZone) ? null : DnsZone.Trim(), StringComparison.OrdinalIgnoreCase)
-            || credentials.Values.Any(v => !string.IsNullOrWhiteSpace(v));
+            || credentials.Values.Any(v => !string.IsNullOrWhiteSpace(v))
+            || before.Dns.Ip != ip;
         var domainChanged = !string.Equals(before.BaseDomain, baseDomain, StringComparison.OrdinalIgnoreCase);
 
         await _config.SetDnsAsync(provider?.Id ?? "none", DnsZone, credentials, ct);
+        await _config.SetDnsIpAsync(ip, ct);
         await _config.UpdateAsync(c =>
         {
             c.InstanceName = Input.InstanceName.Trim();
@@ -132,5 +144,14 @@ public class IndexModel : PageModel
 
         StatusMessage = "Settings saved.";
         return RedirectToPage();
+    }
+
+    /// <summary>The DNS part of the form (the fixed address prefilled with the IP Matddns sees, what was entered after a problem) and the reachability.</summary>
+    private async Task<DnsFormModel> DnsFormAsync(SystemConfig config)
+    {
+        var ct = HttpContext.RequestAborted;
+        Reach = string.IsNullOrWhiteSpace(config.BaseDomain) ? null : await ReachView.BuildAsync(config, _db, ct);
+        var form = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct), config.Dns.Ip.IsFixed ? null : await _dns.DetectPublicIpAsync(ct));
+        return Request.HasFormContentType ? form.WithIp(DnsIp, DnsFixedIp) : form;
     }
 }

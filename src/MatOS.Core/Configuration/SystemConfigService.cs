@@ -142,6 +142,14 @@ public sealed class SystemConfigService
             }
         }, ct);
 
+    /// <summary>Saves where the DNS records point (<see cref="DnsIp"/>): the address of the internet connection, or one fixed address.</summary>
+    public Task SetDnsIpAsync(DnsIp ip, CancellationToken ct = default)
+        => UpdateAsync(c =>
+        {
+            c.Dns.IpMode = ip.IsFixed ? DnsIp.Fixed : DnsIp.Dynamic;
+            c.Dns.FixedIp = ip.IsFixed ? ip.FixedIp : null;
+        }, ct);
+
     /// <summary>
     /// Saves the DNS account. A credential that is left empty keeps the stored value (the form never shows secrets), and <c>none</c> removes
     /// the credentials.

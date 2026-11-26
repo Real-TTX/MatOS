@@ -212,11 +212,11 @@ public sealed class TunnelClient : BackgroundService
         SetDisconnected();
     }
 
-    /// <summary>The key when the tunnel should be up: a free address, used as the base domain, in tunnel mode. Null otherwise.</summary>
+    /// <summary>The key when the tunnel should be up (<see cref="SystemConfig.TunnelWanted"/>): the free address in tunnel mode, or an own domain through the tunnel. Null otherwise.</summary>
     private async Task<string?> WantedKeyAsync(CancellationToken ct)
     {
         var config = await _config.GetAsync(ct);
-        return config.Hosted is { IsDirect: false } && config.UsesHostedAddress ? await _config.GetHostedKeyAsync(ct) : null;
+        return config.TunnelWanted ? await _config.GetHostedKeyAsync(ct) : null;
     }
 
     private async Task RunControlAsync(string key, CancellationToken session, CancellationToken stopping, Action connected)

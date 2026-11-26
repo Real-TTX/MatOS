@@ -133,7 +133,12 @@ public sealed class SetupService
 
             case Reach.Domain:
                 await _config.SetDnsAsync(dns.Provider, dns.Zone, dns.Credentials, ct);
-                await _config.UpdateAsync(c => c.BaseDomain = choices.BaseDomain!.Trim().Trim('.').ToLowerInvariant(), ct);
+                await _config.SetDnsIpAsync(choices.Ip ?? DnsIp.Default, ct);
+                await _config.UpdateAsync(c =>
+                {
+                    c.BaseDomain = choices.BaseDomain!.Trim().Trim('.').ToLowerInvariant();
+                    c.RoutePolicy = DomainRoute.NormalizePolicy(choices.RoutePolicy);
+                }, ct);
                 break;
 
             default:
@@ -312,6 +317,12 @@ public sealed class SetupService
 
             case SetupPlan.SignInKind:
                 return (await _jobs.EnqueueAsync(JobKind.Provision, "Your sign-in for all apps", null, AppJobs.HandOverOwner(), ct), null);
+
+            case SetupPlan.DnsKind:
+                return (await _jobs.EnqueueAsync(JobKind.Provision, "The DNS records of your domain", null, AppJobs.DomainRecords(), ct), null);
+
+            case SetupPlan.ReachKind:
+                return (await _jobs.EnqueueAsync(JobKind.Provision, AppJobs.CheckReachTitle, null, AppJobs.CheckReach(), ct), null);
 
             default:
                 return (await _jobs.EnqueueAsync(JobKind.Provision, "Your free address", null, AppJobs.FreeAddress(), ct), null);
