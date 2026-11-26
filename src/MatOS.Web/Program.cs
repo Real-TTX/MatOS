@@ -64,6 +64,11 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddMatOSCore();
 builder.Services.AddMatOSWorkers();
+// The look of MatOS's sign-in at MatIdentity: the accent, the planet and the default wallpaper (Core/Integrations/SelfBrand.cs).
+builder.Services.AddSingleton(new MatOS.Core.Integrations.SelfBrandAssets(
+    MatOS.Web.Support.Ui.App.Accent,
+    Path.Combine(builder.Environment.WebRootPath, "img", "logo.svg"),
+    Path.Combine(builder.Environment.WebRootPath, "img", "wallpapers", "orbit-light.jpg")));
 builder.Services.AddScoped<MatOS.Web.Support.AppUrls>();
 builder.Services.AddScoped<MatOS.Web.Support.HomeContributions>();
 builder.Services.AddScoped<MatOS.Web.Support.EngineOverview>();
@@ -121,6 +126,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/Account/External");
     options.Conventions.AllowAnonymousToPage("/Account/Logout");
+    options.Conventions.AllowAnonymousToPage("/Account/SignedOut");
     options.Conventions.AllowAnonymousToPage("/Account/AccessDenied");
     options.Conventions.AllowAnonymousToPage("/Share/View");
 

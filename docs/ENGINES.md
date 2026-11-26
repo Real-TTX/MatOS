@@ -158,6 +158,21 @@ The single sign-on of the family (MatDesign docs/PLATFORM.md, "Sign-in with MatI
 address on the shared network (`http://<container>:<port>/signout-backchannel`), MatOS's own (`http://<its container>:<its port>/signout-backchannel`), or `""` (removes
 it) when there is none; a missing field would leave what MatIdentity has.
 
+**Branded sign-in** (MatIdentity docs/ARCHITECTURE.md "Branded sign-in"; here docs/ARCHITECTURE.md "MatOS's sign-in looks like MatOS"). The same PUT takes `branding`:
+`{ name (1–60), accent: "#rrggbb"?, hideIdentity: bool, logo: { contentType: "image/svg+xml"|"image/png", data: base64 }?, background: { contentType: "image/jpeg"|"image/png"|"image/webp", data: base64 }? }`.
+A missing `branding` keeps it, `null` removes it; inside it `name`, `accent` and `hideIdentity` are replaced together, a missing `logo`/`background` keeps the stored picture and
+`null` removes it. Limits: logo ≤ 256 KiB, background ≤ 2 MiB, the bytes must match the type; anything wrong is `400 { errors: { "branding.*": message } }` and nothing is
+saved. Only the client's manager brands it: `managedBy` must be the client's mark, else `409`. `GET /api/v1/clients[/{id}]` answers
+`branding: { name, accent, hideIdentity, hasLogo, hasBackground, logoContentType, backgroundContentType, logoUrl, backgroundUrl }` or `null`, never the data; the URLs are
+absolute with `?v=<first 16 hex digits of the SHA-256 of the bytes>`. MatIdentity serves them anonymously from its own origin (`/branding/{clientId}/logo`, `/background`,
+`/icon.svg`, `/theme.css`; strong ETag, a year of `immutable` caching with the current `?v`, `nosniff`, a sandboxing CSP for the pictures). When a sign-in belongs to a branded
+client (the `client_id` of the authorize request in `returnUrl`, `?brand=`, or the cookie `mid.brand`, 30 minutes) its pages (Login, Forgot, Reset, TwoFactor, Register,
+Verify, NoAccess, AccessDenied) show the client's logo, name ("Sign in to MatOS"), accent, background, title and icon; with `hideIdentity` nothing of MatIdentity. The reset and
+verify mails carry `&brand=` and, with `hideIdentity`, the client's name. **MatOS** sends `{ name: <instance name>, accent: "#8558ec", hideIdentity: true, logo: img/logo.svg,
+background: img/wallpapers/orbit-light.jpg }` with `managedBy: "matos"` and nothing else (the rest of the client stays), only when the client's `GET` has the field `branding`
+(an older MatIdentity has not; the status stays `apiVersion: 1`) and only what differs (`IdentityLink.BrandSelfAsync`, `MatIdentityClient.BrandAsync`). MatOS's sign-out
+sends `id_token_hint`, so MatIdentity's `/connect/logout` ends the session without asking and returns to `/signout-callback-oidc`.
+
 ## MatSMTP (`ghcr.io/real-ttx/matsmtp`)
 
 The mail relay of the family (MatDesign docs/PLATFORM.md, "Mail through MatSMTP"). Image tags `latest` and `release` from `main`, `nightly` from `dev`. In the container: web **2525**,

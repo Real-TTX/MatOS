@@ -560,6 +560,38 @@ const pages = [
   });
   await phone.ctx.close();
 
+  // MatOS's sign-in looks like MatOS (docs/ARCHITECTURE.md): no word of MatIdentity on the way in or out; the sign-out ends on MatOS's own page.
+  console.log('The sign-in and the sign-out');
+  await check('the signed-out page is MatOS\'s and names no MatIdentity', async () => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const response = await page.goto(BASE + '/Account/SignedOut');
+    expectEqual(response.status(), 200, 'status');
+    expectTrue(!/matidentity/i.test(await page.locator('body').innerText()), 'MatIdentity named');
+    expectTrue(await page.locator('a[href="/Account/Login"]').count() === 1, 'a way to sign in again');
+    await ctx.close();
+  });
+  if (SSO) {
+    await check('the sign-in at MatIdentity looks like MatOS (no MatIdentity in the text or the title)', async () => {
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      await page.goto(BASE + '/Account/Login');
+      await page.waitForURL(u => u.origin !== new URL(BASE).origin);
+      expectTrue(!/matidentity/i.test(await page.locator('body').innerText()), 'MatIdentity named on the page');
+      expectTrue(!/matidentity/i.test(await page.title()), 'MatIdentity in the title: ' + await page.title());
+      await ctx.close();
+    });
+    await check('the sign-out ends on MatOS\'s signed-out page without a page of MatIdentity', async () => {
+      const { ctx, page } = await signedIn();
+      await page.goto(BASE + '/Account/Profile');
+      await Promise.all([
+        page.waitForURL(u => u.origin === new URL(BASE).origin && u.pathname === '/Account/SignedOut', { timeout: 15000 }),
+        page.evaluate(() => document.querySelector('form[action="/Account/Logout"]').requestSubmit()),
+      ]);
+      await ctx.close();
+    });
+  }
+
   await check('no script errors on any page', async () => { expectEqual(errors, [], 'errors'); });
 
   await browser.close();

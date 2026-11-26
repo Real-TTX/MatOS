@@ -15,13 +15,15 @@ public class IndexModel : PageModel
     private readonly JobService _jobs;
     private readonly ProxyPublisher _proxy;
     private readonly DnsPublisher _dns;
+    private readonly IdentityLink _identity;
 
-    public IndexModel(SystemConfigService config, JobService jobs, ProxyPublisher proxy, DnsPublisher dns)
+    public IndexModel(SystemConfigService config, JobService jobs, ProxyPublisher proxy, DnsPublisher dns, IdentityLink identity)
     {
         _config = config;
         _jobs = jobs;
         _proxy = proxy;
         _dns = dns;
+        _identity = identity;
     }
 
     [BindProperty]
@@ -121,6 +123,12 @@ public class IndexModel : PageModel
             c.Backups.Retention = Input.BackupRetention;
             c.Backups.StopContainers = Input.BackupStopContainers;
         }, ct);
+
+        // The sign-in at MatIdentity carries the name of the instance: a new name goes there too (a short call; a failure only leaves the old name there).
+        if (!string.Equals(before.InstanceName, Input.InstanceName.Trim(), StringComparison.Ordinal) && before.Identity is not null)
+        {
+            await _identity.BrandSelfAsync(_ => { }, ct);
+        }
 
         // A new domain or DNS account means new host names, certificates and records: tell Matcad and Matddns. A domain that was removed too: its routes,
         // the bindings of web.route and the public addresses of the apps go.

@@ -22,11 +22,13 @@ public sealed class IdentityLink
     private readonly ComposeFiles _files;
     private readonly DockerService _docker;
     private readonly AppAddresses _addresses;
+    private readonly SelfBrandAssets _brand;
 
-    public IdentityLink(MatOSDbContext db, MatIdentityClient identity, SystemConfigService config, ProxyPublisher proxy, ComposeFiles files, DockerService docker, AppAddresses addresses)
+    public IdentityLink(MatOSDbContext db, MatIdentityClient identity, SystemConfigService config, ProxyPublisher proxy, ComposeFiles files, DockerService docker, AppAddresses addresses, SelfBrandAssets brand)
     {
         _docker = docker;
         _addresses = addresses;
+        _brand = brand;
         _db = db;
         _identity = identity;
         _config = config;
@@ -93,7 +95,39 @@ public sealed class IdentityLink
             Origins = origins,
         }, registration.Secret, ct);
         log("MatOS signs people in through MatIdentity.");
+        await BrandSelfAsync(log, ct);
         return true;
+    }
+
+    /// <summary>
+    /// Gives MatOS's sign-in at MatIdentity the look of MatOS (docs/ARCHITECTURE.md "MatOS's sign-in looks like MatOS"): the instance name, the accent, the
+    /// planet and the default wallpaper, nothing of MatIdentity. An older MatIdentity without brands gets nothing; a failure is a line in the log, the sign-in
+    /// works without the look. Called after every registration and when the instance name changes.
+    /// </summary>
+    public async Task BrandSelfAsync(Action<string> log, CancellationToken ct)
+    {
+        var config = await _config.GetAsync(ct);
+        if (config.Identity is null || _brand.For(config.InstanceName) is not { } brand)
+        {
+            return;
+        }
+
+        try
+        {
+            switch (await _identity.BrandAsync(config.SelfClientId, brand, ct))
+            {
+                case BrandingOutcome.Sent:
+                    log($"MatIdentity shows the sign-in of MatOS as {brand.Name}.");
+                    break;
+                case BrandingOutcome.Unsupported:
+                    log("This MatIdentity has no branded sign-in yet: its sign-in shows MatIdentity.");
+                    break;
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            log($"Warning: MatIdentity did not take the look of MatOS's sign-in: {ex.Message}");
+        }
     }
 
     /// <summary>

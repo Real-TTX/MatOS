@@ -41,6 +41,6 @@
 
     @if (Model.IdentityAvailable)
     {
-        <a class="mat-btn mat-btn--secondary mat-btn--block" href="/Account/Login?via=identity&amp;returnUrl=@Uri.EscapeDataString(Model.ReturnUrl ?? "/")"><icon name="key" /><span>Sign in with MatIdentity</span></a>
+        <a class="mat-btn mat-btn--secondary mat-btn--block" href="/Account/Login?via=identity&amp;returnUrl=@Uri.EscapeDataString(Model.ReturnUrl ?? "/")"><icon name="key" /><span>Single sign-on</span></a>
     }
 </div>

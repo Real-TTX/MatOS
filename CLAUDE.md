@@ -69,7 +69,7 @@ src/MatOS.Core        domain, no web types
   Catalog/                   CatalogParser/Service/Models + apps/*.yml (embedded)
   Docker/                    DockerCli (process wrapper), DockerService (typed ops, parsing)
   Integrations/              MatcadClient, MatddnsClient, ProxyPublisher (routes, wildcard), DnsPublisher (records), IAppProvisioner (one per engine),
-                             MatIdentityClient + IdentityLink (MatOS's own sign-in, the issuer of MatIdentity), MatIdentityPeople (SCIM to MatIdentity: the People area) + PersonAccess (what a person may use, kept a minute), MatSmtpClient + MailLink (the setup of MatSMTP), FrameLink (MatOS's
+                             MatIdentityClient + IdentityLink (MatOS's own sign-in, the issuer of MatIdentity) + SelfBrand (that sign-in in the look of MatOS, no word of MatIdentity: docs/ARCHITECTURE.md "MatOS's sign-in looks like MatOS"), MatIdentityPeople (SCIM to MatIdentity: the People area) + PersonAccess (what a person may use, kept a minute), MatSmtpClient + MailLink (the setup of MatSMTP), FrameLink (MatOS's
                              shell.embed: MAT_FRAME_ANCESTORS), PlatformClient (/api of an app, contract 2),
                              BindingBroker (the bindings between the apps and of the engines: identity.oidc, mail.smtp, web.route (a host under the domain, else a port of
                              this machine: every app behind Matcad; PortsAsync); one class for every capability, AppBinding;

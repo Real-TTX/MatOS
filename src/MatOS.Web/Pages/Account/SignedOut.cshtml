@@ -1,0 +1,15 @@
+@page
+@model MatOS.Web.Pages.Account.SignedOutModel
+@{
+    Layout = "_Bare";
+    ViewData["Title"] = "Signed out";
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>You are signed out</h1>
+        <p class="mat-muted">See you soon in @Model.InstanceName.</p>
+    </div>
+    <a href="/Account/Login" class="mat-btn mat-btn--primary mat-btn--block"><icon name="login" /><span>Sign in again</span></a>
+</div>

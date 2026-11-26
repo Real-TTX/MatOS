@@ -398,6 +398,23 @@ MatIdentity; MatOS administers them in its area **People** (below) and MatIdenti
   they always saw (the rules of `audience`).
 - **Manage.** An app with `platform: true` gets the tab *Manage*: `PlatformClient` reads its MatApiDefinition (`GET /api`) and its values with `MAT_API_KEY`,
   and the page draws its pages (tiles, settings form, buttons) with MatUi without knowing the app.
+- **MatOS's sign-in looks like MatOS** (the owner, 2026-11-27: "I do not want to SEE that it is MatIdentity, but a normal login on MatOS; in the apps it is then
+  *Sign in with MatIdentity*"). The single sign-on stays: the person still signs in **at MatIdentity**, so its session lets the apps in without a password. But
+  MatIdentity draws the sign-in of MatOS's client in the look of MatOS (MatIdentity docs/ARCHITECTURE.md "Branded sign-in"): `IdentityLink.BrandSelfAsync`, after
+  every registration (`ConnectSelfAsync`: the first start, *Connect again*, an update of MatIdentity, the rename follow-up, a new address on the login page) and
+  when the instance name changes in the settings, sends `branding` on MatOS's own client: the instance name, the accent `Ui.App.Accent`, `hideIdentity: true`,
+  the planet `img/logo.svg` and the light picture of the default wallpaper `img/wallpapers/orbit-light.jpg` (one picture for both themes; `SelfBrandAssets`,
+  registered by `Program.cs`). It asks first (`GET /api/v1/clients/{id}`): a MatIdentity without the field `branding` is older and gets nothing (its status still says
+  `apiVersion: 1`, so the field is the gate), and the brand is sent only when it differs (`IdentityBranding.Payload`; a picture whose `?v=` is the hash of MatOS's
+  bytes is left out). A failure is a line in the log; the sign-in works without the look. So a person who signs in sees: `/Account/Login` (no page in between, it
+  sends them on to MatIdentity with the `returnUrl`) → MatIdentity's page with the planet, "Sign in to MatOS", the wallpaper, no word of MatIdentity (also
+  Forgot → the mail → Reset) → back in MatOS. The local form (`?local=1`, and the page while MatIdentity does not answer or the person who set MatOS up still
+  waits for it) is not advertised and does not name MatIdentity either ("Single sign-on", "The sign-in does not answer right now"). **The sign-out** sends the
+  id token of the sign-in as `id_token_hint` (`External` keeps it in the session cookie, `Logout` hands it to `MatIdentitySignIn`), so MatIdentity ends its
+  session without a confirmation page of its own, and ends on MatOS's `/Account/SignedOut` ("You are signed out", *Sign in again*); a session from before this
+  has no token and MatIdentity asks once. **The apps are unchanged:** their sign-in is MatIdentity's own look ("Sign in with MatIdentity"), and an app opened from
+  MatOS starts at its `ui.signIn` (`AppService.StartPathAsync`), finds MatIdentity's session and lets the person in without a click. An administrator still sees
+  MatIdentity as an engine in *System* and the settings.
 
 ## MatSMTP, the mail relay
 

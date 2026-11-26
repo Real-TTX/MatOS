@@ -34,15 +34,29 @@ public class LogoutModel : PageModel
         }
 
         var linked = User.GetUserId() is { } id && (await _users.GetAsync(id, HttpContext.RequestAborted))?.ExternalSubject is not null;
+        var idToken = await HttpContext.GetTokenAsync(AuthConstants.CookieScheme, IdTokenName);
         await HttpContext.SignOutAsync(AuthConstants.CookieScheme);
 
-        // Signed in through MatIdentity: end the single sign-on there too, or the next visit would be signed in again at once.
+        // Signed in through MatIdentity: end the single sign-on there too, or the next visit would be signed in again at once. The id token of the sign-in
+        // names the person (id_token_hint), so MatIdentity ends its session without a page of its own, and the person lands on MatOS's signed-out page.
         if (linked && (await _config.GetAsync(HttpContext.RequestAborted)).Identity is not null)
         {
             MatIdentitySignIn.Refresh(HttpContext.RequestServices);
-            return SignOut(new AuthenticationProperties { RedirectUri = "/Account/Login" }, MatIdentitySignIn.Scheme);
+            var properties = new AuthenticationProperties { RedirectUri = SignedOutPath };
+            if (!string.IsNullOrEmpty(idToken))
+            {
+                properties.Items[MatIdentitySignIn.IdTokenHintItem] = idToken;
+            }
+
+            return SignOut(properties, MatIdentitySignIn.Scheme);
         }
 
-        return RedirectToPage("/Account/Login");
+        return LocalRedirect(SignedOutPath);
     }
+
+    /// <summary>The name of the id token of MatIdentity kept with a session (<c>External.cshtml.cs</c>).</summary>
+    public const string IdTokenName = "id_token";
+
+    /// <summary>Where a sign-out ends: MatOS's own page.</summary>
+    public const string SignedOutPath = "/Account/SignedOut";
 }

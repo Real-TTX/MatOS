@@ -63,6 +63,29 @@ public sealed class MatIdentityClient : EngineClient
         return new IdentityRegistration(clientId, answer?["clientSecret"]?.GetValue<string>());
     }
 
+    /// <summary>
+    /// Gives the client <paramref name="clientId"/> (MatOS's own) the look of <paramref name="brand"/> at MatIdentity's sign-in (<c>branding</c> of the PUT, with
+    /// <c>managedBy</c>; every other field is left out, so it stays). Asks first (<c>GET clients/{id}</c>): a MatIdentity without the field <c>branding</c> is
+    /// an older one and gets nothing, and one that has the brand already gets nothing either (<see cref="IdentityBranding.Payload"/>).
+    /// </summary>
+    public async Task<BrandingOutcome> BrandAsync(string clientId, SelfBrand brand, CancellationToken ct)
+    {
+        var client = await GetAsync("clients/" + Uri.EscapeDataString(clientId), ct);
+        if (!IdentityBranding.Supported(client))
+        {
+            return BrandingOutcome.Unsupported;
+        }
+
+        if (IdentityBranding.Payload(brand, client!["branding"]) is not { } branding)
+        {
+            return BrandingOutcome.Unchanged;
+        }
+
+        var body = new JsonObject { ["managedBy"] = Owner.Name, ["branding"] = branding };
+        await SendAsync(HttpMethod.Put, "clients/" + Uri.EscapeDataString(clientId), body, null, ct);
+        return BrandingOutcome.Sent;
+    }
+
     /// <summary>Removes the client when MatOS created it; nothing when it does not exist.</summary>
     public async Task DeleteClientAsync(string clientId, CancellationToken ct)
     {

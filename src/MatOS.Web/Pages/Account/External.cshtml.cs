@@ -24,7 +24,7 @@ public class ExternalModel : PageModel
         _sessions = sessions;
     }
 
-    public string Problem { get; private set; } = "MatIdentity did not sign you in.";
+    public string Problem { get; private set; } = "The sign-in did not finish. Please try again.";
 
     public async Task<IActionResult> OnGetAsync(string? returnUrl)
     {
@@ -48,7 +48,15 @@ public class ExternalModel : PageModel
         // The sid of MatIdentity's session: a logout token that names it ends this one (Infrastructure/BackchannelLogout.cs).
         var session = await _sessions.CreateAsync(
             user.Id, Request.Headers.UserAgent.ToString(), HttpContext.Connection.RemoteIpAddress?.ToString(), principal.FindFirst("sid")?.Value, HttpContext.RequestAborted);
-        await HttpContext.SignInAsync(AuthConstants.CookieScheme, PrincipalFactory.Build(user, session.Token), new AuthenticationProperties { IsPersistent = true });
+        // The id token stays with the session: the sign-out names the person with it (id_token_hint), so MatIdentity signs them out at once instead of
+        // asking on a page of its own (Logout.cshtml.cs).
+        var properties = new AuthenticationProperties { IsPersistent = true };
+        if (result.Properties?.GetTokenValue(LogoutModel.IdTokenName) is { Length: > 0 } idToken)
+        {
+            properties.StoreTokens([new AuthenticationToken { Name = LogoutModel.IdTokenName, Value = idToken }]);
+        }
+
+        await HttpContext.SignInAsync(AuthConstants.CookieScheme, PrincipalFactory.Build(user, session.Token), properties);
         return LocalRedirect(!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl : "/");
     }
 }

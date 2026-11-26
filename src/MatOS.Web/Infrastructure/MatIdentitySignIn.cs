@@ -21,6 +21,9 @@ public sealed class MatIdentitySignIn : IConfigureNamedOptions<OpenIdConnectOpti
     /// <summary>The short cookie between the answer of MatIdentity and the local session (<c>/Account/External</c>).</summary>
     public const string ExternalScheme = "MatIdentity.External";
 
+    /// <summary>The item of the sign-out's properties that carries the id token of the session (sent as <c>id_token_hint</c>).</summary>
+    public const string IdTokenHintItem = "matos.id_token_hint";
+
     private readonly JsonConfigStore _store;
     private readonly SystemConfigService _config;
 
@@ -64,9 +67,16 @@ public sealed class MatIdentitySignIn : IConfigureNamedOptions<OpenIdConnectOpti
         options.TokenValidationParameters.RoleClaimType = "role";
 
         // Sign-out at MatIdentity names the client, so MatIdentity accepts the address it sends the person back to.
+        // The id token of the session (Logout.cshtml.cs) names the person, so MatIdentity signs them out without asking on a page of its own.
         options.Events.OnRedirectToIdentityProviderForSignOut = context =>
         {
             context.ProtocolMessage.ClientId = context.Options.ClientId;
+            if (context.Properties.Items.TryGetValue(IdTokenHintItem, out var hint) && !string.IsNullOrEmpty(hint))
+            {
+                context.ProtocolMessage.IdTokenHint = hint;
+                context.Properties.Items.Remove(IdTokenHintItem);
+            }
+
             return Task.CompletedTask;
         };
 

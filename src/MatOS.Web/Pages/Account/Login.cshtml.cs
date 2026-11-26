@@ -42,7 +42,7 @@ public class LoginModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Reconnected { get; set; }
 
-    /// <summary><c>?via=identity</c>: the button "Sign in with MatIdentity", which goes there even while the page keeps its own form.</summary>
+    /// <summary><c>?via=identity</c>: the button "Single sign-on" (MatIdentity, never named on the page), which goes there even while the page keeps its own form.</summary>
     [BindProperty(SupportsGet = true)]
     public string? Via { get; set; }
 
@@ -99,7 +99,7 @@ public class LoginModel : PageModel
             }
             catch (InvalidOperationException)
             {
-                ErrorMessage = "MatIdentity does not answer. Sign in with a local account.";
+                ErrorMessage = "The sign-in does not answer right now. Sign in with a local account.";
                 return Page();
             }
         }
@@ -129,7 +129,7 @@ public class LoginModel : PageModel
                 return LocalRedirect("/Account/Login?reconnected=1" + (Via == "identity" ? "&via=identity" : string.Empty) + "&returnUrl=" + Uri.EscapeDataString(SafeReturnUrl()));
             }
 
-            ErrorMessage = "MatIdentity does not answer. Sign in with a local account.";
+            ErrorMessage = "The sign-in does not answer right now. Sign in with a local account.";
             IdentityAvailable = (await _config.GetAsync(HttpContext.RequestAborted)).Identity is not null;
             return Page();
         }
