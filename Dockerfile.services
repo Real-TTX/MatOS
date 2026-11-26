@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1
+
+# MatOS Services (services.mattiverse.de): the free addresses, the tunnel edge and the DNS of the zone (docs/SERVICES.md).
+#   docker build -f Dockerfile.services -t ghcr.io/real-ttx/matos-services .
+
+# ---------------------------------------------------------------------------
+# Build stage
+# ---------------------------------------------------------------------------
+# The build runs on the builder's own platform: the published app is portable (no native host), so the arm64 image needs no emulation here.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG Channel=local
+ARG BuildNumber=0
+ARG BuildDate=
+WORKDIR /src
+
+# Restore first (better layer caching).
+COPY ["global.json", "Directory.Build.props", "./"]
+COPY ["src/MatOS.Services/MatOS.Services.csproj", "src/MatOS.Services/"]
+RUN dotnet restore "src/MatOS.Services/MatOS.Services.csproj"
+
+COPY src/MatOS.Services src/MatOS.Services
+# Fall back to today's date when BuildDate is not supplied, so the version never ends in "-".
+RUN BUILD_DATE="${BuildDate:-$(date -u +%Y%m%d)}" && \
+    dotnet publish "src/MatOS.Services/MatOS.Services.csproj" \
+    -c Release -o /app/publish --no-restore \
+    -p:UseAppHost=false \
+    -p:Channel=$Channel -p:BuildNumber=$BuildNumber -p:BuildDate=$BUILD_DATE
+
+# ---------------------------------------------------------------------------
+# Runtime stage (ASP.NET Core base image; no extra packages needed)
+# ---------------------------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+
+# 8080 the API, the tunnel endpoints and the status page; 8443/8081 the edge (TLS by SNI, HTTP by Host); 5353 the DNS of the zone.
+# The health check asks 8080, so keep the API there.
+ENV ASPNETCORE_HTTP_PORTS=8080 \
+    ASPNETCORE_ENVIRONMENT=Production \
+    Services__DataPath=/data \
+    DOTNET_gcServer=0 \
+    DOTNET_TieredPGO=1
+
+# The database (services.db): one volume.
+RUN mkdir -p /data && chown app:app /data
+VOLUME ["/data"]
+EXPOSE 8080 8443 8081 5353/udp 5353/tcp
+
+COPY --from=build /app/publish .
+
+# The image's own user: the service needs no root (all its ports are above 1024).
+USER app
+
+# The app checks itself, so the image needs no extra tools.
+HEALTHCHECK --interval=30s --timeout=8s --start-period=20s --retries=3 \
+    CMD ["dotnet", "MatOS.Services.dll", "--healthcheck"]
+
+ENTRYPOINT ["dotnet", "MatOS.Services.dll"]

@@ -1,0 +1,39 @@
+# MatOS Services on server1: one service, one volume (docs/SERVICES.md, deploy/services/README.md).
+#   echo "SERVER1_IPV4=203.0.113.10" > .env   # server1's public IPv4 address
+#   docker compose up -d
+#
+# The ports are published on 127.0.0.1 for an existing proxy on the host that keeps 80/443 (README: "Option A"). For the variant where
+# this container takes 80/443 itself, see README "Option B"; for the direct mode, the DNS ports below.
+name: matos-services
+
+services:
+  matos-services:
+    image: ghcr.io/real-ttx/matos-services:latest
+    container_name: matos-services
+    restart: unless-stopped
+    environment:
+      # server1's address: the DNS answer for installations in tunnel mode and for the zone itself.
+      Services__Edge__PublicIpv4: "${SERVER1_IPV4:?set SERVER1_IPV4 to server1's public IPv4 address}"
+      Services__Edge__PublicIpv6: "${SERVER1_IPV6:-}"
+      # The administrator list at https://services.mattiverse.de/admin; empty = no such page.
+      Services__AdminPassword: "${MATOS_SERVICES_ADMIN_PASSWORD:-}"
+      # Option B only: where host names outside the zone go (the existing proxy), and the PROXY protocol header to it (README, Option B:
+      # without it every visitor of server1's other sites, services.mattiverse.de included, looks like this container).
+      Services__Edge__FallbackHttps: "${MATOS_SERVICES_FALLBACK_HTTPS:-}"
+      Services__Edge__FallbackHttp: "${MATOS_SERVICES_FALLBACK_HTTP:-}"
+      Services__Edge__FallbackProxyProtocol: "${MATOS_SERVICES_FALLBACK_PROXY_PROTOCOL:-false}"
+      # Option A: the proxy in front of 8443 (and 8081) sends the PROXY protocol, so the limits per visitor address work (README).
+      Services__Edge__ProxyProtocol: "${MATOS_SERVICES_PROXY_PROTOCOL:-false}"
+      Services__Edge__HttpProxyProtocol: "${MATOS_SERVICES_HTTP_PROXY_PROTOCOL:-false}"
+    ports:
+      - "127.0.0.1:8080:8080"   # API, tunnel, status page -> https://services.mattiverse.de
+      - "127.0.0.1:8443:8443"   # edge, TLS by SNI          -> *.my.mattiverse.de:443 (passthrough)
+      - "127.0.0.1:8081:8081"   # edge, HTTP by Host        -> *.my.mattiverse.de:80
+      # Direct mode only (after the delegation of my.mattiverse.de), on server1's public address:
+      # - "${SERVER1_IPV4}:53:5353/udp"
+      # - "${SERVER1_IPV4}:53:5353/tcp"
+    volumes:
+      - matos-services-data:/data
+
+volumes:
+  matos-services-data:

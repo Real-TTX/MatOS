@@ -1,0 +1,49 @@
+namespace MatOS.Services.Data;
+
+/// <summary>How visitors reach an installation (docs/SERVICES.md "Two ways in").</summary>
+public enum InstanceMode
+{
+    /// <summary>Through server1's edge and the installation's outgoing tunnel; works behind every firewall.</summary>
+    Tunnel = 0,
+
+    /// <summary>The DNS points at the installation's own public address; nothing passes server1.</summary>
+    Direct = 1,
+}
+
+/// <summary>A MatOS installation that holds a name below the zone.</summary>
+public sealed class Instance
+{
+    public long Id { get; set; }
+
+    /// <summary>The label below the zone, lower case (<c>anna</c>); unique, and never changes.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>SHA-256 of the key (hex): the key itself is only ever known to the installation.</summary>
+    public string KeyHash { get; set; } = "";
+
+    public InstanceMode Mode { get; set; } = InstanceMode.Tunnel;
+
+    /// <summary>The installation's public IPv4 address as reported through <c>/nic/update</c>.</summary>
+    public string? PublicIpv4 { get; set; }
+
+    public string? PublicIpv6 { get; set; }
+
+    /// <summary>The MatOS version it named at registration (for the administrator view only).</summary>
+    public string? Version { get; set; }
+
+    /// <summary>When it last talked to the service (API, tunnel, DynDNS); written at most every few minutes.</summary>
+    public DateTime? LastSeen { get; set; }
+
+    /// <summary>
+    /// When its tunnel connected for the first time. A name with neither a tunnel nor an address was never used, and expires
+    /// (<see cref="Configuration.ServicesOptions.ExpireUnusedAfterDays"/>).
+    /// </summary>
+    public DateTime? FirstTunnel { get; set; }
+
+    public DateTime CreateDate { get; set; }
+
+    public DateTime? UpdateDate { get; set; }
+
+    /// <summary>The address it registered from: the evidence when a name is abused.</summary>
+    public string CreatedFromIp { get; set; } = "";
+}
