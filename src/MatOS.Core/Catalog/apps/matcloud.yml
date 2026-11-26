@@ -1,0 +1,85 @@
+# MatCloud – the cloud of the Thix apps (ThixClip, ThixNote …): clipboard, notes and settings the same on every PC and Mac, the clipboard history in the browser.
+x-matos:
+  id: matcloud
+  name: MatCloud
+  tagline: The cloud of the Thix apps – clipboard and notes on every device
+  description: The Thix desktop apps sign their devices in here and keep their data the same on every PC and Mac. ThixClip gets its clipboard history in the browser (searchable, also the text in pictures); ThixNote and the other apps sync through the general sync. Devices sign in in the browser with a code, also with MatIdentity.
+  category: Productivity
+  role: app
+  icon: matcloud.svg
+  homepage: https://github.com/Real-TTX/MatCloud
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds it when MatIdentity is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: web
+    port: 4950
+    hostPort: 4950
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATCLOUD_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The data lies in the database volume matcloud-db; matcloud-data (/data) keeps the keys of the sessions and the bindings. Back up both.
+    - Connect a Thix app in its settings under Cloud with the address of MatCloud and "Im Browser anmelden".
+  credentials:
+    - label: User name (without MatIdentity)
+      value: admin
+    - label: Password
+      value: ${MATCLOUD_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matcloud
+      POSTGRES_USER: matcloud
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matcloud-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matcloud -d matcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matcloud:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matcloud;Username=matcloud;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATCLOUD_ADMIN_PASSWORD: ${MATCLOUD_ADMIN_PASSWORD}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      - matcloud-data:/data
+
+volumes:
+  matcloud-db:
+  matcloud-data:

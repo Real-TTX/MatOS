@@ -1,0 +1,21 @@
+@model MatOS.Web.Support.AppWidgetView
+@* The inside of a widget of an app (contributes.widgets, kinds stat, meter and tiles): its heading, its value or rows, and the app it comes from. *@
+<span class="os-widget__head">@Ui.Icon(Model.Icon)@Model.Widget.Label</span>
+@if (Model.Widget.Kind == "tiles")
+{
+    <dl class="os-wrows">
+        @foreach (var row in Model.Rows)
+        {
+            <div class="os-wrows__row@(row.Tone is "warn" or "error" ? " is-warn" : string.Empty)"><dt>@row.Title</dt><dd>@row.Text</dd></div>
+        }
+    </dl>
+}
+else
+{
+    <span class="os-widget__value">@Model.Value</span>
+    @if (Model.Percent is { } percent)
+    {
+        <meter class="os-meter" min="0" max="100" value="@percent">@percent %</meter>
+    }
+}
+<span class="os-widget__note">@Model.App.Name</span>

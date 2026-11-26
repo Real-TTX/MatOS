@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MatOS.Core/MatOS.Core.csproj" />
+    <Project Path="src/MatOS.Web/MatOS.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MatOS.Tests/MatOS.Tests.csproj" />
+  </Folder>
+</Solution>

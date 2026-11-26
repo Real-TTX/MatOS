@@ -1,7 +1,7 @@
 <Project>
 
   <!-- ============================================================= -->
-  <!--  Shared MSBuild properties for all Mattiverse projects         -->
+  <!--  Shared MSBuild properties for all MatOS projects         -->
   <!-- ============================================================= -->
 
   <PropertyGroup>
@@ -12,7 +12,7 @@
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>false</InvariantGlobalization>
     <Company>Matthias Schmoldt</Company>
-    <Product>Mattiverse</Product>
+    <Product>MatOS</Product>
     <Authors>Matthias Schmoldt</Authors>
   </PropertyGroup>
 
@@ -30,8 +30,8 @@
   <!-- ============================================================= -->
 
   <PropertyGroup>
-    <MattiverseMajor>0</MattiverseMajor>
-    <MattiverseMinor>1</MattiverseMinor>
+    <MatOSMajor>0</MatOSMajor>
+    <MatOSMinor>1</MatOSMinor>
 
     <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
     <Channel Condition="'$(Channel)' == ''">local</Channel>
@@ -40,16 +40,16 @@
     <!-- Numeric AssemblyVersion/FileVersion components are capped at 65534, so they are kept stable
          at <major>.<minor>.0.0 and the (potentially large) build number lives only in the string
          Version / InformationalVersion below. -->
-    <Version>$(MattiverseMajor).$(MattiverseMinor).$(BuildNumber)</Version>
-    <AssemblyVersion>$(MattiverseMajor).$(MattiverseMinor).0.0</AssemblyVersion>
-    <FileVersion>$(MattiverseMajor).$(MattiverseMinor).0.0</FileVersion>
+    <Version>$(MatOSMajor).$(MatOSMinor).$(BuildNumber)</Version>
+    <AssemblyVersion>$(MatOSMajor).$(MatOSMinor).0.0</AssemblyVersion>
+    <FileVersion>$(MatOSMajor).$(MatOSMinor).0.0</FileVersion>
 
     <!-- Keep the informational version clean (no +git-sha suffix). -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Channel)' == 'release'">
-    <InformationalVersion>$(MattiverseMajor).$(MattiverseMinor).$(BuildNumber)-$(BuildDate)</InformationalVersion>
+    <InformationalVersion>$(MatOSMajor).$(MatOSMinor).$(BuildNumber)-$(BuildDate)</InformationalVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Channel)' == 'nightly'">
     <InformationalVersion>nightly-$(BuildNumber)-$(BuildDate)</InformationalVersion>

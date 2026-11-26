@@ -1,0 +1,15 @@
+@page
+@model MatOS.Web.Pages.Account.ExternalModel
+@{
+    Layout = "_Bare";
+    ViewData["Title"] = "Sign-in";
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>The sign-in did not work</h1>
+        <p class="mat-muted">@Model.Problem</p>
+    </div>
+    <a href="/Account/Login?local=1" class="mat-btn mat-btn--primary mat-btn--block"><icon name="login" /><span>Sign in with a local account</span></a>
+</div>

@@ -1,0 +1,67 @@
+# MatIdentity – the single sign-on of the Mat apps (OpenID Connect).
+x-matos:
+  id: matidentity
+  name: MatIdentity
+  tagline: Single sign-on for all Mat apps
+  description: >-
+    One sign-in for all your apps: people sign in once and every Mat app lets them in. Groups, roles per app, an authenticator app and passkeys.
+    MatOS registers every app it installs there and gives it its sign-in.
+  category: Infrastructure
+  role: identity
+  icon: matidentity.svg
+  homepage: https://github.com/Real-TTX/MatIdentity
+  recommended: true
+  provision: matidentity
+  core: true
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  ui:
+    service: matidentity
+    port: 2300
+    hostPort: 2300
+  variables:
+    - key: MATIDENTITY_ISSUER
+      label: Public address
+      hidden: true
+    - key: ADMIN_PASSWORD
+      label: Admin password
+      type: secret
+      generate: true
+      help: The initial password of the user "admin" (MatIdentity asks to change it on the first sign-in). Leave empty to generate one.
+  notes:
+    - MatOS registers every app that can use it (MatSplit, ...) as an app in MatIdentity and fills in its sign-in. People, groups and who may open which app are set in MatIdentity.
+    - A new app is open only to the administrators of MatIdentity until it is given to people or groups there.
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${ADMIN_PASSWORD}
+      secret: true
+
+services:
+  matidentity:
+    image: ghcr.io/real-ttx/matidentity:latest
+    restart: unless-stopped
+    environment:
+      # The public address is the issuer of every token; MatOS sets it (the route of the app, or this host and its port).
+      MatIdentity__Issuer: ${MATIDENTITY_ISSUER:-}
+      MAT_API_KEY: ${MAT_API_KEY}
+      # The addresses of MatOS, which may show it in the window of its home screen (MatDesign docs/PLATFORM.md); empty: nobody may frame it.
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+      MatIdentity__Admin__Seed: "true"
+      MatIdentity__Admin__Username: admin
+      MatIdentity__Admin__Password: ${ADMIN_PASSWORD}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      # Database, settings and the keys that sign the tokens.
+      - matidentity-data:/data
+
+volumes:
+  matidentity-data:

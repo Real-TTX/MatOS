@@ -1,0 +1,33 @@
+# MatDesign – the design and identity of all Mat apps.
+x-matos:
+  id: matdesign
+  name: MatDesign
+  tagline: Design and identity of the Mat apps
+  description: >-
+    The rulebook, the foundations (colour, type, space, icons), the shell, every control with live examples, the page
+    patterns and MatUi, the UI toolkit that all Mat apps are built from. A website with nothing to configure and nothing to back up.
+  category: Tools
+  role: app
+  icon: matdesign.svg
+  homepage: https://github.com/Real-TTX/MatDesign
+  ui:
+    service: matdesign
+    port: 8060
+    hostPort: 8060
+  notes:
+    - The site keeps no data, so there is no database and no volume. It runs read-only as an unprivileged user.
+
+services:
+  matdesign:
+    image: ghcr.io/real-ttx/matdesign:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8060
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

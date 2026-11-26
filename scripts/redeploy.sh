@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuilds the Mattiverse container and redeploys the dev stack (the project's live-reload / test workflow).
+# Rebuilds the MatOS container and redeploys the dev stack (the project's live-reload / test workflow).
 #   ./scripts/redeploy.sh [--fresh] [--port 8030]
 set -euo pipefail
 
@@ -15,9 +15,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 cd "$(dirname "$0")/.."
-export MATTIVERSE_CHANNEL=local
-export MATTIVERSE_BUILD_DATE="$(date -u +%Y%m%d)"
-export MATTIVERSE_PORT="$port"
+export MATOS_CHANNEL=local
+export MATOS_BUILD_DATE="$(date -u +%Y%m%d)"
+export MATOS_PORT="$port"
 
 if [[ $fresh -eq 1 ]]; then
   echo "Removing the stack and its volume ..."
@@ -27,5 +27,5 @@ fi
 docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
 
 echo
-echo "Mattiverse local-${MATTIVERSE_BUILD_DATE} is running on http://localhost:${port}"
+echo "MatOS local-${MATOS_BUILD_DATE} is running on http://localhost:${port}"
 echo "Dev login: admin@example.com / Start12345   |   SQLite web: http://localhost:8021"

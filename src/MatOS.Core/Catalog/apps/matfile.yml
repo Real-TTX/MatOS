@@ -1,0 +1,53 @@
+# MatFile – file explorer for your NAS.
+x-matos:
+  id: matfile
+  name: MatFile
+  tagline: File explorer for your NAS
+  description: Browse, upload, edit and share the files on your server from the browser.
+  category: Files
+  role: app
+  icon: matfile.svg
+  homepage: https://github.com/Real-TTX/MatFile
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: matfile
+    port: 2222
+    hostPort: 2222
+  notes:
+    - MatFile has its own users and roles, or signs in through MatIdentity when it is installed.
+    - To browse host folders, mount them into the container (add a volume to the compose file) and create a root path in MatFile.
+  variables:
+    - key: ADMIN_PASSWORD
+      label: Admin password
+      type: secret
+      generate: true
+      help: The password of the user "admin". Leave empty to generate one.
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+
+services:
+  matfile:
+    image: ghcr.io/real-ttx/matfile:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "2222"
+      MATFILE_DATA: /data
+      MATFILE_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      - matfile-data:/data
+
+volumes:
+  matfile-data:

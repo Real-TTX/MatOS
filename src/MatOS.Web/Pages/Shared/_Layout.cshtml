@@ -1,0 +1,236 @@
+@inject MatOS.Core.Configuration.SystemConfigService ConfigSvc
+@inject MatOS.Core.Jobs.JobService JobSvc
+@inject Toolkit Toolkit
+@{
+    // A page fills these in: Title, PageSub (one line under the title), Crumbs (the breadcrumb below the name), Width ("narrow" or "wide"), ActiveHref (the menu item
+    // it belongs to when its address is not one of the menu). A page that draws its own head sets OwnHead; one that fills the whole area (an app in a frame) sets Flush.
+    var isAdmin = User.IsAdmin();
+    var config = await ConfigSvc.GetAsync(Context.RequestAborted);
+    var activeJobs = isAdmin ? await JobSvc.CountActiveAsync(Context.RequestAborted) : 0;
+    var menus = Navigation.For(isAdmin, activeJobs);
+    var active = ViewData["ActiveHref"] as string ?? Navigation.ActiveHref(menus, Context.Request.Path.Value ?? "/");
+    var current = menus.FirstOrDefault(m => m.Contains(active)) ?? menus[0];
+    var hasSwitcher = menus.Count > 1;
+
+    var name = config.InstanceName;
+    var title = ViewData["Title"] as string ?? name;
+    var sub = ViewData["PageSub"] as string;
+    var ownHead = ViewData["OwnHead"] is true;
+    var flush = ViewData["Flush"] is true;
+    var width = ViewData["Width"] as string;
+    var crumbs = ViewData["Crumbs"] as IReadOnlyList<(string Text, string? Url)> ?? [];
+    var displayName = User.GetDisplayName();
+    var role = User.GetRole().ToString();
+    var theme = User.GetTheme();
+
+    IHtmlContent Badge(NavBadge badge, bool sum = false)
+    {
+        var text = badge.IsDot ? string.Empty : badge.Text;
+        var label = string.IsNullOrEmpty(badge.Label) ? string.Empty : (badge.IsDot ? badge.Label : " " + badge.Label);
+        return new HtmlString($"<span class=\"{badge.Classes(sum)}\">{Ui.Encode(text)}" + (label.Length == 0 ? string.Empty : $"<span class=\"mat-sr-only\">{Ui.Encode(label)}</span>") + "</span>");
+    }
+
+    // The flash of a redirect after a POST (SHELL-12): "done" is a toast, something to read is an alert at the top of the content.
+    var flash = TempData["StatusMessage"] as string;
+    var flashIsError = TempData["IsError"] is true;
+}
+<!DOCTYPE html>
+<html lang="en" data-app="@Ui.App.Id" @(theme is "light" or "dark" ? Html.Raw($"data-theme=\"{theme}\"") : null)>
+<partial name="_Head" model="@(string.IsNullOrEmpty(title) || title == name ? name : $"{title} · {name}")" />
+<body>
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+
+    <div class="mat-app">
+        <aside class="mat-nav" id="mat-nav">
+            <div class="mat-nav__brand">
+                <a href="/" aria-label="@name, start page">
+                    @Ui.Logo()
+                    <span>
+                        <span class="mat-nav__name">@name</span>
+                        <span class="mat-nav__tagline">@(name == Ui.App.Name ? Ui.App.Tagline : Ui.App.Name)</span>
+                    </span>
+                </a>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-nav__close" data-nav-close aria-label="Close the menu">@Ui.Icon("x")</button>
+            </div>
+
+            @if (hasSwitcher)
+            {
+                <div class="mat-nav__switch">
+                    <button type="button" class="mat-switcher" data-menu-toggle="nav-switch-menu" data-menu-place="bottom" aria-haspopup="menu" aria-expanded="false">
+                        <span class="mat-switcher__icon">@Ui.Icon(current.Icon)</span>
+                        <span class="mat-switcher__text"><small>Menu</small><span class="mat-switcher__name">@current.Title</span></span>
+                        @Ui.Icon("chevron-down", "mat-switcher__chev")
+                        <span class="mat-switcher__dot" hidden="@(!menus.Any(m => m != current && m.NeedsAttention))"></span>
+                    </button>
+                </div>
+            }
+
+            @foreach (var menu in menus)
+            {
+                <nav class="mat-nav__scroll" aria-label="@(hasSwitcher ? menu.Title : "Main")" data-nav-panel="@menu.Id" hidden="@(menu != current)">
+                    <ul class="mat-nav__list">
+                        @foreach (var group in menu.Groups)
+                        {
+                            if (group.Title is not null)
+                            {
+                                <li class="mat-nav__group" role="presentation">@group.Title</li>
+                            }
+
+                            foreach (var item in group.Items)
+                            {
+                                if (item.IsParent)
+                                {
+                                    var hasActive = item.Contains(active);
+                                    var subId = $"nav-sub-{menu.Id}-{item.Key}";
+                                    var sum = item.SumOfChildren;
+                                    <li class="mat-nav__branch @(hasActive ? "is-open is-current" : "")">
+                                        <button type="button" class="mat-nav__item mat-nav__parent" aria-expanded="@(hasActive ? "true" : "false")" aria-controls="@subId" data-nav-branch="@item.Key">
+                                            @if (item.Icon is not null) { @Ui.Icon(item.Icon) }<span>@item.Title</span>
+                                            @if (item.Badge is not null) { @Badge(item.Badge) }
+                                            else if (sum is not null) { @Badge(sum, sum: true) }
+                                            @Ui.Icon("chevron-down", "mat-nav__chev")
+                                        </button>
+                                        <div class="mat-nav__sub" id="@subId">
+                                            <ul class="mat-nav__list">
+                                                @foreach (var child in item.Children!)
+                                                {
+                                                    var childActive = child.Href == active;
+                                                    <li>
+                                                        <a class="mat-nav__item mat-nav__item--sub @(childActive ? "is-active" : "")" href="@child.Href" aria-current="@(childActive ? "page" : null)">
+                                                            <span>@child.Title</span>
+                                                            @if (child.Badge is not null) { @Badge(child.Badge) }
+                                                        </a>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </li>
+                                }
+                                else
+                                {
+                                    var isActive = item.Href == active;
+                                    <li>
+                                        <a class="mat-nav__item @(isActive ? "is-active" : "")" href="@item.Href" aria-current="@(isActive ? "page" : null)">
+                                            @if (item.Icon is not null) { @Ui.Icon(item.Icon) }<span>@item.Title</span>
+                                            @if (item.Badge is not null) { @Badge(item.Badge) }
+                                        </a>
+                                    </li>
+                                }
+                            }
+                        }
+                    </ul>
+                </nav>
+            }
+
+            <div class="mat-nav__foot">
+                <div class="mat-nav__account">
+                    <button type="button" class="mat-user" data-menu-toggle="user-menu" aria-haspopup="menu" aria-expanded="false">
+                        <span class="mat-avatar" aria-hidden="true">@Ui.Initials(displayName)</span>
+                        <span class="mat-user__text">
+                            <span class="mat-user__name">@displayName</span>
+                            <span class="mat-user__role">@role</span>
+                        </span>
+                        @Ui.Icon("chevron-up", "mat-user__chev")
+                    </button>
+                    <button type="button" class="mat-theme" data-theme-toggle data-theme-save-url="/api/theme" data-theme-state="system" aria-label="Theme: System. Click for Light." title="Theme: System. Click for Light.">
+                        <svg class="mat-icon" data-theme-icon="system" aria-hidden="true" focusable="false"><use href="#mat-i-monitor"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="light" aria-hidden="true" focusable="false"><use href="#mat-i-sun"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="dark" aria-hidden="true" focusable="false"><use href="#mat-i-moon"></use></svg>
+                    </button>
+                </div>
+                <div class="mat-nav__version">@Ui.App.Name @AppVersion.Current</div>
+            </div>
+        </aside>
+
+        <div class="mat-main">
+            <header class="mat-topbar">
+                <button type="button" class="mat-burger" data-nav-toggle aria-label="Open the menu" aria-controls="mat-nav" aria-expanded="false">@Ui.Icon("menu")</button>
+                <nav class="mat-crumbs" aria-label="Breadcrumb">
+                    <ol>
+                        @if (crumbs.Count == 0)
+                        {
+                            <li aria-current="page">@name</li>
+                        }
+                        else
+                        {
+                            <li><a href="/">@name</a></li>
+                            @for (var i = 0; i < crumbs.Count; i++)
+                            {
+                                var c = crumbs[i];
+                                if (i == crumbs.Count - 1 || c.Url is null)
+                                {
+                                    <li aria-current="page">@c.Text</li>
+                                }
+                                else
+                                {
+                                    <li><a href="@c.Url">@c.Text</a></li>
+                                }
+                            }
+                        }
+                    </ol>
+                </nav>
+            </header>
+
+            <main class="mat-page @(width == "narrow" ? "mat-page--narrow" : width == "wide" ? "mat-page--wide" : "") @(flush ? "mv-flush" : "")" id="main">
+                @if (!string.IsNullOrEmpty(flash) && flashIsError)
+                {
+                    <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@flash</div></div>
+                }
+
+                @if (!ownHead)
+                {
+                    <div class="mat-page__head mv-pagehead">
+                        <div class="mat-page__title">
+                            <h1>@title</h1>
+                            @if (!string.IsNullOrEmpty(sub))
+                            {
+                                <p class="mat-page__sub">@sub</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <div class="mat-menu" id="user-menu" role="menu" aria-label="@displayName" hidden>
+        <div class="mat-menu__head">
+            <span class="mat-avatar" aria-hidden="true">@Ui.Initials(displayName)</span>
+            <div><strong>@displayName</strong><small>@User.GetUsername() · @role</small></div>
+        </div>
+        <a class="mat-menu__item" role="menuitem" href="/Account/Profile">@Ui.Icon("user")<span>Show account</span></a>
+        <a class="mat-menu__item" role="menuitem" href="/Account/Profile?tab=password">@Ui.Icon("key")<span>Change password</span></a>
+        <div class="mat-menu__sep" role="separator"></div>
+        <form method="post" action="/Account/Logout">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="mat-menu__item" role="menuitem">@Ui.Icon("logout")<span>Sign out</span></button>
+        </form>
+    </div>
+
+    @if (hasSwitcher)
+    {
+        <div class="mat-menu" id="nav-switch-menu" role="menu" aria-label="Menus" data-nav-scope="mat-nav" hidden>
+            @foreach (var menu in menus)
+            {
+                <button type="button" class="mat-menu__item" role="menuitemradio" aria-checked="@(menu == current ? "true" : "false")" data-nav-set="@menu.Id" data-nav-title="@menu.Title" @(menu.NeedsAttention ? Html.Raw("data-nav-attention") : null)>
+                    @Ui.Icon(menu.Icon)<span>@menu.Title</span>
+                    @if (menu.NeedsAttention) { <span class="mat-nav__badge mat-nav__badge--dot mat-nav__badge--warn"><span class="mat-sr-only">needs attention</span></span> }
+                    @Ui.Icon("check", "mat-menu__check")
+                </button>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(flash) && !flashIsError)
+    {
+        <div data-toast="@flash" data-tone="success" hidden></div>
+    }
+
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
+    <script src="~/js/matos.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

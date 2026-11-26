@@ -1,0 +1,94 @@
+@model MatOS.Web.Pages.Apps.ManageModel
+@* The tab Connections of an app of contract 2 (MatDesign docs/PLATFORM.md "The Connections area"): what it uses and offers, as the app says, with what MatOS bound. *@
+@{
+    var connections = Model.Connections;
+}
+@if (connections is null)
+{
+    <div class="mat-empty mat-empty--framed">
+        <span class="mat-empty__icon"><icon name="plug" /></span>
+        <div class="mat-empty__title">@Model.App.Name does not list its connections</div>
+        <p>The app is stopped or still starting. Its own Connections page has the same list.</p>
+    </div>
+}
+else
+{
+    var uses = connections.Uses ?? [];
+    var offers = connections.Offers ?? [];
+    @if (uses.Count > 0)
+    {
+        <section class="mat-section">
+            <div class="mat-section__head">
+                <h2>Uses</h2>
+                <p class="mat-section__lead">What @Model.App.Name gets from other apps. MatOS connects it as soon as an app that provides it is installed; without one, it can be entered in the app.</p>
+            </div>
+            <table class="mat-table">
+                <thead><tr><th>For</th><th>Connected to</th><th>Set</th></tr></thead>
+                <tbody>
+                    @foreach (var use in uses)
+                    {
+                        var bound = Model.Bindings.FirstOrDefault(b => b.Capability == use.Capability);
+                        var target = bound.Provider ?? use.Values?.FirstOrDefault(v => v.Type == "url" && v.Value is { ValueKind: System.Text.Json.JsonValueKind.String })?.Value?.GetString();
+                        <tr>
+                            <td data-label="For">@use.Label <code>@use.Capability</code></td>
+                            <td data-label="Connected to">@(string.IsNullOrEmpty(target) ? "–" : target)</td>
+                            <td data-label="Set">
+                                @switch (use.Source)
+                                {
+                                    case "variables" when bound.Provider is not null:
+                                        <span class="mat-pill mat-pill--ok">By MatOS</span>
+                                        break;
+                                    case "variables":
+                                        <span class="mat-pill mat-pill--ok">By the variables</span>
+                                        break;
+                                    case "byHand":
+                                        <span class="mat-pill mat-pill--info">Entered in the app</span>
+                                        break;
+                                    default:
+                                        <span class="mat-pill mat-pill--plain">@(use.Optional ? "Not connected (optional)" : "Not connected")</span>
+                                        break;
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+
+    @if (offers.Count > 0)
+    {
+        <section class="mat-section">
+            <div class="mat-section__head">
+                <h2>Offers</h2>
+                <p class="mat-section__lead">What @Model.App.Name gives other apps, and the apps connected to it.</p>
+            </div>
+            @foreach (var offer in offers)
+            {
+                var bindings = offer.Bindings ?? [];
+                <h3>@offer.Label <code>@offer.Capability</code></h3>
+                @if (bindings.Count == 0)
+                {
+                    <p class="mat-muted">No app is connected yet.</p>
+                }
+                else
+                {
+                    <table class="mat-table">
+                        <thead><tr><th>App</th><th>Managed by</th><th class="mat-hide-sm">Since</th><th class="mat-hide-sm">Last used</th></tr></thead>
+                        <tbody>
+                            @foreach (var b in bindings)
+                            {
+                                <tr>
+                                    <td data-label="App">@b.Name <code>@b.Consumer</code></td>
+                                    <td data-label="Managed by">@(b.ManagedBy == "manual" ? "by hand" : b.ManagedBy)</td>
+                                    <td class="mat-hide-sm" data-label="Since">@(b.Since is { } since ? Format.DateTimeLocal(since.UtcDateTime) : "–")</td>
+                                    <td class="mat-hide-sm" data-label="Last used">@(b.LastUsed is { } used ? Format.Ago(used.UtcDateTime) : "–")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        </section>
+    }
+}

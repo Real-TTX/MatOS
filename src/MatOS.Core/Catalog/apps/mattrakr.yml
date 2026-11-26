@@ -1,0 +1,50 @@
+# MatTrakr – lists of movies, series and books.
+x-matos:
+  id: mattrakr
+  name: MatTrakr
+  tagline: Movies, series and books
+  description: Keep track of what you watched, what you read and what is next, with posters and ratings from TMDB and Google Books.
+  category: Fun
+  role: app
+  icon: mattrakr.png
+  homepage: https://github.com/Real-TTX/MatTrakr
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: mattrakr
+    port: 9242
+    hostPort: 9242
+  variables:
+    - key: ADMIN_PASSWORD
+      label: Admin password
+      type: secret
+      generate: true
+      help: The initial password of the user "admin". Leave empty to generate one.
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${ADMIN_PASSWORD}
+      secret: true
+    - label: Note
+      value: MatTrakr asks you to change this password on the first sign-in.
+
+services:
+  mattrakr:
+    image: ghcr.io/real-ttx/mattrakr:latest
+    restart: unless-stopped
+    environment:
+      MATTRAKR_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      - mattrakr-data:/app/data
+
+volumes:
+  mattrakr-data:

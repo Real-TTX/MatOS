@@ -1,0 +1,82 @@
+@page
+@model MatOS.Web.Pages.Backups.ScheduleEditModel
+@{
+    ViewData["Title"] = Model.IsEdit ? "Edit schedule" : "New schedule";
+    ViewData["PageSub"] = "Backs up one app or all of them, at the same time every day or week.";
+    ViewData["Crumbs"] = Crumbs.Of(("Backups", "/Backups"), ("Schedules", "/Backups?tab=schedules"), (Model.IsEdit ? Model.Input.Name : "New schedule", null));
+    ViewData["Width"] = "narrow";
+}
+
+<form method="post" class="mat-form" novalidate>
+    <input type="hidden" asp-for="Input.Id" />
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                <mat-field label="Name" asp-for="Input.Name" required="true" full="true">
+                    <input asp-for="Input.Name" class="mat-input" required maxlength="200" data-msg-required="Please enter a name." />
+                </mat-field>
+
+                <mat-field label="Apps" asp-for="Input.AppSlug" hint="@(Model.Engine is null ? "A schedule runs in MatDock when it can be used, otherwise in MatOS." : $"This schedule runs in {MatOS.Web.Pages.Backups.IndexModel.EngineLabel(Model.Engine)}.")">
+                    <select asp-for="Input.AppSlug" class="mat-select">
+                        <option value="">All apps</option>
+                        @foreach (var app in Model.Apps)
+                        {
+                            <option value="@app.Slug" selected="@(Model.Input.AppSlug == app.Slug)">@app.Name</option>
+                        }
+                    </select>
+                </mat-field>
+
+                <mat-field label="Repeat" asp-for="Input.Frequency">
+                    <select asp-for="Input.Frequency" class="mat-select">
+                        <option value="Daily">Every day</option>
+                        <option value="Weekly">Every week</option>
+                    </select>
+                </mat-field>
+
+                <div class="mat-field" data-show-if="#Input_Frequency" data-show-value="Weekly" @(Model.Input.Frequency == BackupFrequency.Weekly ? "" : "hidden")>
+                    <label class="mat-label" for="Input_Weekday">On</label>
+                    <select asp-for="Input.Weekday" class="mat-select">
+                        @foreach (var day in Enum.GetValues<DayOfWeek>())
+                        {
+                            <option value="@day">@day</option>
+                        }
+                    </select>
+                    <span class="mat-error"></span>
+                </div>
+
+                <mat-field label="At" asp-for="Input.Time" required="true" hint="@(Model.Engine switch { "matdock" => "Time of day in UTC: MatDock runs this schedule.", "local" => "Time of day on the MatOS host.", _ => "Time of day. MatDock runs schedules in UTC, the schedules of MatOS in the time zone of the host." })">
+                    <input asp-for="Input.Time" type="time" class="mat-input" required data-msg-required="Please choose a time." />
+                </mat-field>
+
+                <mat-field label="Keep the newest" asp-for="Input.Retention" hint="Older scheduled backups of an app are deleted.">
+                    <input asp-for="Input.Retention" type="number" min="1" max="365" class="mat-input" data-msg-range="Keep between 1 and 365 backups." />
+                </mat-field>
+
+                <div class="mat-field mat-field--full">
+                    <label class="mat-check">
+                        <input asp-for="Input.StopContainers" type="checkbox" />
+                        <span class="mat-check__text">Stop the app while its data is copied (consistent databases)</span>
+                    </label>
+                </div>
+                <div class="mat-field mat-field--full">
+                    <label class="mat-check">
+                        <input asp-for="Input.Enabled" type="checkbox" />
+                        <span class="mat-check__text">Schedule is on</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+        <a href="/Backups?tab=schedules" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        @if (Model.IsEdit)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" asp-page-handler="Delete" formnovalidate class="mat-btn mat-btn--danger" data-confirm="Delete the schedule “@Model.Input.Name”? Existing backups are kept." data-confirm-ok="Delete"><icon name="trash" /><span>Delete</span></button>
+        }
+    </div>
+</form>

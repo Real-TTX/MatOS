@@ -1,0 +1,181 @@
+@page
+@using MatOS.Core.Engines
+@model MatOS.Web.Pages.Wizard.IndexModel
+@{
+    ViewData["Title"] = "Setup wizard";
+    ViewData["PageSub"] = Model.AlreadyCompleted ? "Run it again to change the addresses, the engines or the DNS account." : "A few questions, then MatOS installs what it needs.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Setup wizard", null));
+    ViewData["Width"] = "narrow";
+    var steps = 5; // welcome, addresses, engines, DNS, review
+}
+
+<form method="post" class="mat-form mv-wizard" data-wizard novalidate>
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-stack mat-stack--sm">
+        <span class="mv-steplabel" data-step-label>Step 1 of @steps</span>
+        <ol class="mat-steps" aria-label="Setup progress">
+            @for (var i = 1; i <= steps; i++)
+            {
+                <li><span class="mat-sr-only">Step @i</span></li>
+            }
+        </ol>
+    </div>
+
+    @* ---------------------------------------------------------------- 1. welcome *@
+    <section class="mv-step" data-step aria-labelledby="step-welcome">
+        <div class="mv-step__head">
+            <h2 id="step-welcome">@(Model.AlreadyCompleted ? "Set up MatOS again" : "Welcome to MatOS")</h2>
+            <p>
+                MatOS is the launcher on top of five programs: MatDock runs your apps, Matcad gives them addresses and HTTPS,
+                Matddns keeps your DNS on your home IP, MatIdentity signs people in and MatSMTP sends the mail. Their settings live in their own screens,
+                so you can see and change what MatOS set up.
+            </p>
+        </div>
+
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <ul class="mv-checks">
+                    @if (Model.Engine.Available)
+                    {
+                        <li class="mv-checks__ok"><icon name="check-circle" /><span>Docker @Model.Engine.Version is connected (@Model.Engine.ContainersRunning containers running)</span></li>
+                    }
+                    else
+                    {
+                        <li class="mv-checks__bad"><icon name="x-circle" /><span>Docker is not reachable: @Model.Engine.Error</span></li>
+                    }
+                    <li class="mv-checks__ok"><icon name="check-circle" /><span>Your data lives in one volume and is easy to back up</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="button" class="mat-btn mat-btn--primary" data-next><span>Let's go</span><icon name="chevron-right" /></button>
+        </div>
+    </section>
+
+    @* ---------------------------------------------------------------- 2. addresses *@
+    <section class="mv-step" data-step aria-labelledby="step-addresses">
+        <div class="mv-step__head">
+            <h2 id="step-addresses">Where do your apps live?</h2>
+            <p>Both are optional. You can change them later in the settings.</p>
+        </div>
+
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack">
+                <mat-field label="Address of this machine" asp-for="PublicHost" hint="How you reach this host from your devices, like nas.local or 192.168.1.20.">
+                    <input asp-for="PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" />
+                </mat-field>
+                <mat-field label="Domain for your apps" asp-for="BaseDomain" hint="Every app gets its own address below this domain, like mail.example.com, with a certificate. Leave empty: every app gets a port of this machine, served by Matcad.">
+                    <input asp-for="BaseDomain" class="mat-input" placeholder="example.com" inputmode="url" autocomplete="off" />
+                </mat-field>
+            </div>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="button" class="mat-btn mat-btn--primary" data-next><span>Next</span><icon name="chevron-right" /></button>
+            <button type="button" class="mat-btn mat-btn--secondary" data-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+
+    @* ---------------------------------------------------------------- 3. the engines *@
+    <section class="mv-step" data-step aria-labelledby="step-engines">
+        <div class="mv-step__head">
+            <h2 id="step-engines">The engines</h2>
+            <p>MatDock is needed for everything else. Skip one of the others if something else on this machine already does its job.</p>
+        </div>
+
+        <fieldset class="mat-field mat-fieldset">
+            <legend class="mat-legend">Engines to install</legend>
+            <div class="mat-choices">
+                @foreach (var card in Model.Engines)
+                {
+                    var app = card.App;
+                    var locked = card.Required || card.Installed is not null;
+                    <label class="mat-choice" data-engine="@app.Id">
+                        @if (app.Id == EngineIds.Matcad)
+                        {
+                            <input asp-for="InstallMatcad" type="checkbox" disabled="@locked" />
+                        }
+                        else if (app.Id == EngineIds.Matddns)
+                        {
+                            <input asp-for="InstallMatddns" type="checkbox" disabled="@locked" />
+                        }
+                        else if (app.Id == EngineIds.MatIdentity)
+                        {
+                            <input asp-for="InstallMatIdentity" type="checkbox" disabled="@locked" />
+                        }
+                        else if (app.Id == EngineIds.MatSmtp)
+                        {
+                            <input asp-for="InstallMatSmtp" type="checkbox" disabled="@locked" />
+                        }
+                        else
+                        {
+                            <input type="checkbox" id="engine-@app.Id" checked disabled />
+                        }
+                        <app-icon name="@app.Name" icon="@app.Icon" />
+                        <span class="mat-choice__text">
+                            <strong data-engine-name>@app.Name</strong>
+                            <small>@card.Owns</small>
+                            <span>
+                                @if (card.Installed is not null) { <span class="mat-pill mat-pill--ok">Installed</span> }
+                                else if (card.Required) { <span class="mat-pill mat-pill--plain">Required</span> }
+                            </span>
+                            @foreach (var conflict in card.Conflicts)
+                            {
+                                <small class="mv-engine__warn">Port @conflict.Port is used by <code>@conflict.Container</code>.</small>
+                            }
+                        </span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+        <p class="mat-muted">Other tools, like Nginx Proxy Manager or Portainer, are in the store as plain apps.</p>
+
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="button" class="mat-btn mat-btn--primary" data-next><span>Next</span><icon name="chevron-right" /></button>
+            <button type="button" class="mat-btn mat-btn--secondary" data-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+
+    @* ---------------------------------------------------------------- 4. DNS account *@
+    <section class="mv-step" data-step aria-labelledby="step-dns">
+        <div class="mv-step__head">
+            <h2 id="step-dns">Where is your domain hosted?</h2>
+            <p>
+                With the account of your DNS provider, Matcad gets certificates without opening a port and Matddns keeps the address of
+                every app on your home IP. Without it, you can add these things in Matcad and Matddns yourself.
+            </p>
+        </div>
+
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <partial name="_DnsFields" model="Model.Dns" />
+            </div>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="button" class="mat-btn mat-btn--primary" data-next><span>Next</span><icon name="chevron-right" /></button>
+            <button type="button" class="mat-btn mat-btn--secondary" data-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+
+    @* ---------------------------------------------------------------- 5. review *@
+    <section class="mv-step" data-step aria-labelledby="step-review">
+        <div class="mv-step__head">
+            <h2 id="step-review">Ready to go</h2>
+            <p>This is what MatOS will do. Passwords are generated and shown on the page of the app afterwards.</p>
+        </div>
+
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <dl class="mat-kv" data-wizard-summary></dl>
+            </div>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="rocket" /><span>Install and finish</span></button>
+            <button type="button" class="mat-btn mat-btn--secondary" data-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+</form>

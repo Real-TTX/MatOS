@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Rebuilds the Mattiverse container and redeploys the dev stack (the project's live-reload / test workflow).
+    Rebuilds the MatOS container and redeploys the dev stack (the project's live-reload / test workflow).
 .DESCRIPTION
     Always rebuilds the image from the current source and recreates the container; the data volume stays.
     The version of a local build is "local-<builddate>".
@@ -23,9 +23,9 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
-    $env:MATTIVERSE_CHANNEL = 'local'
-    $env:MATTIVERSE_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyyMMdd')
-    $env:MATTIVERSE_PORT = "$Port"
+    $env:MATOS_CHANNEL = 'local'
+    $env:MATOS_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyyMMdd')
+    $env:MATOS_PORT = "$Port"
 
     $compose = @('compose', '-f', 'docker-compose.dev.yml')
 
@@ -41,7 +41,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'docker compose failed.' }
 
     Write-Host ''
-    Write-Host "Mattiverse local-$($env:MATTIVERSE_BUILD_DATE) is running on http://localhost:$Port" -ForegroundColor Green
+    Write-Host "MatOS local-$($env:MATOS_BUILD_DATE) is running on http://localhost:$Port" -ForegroundColor Green
     Write-Host 'Dev login: admin@example.com / Start12345   |   SQLite web: http://localhost:8021' -ForegroundColor DarkGray
 }
 finally {

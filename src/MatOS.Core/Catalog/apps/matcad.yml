@@ -1,0 +1,88 @@
+# Matcad – reverse proxy (Caddy) with a web UI.
+x-matos:
+  id: matcad
+  name: Matcad
+  tagline: Reverse proxy with automatic HTTPS
+  description: >-
+    Routes your domains to your apps, issues Let's Encrypt certificates (wildcards too, through DNS providers)
+    and can protect apps with a login. MatOS creates a route for every app you install.
+  category: Infrastructure
+  role: proxy
+  icon: matcad.svg
+  homepage: https://github.com/Real-TTX/Matcad
+  recommended: true
+  provision: matcad
+  core: true
+  # The platform contract (/api) and the sign-in through MatIdentity: MatOS fills MAT_API_KEY, MAT_FRAME_ANCESTORS and MATIDENTITY_*.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: matcad
+    port: 4433
+    hostPort: 4433
+  shared: [caddy]
+  # The service that listens for the routes of the apps: without a domain every app gets a port route, and MatOS publishes those ports here
+  # (the apps publish none themselves). With a domain the apps are reached under it on 80 and 443.
+  routes:
+    service: caddy
+  notes:
+    - Needs the host ports 80 and 443. Stop any other web server or proxy that uses them first.
+    - Every app is reached through Matcad - under your domain, or without one on a port of this machine that MatOS picks.
+    - Keep the Matcad UI (port 4433) off the public internet.
+  variables:
+    - key: MATCAD_API_KEY
+      label: API key
+      type: secret
+      generate: true
+      hidden: true
+    - key: MATCAD_ADMIN_PASSWORD
+      label: Admin password
+      type: secret
+      generate: true
+      help: The password of the user "admin" in Matcad (at least 8 characters). Leave empty to generate one.
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${MATCAD_ADMIN_PASSWORD}
+      secret: true
+    - label: Note
+      value: The routes of your apps are managed by MatOS and carry a "Managed by MatOS" badge in Matcad.
+
+services:
+  caddy:
+    image: ghcr.io/real-ttx/matcad-caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-logs:/caddy-logs
+
+  matcad:
+    image: ghcr.io/real-ttx/matcad:latest
+    restart: unless-stopped
+    depends_on:
+      - caddy
+    environment:
+      Matcad__ApiKey: ${MATCAD_API_KEY}
+      MATCAD_ADMIN_PASSWORD: ${MATCAD_ADMIN_PASSWORD}
+      MAT_API_KEY: ${MAT_API_KEY}
+      # The addresses of MatOS, which may show it in the window of its home screen (MatDesign docs/PLATFORM.md); empty: nobody may frame it.
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      - matcad-data:/data
+      - caddy-logs:/caddy-logs
+
+volumes:
+  matcad-data:
+  caddy-data:
+  caddy-logs:

@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/Mattiverse.Core/Mattiverse.Core.csproj" />
-    <Project Path="src/Mattiverse.Web/Mattiverse.Web.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/Mattiverse.Tests/Mattiverse.Tests.csproj" />
-  </Folder>
-</Solution>

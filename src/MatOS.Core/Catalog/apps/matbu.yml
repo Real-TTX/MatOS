@@ -1,0 +1,73 @@
+# MatBu – backup and sync for files and Docker volumes.
+x-matos:
+  id: matbu
+  name: MatBu
+  tagline: Backup and sync
+  description: Scheduled backups and file sync between hosts, with a worker that can also back up Docker volumes.
+  category: Tools
+  role: app
+  icon: matbu.svg
+  homepage: https://github.com/Real-TTX/MatBu
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  ui:
+    service: matbu
+    port: 9293
+    hostPort: 9293
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATBU_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
+  notes:
+    - MatBu gets read-only access to the Docker socket to find the volumes it can back up.
+  credentials:
+    - label: Username (without MatIdentity)
+      value: admin
+    - label: Password
+      value: ${MATBU_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  matbu:
+    image: ghcr.io/real-ttx/matbu:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      MATBU_DATA_PATH: /data
+      MATBU_TRUST_FORWARD_HEADERS: "true"
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATBU_ADMIN_PASSWORD: ${MATBU_ADMIN_PASSWORD}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      - matbu-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  matbu-worker:
+    image: ghcr.io/real-ttx/matbu:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      MATBU_DATA_PATH: /data
+      MATBU_DOCKER_WORKER: "true"
+    volumes:
+      - matbu-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  matbu-data:

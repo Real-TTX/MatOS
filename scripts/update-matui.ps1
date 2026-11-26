@@ -3,8 +3,8 @@
 .SYNOPSIS
     Copies the newest MatUi toolkit (the UI of all Mat apps) from a running MatDesign into this app.
 .DESCRIPTION
-    MatDesign serves the toolkit as an archive (/ui/matui.zip). Mattiverse carries its own copy in
-    src/Mattiverse.Web/wwwroot/matui (rule CODE-03: copy, do not link), so it works offline. Run this when
+    MatDesign serves the toolkit as an archive (/ui/matui.zip). MatOS carries its own copy in
+    src/MatOS.Web/wwwroot/matui (rule CODE-03: copy, do not link), so it works offline. Run this when
     MatDesign has a new release, then rebuild and look at the pages. The version is the first line of matui.css.
 .PARAMETER Url
     Address of MatDesign (default http://localhost:8060, the dev stack).
@@ -19,7 +19,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$target = Join-Path $root 'src/Mattiverse.Web/wwwroot/matui'
+$target = Join-Path $root 'src/MatOS.Web/wwwroot/matui'
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ('matui-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
 try {

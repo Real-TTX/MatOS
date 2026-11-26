@@ -1,26 +1,26 @@
-# Mattiverse – release stack: as simple as it gets, one service and one data volume.
+# MatOS – release stack: as simple as it gets, one service and one data volume.
 #   docker compose up -d
 #
 # Or without Compose, a single command:
-#   docker run -d --name mattiverse --restart unless-stopped -p 8030:8030 \
-#     -v mattiverse-data:/data -v /var/run/docker.sock:/var/run/docker.sock \
-#     ghcr.io/real-ttx/mattiverse:latest
+#   docker run -d --name matos --restart unless-stopped -p 8030:8030 \
+#     -v matos-data:/data -v /var/run/docker.sock:/var/run/docker.sock \
+#     ghcr.io/real-ttx/matos:latest
 #
 # Web: http://localhost:8030  (the first start opens the setup wizard)
-name: mattiverse
+name: matos
 
 services:
-  mattiverse:
-    image: ghcr.io/real-ttx/mattiverse:latest
-    container_name: mattiverse
+  matos:
+    image: ghcr.io/real-ttx/matos:latest
+    container_name: matos
     restart: unless-stopped
     ports:
-      - "${MATTIVERSE_PORT:-8030}:8030"
+      - "${MATOS_PORT:-8030}:8030"
     volumes:
       # Database, config, session keys, the compose files of all installed apps and the backups.
-      - mattiverse-data:/data
-      # Mattiverse installs, updates and backs up the apps through the Docker engine.
+      - matos-data:/data
+      # MatOS installs, updates and backs up the apps through the Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
-  mattiverse-data:
+  matos-data:

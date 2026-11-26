@@ -1,0 +1,57 @@
+@page
+@model MatOS.Web.Pages.Backups.CreateModel
+@{
+    ViewData["Title"] = "New backup";
+    ViewData["PageSub"] = "Copies the data of one app.";
+    ViewData["Crumbs"] = Crumbs.Of(("Backups", "/Backups"), ("New backup", null));
+    ViewData["Width"] = "narrow";
+}
+
+@if (Model.Apps.Count == 0)
+{
+    <div class="mat-card">
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="apps" /></span>
+            <div class="mat-empty__title">There is no app to back up yet</div>
+            <p>Install an app first; then you can copy its data here.</p>
+            <a class="mat-btn mat-btn--primary" href="/Store"><icon name="store" /><span>Open the store</span></a>
+        </div>
+    </div>
+}
+else
+{
+    <form method="post" class="mat-form" novalidate>
+        <partial name="_ValidationSummary" />
+
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack">
+                <mat-field label="App" asp-for="AppId" required="true">
+                    <select asp-for="AppId" class="mat-select" required data-msg-required="Please choose an app.">
+                        <option value="">Choose an app …</option>
+                        @foreach (var app in Model.Apps)
+                        {
+                            <option value="@app.Id" selected="@(Model.AppId == app.Id)">@app.Name</option>
+                        }
+                    </select>
+                </mat-field>
+
+                <div class="mat-field">
+                    <label class="mat-check">
+                        <input asp-for="StopContainers" type="checkbox" />
+                        <span class="mat-check__text">Stop the app while its data is copied (consistent databases)</span>
+                    </label>
+                    <span class="mat-hint">The app is down for the duration of the copy and started again afterwards. Without it, the copy is taken from the running app.</span>
+                </div>
+
+                <mat-field label="Note" asp-for="Note" hint="Optional, shown in the list.">
+                    <input asp-for="Note" class="mat-input" maxlength="500" />
+                </mat-field>
+            </div>
+        </div>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Back up</span></button>
+            <a href="/Backups" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        </div>
+    </form>
+}

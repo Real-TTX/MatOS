@@ -44,24 +44,24 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Restore
-        run: dotnet restore Mattiverse.slnx
+        run: dotnet restore MatOS.slnx
 
       - name: Build
         run: >
-          dotnet build Mattiverse.slnx -c Release --no-restore
+          dotnet build MatOS.slnx -c Release --no-restore
           -p:Channel=${{ steps.ver.outputs.channel }}
           -p:BuildNumber=${{ steps.ver.outputs.build }}
           -p:BuildDate=${{ steps.ver.outputs.date }}
 
       - name: Test
         # The GitHubActions logger shows every failed test as an annotation of the run (and in the summary of a pull request).
-        run: dotnet test Mattiverse.slnx -c Release --no-build --verbosity normal --logger GitHubActions
+        run: dotnet test MatOS.slnx -c Release --no-build --verbosity normal --logger GitHubActions
 
       - name: Resolve version string
         id: appver
         shell: bash
         run: |
-          v=$(dotnet msbuild src/Mattiverse.Web/Mattiverse.Web.csproj -getProperty:InformationalVersion \
+          v=$(dotnet msbuild src/MatOS.Web/MatOS.Web.csproj -getProperty:InformationalVersion \
                 -p:Channel=${{ steps.ver.outputs.channel }} \
                 -p:BuildNumber=${{ steps.ver.outputs.build }} \
                 -p:BuildDate=${{ steps.ver.outputs.date }})

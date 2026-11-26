@@ -1,0 +1,39 @@
+@using MatOS.Core.Configuration
+@using MatOS.Web.Support
+@model DnsFormModel
+
+@* The DNS account of the domain. The page model binds DnsProvider, DnsZone and DnsCredentials (see DnsForm). *@
+<div class="mat-stack">
+    <mat-field label="DNS provider" for-id="DnsProvider" hint="Where your domain is hosted. MatOS hands the account to Matcad (certificates) and Matddns (DNS records); nobody else sees it.">
+        <select id="DnsProvider" name="DnsProvider" class="mat-select">
+            <option value="" selected="@(Model.Provider == "")">None (I manage DNS myself)</option>
+            @foreach (var provider in DnsProviders.All)
+            {
+                <option value="@provider.Id" selected="@(Model.Provider == provider.Id)">@provider.Name</option>
+            }
+        </select>
+    </mat-field>
+
+    @foreach (var provider in DnsProviders.All)
+    {
+        <div data-show-if="#DnsProvider" data-show-value="@provider.Id" @(Model.Provider == provider.Id ? "" : "hidden")>
+            <div class="mat-form__grid">
+                @foreach (var field in provider.Fields)
+                {
+                    var name = DnsForm.FieldName(provider, field);
+                    var saved = Model.Stored.Contains(name);
+                    <mat-field label="@field.Label" for-id="dns-@name" hint="@(saved && field.Secret ? "Saved. Leave empty to keep it." : null)">
+                        <input id="dns-@name" type="@(field.Secret ? "password" : "text")" name="DnsCredentials[@name]" class="mat-input" autocomplete="off"
+                               value="@(field.Secret ? "" : Model.Values.GetValueOrDefault(name))" placeholder="@(saved && field.Secret ? "••••••••" : null)" />
+                    </mat-field>
+                }
+            </div>
+        </div>
+    }
+
+    <div data-show-if="#DnsProvider" @(Model.Provider == "" ? "hidden" : "")>
+        <mat-field label="Zone at the provider" for-id="DnsZone" hint="Only if it differs from your domain: the zone example.com for apps living on apps.example.com.">
+            <input id="DnsZone" name="DnsZone" class="mat-input" value="@Model.Zone" placeholder="example.com" />
+        </mat-field>
+    </div>
+</div>

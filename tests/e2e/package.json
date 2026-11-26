@@ -1,7 +1,7 @@
 {
-  "name": "mattiverse-e2e",
+  "name": "matos-e2e",
   "private": true,
-  "description": "End-to-end checks of the pages of Mattiverse in a real browser against a running stack (node run.js [base url]).",
+  "description": "End-to-end checks of the pages of MatOS in a real browser against a running stack (node run.js [base url]).",
   "scripts": {
     "test": "node run.js"
   },

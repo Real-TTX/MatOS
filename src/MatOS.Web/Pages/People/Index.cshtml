@@ -1,0 +1,88 @@
+@page
+@model MatOS.Web.Pages.People.IndexModel
+@{
+    ViewData["Title"] = "People";
+    ViewData["PageSub"] = "Who may use which app, with which role, rights and quotas.";
+    ViewData["Crumbs"] = Crumbs.Of(("People", null));
+    var list = Model.List;
+}
+
+<tab-bar model="Model.Tabs" label="People" />
+
+@if (!Model.Available)
+{
+    <div class="mat-empty">
+        <span class="mat-empty__icon"><icon name="users" /></span>
+        <div class="mat-empty__title">People need MatIdentity</div>
+        <p>MatIdentity keeps the people of all apps: one sign-in, and here who may use which app with which rights. Without it every app keeps its own users.</p>
+        <a class="mat-btn mat-btn--primary" href="/Store"><icon name="store" /><span>Open the Store</span></a>
+        <a class="mat-btn mat-btn--secondary" href="/Users"><icon name="key" /><span>MatOS accounts</span></a>
+    </div>
+}
+else
+{
+    <div class="mat-list">
+        <partial name="_Toolbar" model="list.Toolbar" />
+
+        @if (Model.Problem is not null)
+        {
+            <div class="mat-alert mat-alert--error" role="alert"><icon name="alert" /><div class="mat-alert__body">MatIdentity could not be read: @Model.Problem</div></div>
+        }
+        else if (list.Items.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon"><icon name="users" /></span>
+                <div class="mat-empty__title">@(list.Toolbar.Total == 0 ? "No people yet" : "Nothing matches")</div>
+                <p>@(list.Toolbar.Total == 0 ? "Add the people who use the apps; MatIdentity sends each an invitation." : "No person matches. Change the search or the filter.")</p>
+                <a class="mat-btn mat-btn--secondary" href="@(list.Toolbar.Total == 0 ? "/People/Edit" : "/People")">@(list.Toolbar.Total == 0 ? "New person" : "Reset the tools")</a>
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">People</caption>
+                    <thead>
+                        <tr><th scope="col">Name</th><th scope="col" class="mat-hide-sm">User name</th><th scope="col" class="mat-hide-sm">Groups</th><th scope="col">Apps</th><th scope="col">Status</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in list.Items)
+                        {
+                            <tr>
+                                <td data-label="Name"><div class="mat-table__name"><a href="/People/Edit?id=@Uri.EscapeDataString(p.Subject)">@p.DisplayName</a></div>@if (p.Email is not null) { <div class="mat-muted">@p.Email</div> }</td>
+                                <td data-label="User name" class="mat-hide-sm mat-mono">@p.UserName</td>
+                                <td data-label="Groups" class="mat-hide-sm">@(p.Groups.Count == 0 ? "–" : string.Join(", ", p.Groups.Select(g => g.Name)))</td>
+                                <td data-label="Apps">@(p.Administrator ? "All" : p.Access.Count.ToString())</td>
+                                <td data-label="Status">
+                                    @if (!p.Active)
+                                    {
+                                        <span class="mat-pill">Disabled</span>
+                                    }
+                                    else if (p.Administrator)
+                                    {
+                                        <span class="mat-pill mat-pill--info">Administrator</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="mat-pill mat-pill--ok">Active</span>
+                                    }
+                                </td>
+                                <td class="mat-table__cell-actions">
+                                    <div class="mat-table__actions">
+                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/People/Edit?id=@Uri.EscapeDataString(p.Subject)" aria-label="Edit @p.DisplayName" data-tip="Edit"><icon name="edit" /></a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <partial name="_Pager" model="list.Pager" />
+
+        <div class="mat-actions">
+            <a href="/People/Edit" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New person</span></a>
+        </div>
+    </div>
+}

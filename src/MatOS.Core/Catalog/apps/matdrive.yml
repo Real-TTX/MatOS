@@ -1,0 +1,93 @@
+# MatDrive – your files in the browser (drives, sharing, versions, WebDAV, storage locations of the NAS).
+x-matos:
+  id: matdrive
+  name: MatDrive
+  tagline: Files in the browser – drives, sharing and WebDAV
+  description: My Drive and shared drives, sharing with people and links, versions, trash, WebDAV, the storage locations of your NAS (SMB, SFTP, FTP, WebDAV) and office files in MatOffice.
+  category: Files
+  role: app
+  icon: matdrive.svg
+  homepage: https://github.com/Real-TTX/MatDrive
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  ui:
+    service: web
+    port: 4810
+    hostPort: 4810
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATDRIVE_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The files lie in the volume matdrive-data (/data/files); back it up together with the database volume matdrive-db.
+    - Storage locations of the NAS are bind-mounted below /storage and added under Administration → Storage locations.
+    - Opens its office files in MatOffice (office.edit) as soon as MatOffice is installed; MatOS connects the two by itself. Without MatOS, enter MatOffice under Administration → Connections.
+  credentials:
+    - label: E-mail (without MatIdentity)
+      value: admin@matdrive.local
+    - label: Password
+      value: ${MATDRIVE_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matdrive
+      POSTGRES_USER: matdrive
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matdrive-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matdrive -d matdrive"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matdrive:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matdrive;Username=matdrive;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATDRIVE_ADMIN_PASSWORD: ${MATDRIVE_ADMIN_PASSWORD}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      - matdrive-data:/data
+
+volumes:
+  matdrive-db:
+  matdrive-data:

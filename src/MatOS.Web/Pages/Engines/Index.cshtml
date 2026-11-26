@@ -1,0 +1,103 @@
+@page
+@model MatOS.Web.Pages.Engines.IndexModel
+@{
+    var e = Model.Engine;
+    ViewData["Title"] = e.Catalog.Name;
+    ViewData["OwnHead"] = true;
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Engines", "/Settings/Engines"), (e.Catalog.Name, null));
+    ViewData["Width"] = "narrow";
+    var lifecycle = e.App?.Lifecycle;
+}
+@* One engine, as part of the system: what it is, its state, what it keeps for MatOS and which apps it serves. Its own pages open here when the engine
+   lets MatOS frame it (MAT_FRAME_ANCESTORS), else in a new tab. *@
+
+<div class="mv-apphead">
+    <app-icon name="@e.Catalog.Name" icon="@e.Catalog.Icon" size="xl" />
+    <div class="mv-apphead__text">
+        <h1>@e.Catalog.Name</h1>
+        <div class="mv-apphead__sub">
+            @if (e.App is null)
+            {
+                <span class="mat-pill">Not installed</span>
+            }
+            else if (lifecycle != MatOS.Core.Entities.AppLifecycle.Installed)
+            {
+                <span class="mat-pill mat-pill--busy">@lifecycle</span>
+            }
+            else if (e.Status is { ApiVersion: >= 1 } status)
+            {
+                <span class="mat-pill mat-pill--ok">Connected</span>
+                <span class="mat-muted">Version <code>@status.Version</code> · API v@(status.ApiVersion)</span>
+            }
+            else
+            {
+                <span class="mat-pill mat-pill--warn">API not answering</span>
+            }
+        </div>
+    </div>
+</div>
+
+<p>@e.Owns</p>
+
+<div class="mat-actions">
+    @if (e.App is null)
+    {
+        <a class="mat-btn mat-btn--primary" href="/Store/Install?id=@e.Catalog.Id"><icon name="plus" /><span>Install @e.Catalog.Name</span></a>
+    }
+    else
+    {
+        @if (Model.Frame is { Embeddable: true })
+        {
+            <a class="mat-btn mat-btn--primary" href="/Apps/Open?id=@e.App.Id"><icon name="monitor" /><span>Open @e.Catalog.Name here</span></a>
+        }
+        @if (e.OpenUrl is not null)
+        {
+            <a class="mat-btn @(Model.Frame is { Embeddable: true } ? "mat-btn--secondary" : "mat-btn--primary")" href="@e.OpenUrl" target="_blank" rel="noopener"><icon name="external" /><span>Open @e.Catalog.Name in a new tab</span></a>
+        }
+        <a class="mat-btn mat-btn--secondary" href="/Apps/Details?id=@e.App.Id"><icon name="info" /><span>Details</span></a>
+        <a class="mat-btn mat-btn--ghost" href="/Settings/Engines"><icon name="layers" /><span>All engines</span></a>
+    }
+</div>
+
+@if (Model.Frame is { Embeddable: false } frame)
+{
+    <p class="mat-muted">It opens in a new tab: @frame.Reason An update of @e.Catalog.Name that knows <code>MAT_FRAME_ANCESTORS</code> shows it here; MatOS gives it its addresses when it updates the engine.</p>
+}
+
+@if (e.App is not null && lifecycle == MatOS.Core.Entities.AppLifecycle.Installed && e.Status is not { ApiVersion: >= 1 })
+{
+    <p class="mat-muted">It may still be starting, or this image is older than its API. MatOS asks again when you open this window.</p>
+}
+
+<section class="mat-section" aria-labelledby="served-title">
+    <div class="mat-section__head">
+        <h2 id="served-title">What it does for your apps</h2>
+        <p>Everything here carries the mark <em>Managed by MatOS</em> in @e.Catalog.Name.</p>
+    </div>
+    @if (Model.Served.Count == 0)
+    {
+        <div class="mat-empty mat-empty--framed">
+            <span class="mat-empty__icon"><icon name="apps" /></span>
+            <div class="mat-empty__title">Nothing yet</div>
+            <p>None of your apps uses @e.Catalog.Name so far.</p>
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">The apps @e.Catalog.Name serves</caption>
+                <thead><tr><th scope="col">App</th><th scope="col">What @e.Catalog.Name keeps for it</th></tr></thead>
+                <tbody>
+                    @foreach (var (app, what) in Model.Served)
+                    {
+                        <tr>
+                            <td data-label="App"><a href="/Apps/Details?id=@app.Id">@app.Name</a></td>
+                            <td data-label="What" class="mat-mono">@what</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

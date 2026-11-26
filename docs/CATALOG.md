@@ -1,16 +1,16 @@
 # The app catalog
 
-An app in the store is a normal **`docker compose` file** with one extra top-level block, `x-mattiverse`. Compose ignores
+An app in the store is a normal **`docker compose` file** with one extra top-level block, `x-matos`. Compose ignores
 `x-*` keys, so the same file also runs with plain `docker compose up`.
 
-Built-in entries live in [`src/Mattiverse.Core/Catalog/apps`](../src/Mattiverse.Core/Catalog/apps) and are embedded in the
+Built-in entries live in [`src/MatOS.Core/Catalog/apps`](../src/MatOS.Core/Catalog/apps) and are embedded in the
 image. Your own entries go to **`/data/catalog/*.yml`** (the data volume); use **Store → Reload catalog** to pick them up.
 A file with the same `id` as a built-in entry **replaces** it, and a file that cannot be parsed is skipped and logged.
 
 ## Example
 
 ```yaml
-x-mattiverse:
+x-matos:
   id: wiki                    # lowercase letters, digits, dashes; the folder and project name derive from it
   name: Wiki
   tagline: Notes for the family
@@ -29,9 +29,9 @@ x-mattiverse:
     signIn: /Account/Login    # optional: where its sign-in starts; with MatIdentity the app is opened here, so the person lands in it without a click
   shared: [proxy]             # more services that must be reachable by the reverse proxy (the UI service always is)
   routes:                     # only for the reverse proxy (a provider of web.route): the service that listens for the routes;
-    service: caddy            # without a domain Mattiverse publishes the port of every app here (the apps publish none)
+    service: caddy            # without a domain MatOS publishes the port of every app here (the apps publish none)
   provision: matcad           # optional: a built-in provisioner to run after the install (matdock | matcad | matddns | matidentity | matsmtp)
-  platform: true              # optional: the app speaks the platform contract (MatDesign docs/PLATFORM.md): Mattiverse gives it MAT_API_KEY and a Manage page
+  platform: true              # optional: the app speaks the platform contract (MatDesign docs/PLATFORM.md): MatOS gives it MAT_API_KEY and a Manage page
   consumes:                   # optional: what the app uses of other apps (MatDesign docs/PLATFORM.md "Capabilities"); the broker binds each when a provider is installed
     - capability: identity.oidc   # the sign-in through MatIdentity (params: callback /signin-oidc, signedOut /signout-callback-oidc, backchannel /signout-backchannel)
     - capability: mail.smtp       # its mail through MatSMTP (params: sender = the part before the @, default the slug)
@@ -73,10 +73,10 @@ volumes:
 
 ## Rules
 
-- **Do not publish the UI port in the compose file.** Mattiverse publishes it itself (`ui.port` on a free host port) in the
+- **Do not publish the UI port in the compose file.** MatOS publishes it itself (`ui.port` on a free host port) in the
   rendered compose file. Ports that are fixed on purpose (80/443 of a proxy, the mail ports of MatMail) are written in the
-  compose file; Mattiverse checks them before the install and warns when another container holds them.
-- **Named volumes only.** A relative bind mount would resolve inside the Mattiverse container.
+  compose file; MatOS checks them before the install and warns when another container holds them.
+- **Named volumes only.** A relative bind mount would resolve inside the MatOS container.
 - **Answers reach compose as `${KEY}`** from the app's `.env`. Besides your variables you can use `${MV_SLUG}`,
   `${MV_PROJECT}`, `${MV_PUBLIC_HOST}` and `${TZ}`. Values must not contain a single quote or a line break.
 - Every `${KEY}` in the compose file needs a variable or a default (`${KEY:-default}`); the unit tests check this for the
@@ -94,7 +94,7 @@ volumes:
   (`MATIDENTITY_*`, `MATSMTP_*`, ...) to the app's web service and its `.env`; without a provider they are empty and the app does it itself. An app whose image says what it
   consumes in its own `/api` needs no entry (what the `/api` says is added; it wins for the same capability). `identity.oidc` needs a `ui`.
 - The old keys `identity: {}` (with `callback`, `signedOut`, `backchannel`) and `mail: {}` (with `sender`) are read as `identity.oidc` and `mail.smtp` with those parameters, so a
-  catalog copy of an earlier Mattiverse keeps working. The variables an earlier Mattiverse filled for them are taken over as the app's bindings at its next deploy.
+  catalog copy of an earlier MatOS keeps working. The variables an earlier MatOS filled for them are taken over as the app's bindings at its next deploy.
 - A service other than the web service that needs the variables (the one that sends the mail) names them in the compose file (`MATSMTP_HOST: ${MATSMTP_HOST:-}`): the values are in the
   `.env`. The web service gets them by itself.
 
@@ -109,14 +109,14 @@ An entry says nothing about what the app provides, consumes or adds to the home 
 
 Do not list these in the compose file: the entry stays the same whatever is installed beside the app. A variable the entry declares itself wins over the broker's.
 
-## What Mattiverse adds
+## What MatOS adds
 
-Mattiverse renders the entry into one compose file (`ComposeRenderer`). For every service of an app it sets:
+MatOS renders the entry into one compose file (`ComposeRenderer`). For every service of an app it sets:
 
 | | |
 |---|---|
-| `container_name` | `mattiverse-<app>-<service>`: a stable name on the shared network |
-| labels | `mattiverse.managed`, `mattiverse.app`, `mattiverse.instance`, `mattiverse.service` |
-| networks | `default` plus the shared `mattiverse` network, for the UI service and the services listed in `shared` |
-| `ports` | `<host port>:<ui.port>` for the UI service, **only while no reverse proxy routes the app**; with Matcad the app publishes no port: under a domain it is `<app>.<domain>` on 80/443, without one Matcad's route service (`routes.service`) publishes `<host port>:<host port>` for it. The host port is picked by Mattiverse (`ui.hostPort` first, else a free one of the pool); nobody chooses it |
+| `container_name` | `matos-<app>-<service>`: a stable name on the shared network |
+| labels | `matos.managed`, `matos.app`, `matos.instance`, `matos.service` |
+| networks | `default` plus the shared `matos` network, for the UI service and the services listed in `shared` |
+| `ports` | `<host port>:<ui.port>` for the UI service, **only while no reverse proxy routes the app**; with Matcad the app publishes no port: under a domain it is `<app>.<domain>` on 80/443, without one Matcad's route service (`routes.service`) publishes `<host port>:<host port>` for it. The host port is picked by MatOS (`ui.hostPort` first, else a free one of the pool); nobody chooses it |
 | `x-matdock` | one block for the stack (name, description, category), so MatDock's launchpad shows it as an app |

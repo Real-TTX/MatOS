@@ -1,0 +1,47 @@
+@page
+@model MatOS.Web.Pages.Apps.OpenModel
+@{
+    var app = Model.App;
+    ViewData["Title"] = app.Name;
+    ViewData["OwnHead"] = true;
+    ViewData["Flush"] = true;
+    ViewData["Crumbs"] = Crumbs.Of(("Apps", "/Apps"), (app.Name, null));
+}
+
+@* data-window-tab: what "Open in a new tab" of the window of the home screen opens (the app itself, not this page). *@
+<div class="mv-appview" data-window-tab="@Model.OpenUrl">
+    <div class="mv-appview__bar">
+        <div class="mv-appview__title">
+            <app-icon name="@app.Name" icon="@Model.Icon" size="sm" />
+            <h1 class="mat-fs-md">@app.Name</h1>
+        </div>
+        @if (Model.Frame.Embeddable)
+        {
+            <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-frame-reload="app-frame" aria-label="Reload @app.Name" data-tip="Reload"><icon name="refresh" /></button>
+        }
+        <a href="@Model.OpenUrl" target="_blank" rel="noopener" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Open @app.Name in a new tab" data-tip="Open in a new tab"><icon name="external" /></a>
+        <a href="/Apps/Details?id=@app.Id" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Details of @app.Name" data-tip="Details"><icon name="info" /></a>
+    </div>
+
+    @if (Model.Frame.Embeddable)
+    {
+        <iframe id="app-frame" class="mv-appview__frame" src="@Model.OpenUrl" title="@app.Name"
+                allow="clipboard-read; clipboard-write; fullscreen; camera; microphone; geolocation"
+                referrerpolicy="same-origin"></iframe>
+    }
+    else
+    {
+        <div class="mv-appview__fallback">
+            <div class="mat-card">
+                <div class="mat-card__body mv-centered">
+                    <app-icon name="@app.Name" icon="@Model.Icon" size="xl" />
+                    <p class="mat-muted">@Model.Frame.Reason</p>
+                    <div class="mat-btn-row mat-btn-row--plain">
+                        <a href="@Model.OpenUrl" target="_blank" rel="noopener" class="mat-btn mat-btn--primary"><icon name="external" /><span>Open in a new tab</span></a>
+                        <a href="/Apps/Details?id=@app.Id" class="mat-btn mat-btn--ghost"><icon name="info" /><span>Details</span></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

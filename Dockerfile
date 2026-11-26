@@ -12,14 +12,14 @@ WORKDIR /src
 
 # Restore first (better layer caching).
 COPY ["global.json", "Directory.Build.props", "./"]
-COPY ["src/Mattiverse.Core/Mattiverse.Core.csproj", "src/Mattiverse.Core/"]
-COPY ["src/Mattiverse.Web/Mattiverse.Web.csproj", "src/Mattiverse.Web/"]
-RUN dotnet restore "src/Mattiverse.Web/Mattiverse.Web.csproj"
+COPY ["src/MatOS.Core/MatOS.Core.csproj", "src/MatOS.Core/"]
+COPY ["src/MatOS.Web/MatOS.Web.csproj", "src/MatOS.Web/"]
+RUN dotnet restore "src/MatOS.Web/MatOS.Web.csproj"
 
 COPY src src
 # Fall back to today's date when BuildDate is not supplied, so the version never ends in "-".
 RUN BUILD_DATE="${BuildDate:-$(date -u +%Y%m%d)}" && \
-    dotnet publish "src/Mattiverse.Web/Mattiverse.Web.csproj" \
+    dotnet publish "src/MatOS.Web/MatOS.Web.csproj" \
     -c Release -o /app/publish --no-restore \
     -p:UseAppHost=false \
     -p:Channel=$Channel -p:BuildNumber=$BuildNumber -p:BuildDate=$BUILD_DATE
@@ -30,7 +30,7 @@ RUN BUILD_DATE="${BuildDate:-$(date -u +%Y%m%d)}" && \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Docker CLI + compose plugin: Mattiverse installs and manages the apps through the mounted
+# Docker CLI + compose plugin: MatOS installs and manages the apps through the mounted
 # /var/run/docker.sock. Installed from Docker's apt repo (multi-arch via dpkg --print-architecture).
 # The base image is Ubuntu or Debian depending on the .NET release, so the repo is chosen from /etc/os-release.
 RUN apt-get update \
@@ -48,7 +48,7 @@ RUN apt-get update \
 
 ENV ASPNETCORE_URLS=http://+:8030 \
     ASPNETCORE_ENVIRONMENT=Production \
-    Mattiverse__DataPath=/data \
+    MatOS__DataPath=/data \
     DOTNET_gcServer=0 \
     DOTNET_TieredPGO=1
 
@@ -61,7 +61,7 @@ COPY --from=build /app/publish .
 
 # The app checks itself, so the image needs no extra tools.
 HEALTHCHECK --interval=30s --timeout=8s --start-period=30s --retries=3 \
-    CMD ["dotnet", "Mattiverse.Web.dll", "--healthcheck"]
+    CMD ["dotnet", "MatOS.Web.dll", "--healthcheck"]
 
 # Runs as root on purpose: access to the Docker socket is root-equivalent anyway.
-ENTRYPOINT ["dotnet", "Mattiverse.Web.dll"]
+ENTRYPOINT ["dotnet", "MatOS.Web.dll"]

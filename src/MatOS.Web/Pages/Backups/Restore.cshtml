@@ -1,0 +1,55 @@
+@page
+@model MatOS.Web.Pages.Backups.RestoreModel
+@{
+    var backup = Model.Backup;
+    ViewData["Title"] = $"Restore {backup.AppName}";
+    ViewData["PageSub"] = "Puts the data of this backup back.";
+    ViewData["Crumbs"] = Crumbs.Of(("Backups", "/Backups"), ($"Restore {backup.AppName}", null));
+    ViewData["Width"] = "narrow";
+}
+
+<div class="mat-card">
+    <div class="mat-card__head"><icon name="save" /><span class="mat-card__title">The backup</span></div>
+    <div class="mat-card__body">
+        <dl class="mat-kv">
+            <dt>Created</dt><dd><span class="mat-mono">@Format.DateTimeLocal(backup.CreatedUtc)</span> <span class="mat-muted">· @Format.Ago(backup.CreatedUtc)</span></dd>
+            <dt>Kind</dt><dd>@backup.Kind @backup.Note</dd>
+            <dt>Kept by</dt><dd>@MatOS.Web.Pages.Backups.IndexModel.EngineLabel(backup.Engine)</dd>
+            <dt>Content</dt><dd>@backup.VolumeCount volume@(backup.VolumeCount == 1 ? "" : "s"), @Format.Size(backup.SizeBytes)</dd>
+            <dt>Copy</dt><dd>@(backup.Consistent ? "Taken while the app was stopped (consistent)." : "Taken from the running app (a live copy).")</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="mat-alert mat-alert--warning">
+    <icon name="alert" />
+    <div class="mat-alert__body">
+        @if (Model.App is null)
+        {
+            <text>The app is not installed any more. It is re-created with the settings and data of this backup.</text>
+        }
+        else
+        {
+            <text>The current data of <strong>@Model.App.Name</strong> is replaced by the data of this backup, and its containers are re-created.</text>
+        }
+    </div>
+</div>
+
+<form method="post" asp-route-id="@backup.Id" class="mat-form" novalidate>
+    @if (Model.App is not null)
+    {
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <label class="mat-check">
+                    <input asp-for="BackupFirst" type="checkbox" />
+                    <span class="mat-check__text">Save the current state as a backup first</span>
+                </label>
+            </div>
+        </div>
+    }
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--danger" data-confirm="Restore @backup.AppName from the backup of @Format.DateTimeLocal(backup.CreatedUtc)? Its current data is replaced." data-confirm-ok="Restore"><icon name="restore" /><span>Restore</span></button>
+        <a href="/Backups" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    </div>
+</form>

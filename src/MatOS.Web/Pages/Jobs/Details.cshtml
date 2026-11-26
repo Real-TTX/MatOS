@@ -1,0 +1,41 @@
+@page
+@model MatOS.Web.Pages.Jobs.DetailsModel
+@{
+    ViewData["Title"] = Model.Job.Title;
+    ViewData["OwnHead"] = true;
+    ViewData["Crumbs"] = Crumbs.Of(("Activity", "/Jobs"), (Model.Job.Title, null));
+    var job = Model.Job;
+    var app = Model.App;
+}
+
+<div data-job class="mat-stack">
+    <div class="mat-page__head">
+        <div class="mat-page__title">
+            <h1>@job.Title</h1>
+            <p class="mat-page__sub"><span class="mat-pill mat-pill--busy" data-job-status>@job.Status</span></p>
+        </div>
+    </div>
+
+    <div class="mat-alert mat-alert--danger" role="alert" data-job-error hidden>
+        <icon name="x-circle" />
+        <div class="mat-alert__body"></div>
+    </div>
+
+    <pre class="mat-code mv-log mv-log--tall" data-job-log data-job-id="@job.Id" aria-live="polite" aria-label="Log of @job.Title"></pre>
+
+    <div class="mat-btn-row mat-btn-row--plain">
+        @if (app is not null && app.UiService is not null && job.Kind != JobKind.Uninstall)
+        {
+            <a href="/Apps/Open?id=@app.Id" class="mat-btn mat-btn--primary" data-job-done hidden><icon name="rocket" /><span>Open @app.Name</span></a>
+        }
+        @if (app is not null && job.Kind != JobKind.Uninstall)
+        {
+            <a href="/Apps/Details?id=@app.Id" class="mat-btn mat-btn--secondary" data-job-done hidden><icon name="info" /><span>Details</span></a>
+        }
+        @if (app is null || job.Kind == JobKind.Uninstall)
+        {
+            <a href="@(job.Kind == JobKind.Uninstall ? "/Apps" : "/")" class="mat-btn mat-btn--primary" data-job-done hidden><icon name="@(job.Kind == JobKind.Uninstall ? "apps" : "home")" /><span>@(job.Kind == JobKind.Uninstall ? "Back to Apps" : "Home")</span></a>
+        }
+        <a href="/Jobs" class="mat-btn mat-btn--ghost"><icon name="back" /><span>Activity</span></a>
+    </div>
+</div>

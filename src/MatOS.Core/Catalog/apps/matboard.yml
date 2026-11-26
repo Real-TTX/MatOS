@@ -1,0 +1,82 @@
+# MatBoard – the digital whiteboard for teams.
+x-matos:
+  id: matboard
+  name: MatBoard
+  tagline: The digital whiteboard for teams
+  description: An endless board like Miro - sticky notes, shapes, connectors, frames, templates for workshops, comments, voting stamps and presenting, live with everybody at once, shared with people or by a link.
+  category: Productivity
+  role: app
+  icon: matboard.svg
+  homepage: https://github.com/Real-TTX/MatBoard
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed and passes the variables
+  # of the binding to the web service by itself. A MatBoard on MatPlatform 2.2 says the same in its /api.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail (shared boards) through MatSMTP (MATSMTP_*)
+  ui:
+    service: web
+    port: 3945
+    hostPort: 3945
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATBOARD_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The PostgreSQL database is only reachable inside the stack; back up the volume matboard-db together with matboard-data.
+  credentials:
+    - label: E-mail (without MatIdentity)
+      value: admin@matboard.local
+    - label: Password
+      value: ${MATBOARD_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matboard
+      POSTGRES_USER: matboard
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matboard-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matboard -d matboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matboard:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matboard;Username=matboard;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATBOARD_ADMIN_PASSWORD: ${MATBOARD_ADMIN_PASSWORD}
+    volumes:
+      - matboard-data:/data
+
+volumes:
+  matboard-db:
+  matboard-data:

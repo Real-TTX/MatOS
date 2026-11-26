@@ -1,0 +1,91 @@
+# MatOffice – office in the browser: Docs, Sheets, Slides and Base in one app.
+x-matos:
+  id: matoffice
+  name: MatOffice
+  tagline: Office in the browser – documents, spreadsheets, presentations, databases
+  description: Four apps in one, like the office suites you know – with Word, Excel and PowerPoint files, sharing, versions and offline use. MatDrive opens its office files in it.
+  category: Productivity
+  role: app
+  icon: matoffice.svg
+  homepage: https://github.com/Real-TTX/MatOffice
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  ui:
+    service: web
+    port: 4820
+    hostPort: 4820
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATOFFICE_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - Provides office.edit; MatOS connects MatDrive to it by itself (MatDrive opens its office files here). Without MatOS, connect an app under Administration → Connections.
+  credentials:
+    - label: E-mail (without MatIdentity)
+      value: admin@matoffice.local
+    - label: Password
+      value: ${MATOFFICE_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matoffice
+      POSTGRES_USER: matoffice
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matoffice-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matoffice -d matoffice"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matoffice:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matoffice;Username=matoffice;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATOFFICE_ADMIN_PASSWORD: ${MATOFFICE_ADMIN_PASSWORD}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      - matoffice-data:/data
+
+volumes:
+  matoffice-db:
+  matoffice-data:

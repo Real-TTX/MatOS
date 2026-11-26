@@ -1,14 +1,14 @@
 // The wallpapers of the home screen: draws them (orbit.js, views.js write SVG) and renders each to a JPEG for the screen and a small one for the picker.
 // Nothing is downloaded; every picture is drawn here. Run it again after changing a generator:
 //   cd tests/e2e && npm install && cd ../.. && node scripts/wallpapers/render.js
-// It uses Playwright with the installed Edge (like the browser checks). The JPEGs land in src/Mattiverse.Web/wwwroot/img/wallpapers.
+// It uses Playwright with the installed Edge (like the browser checks). The JPEGs land in src/MatOS.Web/wwwroot/img/wallpapers.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { chromium } = require(path.join(__dirname, '..', '..', 'tests', 'e2e', 'node_modules', 'playwright-core'));
 
-const OUT = path.join(__dirname, '..', '..', 'src', 'Mattiverse.Web', 'wwwroot', 'img', 'wallpapers');
+const OUT = path.join(__dirname, '..', '..', 'src', 'MatOS.Web', 'wwwroot', 'img', 'wallpapers');
 const NAMES = ['orbit-dark', 'orbit-light', 'earth', 'jungle', 'lagoon', 'mountains'];
 const SIZES = [['', 2560, 1600, 82], ['-thumb', 480, 300, 80]];
 

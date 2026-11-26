@@ -1,0 +1,100 @@
+@page
+@model MatOS.Web.Pages.People.AccessModel
+@{
+    ViewData["Title"] = Model.App.Name;
+    ViewData["PageSub"] = "What " + Model.Who + " may do in " + Model.App.Name + ".";
+    ViewData["Crumbs"] = Crumbs.Of(("People", "/People"), (Model.Who, Model.Back), (Model.App.Name, null));
+    ViewData["Width"] = "narrow";
+    var fromRole = Model.App.Permissions.Where(p => p.Roles.Contains(Model.EffectiveRole ?? string.Empty)).Select(p => p.Key).ToHashSet();
+    var also = Model.Access?.Via.Where(v => v != "person").ToList() ?? [];
+}
+
+<form method="post" asp-route-person="@Model.PersonId" asp-route-group="@Model.GroupId" asp-route-app="@Model.AppId" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="apps" /><span class="mat-card__title">@Model.App.Name</span></div>
+        <div class="mat-card__body mat-stack">
+            @if (also.Count > 0)
+            {
+                <p class="mat-muted">@Model.Who may use it anyway: @MatOS.Web.Pages.People.EditModel.Via(also). What is given here adds to that.</p>
+            }
+
+            <label class="mat-check">
+                <input type="checkbox" name="Given" value="true" checked="@Model.Given" />
+                <span class="mat-check__text">Give @Model.App.Name to @Model.Who</span>
+            </label>
+
+            @if (!Model.App.RolesByIdentity)
+            {
+                <p class="mat-hint">@Model.App.Name gives roles and rights itself; MatIdentity only lets people in.</p>
+            }
+            else
+            {
+                <mat-field label="Role" for-id="access-role">
+                    <select class="mat-select" id="access-role" name="Role">
+                        <option value="">Default (@(Model.App.Roles.LastOrDefault()?.Label ?? "–"))</option>
+                        @foreach (var r in Model.App.Roles)
+                        {
+                            <option value="@r.Key" selected="@(Model.Role == r.Key)">@r.Label</option>
+                        }
+                    </select>
+                </mat-field>
+
+                @if (Model.App.Permissions.Count > 0)
+                {
+                    <fieldset class="mat-field mat-fieldset">
+                        <legend class="mat-label">Rights</legend>
+                        <div class="mat-options">
+                            @foreach (var p in Model.App.Permissions)
+                            {
+                                <label class="mat-check">
+                                    <input type="checkbox" name="Permissions" value="@p.Key" checked="@(Model.Permissions.Contains(p.Key) || fromRole.Contains(p.Key))" disabled="@fromRole.Contains(p.Key)" />
+                                    <span class="mat-check__text">@p.Label@if (fromRole.Contains(p.Key)) { <span class="mat-muted"> (comes with the role)</span> }</span>
+                                </label>
+                            }
+                        </div>
+                        <span class="mat-hint">On top of the role. Rights given to a group add up with these.</span>
+                    </fieldset>
+                }
+
+                @foreach (var q in Model.App.Quotas)
+                {
+                    var error = ViewData.ModelState[$"Quota[{q.Key}]"]?.Errors.FirstOrDefault()?.ErrorMessage;
+                    var usage = Model.UsageText(q);
+                    <div class="mat-field">
+                        <label class="mat-label" for="quota-@q.Key">@q.Label (@MatOS.Core.Integrations.MatIdentityPeople.UnitOf(q))</label>
+                        <input class="mat-input" type="text" inputmode="decimal" id="quota-@q.Key" name="Quota[@q.Key]" value="@Model.Quota.GetValueOrDefault(q.Key)"
+                               placeholder="The app's own setting" aria-invalid="@(error is null ? "false" : "true")" />
+                        <label class="mat-check">
+                            <input type="checkbox" name="Unlimited" value="@q.Key" checked="@Model.Unlimited.Contains(q.Key)" />
+                            <span class="mat-check__text">No limit</span>
+                        </label>
+                        @if (error is not null)
+                        {
+                            <span class="mat-error">@error</span>
+                        }
+                        else if (usage is not null)
+                        {
+                            <span class="mat-hint">@usage</span>
+                        }
+                        else if (!string.IsNullOrEmpty(q.Hint))
+                        {
+                            <span class="mat-hint">@q.Hint</span>
+                        }
+                    </div>
+                }
+
+                @if (Model.App.Quotas.Count > 0)
+                {
+                    <p class="mat-muted">An empty quota is the app's own setting. Without a value of the person's own, the largest value of their groups counts.</p>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+        <a href="@Model.Back" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    </div>
+</form>

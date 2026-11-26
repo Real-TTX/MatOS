@@ -1,12 +1,12 @@
-// End-to-end checks of the pages of Mattiverse in a real browser (the installed Edge, or Chrome) against a running stack.
+// End-to-end checks of the pages of MatOS in a real browser (the installed Edge, or Chrome) against a running stack.
 //   ./scripts/redeploy.ps1 && cd tests/e2e && npm install && node run.js [http://localhost:8030]
-// It signs in with the account of the development stack (admin@example.com / Start12345, set MATTIVERSE_USER and MATTIVERSE_PASSWORD for another one) and
+// It signs in with the account of the development stack (admin@example.com / Start12345, set MATOS_USER and MATOS_PASSWORD for another one) and
 // changes nothing that it does not remove again: the one schedule it creates is deleted at the end. Exit code 1 when a check fails.
 const { chromium } = require('playwright-core');
 
 const BASE = (process.argv[2] || process.env.BASE || 'http://localhost:8030').replace(/\/$/, '');
-const USER = process.env.MATTIVERSE_USER || 'admin@example.com';
-const PASSWORD = process.env.MATTIVERSE_PASSWORD || 'Start12345';
+const USER = process.env.MATOS_USER || 'admin@example.com';
+const PASSWORD = process.env.MATOS_PASSWORD || 'Start12345';
 const results = [];
 
 async function check(name, fn) {
@@ -88,7 +88,7 @@ const pages = [
     }
     expectTrue(new Set(seen.slice(0, 3)).size === 3 && seen[3] === seen[0], 'system, light and dark, then the first again: ' + seen.join(' > '));
   });
-  console.log('The home screen (Mattiverse OS)');
+  console.log('The home screen (MatOS)');
   const win = () => page.frameLocator('.os-window.is-active .os-window__frame');
   const winTitle = () => page.locator('.os-window.is-active [data-win-title]').innerText();
   const titled = title => page.waitForFunction(t => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === t; }, title);
@@ -118,7 +118,7 @@ const pages = [
     await page.keyboard.press('Escape');
     expectTrue(!(await page.locator('#os-folder-system').isVisible()), 'Escape closes it');
   });
-  await check('a part of Mattiverse opens in a window: a title, the page without its menu, Back', async () => {
+  await check('a part of MatOS opens in a window: a title, the page without its menu, Back', async () => {
     await page.goto(BASE + '/');
     await page.click('.os-dock a[data-window="/Store"]');
     await titled('Store');
@@ -151,7 +151,7 @@ const pages = [
   });
   await check('several windows: the bar moves one, an edge sizes it, a click brings one to the front, the edge of the screen takes a half', async () => {
     await page.goto(BASE + '/');
-    await page.evaluate(() => { Object.keys(localStorage).filter(k => k.startsWith('mattiverse.os.geo.')).forEach(k => localStorage.removeItem(k)); });
+    await page.evaluate(() => { Object.keys(localStorage).filter(k => k.startsWith('matos.os.geo.')).forEach(k => localStorage.removeItem(k)); });
     await page.click('.os-dock a[data-window="/Store"]');
     await titled('Store');
     await page.click('.os-dock a[data-window="/Settings"]');
@@ -219,7 +219,7 @@ const pages = [
     expectTrue(half[0] < 12 && Math.abs(half[2] - 668) < 6, 'the store is still the left half: ' + half);
 
     // the home screen refreshes itself and the windows stay
-    await page.evaluate(() => new Promise(done => window.MattiverseOs.refresh(done)));
+    await page.evaluate(() => new Promise(done => window.MatOSOs.refresh(done)));
     expectEqual(await windows(), 3, 'a refresh of the home screen keeps the windows');
     expectTrue((await page.locator('.os-page [data-home-key]').count()) > 5, 'and its things are there');
 
@@ -248,7 +248,7 @@ const pages = [
     await page.click('.os-window.is-active .os-lights [data-win-close]');
     await noWindows();
   });
-  await check('an engine opens its own window in Mattiverse', async () => {
+  await check('an engine opens its own window in MatOS', async () => {
     await page.goto(BASE + '/');
     await page.click('[data-os-folder="os-folder-system"]');
     const first = page.locator('#os-folder-system .os-app[href^="/Engines?id="]').first();
@@ -276,7 +276,7 @@ const pages = [
     await page.click('[data-os-menu="os-user-menu"]');
     expectTrue(await page.locator('#os-user-menu').isVisible(), 'the menu opens');
     expectEqual(await page.locator('#os-user-menu [data-window="/Account/Profile?tab=home"]').count(), 1, 'the wallpaper');
-    expectTrue(/Mattiverse \S+/.test(await page.locator('#os-user-menu .os-menu__foot').innerText()), 'the version (SHELL-06)');
+    expectTrue(/MatOS \S+/.test(await page.locator('#os-user-menu .os-menu__foot').innerText()), 'the version (SHELL-06)');
     await page.keyboard.press('Escape');
     await page.click('.os-grid .os-app[data-window="/People"]', { button: 'right' });
     expectTrue(await page.locator('.os-menu[role=menu]:not(#os-user-menu)').isVisible(), 'the menu of an app');
@@ -394,7 +394,7 @@ const pages = [
     await page.goto(BASE + '/People');
     expectEqual(await page.locator('.mat-switcher__name').innerText(), 'Administration', 'the menu of the page');
     await page.goto(BASE + '/Store');
-    expectEqual(await page.locator('.mat-switcher__name').innerText(), 'Mattiverse', 'the menu of the launcher');
+    expectEqual(await page.locator('.mat-switcher__name').innerText(), 'MatOS', 'the menu of the launcher');
   });
   await check('the menu marks the current page and the submenu opens on its branch', async () => {
     await page.goto(BASE + '/Settings/Engines');

@@ -1,0 +1,63 @@
+# MatSplit – shared expenses for trips and flats.
+x-matos:
+  id: matsplit
+  name: MatSplit
+  tagline: Shared expenses for trips and flats
+  description: Track who paid what in a group, attach receipts with the camera and settle up with a click. Guests join through a link.
+  category: Fun
+  role: app
+  icon: matsplit.svg
+  homepage: https://github.com/Real-TTX/MatSplit
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: matsplit
+    port: 8080
+    hostPort: 4774
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATSPLIT_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  credentials:
+    - label: Username (without MatIdentity)
+      value: admin
+    - label: Password
+      value: ${MATSPLIT_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  matsplit:
+    image: ghcr.io/real-ttx/matsplit:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      MATSPLIT_DATA_DIR: /data
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATSPLIT_ADMIN_PASSWORD: ${MATSPLIT_ADMIN_PASSWORD}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      - matsplit-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  matsplit-data:

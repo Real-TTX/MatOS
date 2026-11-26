@@ -1,0 +1,157 @@
+@page
+@using System.Globalization
+@model MatOS.Web.Pages.Tasks.IndexModel
+@{
+    ViewData["Title"] = "Task Manager";
+    ViewData["PageSub"] = "What runs on this host and what it uses, as MatDock measures it.";
+    ViewData["Crumbs"] = Crumbs.Of(("Task Manager", null));
+    var list = Model.List;
+    string Percent(double value) => value.ToString(value < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " %";
+    string Tone(double value) => value >= 90 ? "error" : value >= 75 ? "warn" : "ok";
+}
+
+@* The numbers move: the two parts marked data-live are fetched again every few seconds and exchanged in place (js/matos.js), the window stays as it is. *@
+<section class="mv-stats" id="tasks-host" data-live="5000" aria-label="The host">
+    @if (Model.Engine.Load is { } load)
+    {
+        <div class="mat-card mat-stat mv-stat mv-stat--row">
+            <span class="mv-stat__icon"><icon name="activity" /></span>
+            <div class="mv-stat__body">
+                <div class="mat-stat__value">@Percent(load.CpuPercent)</div>
+                <div class="mat-stat__label">Processor</div>
+                <progress class="mv-progress" max="100" value="@((int)load.CpuPercent)" data-tone="@Tone(load.CpuPercent)" aria-label="Processor"></progress>
+            </div>
+        </div>
+        <div class="mat-card mat-stat mv-stat mv-stat--row">
+            <span class="mv-stat__icon"><icon name="layers" /></span>
+            <div class="mv-stat__body">
+                <div class="mat-stat__value">@Percent(load.MemoryPercent)</div>
+                <div class="mat-stat__label">Memory</div>
+                <progress class="mv-progress" max="100" value="@((int)load.MemoryPercent)" data-tone="@Tone(load.MemoryPercent)" aria-label="Memory"></progress>
+            </div>
+        </div>
+        <div class="mat-card mat-stat mv-stat mv-stat--row">
+            <span class="mv-stat__icon"><icon name="hard-drive" /></span>
+            <div class="mv-stat__body">
+                <div class="mat-stat__value">@Percent(load.DiskPercent)</div>
+                <div class="mat-stat__label">Disk</div>
+                <progress class="mv-progress" max="100" value="@((int)load.DiskPercent)" data-tone="@Tone(load.DiskPercent)" aria-label="Disk"></progress>
+            </div>
+        </div>
+    }
+    <div class="mat-card mat-stat mv-stat mv-stat--row">
+        <span class="mv-stat__icon"><icon name="box" /></span>
+        <div class="mv-stat__body">
+            <div class="mat-stat__value">@Model.Running <small>of @Model.Total</small></div>
+            <div class="mat-stat__label">Containers running</div>
+        </div>
+    </div>
+</section>
+
+@if (!Model.Measured)
+{
+    <div class="mat-alert mat-alert--warn" role="status">
+        <icon name="alert" />
+        <div>MatDock does not answer, so only the containers of MatOS are listed, without what they use, and nothing can be changed here.</div>
+    </div>
+}
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="list.Toolbar" />
+
+    <div id="tasks-list" data-live="5000">
+        @if (list.Items.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon"><icon name="bar-chart" /></span>
+                @if (list.Toolbar.Matching != list.Toolbar.Total)
+                {
+                    <div class="mat-empty__title">Nothing matches</div>
+                    <p>Change the search or the filter.</p>
+                    <a class="mat-btn mat-btn--secondary" href="/Tasks">Reset the tools</a>
+                }
+                else
+                {
+                    <div class="mat-empty__title">No containers</div>
+                    <p>Nothing runs on this host yet.</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table mv-tasks">
+                    <caption class="mat-sr-only">Containers</caption>
+                    <thead>
+                        <tr><th scope="col">Container</th><th scope="col">State</th><th scope="col">Processor</th><th scope="col">Memory</th><th scope="col" class="mat-hide-sm">Since</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var task in list.Items)
+                        {
+                            var c = task.Container;
+                            var of = c.Project.Length == 0 ? c.Image : c.Service.Length == 0 ? c.Project : $"{c.Project} · {c.Service}";
+                            <tr>
+                                <td data-label="Container">
+                                    <div class="mat-table__name">
+                                        <span class="mv-task__dot @(c.IsRunning ? "is-running" : "")" aria-hidden="true"></span>
+                                        <span><a href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)">@c.Name</a><small>@of</small></span>
+                                    </div>
+                                </td>
+                                <td data-label="State">
+                                    <span class="mat-pill @(c.IsRunning ? "mat-pill--ok" : "mat-pill--plain")">@(c.IsRunning ? "Running" : "Stopped")</span>
+                                    @if (task.Own) { <span class="mat-pill mat-pill--accent">MatOS</span> }
+                                </td>
+                                <td data-label="Processor">
+                                    @if (task.CpuPercent is { } cpu)
+                                    {
+                                        <span class="mv-load"><progress class="mv-progress" max="100" value="@((int)Math.Min(cpu, 100))" data-tone="@Tone(cpu)" aria-label="Processor of @c.Name"></progress><span>@Percent(cpu)</span></span>
+                                    }
+                                    else
+                                    {
+                                        <span class="mat-muted">–</span>
+                                    }
+                                </td>
+                                <td data-label="Memory" class="mat-nowrap">
+                                    @if (task.MemoryBytes is { } bytes)
+                                    {
+                                        <span class="mv-task__mem">@Format.Size(bytes)</span> <span class="mat-muted">@Percent(task.MemoryPercent ?? 0)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="mat-muted">–</span>
+                                    }
+                                </td>
+                                <td data-label="Since" class="mat-hide-sm mat-muted">@c.Status</td>
+                                <td class="mat-table__cell-actions">
+                                    <div class="mat-table__actions">
+                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)" aria-label="Show the log of @c.Name" data-tip="Show the log"><icon name="terminal" /></a>
+                                        @if (Model.CanAct(task))
+                                        {
+                                            @if (c.IsRunning)
+                                            {
+                                                <form method="post" asp-page-handler="Action" asp-route-name="@c.Name" asp-route-verb="restart" data-confirm="Restart @c.Name? It is away for a moment." data-confirm-ok="Restart">
+                                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Restart @c.Name" data-tip="Restart"><icon name="refresh" /></button>
+                                                </form>
+                                                <form method="post" asp-page-handler="Action" asp-route-name="@c.Name" asp-route-verb="stop" data-confirm="Stop @c.Name? Its app may stop working until it is started again." data-confirm-ok="Stop" data-confirm-danger>
+                                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Stop @c.Name" data-tip="Stop"><icon name="stop" /></button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <form method="post" asp-page-handler="Action" asp-route-name="@c.Name" asp-route-verb="start">
+                                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Start @c.Name" data-tip="Start"><icon name="play" /></button>
+                                                </form>
+                                            }
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <partial name="_Pager" model="list.Pager" />
+    </div>
+</div>

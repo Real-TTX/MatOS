@@ -1,0 +1,24 @@
+@inject MatOS.Core.Configuration.SystemConfigService ConfigSvc
+@inject Toolkit Toolkit
+@{
+    // A page without a menu: sign-in, setup, a shared link, an error. A centred card on the plain page background (rule SHELL-11).
+    var config = await ConfigSvc.GetAsync(Context.RequestAborted);
+    var name = config.InstanceName;
+    var title = ViewData["Title"] as string;
+    var theme = User.Identity?.IsAuthenticated == true ? User.GetTheme() : "system";
+}
+<!DOCTYPE html>
+@* data-top-level: such a page takes the whole tab; inside the window of the home screen it leaves the window (js/window-mode.js). *@
+<html lang="en" data-app="@Ui.App.Id" data-top-level @(theme is "light" or "dark" ? Html.Raw($"data-theme=\"{theme}\"") : null)>
+<partial name="_Head" model="@(string.IsNullOrEmpty(title) || title == name ? name : $"{title} · {name}")" />
+<body>
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+    <main class="mat-auth" id="main">
+        @RenderBody()
+    </main>
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
+    <script src="~/js/matos.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

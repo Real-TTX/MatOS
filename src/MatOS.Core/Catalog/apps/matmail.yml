@@ -1,0 +1,106 @@
+# MatMail – mail gateway with a built-in web mail client.
+x-matos:
+  id: matmail
+  name: MatMail
+  tagline: Mail gateway with a web mail client
+  description: >-
+    Connect your mail accounts (Strato, Netcup, ...) once and work with them in the web client, in Outlook or Thunderbird,
+    or send through MatMail as a smart host. Tenants keep the provider credentials off your customers' devices.
+  category: Communication
+  role: app
+  icon: matmail.svg
+  homepage: https://github.com/Real-TTX/MatMail
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: matmail
+    port: 9933
+    hostPort: 9933
+  notes:
+    - Publishes the standard mail ports (25, 587, 465, 143, 993) on the host. Change them below Advanced if another mail server uses them.
+  variables:
+    - key: ADMIN_PASSWORD
+      label: Admin password
+      type: secret
+      generate: true
+      help: The password of the first administrator. Leave empty to generate one.
+    - key: MAIL_HOSTNAME
+      label: Mail host name
+      default: localhost
+      help: The name your mail clients use to connect (for example mail.example.com).
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: SMTP_PORT
+      label: SMTP port
+      type: number
+      default: "25"
+      advanced: true
+    - key: SUBMISSION_PORT
+      label: Submission port
+      type: number
+      default: "587"
+      advanced: true
+    - key: SMTPS_PORT
+      label: SMTPS port
+      type: number
+      default: "465"
+      advanced: true
+    - key: IMAP_PORT
+      label: IMAP port
+      type: number
+      default: "143"
+      advanced: true
+    - key: IMAPS_PORT
+      label: IMAPS port
+      type: number
+      default: "993"
+      advanced: true
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${ADMIN_PASSWORD}
+      secret: true
+
+services:
+  matmail:
+    image: ghcr.io/real-ttx/matmail:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "${SMTP_PORT:-25}:25"
+      - "${SUBMISSION_PORT:-587}:587"
+      - "${SMTPS_PORT:-465}:465"
+      - "${IMAP_PORT:-143}:143"
+      - "${IMAPS_PORT:-993}:993"
+    environment:
+      MATMAIL_ADMIN_USER: admin
+      MATMAIL_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      MATMAIL__Database__Password: ${DB_PASSWORD}
+      MATMAIL__Server__Hostname: ${MAIL_HOSTNAME:-localhost}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      - matmail-data:/data
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - matmail-db:/var/lib/postgresql/data
+
+volumes:
+  matmail-data:
+  matmail-db:

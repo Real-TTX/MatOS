@@ -1,0 +1,334 @@
+@page
+@model MatOS.Web.Pages.Apps.DetailsModel
+@{
+    var app = Model.App;
+    ViewData["Title"] = app.Name;
+    ViewData["OwnHead"] = true;
+    ViewData["Crumbs"] = Crumbs.Of(("Apps", "/Apps"), (app.Name, null));
+    var isAdmin = User.IsAdmin();
+    var running = Model.Runtime.State is RuntimeState.Running or RuntimeState.Partial or RuntimeState.Unhealthy;
+}
+
+<div class="mat-stack" @(Model.IsBusy ? "data-autorefresh=4000" : "")>
+    <div class="mat-page__head">
+        <div class="mv-apphead">
+            <app-icon name="@app.Name" icon="@Model.Catalog?.Icon" size="lg" />
+            <div class="mv-apphead__text">
+                <h1>@app.Name</h1>
+                <div class="mv-apphead__sub"><partial name="_StatusPill" model="Model.Status" /><span>@(Model.Catalog?.Tagline ?? app.CatalogId)</span></div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(app.StatusMessage))
+    {
+        <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@app.StatusMessage</div></div>
+    }
+    @if (Model.ActiveJob is { } job)
+    {
+        <div class="mat-alert mat-alert--info">
+            <icon name="activity" />
+            <div class="mat-alert__body">@job.Title is in progress. <a href="/Jobs/Details?id=@job.Id">Show the log</a></div>
+        </div>
+    }
+
+    <div class="mat-actions">
+        @if (Model.CanOpen)
+        {
+            <a href="/Apps/Open?id=@app.Id" class="mat-btn mat-btn--primary"><icon name="external" /><span>Open</span></a>
+        }
+        @if (isAdmin && app.Lifecycle == AppLifecycle.Failed)
+        {
+            <form method="post" asp-page-handler="Retry" asp-route-id="@app.Id">
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="refresh" /><span>Try again</span></button>
+            </form>
+        }
+        @if (isAdmin && app.Lifecycle is AppLifecycle.Installed)
+        {
+            <form method="post" asp-page-handler="@(running ? "Stop" : "Start")" asp-route-id="@app.Id">
+                <button type="submit" class="mat-btn mat-btn--secondary" disabled="@Model.IsBusy"><icon name="@(running ? "stop" : "play")" /><span>@(running ? "Stop" : "Start")</span></button>
+            </form>
+            @if (running)
+            {
+                <form method="post" asp-page-handler="Restart" asp-route-id="@app.Id">
+                    <button type="submit" class="mat-btn mat-btn--secondary" disabled="@Model.IsBusy"><icon name="refresh" /><span>Restart</span></button>
+                </form>
+            }
+            <a href="/Apps/Update?id=@app.Id" class="mat-btn mat-btn--secondary @(Model.IsBusy ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy ? "true" : null)"><icon name="arrow-up" /><span>Update</span></a>
+            <a href="/Backups/Create?appId=@app.Id" class="mat-btn mat-btn--secondary @(Model.IsBusy ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy ? "true" : null)"><icon name="save" /><span>Back up</span></a>
+        }
+        @* MatDock, Matcad and Matddns are part of MatOS: only a failed install can be removed (to start over). *@
+        @if (isAdmin && app.Lifecycle != AppLifecycle.Removing && (!app.IsCore || app.Lifecycle == AppLifecycle.Failed))
+        {
+            <a href="/Apps/Uninstall?id=@app.Id" class="mat-btn mat-btn--danger mat-btn--end mat-ms-auto @(Model.IsBusy && app.Lifecycle != AppLifecycle.Failed ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy && app.Lifecycle != AppLifecycle.Failed ? "true" : null)"><icon name="trash" /><span>Uninstall</span></a>
+        }
+    </div>
+
+    <tab-bar model="Model.Tabs" label="@app.Name" />
+
+    @switch (Model.ActiveTab)
+    {
+        case "logs":
+            <div class="mat-card">
+                <div class="mat-card__body mat-stack">
+                    @if (Model.Containers.Count > 1)
+                    {
+                        <form method="get" data-autosubmit>
+                            <input type="hidden" name="id" value="@app.Id" />
+                            <input type="hidden" name="tab" value="logs" />
+                            <div class="mat-field">
+                                <label class="mat-label" for="container">Container</label>
+                                <select id="container" name="container" class="mat-select">
+                                    @foreach (var container in Model.Containers)
+                                    {
+                                        <option value="@container.Name" selected="@(container.Name == Model.Container)">@container.Service (@container.State)</option>
+                                    }
+                                </select>
+                            </div>
+                        </form>
+                    }
+                    <pre class="mat-code mv-log mv-log--tall" aria-label="Log of @(Model.Container ?? app.Name)">@Model.LogText</pre>
+                    <div class="mat-actions">
+                        <a href="/Apps/Details?id=@app.Id&tab=logs&container=@Model.Container" class="mat-btn mat-btn--secondary"><icon name="refresh" /><span>Refresh</span></a>
+                    </div>
+                </div>
+            </div>
+            break;
+
+        case "backups":
+            @if (Model.Backups.Count == 0)
+            {
+                <div class="mat-card">
+                    <div class="mat-empty">
+                        <span class="mat-empty__icon"><icon name="save" /></span>
+                        <div class="mat-empty__title">No backups of this app yet</div>
+                        <p>A backup copies the data of the app, so you can go back if something goes wrong.</p>
+                        <a href="/Backups/Create?appId=@app.Id" class="mat-btn mat-btn--primary"><icon name="plus" /><span>Back up now</span></a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table">
+                        <caption class="mat-sr-only">Backups of @app.Name</caption>
+                        <thead><tr><th scope="col">Created</th><th scope="col">Kind</th><th scope="col" class="mat-num">Size</th><th scope="col">Status</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var backup in Model.Backups)
+                            {
+                                <tr>
+                                    <td data-label="Created" class="mat-nowrap"><span class="mat-mono">@Format.DateTimeLocal(backup.CreatedUtc)</span> <span class="mat-muted">· @Format.Ago(backup.CreatedUtc)</span></td>
+                                    <td data-label="Kind">@backup.Kind</td>
+                                    <td data-label="Size" class="mat-num mat-mono mat-nowrap">@Format.Size(backup.SizeBytes)</td>
+                                    <td data-label="Status"><span class="mat-pill @(backup.Status == BackupStatus.Succeeded ? "mat-pill--ok" : backup.Status == BackupStatus.Failed ? "mat-pill--error" : "mat-pill--busy")">@backup.Status</span></td>
+                                    <td class="mat-table__cell-actions">
+                                        <div class="mat-table__actions">
+                                            @if (backup.Status == BackupStatus.Succeeded)
+                                            {
+                                                <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" asp-page="/Backups/Restore" asp-route-id="@backup.Id" aria-label="Restore the backup from @Format.DateTimeLocal(backup.CreatedUtc)" data-tip="Restore"><icon name="restore" /></a>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mat-actions">
+                    <a href="/Backups/Create?appId=@app.Id" class="mat-btn mat-btn--primary"><icon name="plus" /><span>Back up now</span></a>
+                </div>
+            }
+            break;
+
+        case "files":
+            <p class="mat-muted">
+                @if (app.Engine == "matdock")
+                {
+                    <text>This stack lives in <strong>MatDock</strong>, and this is how MatDock has it now. Edit it there: MatOS keeps your changes when it updates the app. Secret values are hidden.</text>
+                }
+                else
+                {
+                    <text>These files live on the MatOS data volume in <code>apps/@app.Slug</code>; MatOS runs this stack itself. Secret values are hidden.</text>
+                }
+            </p>
+            @if (string.IsNullOrEmpty(Model.Files.Compose))
+            {
+                <div class="mat-card">
+                    <div class="mat-empty">
+                        <span class="mat-empty__icon"><icon name="file" /></span>
+                        <div class="mat-empty__title">The stack could not be read</div>
+                        <p>Is its engine running?</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="mat-card">
+                    <div class="mat-card__head"><icon name="file" /><span class="mat-card__title">docker-compose.yml</span></div>
+                    <div class="mat-card__body"><pre class="mat-code mv-log" tabindex="0">@Model.Files.Compose</pre></div>
+                </div>
+                <div class="mat-card">
+                    <div class="mat-card__head"><icon name="file" /><span class="mat-card__title">.env</span></div>
+                    <div class="mat-card__body"><pre class="mat-code mv-log" tabindex="0">@Model.Files.Env</pre></div>
+                </div>
+            }
+            break;
+
+        case "sharing":
+            @if (Model.Shares.Count == 0)
+            {
+                <div class="mat-card">
+                    <div class="mat-empty">
+                        <span class="mat-empty__icon"><icon name="link" /></span>
+                        <div class="mat-empty__title">No shared links</div>
+                        <p>A link lets someone without an account open the page of this app.</p>
+                        <a href="/Apps/Share?id=@app.Id" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New link</span></a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table">
+                        <caption class="mat-sr-only">Shared links of @app.Name</caption>
+                        <thead><tr><th scope="col">Label</th><th scope="col">Link</th><th scope="col">Expires</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var share in Model.Shares)
+                            {
+                                <tr>
+                                    <td data-label="Label"><div class="mat-table__name">@(string.IsNullOrEmpty(share.Label) ? "Link" : share.Label)</div></td>
+                                    <td data-label="Link" class="mat-mono mat-text-break">@Model.ShareUrl(share)</td>
+                                    <td data-label="Expires" class="mat-muted mat-nowrap">@(share.ExpiresAt is { } exp ? exp.ToLocalTime().ToString("yyyy-MM-dd") : "never")</td>
+                                    <td class="mat-table__cell-actions">
+                                        <div class="mat-table__actions">
+                                            <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-copy="@Model.ShareUrl(share)" aria-label="Copy the link" data-tip="Copy the link"><icon name="copy" /></button>
+                                            <form method="post" asp-page-handler="DeleteShare" asp-route-id="@app.Id" asp-route-shareId="@share.Id" data-confirm="Revoke this link? Anyone who has it loses access." data-confirm-ok="Revoke" data-confirm-danger>
+                                                <button type="submit" class="mat-btn mat-btn--danger mat-btn--icon mat-btn--sm" aria-label="Revoke the link" data-tip="Revoke"><icon name="trash" /></button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mat-actions">
+                    <a href="/Apps/Share?id=@app.Id" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New link</span></a>
+                </div>
+            }
+            break;
+
+        default:
+            @if (isAdmin)
+            {
+                @foreach (var note in Model.Catalog?.Notes ?? [])
+                {
+                    <div class="mat-alert mat-alert--info"><icon name="info" /><div class="mat-alert__body">@note</div></div>
+                }
+            }
+
+            @if (isAdmin && Model.Credentials.Count > 0)
+            {
+                <div class="mat-card">
+                    <div class="mat-card__head"><icon name="key" /><span class="mat-card__title">Initial credentials</span></div>
+                    <div class="mat-card__body">
+                        <dl class="mat-kv">
+                            @for (var i = 0; i < Model.Credentials.Count; i++)
+                            {
+                                var credential = Model.Credentials[i];
+                                <dt>@credential.Label</dt>
+                                <dd>
+                                    @if (credential.Secret)
+                                    {
+                                        <span class="mv-secret">
+                                            <span class="mv-secret__value" id="secret-@i" data-secret="@credential.Value" data-shown="0">••••••••••</span>
+                                            <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-reveal="secret-@i" aria-pressed="false" aria-label="Show or hide @credential.Label" data-tip="Show or hide"><icon name="eye" /></button>
+                                            <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-copy="@credential.Value" aria-label="Copy @credential.Label" data-tip="Copy"><icon name="copy" /></button>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="mat-mono">@credential.Value</span>
+                                    }
+                                </dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+            }
+
+            <div class="mat-card">
+                <div class="mat-card__head"><icon name="info" /><span class="mat-card__title">About this app</span></div>
+                <div class="mat-card__body">
+                    <dl class="mat-kv">
+                        @if (Model.OpenUrl is not null)
+                        {
+                            <dt>Address</dt>
+                            <dd><a href="@Model.OpenUrl" target="_blank" rel="noopener">@Model.OpenUrl</a></dd>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.InternalAddress))
+                        {
+                            <dt>Address for other apps</dt>
+                            <dd><code>@Model.InternalAddress</code> <span class="mat-muted">(on the Docker network "matos")</span></dd>
+                        }
+                        <dt>Installed from</dt>
+                        <dd>@(Model.Catalog?.Name ?? app.CatalogId) <span class="mat-muted">· project <code>@app.ProjectName</code></span></dd>
+                        @foreach (var link in Model.EngineLinks)
+                        {
+                            <dt>@link.Label</dt>
+                            <dd><a href="@link.Url" target="_blank" rel="noopener">@link.Engine</a> <span class="mat-muted">· marked "Managed by MatOS" there</span></dd>
+                        }
+                        <dt>Installed</dt>
+                        <dd><span class="mat-mono">@Format.DateTimeLocal(app.CreateDate)</span> <span class="mat-muted">· @Format.Ago(app.CreateDate)</span></dd>
+                        @if (isAdmin)
+                        {
+                            <dt>Last backup</dt>
+                            <dd>@(app.LastBackupAt is { } backup ? $"{Format.DateTimeLocal(backup)} ({Format.Ago(backup)})" : "never")</dd>
+                        }
+                        @if (app.LastUpdatedAt is { } updated)
+                        {
+                            <dt>Last update</dt>
+                            <dd class="mat-mono">@Format.DateTimeLocal(updated)</dd>
+                        }
+                        @if (Model.Catalog?.Homepage is { Length: > 0 } homepage)
+                        {
+                            <dt>Project</dt>
+                            <dd><a href="@homepage" target="_blank" rel="noopener">@homepage</a></dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+
+            @if (Model.Containers.Count == 0)
+            {
+                <div class="mat-card">
+                    <div class="mat-empty">
+                        <span class="mat-empty__icon"><icon name="box" /></span>
+                        <div class="mat-empty__title">No containers</div>
+                        <p>Start the app to create them.</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table">
+                        <caption class="mat-sr-only">Containers of @app.Name</caption>
+                        <thead><tr><th scope="col">Container</th><th scope="col" class="mat-hide-sm">Image</th><th scope="col">Status</th><th scope="col" class="mat-hide-sm">Ports</th></tr></thead>
+                        <tbody>
+                            @foreach (var container in Model.Containers)
+                            {
+                                <tr>
+                                    <td data-label="Container"><div class="mat-table__name"><span>@container.Service<small class="mat-mono">@container.Name</small></span></div></td>
+                                    <td data-label="Image" class="mat-hide-sm mat-mono mat-text-break">@container.Image</td>
+                                    <td data-label="Status"><span class="mat-pill @(container.IsRunning ? "mat-pill--ok" : "")">@container.Status</span></td>
+                                    <td data-label="Ports" class="mat-hide-sm mat-muted mat-text-break">@(string.IsNullOrEmpty(container.Ports) ? "–" : container.Ports)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            break;
+    }
+</div>

@@ -1,0 +1,26 @@
+@page "/s/{token}"
+@model MatOS.Web.Pages.Share.ViewModel
+@{
+    Layout = "_Bare";
+    ViewData["Title"] = Model.App.Name;
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <p class="mat-muted">Shared with you</p>
+    </div>
+    <div class="mv-centered">
+        <app-icon name="@Model.App.Name" icon="@Model.Icon" size="xl" />
+        <h1>@Model.App.Name</h1>
+        @if (Model.OpenUrl is not null)
+        {
+            <p class="mat-muted">Open the app to continue.</p>
+            <a href="@Model.OpenUrl" class="mat-btn mat-btn--primary"><icon name="external" /><span>Open @Model.App.Name</span></a>
+        }
+        else
+        {
+            <p class="mat-muted">This app has no web page.</p>
+        }
+    </div>
+</div>

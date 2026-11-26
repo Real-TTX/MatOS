@@ -1,4 +1,4 @@
-// Draws the "Orbit" wallpaper of Mattiverse (a planet with rings), a dark and a light variant, as SVG.
+// Draws the "Orbit" wallpaper of MatOS (a planet with rings), a dark and a light variant, as SVG.
 // node orbit.js <out folder> (render.js calls it)
 const fs = require('fs');
 const path = require('path');

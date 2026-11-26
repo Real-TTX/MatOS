@@ -1,0 +1,81 @@
+# MatSMTP – the mail relay of the Mat apps (SMTP smarthost with rules, a queue and webhooks).
+x-matos:
+  id: matsmtp
+  name: MatSMTP
+  tagline: SMTP relay
+  description: >-
+    One place where all mail of your apps leaves: they hand it to MatSMTP, and MatSMTP delivers it through your mail account, with rules, a queue,
+    retries and a history of every message. MatOS gives every app that sends mail its own relay user there.
+  category: Infrastructure
+  role: mail
+  icon: matsmtp.svg
+  homepage: https://github.com/Real-TTX/MatSMTP
+  recommended: true
+  provision: matsmtp
+  core: true
+  # The platform contract (/api) and the sign-in through MatIdentity: MatOS fills MAT_API_KEY, MAT_FRAME_ANCESTORS and MATIDENTITY_*.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: matsmtp
+    port: 2525
+    hostPort: 2525
+  variables:
+    - key: MATSMTP_API_KEY
+      label: API key
+      type: secret
+      generate: true
+      hidden: true
+    - key: ADMIN_PASSWORD
+      label: Admin password
+      type: secret
+      generate: true
+      help: The password of the administrator (at least 8 characters). Leave empty to generate one.
+    - key: SUBMISSION_PORT
+      label: Submission port
+      type: number
+      default: "2587"
+      advanced: true
+      help: The host port for devices in your network (a printer, a NAS) that send through MatSMTP with a relay user and STARTTLS. The apps of MatOS reach MatSMTP inside Docker and need no port.
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - MatOS gives every app that sends mail (MatDock, MatBu, Matmon, MatCMS, ...) its own relay user in MatSMTP and its sender address. Add the account MatSMTP delivers through in its own UI.
+    - The SMTP port of the apps (2025) is only open inside Docker; it is never published, so MatSMTP is no open relay.
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${ADMIN_PASSWORD}
+      secret: true
+    - label: Note
+      value: The relay users of your apps carry a "Managed by MatOS" badge.
+
+services:
+  matsmtp:
+    image: ghcr.io/real-ttx/matsmtp:latest
+    restart: unless-stopped
+    ports:
+      # Submission with STARTTLS for devices in the network; the apps use 2025 on the shared network.
+      - "${SUBMISSION_PORT:-2587}:2587"
+    environment:
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MATSMTP_API_KEY: ${MATSMTP_API_KEY}
+      MATSMTP_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      MAT_API_KEY: ${MAT_API_KEY}
+      # The addresses of MatOS, which may show it in the window of its home screen (MatDesign docs/PLATFORM.md); empty: nobody may frame it.
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+    volumes:
+      # Database, queue, settings, keys and certificates.
+      - matsmtp-data:/data
+
+volumes:
+  matsmtp-data:

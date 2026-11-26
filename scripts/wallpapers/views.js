@@ -1,4 +1,4 @@
-// More wallpapers for Mattiverse, all drawn (nothing downloaded): views from above.
+// More wallpapers for MatOS, all drawn (nothing downloaded): views from above.
 // earth: the Earth from orbit; jungle: a jungle with a river; lagoon: an island with a reef; mountains: a range with snow.
 // Natural surfaces come from SVG noise (feTurbulence), lit by feDiffuseLighting where they need relief.
 // node views.js <out folder> (render.js calls it)

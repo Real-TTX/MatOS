@@ -1,0 +1,157 @@
+@page
+@model MatOS.Web.Pages.Apps.ManageModel
+@{
+    ViewData["Title"] = Model.App.Name;
+    ViewData["PageSub"] = "What the app shows and lets you set up, drawn from its own description.";
+    ViewData["Crumbs"] = Crumbs.Of(("Apps", "/Apps"), (Model.App.Name, $"/Apps/Details?id={Model.Id}"), ("Manage", null));
+    ViewData["ActiveHref"] = "/Apps";
+    var definition = Model.Definition;
+}
+
+@if (definition is null)
+{
+    <div class="mat-empty mat-empty--framed">
+        <span class="mat-empty__icon"><icon name="plug" /></span>
+        <div class="mat-empty__title">@Model.App.Name does not answer</div>
+        <p>The app is stopped, still starting, or its version does not have the platform API yet. Start it, or update it.</p>
+        <a class="mat-btn mat-btn--secondary" href="/Apps/Details?id=@Model.Id"><icon name="back" /><span>Back to the app</span></a>
+    </div>
+}
+else
+{
+    @if (definition.Pages.Count > 1 || Model.HasConnections)
+    {
+        <tab-bar model="Model.PageTabs" label="@Model.App.Name" />
+    }
+
+    @foreach (var part in Model.Current!.Sections)
+    {
+        switch (part.Kind)
+        {
+            case "tiles":
+                <section class="mv-stats" aria-label="@(part.Label ?? "At a glance")">
+                    @foreach (var item in Model.TilesOf(part))
+                    {
+                        var value = Model.Values.GetValueOrDefault(item.Key);
+                        var tone = PlatformFormat.Tone(item, value);
+                        var percent = PlatformFormat.Percent(item, value, Model.Values);
+                        <div class="mat-card mat-stat mv-stat mv-stat--@tone">
+                            @if (item.Icon is not null && Model.KnownIcon(item.Icon))
+                            {
+                                <span class="mv-stat__icon">@Ui.Icon(item.Icon)</span>
+                            }
+                            <div class="mv-stat__body">
+                                <div class="mat-stat__value">@PlatformFormat.Text(item, value, Model.Values)</div>
+                                <div class="mat-stat__label">@item.Label</div>
+                                @if (percent is { } p)
+                                {
+                                    <div class="mat-meter" role="progressbar" aria-valuenow="@p" aria-valuemin="0" aria-valuemax="100" aria-label="@item.Label"><div class="mat-meter__fill" data-value="@p"></div></div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+                break;
+
+            case "actions":
+                <div class="mat-actions">
+                    @foreach (var action in Model.ActionsOf(part))
+                    {
+                        var icon = action.Icon is not null && Model.KnownIcon(action.Icon) ? action.Icon : "chevron-right";
+                        if (action.Kind == "link" && Model.LinkOf(action.Url) is { } href)
+                        {
+                            <a class="mat-btn mat-btn--secondary" href="@href" target="_blank" rel="noopener">@Ui.Icon(icon)<span>@action.Label</span></a>
+                        }
+                        else if (action.Kind == "post")
+                        {
+                            @* The button stands in the row itself (the toolkit orders the buttons of a row: positive to negative); its form is beside it. *@
+                            <form id="action-@action.Id" method="post" asp-page-handler="Action" asp-route-id="@Model.Id" asp-route-view="@Model.Current.Id" data-confirm="@action.Confirm" data-confirm-ok="@action.Label" data-confirm-danger="@(action.Danger == true ? "true" : null)" hidden>
+                                <input type="hidden" name="actionId" value="@action.Id" />
+                            </form>
+                            <button type="submit" form="action-@action.Id" class="mat-btn @(action.Danger == true ? "mat-btn--danger" : "mat-btn--secondary")">@Ui.Icon(icon)<span>@action.Label</span></button>
+                        }
+                    }
+                </div>
+                break;
+
+            case "form":
+                var fields = Model.FieldsOf(part).ToList();
+                <form method="post" asp-page-handler="Configure" asp-route-id="@Model.Id" asp-route-view="@Model.Current.Id" class="mat-form" novalidate>
+                    <input type="hidden" name="keys" value="@string.Join(',', fields.Select(f => f.Key))" />
+                    <partial name="_ValidationSummary" />
+                    <div class="mat-card">
+                        @if (part.Label is not null)
+                        {
+                            <div class="mat-card__head"><icon name="settings" /><span class="mat-card__title">@part.Label</span></div>
+                        }
+                        <div class="mat-card__body mat-stack">
+                            @foreach (var field in fields)
+                            {
+                                var id = "f-" + field.Key;
+                                var name = "f." + field.Key;
+                                var showIf = PlatformFormat.ShowIf(field);
+                                var hint = field.Hint + (field.Restart == true ? " Takes effect after a restart." : string.Empty);
+                                var error = Model.FieldErrors.GetValueOrDefault(field.Key);
+                                var locked = field.Fixed == true;
+                                <div class="mat-field @(error is null ? string.Empty : "is-invalid")" data-show-if="@showIf?.Controller" data-show-value="@showIf?.Value">
+                                    @if (field.Type == "bool")
+                                    {
+                                        <input type="hidden" name="@name" value="false" />
+                                        <label class="mat-check">
+                                            <input type="checkbox" id="@id" name="@name" value="true" checked="@PlatformFormat.FieldIsTrue(Model.Settings, field.Key)" disabled="@locked" />
+                                            <span class="mat-check__text">@field.Label</span>
+                                        </label>
+                                    }
+                                    else
+                                    {
+                                        <label class="mat-label" for="@id">@field.Label@if (field.Required == true) { <span class="mat-req" aria-hidden="true"> *</span> }</label>
+                                        @switch (field.Type)
+                                        {
+                                            case "select":
+                                                <select class="mat-select" id="@id" name="@name" required="@(field.Required == true)" disabled="@locked">
+                                                    @foreach (var option in field.Options ?? [])
+                                                    {
+                                                        <option value="@option.Value" selected="@(PlatformFormat.FieldValue(Model.Settings, field.Key) == option.Value)">@option.Label</option>
+                                                    }
+                                                </select>
+                                                break;
+                                            case "secret":
+                                                <input class="mat-input" type="password" id="@id" name="@name" autocomplete="new-password" disabled="@locked" placeholder="@(PlatformFormat.SecretIsSet(Model.Settings, field.Key) ? "Stored – leave empty to keep it" : field.Placeholder)" />
+                                                break;
+                                            case "number":
+                                                <input class="mat-input" type="number" id="@id" name="@name" value="@PlatformFormat.FieldValue(Model.Settings, field.Key)" min="@field.Min" max="@field.Max" required="@(field.Required == true)" data-msg-required="Please enter @field.Label.ToLowerInvariant()." data-msg-range="Choose between @field.Min and @field.Max." disabled="@locked" />
+                                                break;
+                                            default:
+                                                <input class="mat-input" type="@(field.Type is "url" or "email" ? field.Type : "text")" id="@id" name="@name" value="@PlatformFormat.FieldValue(Model.Settings, field.Key)" placeholder="@field.Placeholder" maxlength="@(field.Max is { } max ? (int)max : (int?)null)" pattern="@field.Pattern" required="@(field.Required == true)" data-msg-required="Please enter @field.Label.ToLowerInvariant()." disabled="@locked" />
+                                                break;
+                                        }
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(hint))
+                                    {
+                                        <span class="mat-hint">@hint</span>
+                                    }
+                                    <span class="mat-error" aria-live="polite">@error</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="mat-btn-row">
+                        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+                        <a href="/Apps/Details?id=@Model.Id" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+                    </div>
+                </form>
+                break;
+
+            case "link" when Model.LinkOf(part.Url) is { } link:
+                <a class="mat-btn mat-btn--secondary" href="@link" target="_blank" rel="noopener"><icon name="external" /><span>@(part.Label ?? "Open")</span></a>
+                break;
+        }
+    }
+
+    @if (Model.ShowConnections)
+    {
+        <partial name="_AppConnections" />
+    }
+
+    <p class="mat-muted mat-small">@definition.App.Name @definition.App.Version · platform contract @definition.Contract</p>
+}

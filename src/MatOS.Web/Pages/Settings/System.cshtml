@@ -1,0 +1,54 @@
+@page
+@model MatOS.Web.Pages.Settings.SystemModel
+@{
+    ViewData["Title"] = "System";
+    ViewData["PageSub"] = "Docker, the data folder and the version of MatOS.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("System", null));
+    ViewData["Width"] = "narrow";
+}
+
+<partial name="_SettingsTabs" model="@("system")" />
+
+<div class="mat-card">
+    <div class="mat-card__head"><icon name="whale" /><span class="mat-card__title">Docker</span></div>
+    <div class="mat-card__body">
+        @if (Model.Engine.Available)
+        {
+            <dl class="mat-kv">
+                <dt>Status</dt><dd><span class="mat-pill mat-pill--ok">Connected</span> <span class="mat-muted">as @Model.Engine.Source reports it</span></dd>
+                @if (Model.Engine.Load is { } load)
+                {
+                    <dt>Engine</dt><dd>Docker @Model.Engine.Version</dd>
+                    <dt>Processor</dt><dd class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.CpuPercent)" data-tone="@(load.CpuPercent >= 90 ? "error" : load.CpuPercent >= 75 ? "warn" : "ok")" aria-label="Processor"></progress><span>@(load.CpuPercent.ToString("0")) %</span></dd>
+                    <dt>Memory</dt><dd class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.MemoryPercent)" data-tone="@(load.MemoryPercent >= 90 ? "error" : load.MemoryPercent >= 75 ? "warn" : "ok")" aria-label="Memory"></progress><span>@(load.MemoryPercent.ToString("0")) %</span></dd>
+                    <dt>Disk</dt><dd class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.DiskPercent)" data-tone="@(load.DiskPercent >= 90 ? "error" : load.DiskPercent >= 75 ? "warn" : "ok")" aria-label="Disk"></progress><span>@(load.DiskPercent.ToString("0")) %</span></dd>
+                    <dt>Containers</dt><dd>@Model.Engine.ContainersRunning running</dd>
+                }
+                else
+                {
+                    <dt>Engine</dt><dd>Docker @Model.Engine.Version on @Model.Engine.OperatingSystem</dd>
+                    <dt>Resources</dt><dd>@Model.Engine.Cpus CPUs, @Format.Size(Model.Engine.MemoryBytes) memory</dd>
+                    <dt>Containers</dt><dd>@Model.Engine.ContainersRunning running of @Model.Engine.ContainersTotal, @Model.Engine.Images images</dd>
+                }
+                <dt>Shared network</dt><dd><code>@Model.Network</code> <span class="mat-muted">connects the reverse proxy and the apps' web interfaces</span></dd>
+                <dt>This container</dt><dd>@(Model.SelfContainer is null ? "not running in Docker" : Model.SelfContainer)</dd>
+            </dl>
+        }
+        else
+        {
+            <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@Model.Engine.Error</div></div>
+        }
+    </div>
+</div>
+
+<div class="mat-card">
+    <div class="mat-card__head"><icon name="info" /><span class="mat-card__title">MatOS</span></div>
+    <div class="mat-card__body">
+        <dl class="mat-kv">
+            <dt>Version</dt><dd><code>@Model.Version</code></dd>
+            <dt>Data folder</dt><dd><code>@Model.DataPath</code> <span class="mat-muted">database, settings, compose files of the apps, backups</span></dd>
+            <dt>Catalog</dt><dd>@Model.CatalogTotal apps@(Model.CatalogCustom > 0 ? $" ({Model.CatalogCustom} of your own)" : "")</dd>
+            <dt>Reverse proxy</dt><dd>@(Model.ProxyActive ? "Matcad creates a route for every app." : "No automatic routes (needs Matcad and a domain for your apps).")</dd>
+        </dl>
+    </div>
+</div>

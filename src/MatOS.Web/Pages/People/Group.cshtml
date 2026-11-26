@@ -1,0 +1,89 @@
+@page
+@model MatOS.Web.Pages.People.GroupModel
+@{
+    ViewData["Title"] = Model.IsEdit ? Model.Group!.Name : "New group";
+    ViewData["PageSub"] = Model.IsEdit ? "Its members, and the apps it gives them." : "A name and the members; the apps come next.";
+    ViewData["Crumbs"] = Crumbs.Of(("People", "/People"), ("Groups", "/People/Groups"), (Model.IsEdit ? Model.Group!.Name : "New group", null));
+    ViewData["Width"] = "narrow";
+}
+
+<form method="post" asp-route-id="@Model.Id" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="layers" /><span class="mat-card__title">Group</span></div>
+        <div class="mat-card__body mat-stack">
+            <mat-field label="Name" asp-for="Name" required="true">
+                <input asp-for="Name" class="mat-input" required data-msg-required="Please enter a name." />
+            </mat-field>
+
+            @if (Model.People.Count > 0)
+            {
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-label">Members</legend>
+                    <div class="mat-options">
+                        @foreach (var p in Model.People)
+                        {
+                            <label class="mat-check">
+                                <input type="checkbox" name="Members" value="@p.Subject" checked="@Model.Members.Contains(p.Subject)" />
+                                <span class="mat-check__text">@p.DisplayName <span class="mat-muted">@p.UserName</span></span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+            }
+            else
+            {
+                <p class="mat-hint">There are no people yet.</p>
+            }
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+        <a href="/People/Groups" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        @if (Model.IsEdit)
+        {
+            <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" asp-route-id="@Model.Id" formnovalidate
+                    data-confirm="Delete the group @Model.Group!.Name? Its members lose what the group gave them." data-confirm-ok="Delete" data-confirm-danger><icon name="trash" /><span>Delete</span></button>
+        }
+    </div>
+</form>
+
+@if (Model.Group is { } group)
+{
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="apps" /><span class="mat-card__title">Apps</span></div>
+        <div class="mat-card__body mat-stack">
+            @if (Model.Apps.Count == 0)
+            {
+                <p class="mat-hint">No app signs in through MatIdentity yet.</p>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table">
+                        <caption class="mat-sr-only">Apps of @group.Name</caption>
+                        <thead><tr><th scope="col">App</th><th scope="col">Given</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var app in Model.Apps)
+                            {
+                                var grant = group.Grants.FirstOrDefault(g => g.App == app.ClientId);
+                                <tr>
+                                    <td data-label="App"><span class="mat-table__name">@app.Name</span></td>
+                                    <td data-label="Given">@(grant is null ? "–" : MatOS.Web.Pages.People.GroupModel.Summary(app, grant))</td>
+                                    <td class="mat-table__cell-actions">
+                                        <div class="mat-table__actions">
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/People/Access?group=@Uri.EscapeDataString(group.Id)&amp;app=@Uri.EscapeDataString(app.ClientId)"
+                                               aria-label="@app.Name for the group @group.Name" data-tip="Change"><icon name="sliders" /></a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}

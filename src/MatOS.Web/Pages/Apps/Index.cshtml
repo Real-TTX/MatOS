@@ -1,0 +1,97 @@
+@page
+@model MatOS.Web.Pages.Apps.IndexModel
+@{
+    ViewData["Title"] = "Apps";
+    ViewData["PageSub"] = "What is installed, and how it is doing.";
+    ViewData["Crumbs"] = Crumbs.Of(("Apps", null));
+    var isAdmin = User.IsAdmin();
+    var list = Model.List;
+}
+
+<div class="mat-list" @(Model.Busy ? "data-autorefresh=4000" : "")>
+    <partial name="_Toolbar" model="list.Toolbar" />
+
+    @if (list.Items.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="apps" /></span>
+            @if (list.Filtered)
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>Change the search or the filter.</p>
+                <a class="mat-btn mat-btn--secondary" href="/Apps">Reset the tools</a>
+            }
+            else
+            {
+                <div class="mat-empty__title">No apps yet</div>
+                <p>The store has your Mat apps and a few more, installed with one click.</p>
+                @if (isAdmin)
+                {
+                    <a class="mat-btn mat-btn--primary" href="/Store"><icon name="store" /><span>Open the store</span></a>
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Apps</caption>
+                <thead>
+                    <tr><th scope="col">App</th><th scope="col">Status</th><th scope="col" class="mat-hide-sm">Address</th><th scope="col" class="mat-hide-sm">Last backup</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in list.Items)
+                    {
+                        var app = row.App;
+                        <tr>
+                            <td data-label="App">
+                                <div class="mat-table__name">
+                                    <app-icon name="@app.Name" icon="@row.Icon" />
+                                    <span>
+                                        <a href="/Apps/Details?id=@app.Id">@app.Name</a>
+                                        <small>@row.Kind</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Status"><partial name="_StatusPill" model="row.Status" /></td>
+                            <td data-label="Address" class="mat-hide-sm mat-mono">
+                                @if (!string.IsNullOrEmpty(app.PublicUrl))
+                                {
+                                    @app.PublicUrl.Replace("https://", "").Replace("http://", "")
+                                }
+                                else if (app.HostPort is { } port)
+                                {
+                                    <text>port @port</text>
+                                }
+                                else
+                                {
+                                    <text>–</text>
+                                }
+                            </td>
+                            <td data-label="Last backup" class="mat-hide-sm mat-nowrap">@(app.LastBackupAt is { } backup ? Format.Ago(backup) : "never")</td>
+                            <td class="mat-table__cell-actions">
+                                <div class="mat-table__actions">
+                                    @if (app.Lifecycle == AppLifecycle.Installed && app.UiService is not null)
+                                    {
+                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Apps/Open?id=@app.Id" aria-label="Open @app.Name" data-tip="Open"><icon name="external" /></a>
+                                    }
+                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Apps/Details?id=@app.Id" aria-label="Details of @app.Name" data-tip="Details"><icon name="info" /></a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <partial name="_Pager" model="list.Pager" />
+
+    @if (isAdmin && (list.Items.Count > 0 || list.Filtered))
+    {
+        <div class="mat-actions">
+            <a href="/Store" class="mat-btn mat-btn--primary"><icon name="plus" /><span>Install app</span></a>
+        </div>
+    }
+</div>

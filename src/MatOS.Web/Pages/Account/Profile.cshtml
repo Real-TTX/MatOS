@@ -1,0 +1,95 @@
+@page
+@model MatOS.Web.Pages.Account.ProfileModel
+@using MatOS.Core.Users
+@{
+    ViewData["Title"] = "Account";
+    ViewData["PageSub"] = "Who you are in MatOS, your home screen and your password.";
+    ViewData["Crumbs"] = Crumbs.Of(("Account", null));
+    ViewData["Width"] = "narrow";
+}
+
+@if (Model.MustChange)
+{
+    <div class="mat-alert mat-alert--warning" role="alert"><icon name="alert" /><div class="mat-alert__body">Please set your own password before you continue.</div></div>
+}
+
+<div class="mv-winnav">
+    <div class="mv-winnav__head"><span class="mat-avatar" aria-hidden="true">@Ui.Initials(User.GetDisplayName())</span><span><strong>@User.GetDisplayName()</strong><small>@User.GetRole()</small></span></div>
+    <tab-bar model="Model.Tabs" label="Account" />
+</div>
+
+@if (Model.HomeTab)
+{
+    <form method="post" asp-page-handler="Wallpaper" class="mat-form" novalidate>
+        <fieldset class="mat-fieldset">
+            <legend class="mat-label">Wallpaper</legend>
+            <p class="mat-hint">The picture behind your home screen. Orbit follows the theme; the others stay as they are and get a lighter veil in the light theme.</p>
+            <div class="mat-choices mv-wallchoices">
+                @foreach (var w in Wallpapers.All)
+                {
+                    <label class="mat-choice">
+                        <span class="mv-wallthumb @(w.Id == Wallpapers.None ? "mv-wallthumb--none" : "")">
+                            @if (w.Id == Wallpapers.None)
+                            {
+                                <icon name="x" />
+                            }
+                            else
+                            {
+                                <img src="/img/wallpapers/@(w.Id == Wallpapers.Default ? "orbit-dark" : w.Id)-thumb.jpg" alt="" width="480" height="300" loading="lazy" />
+                            }
+                        </span>
+                        <span class="mat-choice__text">
+                            <input type="radio" name="wallpaper" value="@w.Id" checked="@(w.Id == Model.Wallpaper)" />
+                            <strong>@w.Name</strong>
+                            <span class="mat-hint">@w.Description</span>
+                        </span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+            <a href="/" class="mat-btn mat-btn--secondary"><icon name="home" /><span>Home</span></a>
+        </div>
+    </form>
+}
+else if (!Model.PasswordTab)
+{
+    <div class="mat-card">
+        <div class="mat-card__head"><icon name="user" /><span class="mat-card__title">Your account</span></div>
+        <div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Username</dt><dd>@Model.Username</dd>
+                <dt>Display name</dt><dd>@Model.DisplayName</dd>
+                <dt>Role</dt><dd>@Model.Role</dd>
+            </dl>
+        </div>
+    </div>
+}
+else
+{
+    <form method="post" class="mat-form" novalidate>
+        <partial name="_ValidationSummary" />
+
+        <div class="mat-card">
+            <div class="mat-card__head"><icon name="key" /><span class="mat-card__title">Change password</span></div>
+            <div class="mat-card__body mat-stack">
+                <mat-field label="Current password" asp-for="Input.CurrentPassword" required="true">
+                    <input asp-for="Input.CurrentPassword" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your current password." />
+                </mat-field>
+                <mat-field label="New password" asp-for="Input.NewPassword" required="true" hint="At least 8 characters.">
+                    <input asp-for="Input.NewPassword" type="password" class="mat-input" autocomplete="new-password" required minlength="8" data-msg-required="Please enter a new password." data-msg-range="Use at least 8 characters." />
+                </mat-field>
+                <mat-field label="Confirm new password" asp-for="Input.ConfirmPassword" required="true">
+                    <input asp-for="Input.ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" required data-msg-required="Please repeat the new password." />
+                </mat-field>
+            </div>
+        </div>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+            <a href="/Account/Profile" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        </div>
+    </form>
+}
