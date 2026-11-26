@@ -119,6 +119,13 @@ public sealed class CatalogUi
 
     /// <summary>Appended to the address when the app is opened (for example <c>/login</c>).</summary>
     public string? Path { get; set; }
+
+    /// <summary>
+    /// Where the sign-in of the app starts (<c>/Account/Login</c>), for an app whose start page does not ask who is there (a page with "Sign in" and "Create account").
+    /// While the app signs people in through MatIdentity, Mattiverse opens it here instead: the app sends the person on to MatIdentity, which knows them already,
+    /// and they land in the app without a click. Without MatIdentity it is not used.
+    /// </summary>
+    public string? SignIn { get; set; }
 }
 
 /// <summary>One question of the install form; the answer reaches compose as <c>${KEY}</c> from the <c>.env</c> file.</summary>

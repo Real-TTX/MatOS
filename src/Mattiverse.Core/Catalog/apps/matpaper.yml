@@ -17,11 +17,21 @@ x-mattiverse:
     service: matpaper
     port: 8080
     hostPort: 4994
+  variables:
+    # Seeds the administrator "admin", so there is no setup page: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATPAPER_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
   notes:
     - The PostgreSQL database is only reachable inside the stack, so its default password is not exposed.
   credentials:
-    - label: First sign-in
-      value: MatPaper walks you through creating the administrator.
+    - label: Username (without MatIdentity)
+      value: admin
+    - label: Password
+      value: ${MATPAPER_ADMIN_PASSWORD}
+      secret: true
 
 services:
   matpaper:
@@ -31,6 +41,7 @@ services:
       - db
     environment:
       MAT_API_KEY: ${MAT_API_KEY}
+      MATPAPER_ADMIN_PASSWORD: ${MATPAPER_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
       MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}

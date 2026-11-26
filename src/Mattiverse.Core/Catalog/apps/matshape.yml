@@ -19,7 +19,15 @@ x-mattiverse:
     service: web
     port: 3939
     hostPort: 3939
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
   variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATSHAPE_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
     - key: DB_PASSWORD
       label: Database password
       type: secret
@@ -33,8 +41,11 @@ x-mattiverse:
     - The PostgreSQL database is only reachable inside the stack; back up the volume matshape-db together with matshape-data.
     - The geometry is computed in the browser; the server keeps the history of the features.
   credentials:
-    - label: First sign-in
-      value: The first account that registers (or the first person through MatIdentity) is the administrator.
+    - label: E-mail (without MatIdentity)
+      value: admin@matshape.local
+    - label: Password
+      value: ${MATSHAPE_ADMIN_PASSWORD}
+      secret: true
 
 services:
   db:
@@ -63,6 +74,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=matshape;Username=matshape;Password=${DB_PASSWORD}"
       TZ: ${TIMEZONE:-Europe/Berlin}
       MAT_API_KEY: ${MAT_API_KEY}
+      MATSHAPE_ADMIN_PASSWORD: ${MATSHAPE_ADMIN_PASSWORD}
     volumes:
       - matshape-data:/data
 

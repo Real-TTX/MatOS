@@ -26,6 +26,7 @@ x-mattiverse:
     port: 3000                # its port inside the container
     hostPort: 3000            # tried first on the host; a free port from the pool is used when taken
     path: /login              # optional: appended when the app is opened
+    signIn: /Account/Login    # optional: where its sign-in starts; with MatIdentity the app is opened here, so the person lands in it without a click
   shared: [proxy]             # more services that must be reachable by the reverse proxy (the UI service always is)
   routes:                     # only for the reverse proxy (a provider of web.route): the service that listens for the routes;
     service: caddy            # without a domain Mattiverse publishes the port of every app here (the apps publish none)

@@ -17,13 +17,19 @@ x-mattiverse:
     service: matplay
     port: 8080
     hostPort: 4664
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATPLAY_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
   credentials:
-    - label: Username
+    - label: Username (without MatIdentity)
       value: admin
     - label: Password
-      value: admin
-    - label: Note
-      value: MatPlay asks you to change this password on the first sign-in.
+      value: ${MATPLAY_ADMIN_PASSWORD}
+      secret: true
 
 services:
   matplay:
@@ -31,6 +37,7 @@ services:
     restart: unless-stopped
     environment:
       MAT_API_KEY: ${MAT_API_KEY}
+      MATPLAY_ADMIN_PASSWORD: ${MATPLAY_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
       MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}

@@ -18,7 +18,15 @@ x-mattiverse:
     service: web
     port: 4820
     hostPort: 4820
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
   variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATOFFICE_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
     - key: DB_PASSWORD
       label: Database password
       type: secret
@@ -31,8 +39,11 @@ x-mattiverse:
   notes:
     - Provides office.edit; Mattiverse connects MatDrive to it by itself (MatDrive opens its office files here). Without Mattiverse, connect an app under Administration → Connections.
   credentials:
-    - label: First sign-in
-      value: The first account that registers is the administrator.
+    - label: E-mail (without MatIdentity)
+      value: admin@matoffice.local
+    - label: Password
+      value: ${MATOFFICE_ADMIN_PASSWORD}
+      secret: true
 
 services:
   db:
@@ -61,6 +72,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=matoffice;Username=matoffice;Password=${DB_PASSWORD}"
       TZ: ${TIMEZONE:-Europe/Berlin}
       MAT_API_KEY: ${MAT_API_KEY}
+      MATOFFICE_ADMIN_PASSWORD: ${MATOFFICE_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
       MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}

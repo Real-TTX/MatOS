@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="MatAi">
+  <!-- The flat tile in the accent of MatAi (IDENT-03): a speech bubble that holds a spark (an answer that is made, not looked up), with a small second spark. -->
+  <rect width="128" height="128" rx="28" fill="#a21caf"/>
+  <path d="M44 26h40a20 20 0 0 1 20 20v20a20 20 0 0 1-20 20H59l-17.5 14.5a2 2 0 0 1-3.3-1.5V85.2A20 20 0 0 1 24 66V46a20 20 0 0 1 20-20z" fill="#fff"/>
+  <path d="M58 37c1.6 11.2 5.8 15.4 17 17-11.2 1.6-15.4 5.8-17 17-1.6-11.2-5.8-15.4-17-17 11.2-1.6 15.4-5.8 17-17z" fill="#a21caf"/>
+  <path d="M83 36c.8 5.4 2.6 7.2 8 8-5.4.8-7.2 2.6-8 8-.8-5.4-2.6-7.2-8-8 5.4-.8 7.2-2.6 8-8z" fill="#a21caf"/>
+</svg>

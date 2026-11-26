@@ -127,6 +127,57 @@ public class CatalogTests
     public void ParsePort_IgnoresAnEphemeralHostPort() => Assert.Null(CatalogParser.ParsePort("8080"));
 
     [Fact]
+    public void Apps_whose_start_page_does_not_ask_who_is_there_say_where_their_sign_in_starts()
+    {
+        var catalog = CreateCatalog();
+
+        // With MatIdentity Mattiverse opens them at their sign-in (AppService.StartPathAsync), so nobody clicks "Sign in" first.
+        Assert.All(new[] { "matdo", "matdrive", "matoffice", "matboard", "matshape", "matcloud" }, id => Assert.Equal("/Account/Login", catalog.Get(id)!.Ui!.SignIn));
+        Assert.Null(catalog.Get("matfile")!.Ui!.SignIn);
+    }
+
+    [Fact]
+    public void MatAi_needs_nothing_set_up_before_it_opens()
+    {
+        var matai = CreateCatalog().Get("matai")!;
+
+        // Its administrator is seeded from a generated password nobody is asked for (no first-run page), and it signs in through MatIdentity.
+        Assert.Contains(matai.Variables, v => v.Key == "MATAI_ADMIN_PASSWORD" && v.Generate && v.Hidden);
+        Assert.Contains(matai.Consumes, c => c.Capability == Capabilities.IdentityOidc);
+        Assert.Equal(2301, matai.Ui!.Port);
+    }
+
+    [Theory]
+    [InlineData("matbu", "MATBU_ADMIN_PASSWORD")]
+    [InlineData("matsplit", "MATSPLIT_ADMIN_PASSWORD")]
+    [InlineData("matplay", "MATPLAY_ADMIN_PASSWORD")]
+    [InlineData("matdo", "MATDO_ADMIN_PASSWORD")]
+    [InlineData("matdrive", "MATDRIVE_ADMIN_PASSWORD")]
+    [InlineData("matoffice", "MATOFFICE_ADMIN_PASSWORD")]
+    [InlineData("matboard", "MATBOARD_ADMIN_PASSWORD")]
+    [InlineData("matshape", "MATSHAPE_ADMIN_PASSWORD")]
+    [InlineData("matcloud", "MATCLOUD_ADMIN_PASSWORD")]
+    public void The_administrator_of_an_app_is_seeded_from_a_generated_password_nobody_is_asked_for(string id, string variable)
+    {
+        var app = CreateCatalog().Get(id)!;
+
+        // No fixed admin/admin and no "the first one who registers": the password is generated, hidden at the install and shown with the credentials.
+        Assert.Contains(app.Variables, v => v.Key == variable && v.Generate && v.Hidden);
+        Assert.Contains(app.Credentials, c => c.Secret && c.Value == "${" + variable + "}");
+        Assert.DoesNotContain(app.Credentials, c => c.Value == "admin" && c.Label == "Password");
+    }
+
+    [Fact]
+    public void MatPaper_needs_nothing_set_up_before_it_opens()
+    {
+        var matpaper = CreateCatalog().Get("matpaper")!;
+
+        // Its administrator is seeded from a generated password nobody is asked for (no setup page); people sign in through MatIdentity.
+        Assert.Contains(matpaper.Variables, v => v.Key == "MATPAPER_ADMIN_PASSWORD" && v.Generate && v.Hidden);
+        Assert.Contains(matpaper.Consumes, c => c.Capability == Capabilities.IdentityOidc);
+    }
+
+    [Fact]
     public void MatMail_PublishesItsMailPortsAsFixedPorts()
     {
         var matmail = CreateCatalog().Get("matmail")!;

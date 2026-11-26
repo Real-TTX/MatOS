@@ -101,6 +101,16 @@ public sealed partial class AppService
     public Task<InstalledApp?> GetAsync(long id, CancellationToken ct = default)
         => _db.InstalledApps.FirstOrDefaultAsync(a => a.Id == id, ct);
 
+    /// <summary>
+    /// Where an app is opened when nobody asks for one of its pages: its sign-in (the catalog's <c>ui.signIn</c>) while it signs people in through MatIdentity
+    /// (it is bound to <c>identity.oidc</c>), so the person who is signed in to Mattiverse lands in the app directly. <c>null</c>: its start page.
+    /// </summary>
+    public async Task<string?> StartPathAsync(InstalledApp app, CancellationToken ct = default)
+        => _catalog.Get(app.CatalogId)?.Ui?.SignIn is { Length: > 0 } signIn
+            && await _db.AppBindings.AsNoTracking().AnyAsync(b => b.ConsumerAppId == app.Id && b.Capability == Capabilities.IdentityOidc, ct)
+                ? signIn
+                : null;
+
     public Task<InstalledApp?> GetBySlugAsync(string slug, CancellationToken ct = default)
         => _db.InstalledApps.FirstOrDefaultAsync(a => a.Slug == slug, ct);
 

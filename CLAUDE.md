@@ -61,7 +61,7 @@ src/Mattiverse.Core        domain, no web types
                              compose file; ComposePorts: a routed app publishes no port, the proxy the ports of its port routes),
                              ComposeFiles, ComposeRunner, AppReconciler (adopt MatDock stacks), AppVariables, PortPlanner, AppAddresses (public and internal address of an app)
   Engines/                   IStackEngine: LocalComposeEngine (own docker compose) and MatDockEngine; StackEngines picks one;
-                             EngineClient/EngineLocator (address + API key of an installed engine), MatDockClient, EngineIds, RuntimeReader (what the pages show of the runtime: asked from MatDock; the Task Manager `/Tasks` is its list of every container with CPU and memory)
+                             EngineClient/EngineLocator (address + API key of an installed engine), MatDockClient, EngineIds, AppService.StartPathAsync (an app bound to MatIdentity is opened at its sign-in, the catalog's `ui.signIn`, so the person lands in it without a click), RuntimeReader (what the pages show of the runtime: asked from MatDock; the Task Manager `/Tasks` is its list of every container with CPU and memory)
   Backups/                   IBackupProvider: LocalBackupProvider (BackupService, own runner) and MatDockBackupProvider; BackupHub merges
                              them (ids local:<id>, matdock:<id>); BackupSchedulerService runs the local schedules
   Catalog/                   CatalogParser/Service/Models + apps/*.yml (embedded)

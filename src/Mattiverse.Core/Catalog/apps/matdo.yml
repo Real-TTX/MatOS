@@ -18,7 +18,15 @@ x-mattiverse:
     service: web
     port: 6006
     hostPort: 6006
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
   variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATDO_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
     - key: DB_PASSWORD
       label: Database password
       type: secret
@@ -31,8 +39,11 @@ x-mattiverse:
   notes:
     - The PostgreSQL database is only reachable inside the stack.
   credentials:
-    - label: First sign-in
-      value: The first account that registers (or the first person through MatIdentity) is the administrator.
+    - label: E-mail (without MatIdentity)
+      value: admin@matdo.local
+    - label: Password
+      value: ${MATDO_ADMIN_PASSWORD}
+      secret: true
 
 services:
   db:
@@ -62,6 +73,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=matdo;Username=matdo;Password=${DB_PASSWORD}"
       TZ: ${TIMEZONE:-Europe/Berlin}
       MAT_API_KEY: ${MAT_API_KEY}
+      MATDO_ADMIN_PASSWORD: ${MATDO_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
       MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}

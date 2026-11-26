@@ -52,7 +52,8 @@ public class OpenModel : PageModel
         }
 
         // An app that is still installing (or failed) has nothing to show yet: go to its page.
-        var url = await _urls.OpenUrlAsync(app, Request, ct, Mattiverse.Core.Integrations.ShellRules.IsPath(path) ? path : null);
+        // Without a page to open it is the start of the app, or its sign-in while MatIdentity signs people in (nobody clicks "Sign in" first).
+        var url = await _urls.OpenUrlAsync(app, Request, ct, Mattiverse.Core.Integrations.ShellRules.IsPath(path) ? path : await _apps.StartPathAsync(app, ct));
         if (app.Lifecycle != AppLifecycle.Installed || url is null)
         {
             return RedirectToPage("/Apps/Details", new { id });

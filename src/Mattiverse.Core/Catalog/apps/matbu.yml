@@ -18,15 +18,21 @@ x-mattiverse:
     service: matbu
     port: 9293
     hostPort: 9293
+  variables:
+    # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
+    - key: MATBU_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      hidden: true
   notes:
     - MatBu gets read-only access to the Docker socket to find the volumes it can back up.
   credentials:
-    - label: Username
+    - label: Username (without MatIdentity)
       value: admin
     - label: Password
-      value: admin
-    - label: Note
-      value: Change this password after the first sign-in.
+      value: ${MATBU_ADMIN_PASSWORD}
+      secret: true
 
 services:
   matbu:
@@ -37,6 +43,7 @@ services:
       MATBU_DATA_PATH: /data
       MATBU_TRUST_FORWARD_HEADERS: "true"
       MAT_API_KEY: ${MAT_API_KEY}
+      MATBU_ADMIN_PASSWORD: ${MATBU_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
       MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
