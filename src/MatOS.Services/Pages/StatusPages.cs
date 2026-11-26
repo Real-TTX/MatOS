@@ -19,8 +19,8 @@ public static class StatusPages
 {
     public const string AdminPolicy = "admin";
 
-    /// <summary>The repository that holds MatOS and this service (Real-TTX/MatOS is another project).</summary>
-    public const string RepositoryUrl = "https://github.com/Real-TTX/Mattiverse";
+    /// <summary>The repository that holds MatOS and this service (called Mattiverse until 2026-11; the older matOS desktop is Real-TTX/MatOS-legacy).</summary>
+    public const string RepositoryUrl = "https://github.com/Real-TTX/MatOS";
 
     private const string Style = """
         body{font-family:system-ui,sans-serif;max-width:60rem;margin:3rem auto;padding:0 1rem;color:#1d1d1f;line-height:1.5}

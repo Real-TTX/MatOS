@@ -53,7 +53,7 @@ it is the answer for every installation in tunnel mode, and 53/udp+tcp must reac
 
 ```sh
 mkdir -p /opt/matos-services && cd /opt/matos-services
-curl -fsSLO https://raw.githubusercontent.com/Real-TTX/Mattiverse/main/deploy/services/docker-compose.yml   # or copy the file
+curl -fsSLO https://raw.githubusercontent.com/Real-TTX/MatOS/main/deploy/services/docker-compose.yml   # or copy the file
 cat > .env <<'EOF'
 SERVER1_IPV4=203.0.113.10
 # SERVER1_IPV6=2001:db8::10
@@ -63,7 +63,7 @@ docker compose up -d
 curl -s http://127.0.0.1:8080/healthz    # ok
 ```
 
-(The file is in the repository `Real-TTX/Mattiverse`, which holds MatOS; `Real-TTX/MatOS` is another project. Until this branch is merged into
+(The file is in the repository `Real-TTX/MatOS` (called Mattiverse until 2026-11). Until the branch `feature/matos` is merged into
 `main`, copy the file instead.)
 
 The compose file publishes 8080, 8443 and 8081 on `127.0.0.1` for a proxy on the host. If the proxy runs in Docker itself, put both on one network

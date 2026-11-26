@@ -84,7 +84,7 @@ Not in the catalog: **msBi** (no anonymously pullable image), **Matgate** (four 
 - Host ports used by more than one project (found while collecting the catalog): `9101` (MatCMS and Feusys.Web),
   `9262` (TabSale and TapSale), `4433` (Matcad and the old Matcat), `80`/`443` (Matcad and the Caddy inside the stack of the older matOS desktop).
   MatOS picks a free port from its pool when the preferred one is taken and warns about the fixed ones.
-- **The older matOS desktop** (repository Real-TTX/MatOS) and this app overlap in purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)). Since the rename
+- **The older matOS desktop** (repository Real-TTX/MatOS-legacy, archived) and this app overlap in purpose (see [ARCHITECTURE.md](ARCHITECTURE.md)). Since the rename
   they share their Docker names and their image: both are the compose project `matos` with the service and container `matos`, the volume `matos_matos-data`
   and the shared network `matos`, and both name `ghcr.io/real-ttx/matos` (the older desktop's workflows publish it). They **cannot run side by side** on
   one host any more. **Decided (the owner, 2026-11-26): the older desktop is retired**: repository `Real-TTX/MatOS-legacy` (archived), images

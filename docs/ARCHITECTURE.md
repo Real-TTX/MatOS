@@ -23,7 +23,7 @@ The five are **fixed parts** of MatOS (`EngineIds.All`, `core: true`; the wizard
 Other tools in the store (Nginx Proxy Manager, Portainer, ...) are plain apps without deep integration. The contract between MatOS and the
 engines is [ENGINES.md](ENGINES.md).
 
-| | MatOS (this app) | matOS (the older desktop, Real-TTX/MatOS) | MatDock |
+| | MatOS (this app) | matOS (the older desktop, now Real-TTX/MatOS-legacy, retired) | MatDock |
 |---|---|---|---|
 | Idea | A launcher: one app at a time, like a phone | A desktop in the browser: windows, taskbar | A Docker manager for many hosts over SSH |
 | Strength | Installing the Mat apps, the setup wizard, mobile | Rich desktop, file explorer, task manager | Stacks, volumes, backups, terminal, many hosts |
@@ -191,7 +191,7 @@ path would resolve inside that container and not on the host.
 ## Where does the catalog live?
 
 **In MatOS** (`src/MatOS.Core/catalog/apps/*.yml`, embedded, plus `/data/catalog/*.yml`). A catalog entry is a compose file with an
-`x-matos` block ([CATALOG.md](CATALOG.md)): data, not code. The older matOS desktop (Real-TTX/MatOS) keeps its catalog in C# code, which makes every new app a release; here it is a file.
+`x-matos` block ([CATALOG.md](CATALOG.md)): data, not code. The older matOS desktop (Real-TTX/MatOS-legacy) kept its catalog in C# code, which makes every new app a release; here it is a file.
 A user file with the same `id` replaces the built-in entry. The three engines carry `core: true` and a `provision` key that names what connects them.
 
 All apps and engines share the Docker network `matos` with MatOS itself (it attaches itself on start), so they reach each other by container name
@@ -462,7 +462,7 @@ one place, `Core/Configuration/Mattiverse.cs`; the mark is `Core/Owner.cs`. Acce
 
 Kept on purpose: the Data Protection application name `Mattiverse` (`Program.cs`) and the purpose of the secret protector `Mattiverse.Secrets.v1`
 (`DataProtectionSecretProtector.Purpose`): both are part of the key derivation, another name would make every protected secret unreadable; the domain
-`mattiverse.de`, the branches `mattiverse-integration` of the engines and the repository `Real-TTX/Mattiverse`. Not carried over: the cookie names (`matos.auth`): a person
+`mattiverse.de`, the branches `mattiverse-integration` of the engines and the old name of the repository (`Real-TTX/Mattiverse`, renamed to `Real-TTX/MatOS` on 2026-11-26; GitHub forwards the old address). Not carried over: the cookie names (`matos.auth`): a person
 signs in once more after the upgrade.
 
 Decided (the owner, 2026-11-26): the older matOS desktop is retired. Its repository becomes `Real-TTX/MatOS-legacy` (archived) and its images move to
