@@ -50,13 +50,59 @@ public sealed class DnsService(ServicesOptions options, InstanceDirectory direct
             new DnsZone(
                 options.Zone, options.Dns.NameServerList(), options.Edge.Ipv4(), options.Edge.Ipv6(), (uint)Math.Max(1, options.Dns.Ttl)),
             directory.FindAsync);
-        _udp = Listeners.Bind(options.ListenIp(), options.Dns.Port, SocketType.Dgram);
-        // The TCP listener takes the port UDP got, so with port 0 (tests) both still share one number.
-        var port = ((IPEndPoint)_udp.LocalEndPoint!).Port;
-        _tcp = Listeners.Bind(options.ListenIp(), port, SocketType.Stream);
+        (_udp, _tcp) = BindPair(options.ListenIp(), options.Dns.Port);
         _tcp.Listen(64);
         logger.LogInformation("DNS for {Zone} listening on {Endpoint} (UDP and TCP)", options.Zone, UdpEndPoint);
         return base.StartAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// UDP and TCP on one port number. With a fixed port (5353 in the container) a failure is the operator's to see. With port 0 (the tests) the
+    /// system picks a TCP port and UDP takes the same number. That number may be taken for UDP or sit in a range Windows reserves for UDP only
+    /// (Hyper-V, WSL: "access denied"); Windows hands out free ports one after the other, so a reserved range can swallow many tries in a row:
+    /// a try that fails holds its TCP port until the end, so the next one gets another number, up to 400 of them.
+    /// </summary>
+    private static (Socket Udp, Socket Tcp) BindPair(IPAddress address, int port)
+    {
+        if (port != 0)
+        {
+            var udp = Listeners.Bind(address, port, SocketType.Dgram);
+            try
+            {
+                return (udp, Listeners.Bind(address, port, SocketType.Stream));
+            }
+            catch
+            {
+                udp.Dispose();
+                throw;
+            }
+        }
+
+        var held = new List<Socket>();
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var tcp = Listeners.Bind(address, 0, SocketType.Stream);
+                try
+                {
+                    return (Listeners.Bind(address, ((IPEndPoint)tcp.LocalEndPoint!).Port, SocketType.Dgram), tcp);
+                }
+                catch (SocketException) when (attempt < 400)
+                {
+                    held.Add(tcp);
+                }
+                catch
+                {
+                    tcp.Dispose();
+                    throw;
+                }
+            }
+        }
+        finally
+        {
+            held.ForEach(socket => socket.Dispose());
+        }
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>

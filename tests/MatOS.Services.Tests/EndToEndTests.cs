@@ -48,7 +48,7 @@ public class EndToEndTests
 
         // Many visitors at once.
         var many = await Task.WhenAll(Enumerable.Range(0, 20).Select(i => HttpGetAsync(service.Http, $"app{i}.anna.my.mattiverse.de")));
-        Assert.All(many, (answer, i) => Assert.Contains($"hello from app{i}.anna.my.mattiverse.de", answer));
+        Assert.All(many, (answer, i) => Assert.True(answer.Contains($"hello from app{i}.anna.my.mattiverse.de"), $"app{i}: {answer}"));
 
         // A name outside the zone goes to the fallback (the existing proxy) unchanged.
         Assert.Contains("hello from example.org", await HttpGetAsync(service.Http, "example.org"));
