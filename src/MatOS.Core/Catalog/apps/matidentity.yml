@@ -18,7 +18,11 @@ x-matos:
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
   consumes:
-    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+    # Its mail (the invitation, a new password) through MatSMTP (MATSMTP_*), from a neutral sender: account@<domain>, not matidentity@<domain>. The
+    # sign-in of MatOS hides MatIdentity (docs/ENGINES.md "MatIdentity"), and so does the From of its mails.
+    - capability: mail.smtp
+      params:
+        sender: account
   ui:
     service: matidentity
     port: 2300

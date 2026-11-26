@@ -137,6 +137,14 @@ public class CatalogTests
     }
 
     [Fact]
+    public void MatIdentity_sends_its_mail_from_a_neutral_sender()
+    {
+        // The sign-in of MatOS hides MatIdentity; the From of its mails (a new password, an invitation) does too.
+        var mail = Assert.Single(CreateCatalog().Get("matidentity")!.Consumes, c => c.Capability == Capabilities.MailSmtp);
+        Assert.Equal("account", mail.Params["sender"]);
+    }
+
+    [Fact]
     public void MatAi_needs_nothing_set_up_before_it_opens()
     {
         var matai = CreateCatalog().Get("matai")!;

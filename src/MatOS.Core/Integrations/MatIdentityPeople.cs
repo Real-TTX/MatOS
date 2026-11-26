@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MatOS.Core.Catalog;
+using MatOS.Core.Configuration;
 using MatOS.Core.Engines;
 
 namespace MatOS.Core.Integrations;
@@ -64,6 +65,12 @@ public sealed class MatIdentityPeople
     public const string ActorHeader = "X-Mat-Actor";
 
     /// <summary>
+    /// The brand of the mails a write triggers (the invitation, a new password): MatOS's own client at MatIdentity, so a person invited from MatOS gets a mail of MatOS
+    /// whose link opens the page in MatOS's look (docs/ENGINES.md "MatIdentity"). An older MatIdentity ignores it.
+    /// </summary>
+    public const string BrandHeader = "X-Mat-Brand";
+
+    /// <summary>
     /// The HTTP client of these calls: it follows no redirect (an older MatIdentity without SCIM answers <c>/scim/v2</c> with its sign-in page, which must not be taken
     /// for an answer).
     /// </summary>
@@ -74,11 +81,13 @@ public sealed class MatIdentityPeople
 
     private readonly EngineLocator _locator;
     private readonly IHttpClientFactory _http;
+    private readonly SystemConfigService? _config;
 
-    public MatIdentityPeople(EngineLocator locator, IHttpClientFactory http)
+    public MatIdentityPeople(EngineLocator locator, IHttpClientFactory http, SystemConfigService? config = null)
     {
         _locator = locator;
         _http = http;
+        _config = config;
     }
 
     /// <summary>MatIdentity is installed and MatOS has its key.</summary>
@@ -343,6 +352,12 @@ public sealed class MatIdentityPeople
         if (!string.IsNullOrEmpty(actor))
         {
             request.Headers.Add(ActorHeader, actor);
+        }
+
+        // A write of MatOS signed in through MatIdentity names MatOS's brand: the mails it triggers look like MatOS.
+        if (method != HttpMethod.Get && _config is not null && await _config.GetAsync(ct) is { Identity: not null } config)
+        {
+            request.Headers.Add(BrandHeader, config.SelfClientId);
         }
 
         if (body is not null)

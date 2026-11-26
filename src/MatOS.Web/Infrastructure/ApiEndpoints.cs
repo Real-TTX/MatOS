@@ -52,7 +52,7 @@ public static class ApiEndpoints
                 return Results.NotFound();
             }
 
-            await http.SignInAsync(AuthConstants.CookieScheme, PrincipalFactory.Build(user, http.User.GetSessionToken() ?? string.Empty));
+            await SessionCookie.RefreshAsync(http, user);
             return Results.NoContent();
         }).RequireAuthorization();
 

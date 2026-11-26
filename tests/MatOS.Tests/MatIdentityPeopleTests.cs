@@ -1,8 +1,12 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using MatOS.Core.Configuration;
 using MatOS.Core.Engines;
 using MatOS.Core.Integrations;
+using MatOS.Core.Security;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MatOS.Tests;
 
@@ -154,11 +158,35 @@ public sealed class MatIdentityPeopleTests
         Assert.Null(await People(handler).PersonAsync("sub-nobody"));
     }
 
+    [Fact]
+    public async Task The_writes_of_a_MatOS_signed_in_through_MatIdentity_name_its_brand_for_the_mails()
+    {
+        var paths = new AppPaths(Path.Combine(Path.GetTempPath(), "matos-tests-" + Guid.NewGuid().ToString("N")));
+        var config = new SystemConfigService(new JsonConfigStore(paths, NullLogger<JsonConfigStore>.Instance), new DataProtectionSecretProtector(new EphemeralDataProtectionProvider()));
+        var handler = new ScimHandler { Answer = _ => (HttpStatusCode.OK, """{ "ok": true, "message": "sent" }""") };
+        var people = new MatIdentityPeople(new StubLocator(), new StubFactory(handler), config);
+
+        // Not signed in through MatIdentity yet: no brand.
+        await people.RunActionAsync("sub-anna", "invite", null);
+        Assert.Null(handler.Brands.Single());
+
+        await config.SetIdentityAsync(new IdentitySignIn { Authority = "http://matidentity.test", ClientId = "matos-home" }, "secret");
+        await people.RunActionAsync("sub-anna", "resetPassword", null);
+        Assert.Equal("matos-home", handler.Brands[^1]);
+
+        // A read names none.
+        handler.Answer = _ => (HttpStatusCode.OK, Anna);
+        await people.PersonAsync("sub-anna");
+        Assert.Null(handler.Brands[^1]);
+    }
+
     private static MatIdentityPeople People(ScimHandler handler) => new(new StubLocator(), new StubFactory(handler));
 
     private sealed class ScimHandler : HttpMessageHandler
     {
         public List<(string Method, string Url, string? Key, string? Actor, JsonNode? Body)> Requests { get; } = [];
+
+        public List<string?> Brands { get; } = [];
 
         public Func<(string Method, string Url), (HttpStatusCode Status, string Body)> Answer { get; set; } = _ => (HttpStatusCode.OK, "{}");
 
@@ -168,6 +196,7 @@ public sealed class MatIdentityPeopleTests
         {
             var text = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             var url = request.RequestUri!.AbsoluteUri;
+            Brands.Add(request.Headers.TryGetValues(MatIdentityPeople.BrandHeader, out var brand) ? brand.Single() : null);
             Requests.Add((request.Method.Method, url, request.Headers.TryGetValues("X-Api-Key", out var key) ? key.Single() : null,
                 request.Headers.TryGetValues(MatIdentityPeople.ActorHeader, out var actor) ? actor.Single() : null,
                 string.IsNullOrEmpty(text) ? null : JsonNode.Parse(text)));

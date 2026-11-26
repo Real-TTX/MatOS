@@ -166,12 +166,17 @@ saved. Only the client's manager brands it: `managedBy` must be the client's mar
 `branding: { name, accent, hideIdentity, hasLogo, hasBackground, logoContentType, backgroundContentType, logoUrl, backgroundUrl }` or `null`, never the data; the URLs are
 absolute with `?v=<first 16 hex digits of the SHA-256 of the bytes>`. MatIdentity serves them anonymously from its own origin (`/branding/{clientId}/logo`, `/background`,
 `/icon.svg`, `/theme.css`; strong ETag, a year of `immutable` caching with the current `?v`, `nosniff`, a sandboxing CSP for the pictures). When a sign-in belongs to a branded
-client (the `client_id` of the authorize request in `returnUrl`, `?brand=`, or the cookie `mid.brand`, 30 minutes) its pages (Login, Forgot, Reset, TwoFactor, Register,
-Verify, NoAccess, AccessDenied) show the client's logo, name ("Sign in to MatOS"), accent, background, title and icon; with `hideIdentity` nothing of MatIdentity. The reset and
-verify mails carry `&brand=` and, with `hideIdentity`, the client's name. **MatOS** sends `{ name: <instance name>, accent: "#8558ec", hideIdentity: true, logo: img/logo.svg,
+client (first match: the `client_id` of the local `/connect/authorize` or `/connect/logout` request in `returnUrl`, which always wins over a `?brand=` beside it, the
+OpenID Connect request an error page answers, `?brand=`, or the cookie `mid.brand`, 30 minutes) its pages (Login, Forgot, Reset, TwoFactor, Register, Verify, NoAccess,
+AccessDenied, ChangePassword (the forced change of a password), the sign-out question Logout, and the error pages StatusCode and Error) show the client's logo, name ("Sign in to MatOS"), accent, background, title and icon; with `hideIdentity` nothing of MatIdentity. The reset and
+verify mails carry `&brand=` and, with `hideIdentity`, the client's name. A broker names its brand for the mails it triggers with the header `X-Mat-Brand: <clientId>` on
+`POST /api/v1/people/{subject}/actions/invite|resetPassword` and SCIM `POST /scim/v2/Users` (an id that is no branded client is ignored); MatOS sends its own client id
+on every write of the People area (`MatIdentityPeople.BrandHeader`). MatIdentity's mail goes out as `account@<sender domain>` (the catalog's `mail.smtp` param `sender`),
+not `matidentity@`. **MatOS** sends `{ name: <instance name>, accent: "#8558ec", hideIdentity: true, logo: img/logo.svg,
 background: img/wallpapers/orbit-light.jpg }` with `managedBy: "matos"` and nothing else (the rest of the client stays), only when the client's `GET` has the field `branding`
 (an older MatIdentity has not; the status stays `apiVersion: 1`) and only what differs (`IdentityLink.BrandSelfAsync`, `MatIdentityClient.BrandAsync`). MatOS's sign-out
-sends `id_token_hint`, so MatIdentity's `/connect/logout` ends the session without asking and returns to `/signout-callback-oidc`.
+sends `id_token_hint`, so MatIdentity's `/connect/logout` ends the session without asking and returns to `/signout-callback-oidc`. MatOS keeps the id token in
+its session cookie whenever it writes the cookie again (theme, wallpaper, password: `SessionCookie.RefreshAsync`); without a hint the question is asked in MatOS's look.
 
 ## MatSMTP (`ghcr.io/real-ttx/matsmtp`)
 

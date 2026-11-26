@@ -112,7 +112,7 @@ public class ProfileModel : PageModel
 
         // Re-issue the cookie so the "must change password" flag is cleared immediately.
         user.MustChangePassword = false;
-        await HttpContext.SignInAsync(AuthConstants.CookieScheme, PrincipalFactory.Build(user, User.GetSessionToken() ?? string.Empty));
+        await SessionCookie.RefreshAsync(HttpContext, user);
 
         StatusMessage = "Password changed.";
         return RedirectToPage();
@@ -142,7 +142,7 @@ public class ProfileModel : PageModel
             return Forbid();
         }
 
-        await HttpContext.SignInAsync(AuthConstants.CookieScheme, PrincipalFactory.Build(user, User.GetSessionToken() ?? string.Empty));
+        await SessionCookie.RefreshAsync(HttpContext, user);
         StatusMessage = "Wallpaper changed. You see it on the home screen.";
         return RedirectToPage(new { tab = "home" });
     }
