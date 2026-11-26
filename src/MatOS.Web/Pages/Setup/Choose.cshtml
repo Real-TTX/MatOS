@@ -8,10 +8,10 @@
     ViewData["Title"] = "Set up MatOS";
 
     // A card of the store, as a box to tick: the icon, the name, what it is for and how far it is along. What the state means is written out (a tooltip does
-    // not exist on touch): its own note, or the meaning of a beta; the alphas have theirs above their group.
+    // not exist on touch) in the store's words for a person (the catalog's stateNote speaks of tests and branches); the alphas have theirs above their group.
     async Task AppChoice(CatalogApp app)
     {
-        var note = app.StateNote ?? (app.State == AppStates.Beta ? AppStates.Meaning(app.State) : null);
+        var note = app.State == AppStates.Beta ? MatOS.Web.Pages.Store.StoreWords.State(app.State) : null;
         <label class="mat-choice ob-app" data-ob-app="@app.Name">
             <input type="checkbox" name="Apps" value="@app.Id" checked="@Model.Apps.Contains(app.Id)" />
             <app-icon name="@app.Name" icon="@app.Icon" />

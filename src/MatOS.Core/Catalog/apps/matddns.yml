@@ -2,11 +2,11 @@
 x-matos:
   id: matddns
   name: Matddns
-  tagline: DynDNS client with failover
+  tagline: Keeps your address pointing home
   description: >-
     Keeps your DNS records in sync with your current IP. Pulls the IP from many sources (public IP, UniFi, FRITZ!Box, ...),
     writes it to Cloudflare, Netcup, Hetzner, GoDaddy or any DynDNS provider and fails over to the next reachable source.
-  category: Infrastructure
+  category: System
   role: ddns
   state: beta
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.

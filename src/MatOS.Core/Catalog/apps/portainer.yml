@@ -4,7 +4,7 @@ x-matos:
   name: Portainer
   tagline: Docker management UI
   description: Containers, images, volumes and networks of this host in a web UI.
-  category: Infrastructure
+  category: System
   role: docker
   state: third-party
   homepage: https://www.portainer.io

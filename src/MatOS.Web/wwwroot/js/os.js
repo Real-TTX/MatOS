@@ -110,6 +110,14 @@
   function sourceOf(app) {
     return pinned(app) || $$('.os-app[data-window]').filter(function (a) { return a.getAttribute('data-window') === app; })[0] || null;
   }
+  // A page with no icon of its own on the home screen: the details of an app take the app's icon, a page further in its section's (/Settings/System the one of /Settings).
+  function kinOf(url) {
+    if (!url) { return null; }
+    var app = $$('.os-app[data-details]').filter(function (a) { return a.getAttribute('data-details') === url; })[0];
+    if (app) { return app; }
+    var section = /^\/[^/?#]+/.exec(url);
+    return section && section[0] !== url ? sourceOf(section[0]) : null;
+  }
 
   // Where windows may be: below the status bar, and (filling the screen, or a half) above the dock.
   function area() {
@@ -209,7 +217,9 @@
   }
 
   function setIcon(w, source) {
-    var pic = source && source.querySelector('.os-app__icon > .mv-appicon, .os-app__icon > .os-ico, :scope > .os-ico, :scope > .mv-appicon');
+    var picOf = function (el) { return el ? el.querySelector('.os-app__icon > .mv-appicon, .os-app__icon > .os-ico, :scope > .os-ico, :scope > .mv-appicon') : null; };
+    // A window opened from a widget, a page or the address has no icon of its own: the one of the same page in the dock or on the home screen.
+    var pic = picOf(source) || picOf(sourceOf(w.app)) || (w.url !== w.app ? picOf(sourceOf(w.url)) : null) || picOf(kinOf(w.url));
     var make = function () {
       if (pic) { return pic.cloneNode(true); }
       var blank = document.createElement('span');
@@ -341,6 +351,9 @@
         w.rect.x += 30;
         w.rect.y += 30;
       }
+      // A new window that was stepped down ends above the dock, as the first one does (a place the person chose is kept as it was).
+      var room = area();
+      if (!kept && w.rect.y + w.rect.h > room.bottom) { w.rect.h = Math.max(MINH, room.bottom - w.rect.y); }
     }
     clampRect(w.rect);
     el.id = 'os-window-' + w.id;
@@ -676,6 +689,8 @@
         if (!fresh) { later(true); return; }
         var now = currentPage();
         pagesEl.innerHTML = fresh.innerHTML;
+        if (fresh.hasAttribute('data-os-default')) { pagesEl.setAttribute('data-os-default', ''); } else { pagesEl.removeAttribute('data-os-default'); }
+        keepOrder();
         if (fresh.hasAttribute('data-autorefresh')) { pagesEl.setAttribute('data-autorefresh', fresh.getAttribute('data-autorefresh')); } else { pagesEl.removeAttribute('data-autorefresh'); }
         var freshHidden = doc.querySelector('[data-os-hidden]');
         if (hiddenBox && freshHidden) { hiddenBox.innerHTML = freshHidden.innerHTML; }
@@ -777,6 +792,67 @@
   // its own right after it (data-continues), as a phone does. The places of the grid are taken in order (an earlier thing never moves for a later one),
   // so the first thing that reaches below the page and all after it continue. What is kept is the person's pages (layout()), so the same arrangement
   // fits a phone and a large screen. Moving, sizing, hiding a thing and a new size of the window let the pages flow again.
+  //
+  // The home screen as it comes (data-os-default: the person never arranged it) keeps the order of the server, and a screen that has room left at its end
+  // takes the later things that fit there before the next page begins (so a phone shows the apps on the first page and no empty band above the dots).
+  // An arrangement of the person's own is never reordered.
+  function asItComes() { return !!pagesEl && pagesEl.hasAttribute('data-os-default'); }
+  var order = new WeakMap();
+  function keepOrder() {
+    var n = 0;
+    pages().forEach(function (page) { things(page).forEach(function (t) { order.set(t, n++); }); });
+  }
+  // The person changed something: from now on the home screen is theirs, as it is on the screen.
+  function mine() { if (pagesEl) { pagesEl.removeAttribute('data-os-default'); } }
+
+  // A widget that follows icons begins a row of its own at the left, when nothing reaches into that place; else at least on a pair of columns
+  // (os-at-N), so that widgets line up as on a phone and do not sit half a column off. The grid itself places everything in order.
+  var atClasses = ['os-at-1', 'os-at-3', 'os-at-5', 'os-at-7'];
+  function align(page) {
+    var list = things(page);
+    list.forEach(function (t) { t.classList.remove.apply(t.classList, atClasses); });
+    var g = null;
+    for (var i = 1; i < list.length; i++) {
+      var el = list[i];
+      var prev = list[i - 1];
+      if (!el.classList.contains('os-widget') || prev.classList.contains('os-widget')) { continue; }
+      if (!g) {
+        var cs = getComputedStyle(page);
+        var cols = cs.gridTemplateColumns.split(' ').length;
+        var gapX = parseFloat(cs.columnGap) || 0;
+        var box = page.getBoundingClientRect();
+        g = { cols: cols, box: box, step: (box.width - gapX * (cols - 1)) / cols + gapX, rowStep: (parseFloat(cs.gridAutoRows) || 0) + (parseFloat(cs.rowGap) || 0) };
+      }
+      var pr = prev.getBoundingClientRect();
+      var x = g.box.left + 4;
+      var y = pr.top + g.rowStep + 4;
+      var taken = list.slice(0, i).some(function (o) { var r = o.getBoundingClientRect(); return r.left <= x && r.right >= x && r.top <= y && r.bottom >= y; });
+      var at = 1;
+      if (taken) {
+        var span = Math.max(1, Math.round(el.getBoundingClientRect().width / g.step));
+        var next = Math.round((pr.left - g.box.left) / g.step) + 2;
+        at = next % 2 === 0 ? next + 1 : next;
+        if (at + span - 1 > g.cols) { at = 1; }
+      }
+      if (at <= 7) { el.classList.add('os-at-' + at); }
+    }
+  }
+
+  // The later things that fit in what is left of a full screen move up before the first that does not (the home screen as it comes only).
+  function fillUp(page, stop, bottom) {
+    var list = things(page);
+    for (var j = list.indexOf(stop) + 1; j < list.length; j++) {
+      var el = list[j];
+      var back = el.nextSibling;
+      page.insertBefore(el, stop);
+      align(page);
+      if (el.getBoundingClientRect().bottom > bottom) {
+        page.insertBefore(el, back);
+        align(page);
+      }
+    }
+  }
+
   function flow() {
     if (!pagesEl || pagesEl.classList.contains('is-searching')) { return; }
     var owner = null;
@@ -788,12 +864,25 @@
         owner = page;
       }
     });
+    if (asItComes()) {
+      pages().forEach(function (page) {
+        things(page).sort(function (a, b) { return (order.has(a) ? order.get(a) : 1e6) - (order.has(b) ? order.get(b) : 1e6); })
+          .forEach(function (t) { page.appendChild(t); });
+      });
+    }
     for (var page = pages()[0]; page; page = page.nextElementSibling) {
+      align(page);
       var list = things(page);
       var bottom = page.getBoundingClientRect().bottom + 1;
       var cut = -1;
       for (var i = 0; i < list.length; i++) {
         if (list[i].getBoundingClientRect().bottom > bottom) { cut = i; break; }
+      }
+      if (cut > 0 && asItComes()) {
+        var stop = list[cut];
+        fillUp(page, stop, bottom);
+        list = things(page);
+        cut = list.indexOf(stop);
       }
       // A thing taller than the screen stays alone on its page.
       if (cut === 0) { cut = list.length > 1 ? 1 : -1; }
@@ -836,6 +925,7 @@
     }
     // Native dragging of a link or a picture would take the place of moving a thing.
     pagesEl.addEventListener('dragstart', function (e) { e.preventDefault(); });
+    keepOrder();
     flow();
     // Another size of the window holds more or less: the pages flow again, and the thing that was first on the screen stays in sight.
     var resizing = null;
@@ -945,6 +1035,7 @@
   }
   function moveTo(el, page, before) {
     if (before === el || (el.parentNode === page && el.nextSibling === before)) { return; }
+    mine();
     var at = snapshot();
     page.insertBefore(el, before || null);
     flow();
@@ -968,6 +1059,7 @@
 
   var sizeClass = { small: 'os-w2', medium: 'os-w2x2', wide: 'os-w4x2' };
   function setSize(el, size) {
+    mine();
     var at = snapshot();
     Object.keys(sizeClass).forEach(function (s) { el.classList.remove(sizeClass[s]); });
     el.classList.add(sizeClass[size] || 'os-w2');
@@ -979,6 +1071,7 @@
 
   function hide(el) {
     if (!hiddenBox) { return; }
+    mine();
     var at = snapshot();
     $$(':scope > .os-remove', el).forEach(function (b) { b.remove(); });
     hiddenBox.appendChild(el);
@@ -990,6 +1083,7 @@
   function restore(el) {
     var page = pages()[currentPage()] || pages()[0];
     if (!page) { return; }
+    mine();
     var at = snapshot();
     page.appendChild(el);
     if (editing) { addRemove(el); }
@@ -1626,7 +1720,6 @@
     'short-date': { weekday: 'short', day: 'numeric', month: 'short' },
     weekday: { weekday: 'long' },
   };
-  var greet = $('[data-os-greeting]');
   function tick() {
     var now = new Date();
     $$('[data-os-clock]').forEach(function (el) {
@@ -1634,11 +1727,10 @@
       if (!f) { return; }
       el.textContent = f.hour ? now.toLocaleTimeString([], f) : now.toLocaleDateString([], f);
     });
-    if (greet) {
-      var h = now.getHours();
-      var part = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-      greet.textContent = part + ', ' + greet.getAttribute('data-os-greeting');
-    }
+    // The greeting is looked up each time: a refresh of the home screen draws the widget anew.
+    var h = now.getHours();
+    var part = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    $$('[data-os-greeting]').forEach(function (greet) { greet.textContent = part + ', ' + greet.getAttribute('data-os-greeting'); });
   }
   tick();
   setInterval(tick, 10000);

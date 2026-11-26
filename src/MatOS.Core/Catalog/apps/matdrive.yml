@@ -2,7 +2,7 @@
 x-matos:
   id: matdrive
   name: MatDrive
-  tagline: Files in the browser – drives, sharing and WebDAV
+  tagline: Your files in the browser, shared when you like
   description: My Drive and shared drives, sharing with people and links, versions, trash, WebDAV, the storage locations of your NAS (SMB, SFTP, FTP, WebDAV) and office files in MatOffice.
   category: Files
   role: app

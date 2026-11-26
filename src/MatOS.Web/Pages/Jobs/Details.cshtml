@@ -9,10 +9,10 @@
 }
 
 <div data-job class="mat-stack">
-    <div class="mat-page__head">
+    <div class="mat-page__head mv-pagehead">
         <div class="mat-page__title">
             <h1>@job.Title</h1>
-            <p class="mat-page__sub"><span class="mat-pill mat-pill--busy" data-job-status>@job.Status</span></p>
+            <p class="mat-page__sub mv-cellgroup"><span class="mat-pill mat-pill--busy" data-job-status>@job.Status</span>@if (job.FinishedAt is { } finished) {<span class="mat-muted">@Format.DateTimeLocal(finished) · took @Format.Duration(job.StartedAt, job.FinishedAt)</span>}</p>
         </div>
     </div>
 
@@ -21,7 +21,18 @@
         <div class="mat-alert__body"></div>
     </div>
 
-    <pre class="mat-code mv-log mv-log--tall" data-job-log data-job-id="@job.Id" aria-live="polite" aria-label="Log of @job.Title"></pre>
+    @if (job.Status == JobStatus.Succeeded)
+    {
+        <div class="mat-alert mat-alert--success" role="status"><icon name="check-circle" /><div class="mat-alert__body">@Model.Result</div></div>
+    }
+
+    @* The log is open while the work runs (and when it failed); once it went well the line above says so and the log waits behind a click. *@
+    <details class="mat-collapse mv-details" open="@(job.Status != JobStatus.Succeeded)">
+        <summary><span>The log</span><span class="mat-accordion__chev" aria-hidden="true"><icon name="chevron-down" /></span></summary>
+        <div class="mat-accordion__body">
+            <pre class="mat-code mv-log mv-log--tall" data-job-log data-job-id="@job.Id" aria-live="polite" aria-label="Log of @job.Title"></pre>
+        </div>
+    </details>
 
     <div class="mat-btn-row mat-btn-row--plain">
         @if (app is not null && app.UiService is not null && job.Kind != JobKind.Uninstall)
@@ -36,6 +47,7 @@
         {
             <a href="@(job.Kind == JobKind.Uninstall ? "/Apps" : "/")" class="mat-btn mat-btn--primary" data-job-done hidden><icon name="@(job.Kind == JobKind.Uninstall ? "apps" : "home")" /><span>@(job.Kind == JobKind.Uninstall ? "Back to Apps" : "Home")</span></a>
         }
-        <a href="/Jobs" class="mat-btn mat-btn--ghost"><icon name="back" /><span>Activity</span></a>
+        @* In the window its Back does this (mv-page-only). *@
+        <a href="/Jobs" class="mat-btn mat-btn--ghost mv-page-only"><icon name="back" /><span>Activity</span></a>
     </div>
 </div>

@@ -2,11 +2,11 @@
 x-matos:
   id: matcad
   name: Matcad
-  tagline: Reverse proxy with automatic HTTPS
+  tagline: Your apps safely on the web
   description: >-
     Routes your domains to your apps, issues Let's Encrypt certificates (wildcards too, through DNS providers)
     and can protect apps with a login. MatOS creates a route for every app you install.
-  category: Infrastructure
+  category: System
   role: proxy
   state: integrated
   stateNote: Runs every route of MatOS.

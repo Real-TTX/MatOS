@@ -2,53 +2,69 @@
 @model MatOS.Web.Pages.Settings.SystemModel
 @{
     ViewData["Title"] = "System";
-    ViewData["PageSub"] = "Docker, the data folder and the version of MatOS.";
+    ViewData["PageSub"] = "How this machine is doing, and which MatOS runs on it.";
     ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("System", null));
     ViewData["Width"] = "narrow";
+
+    // A load as a meter and its number; the tone turns at 75 and 90 percent.
+    string Tone(double percent) => percent >= 90 ? "error" : percent >= 75 ? "warn" : "ok";
 }
 
 <partial name="_SettingsTabs" model="@("system")" />
 
-<div class="mat-card">
-    <div class="mat-card__head"><icon name="whale" /><span class="mat-card__title">Docker</span></div>
-    <div class="mat-card__body">
-        @if (Model.Engine.Available)
-        {
-            <dl class="mat-kv">
-                <dt>Status</dt><dd><span class="mat-pill mat-pill--ok">Connected</span> <span class="mat-muted">as @Model.Engine.Source reports it</span></dd>
-                @if (Model.Engine.Load is { } load)
-                {
-                    <dt>Engine</dt><dd>Docker @Model.Engine.Version</dd>
-                    <dt>Processor</dt><dd class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.CpuPercent)" data-tone="@(load.CpuPercent >= 90 ? "error" : load.CpuPercent >= 75 ? "warn" : "ok")" aria-label="Processor"></progress><span>@(load.CpuPercent.ToString("0")) %</span></dd>
-                    <dt>Memory</dt><dd class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.MemoryPercent)" data-tone="@(load.MemoryPercent >= 90 ? "error" : load.MemoryPercent >= 75 ? "warn" : "ok")" aria-label="Memory"></progress><span>@(load.MemoryPercent.ToString("0")) %</span></dd>
-                    <dt>Disk</dt><dd class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.DiskPercent)" data-tone="@(load.DiskPercent >= 90 ? "error" : load.DiskPercent >= 75 ? "warn" : "ok")" aria-label="Disk"></progress><span>@(load.DiskPercent.ToString("0")) %</span></dd>
-                    <dt>Containers</dt><dd>@Model.Engine.ContainersRunning running</dd>
-                }
-                else
-                {
-                    <dt>Engine</dt><dd>Docker @Model.Engine.Version on @Model.Engine.OperatingSystem</dd>
-                    <dt>Resources</dt><dd>@Model.Engine.Cpus CPUs, @Format.Size(Model.Engine.MemoryBytes) memory</dd>
-                    <dt>Containers</dt><dd>@Model.Engine.ContainersRunning running of @Model.Engine.ContainersTotal, @Model.Engine.Images images</dd>
-                }
-                <dt>Shared network</dt><dd><code>@Model.Network</code> <span class="mat-muted">connects the reverse proxy and the apps' web interfaces</span></dd>
-                <dt>This container</dt><dd>@(Model.SelfContainer is null ? "not running in Docker" : Model.SelfContainer)</dd>
-            </dl>
-        }
-        else
-        {
-            <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@Model.Engine.Error</div></div>
-        }
-    </div>
-</div>
+@* A list of facts, as the settings of a phone: what a person wants to know first, the rest behind "Technical details". *@
+<section class="mat-stack mat-stack--sm" aria-labelledby="sys-machine">
+    <h2 class="mat-itemlist__header" id="sys-machine">This machine</h2>
+    @if (Model.Engine.Available)
+    {
+        <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-labelledby="sys-machine">
+            <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Status</span><span class="mat-item__text">Checked just now</span></span><span class="mat-item__end"><span class="mat-pill mat-pill--ok">Connected</span></span></div></li>
+            @if (Model.Engine.Load is { } load)
+            {
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Processor</span></span><span class="mat-item__end"><span class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.CpuPercent)" data-tone="@Tone(load.CpuPercent)" aria-label="Processor"></progress><span>@(load.CpuPercent.ToString("0")) %</span></span></span></div></li>
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Memory</span></span><span class="mat-item__end"><span class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.MemoryPercent)" data-tone="@Tone(load.MemoryPercent)" aria-label="Memory"></progress><span>@(load.MemoryPercent.ToString("0")) %</span></span></span></div></li>
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Disk</span></span><span class="mat-item__end"><span class="mv-load"><progress class="mv-progress" max="100" value="@((int)load.DiskPercent)" data-tone="@Tone(load.DiskPercent)" aria-label="Disk"></progress><span>@(load.DiskPercent.ToString("0")) %</span></span></span></div></li>
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Running</span></span><span class="mat-item__end"><a href="/Tasks">@Model.Engine.ContainersRunning programs</a></span></div></li>
+            }
+            else
+            {
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Resources</span></span><span class="mat-item__end"><span>@Model.Engine.Cpus processors, @Format.Size(Model.Engine.MemoryBytes) memory</span></span></div></li>
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Running</span></span><span class="mat-item__end"><span>@Model.Engine.ContainersRunning of @Model.Engine.ContainersTotal programs</span></span></div></li>
+            }
+        </ul>
+    }
+    else
+    {
+        <div class="mat-alert mat-alert--danger" role="alert">
+            <icon name="x-circle" />
+            <div class="mat-alert__body">
+                <strong>MatOS cannot reach Docker, which runs the apps, right now.</strong>
+                <p class="mat-small">@Model.Engine.Error</p>
+            </div>
+        </div>
+    }
+</section>
 
-<div class="mat-card">
-    <div class="mat-card__head"><icon name="info" /><span class="mat-card__title">MatOS</span></div>
-    <div class="mat-card__body">
-        <dl class="mat-kv">
-            <dt>Version</dt><dd><code>@Model.Version</code></dd>
-            <dt>Data folder</dt><dd><code>@Model.DataPath</code> <span class="mat-muted">database, settings, compose files of the apps, backups</span></dd>
-            <dt>Catalog</dt><dd>@Model.CatalogTotal apps@(Model.CatalogCustom > 0 ? $" ({Model.CatalogCustom} of your own)" : "")</dd>
-            <dt>Reverse proxy</dt><dd>@(Model.ProxyActive ? "Matcad creates a route for every app." : "No automatic routes (needs Matcad and a domain for your apps).")</dd>
-        </dl>
+<section class="mat-stack mat-stack--sm" aria-labelledby="sys-matos">
+    <h2 class="mat-itemlist__header" id="sys-matos">MatOS</h2>
+    <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-labelledby="sys-matos">
+        <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Version</span></span><span class="mat-item__end"><span>@Model.Version</span></span></div></li>
+        <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Store</span></span><span class="mat-item__end"><a href="/Store">@Model.CatalogTotal apps@(Model.CatalogCustom > 0 ? $" ({Model.CatalogCustom} of your own)" : "")</a></span></div></li>
+        <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Addresses of the apps</span><span class="mat-item__text">@(Model.ProxyActive ? "Matcad gives every app its own address under your domain." : "Every app has a port of this machine. A domain (General) or a free address (Address) gives each its own name.")</span></span></div></li>
+    </ul>
+</section>
+
+<details class="mat-collapse mv-details">
+    <summary><span>Technical details</span><span class="mat-accordion__chev" aria-hidden="true"><icon name="chevron-down" /></span></summary>
+    <div class="mat-accordion__body">
+        <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-label="Technical details">
+            @if (Model.Engine.Available)
+            {
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Docker</span></span><span class="mat-item__end"><span>@Model.Engine.Version@(Model.Engine.Load is null && !string.IsNullOrEmpty(Model.Engine.OperatingSystem) ? $" on {Model.Engine.OperatingSystem}" : "")</span></span></div></li>
+            }
+            <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Shared network</span><span class="mat-item__text">Connects the reverse proxy and the web pages of the apps</span></span><span class="mat-item__end"><code>@Model.Network</code></span></div></li>
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">This container</span></span><span class="mat-item__end"><span>@(Model.SelfContainer ?? "Not running in Docker")</span></span></div></li>
+            <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Data folder</span><span class="mat-item__text">The database, the settings, the files of the apps and the backups</span></span><span class="mat-item__end"><code>@Model.DataPath</code></span></div></li>
+        </ul>
     </div>
-</div>
+</details>

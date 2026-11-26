@@ -2,7 +2,7 @@
 x-matos:
   id: matshape
   name: MatShape
-  tagline: 3D CAD in the browser
+  tagline: Design 3D parts in the browser
   description: Parametric parts from constraint sketches and features (fillet, chamfer, hole, shell, sweep, loft ...), drawings and assemblies, STEP export, versions, sharing and an AI assistant.
   category: Productivity
   role: app

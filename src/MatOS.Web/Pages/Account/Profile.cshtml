@@ -56,24 +56,22 @@
 }
 else if (!Model.PasswordTab)
 {
-    <div class="mat-card">
-        <div class="mat-card__head"><icon name="user" /><span class="mat-card__title">Your account</span></div>
-        <div class="mat-card__body">
-            <dl class="mat-kv">
-                <dt>Username</dt><dd>@Model.Username</dd>
-                <dt>Display name</dt><dd>@Model.DisplayName</dd>
-                <dt>Role</dt><dd>@Model.Role</dd>
-            </dl>
-        </div>
-    </div>
+    @* No heading over it: the window, the tab and the head of the sidebar already say whose account this is. *@
+    <section class="mat-stack mat-stack--sm" aria-label="Your account">
+        <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-label="Your account">
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Name</span></span><span class="mat-item__end"><span>@Model.DisplayName</span></span></div></li>
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">User name</span></span><span class="mat-item__end"><span>@Model.Username</span></span></div></li>
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Role</span></span><span class="mat-item__end"><span>@Model.Role</span></span></div></li>
+        </ul>
+    </section>
 }
 else
 {
     <form method="post" class="mat-form" novalidate>
         <partial name="_ValidationSummary" />
 
-        <div class="mat-card">
-            <div class="mat-card__head"><icon name="key" /><span class="mat-card__title">Change password</span></div>
+        @* The fields on one surface, without a title of their own: the tab says what this is (as the other settings). *@
+        <div class="mat-card" role="group" aria-label="Change password">
             <div class="mat-card__body mat-stack">
                 <mat-field label="Current password" asp-for="Input.CurrentPassword" required="true">
                     <input asp-for="Input.CurrentPassword" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your current password." />

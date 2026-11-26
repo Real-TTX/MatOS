@@ -3,7 +3,8 @@
    In there a page drops the menu and the header of the shell (the window has a title, Back and Close); see .mv-in-window in matos.css.
    - A page that belongs to the whole tab (sign-in, a shared link, an error: <html data-top-level>) leaves the window and takes the tab.
    - The home screen itself never draws inside the window: when a page lands on it (a redirect to /), the window closes instead.
-   - A link to the home screen inside the window puts the window away (the page stays as it is). */
+   - A link to the home screen inside the window puts the window away (the page stays as it is).
+   - Tabs that do not fit show the current one and fade out where more of them wait. */
 (function () {
   'use strict';
 
@@ -28,4 +29,31 @@
       home();
     }
   }, true);
+
+  // Tabs wider than the window scroll sideways: the current one is brought into view (only the tabs scroll, not the page), and the side where more tabs
+  // wait is marked (mv-more-start, mv-more-end), which fades out in matos.css. A window that is resized or a tray that is scrolled marks again.
+  function mark(tabs) {
+    var more = tabs.scrollWidth - tabs.clientWidth > 1;
+    tabs.classList.toggle('mv-more-start', more && tabs.scrollLeft > 1);
+    tabs.classList.toggle('mv-more-end', more && tabs.scrollLeft < tabs.scrollWidth - tabs.clientWidth - 1);
+  }
+
+  function tabs() {
+    Array.prototype.forEach.call(document.querySelectorAll('.mat-tabs'), function (list) {
+      var current = list.querySelector('.mat-tab.is-active, .mat-tab[aria-selected="true"]');
+      if (current && list.scrollWidth > list.clientWidth) {
+        var box = list.getBoundingClientRect();
+        var tab = current.getBoundingClientRect();
+        if (tab.right > box.right) { list.scrollLeft += tab.right - box.right + 24; }
+        else if (tab.left < box.left) { list.scrollLeft -= box.left - tab.left + 24; }
+      }
+      mark(list);
+      list.addEventListener('scroll', function () { mark(list); }, { passive: true });
+    });
+    window.addEventListener('resize', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.mat-tabs'), mark);
+    });
+  }
+
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', tabs); } else { tabs(); }
 })();

@@ -2,7 +2,7 @@
 x-matos:
   id: matfile
   name: MatFile
-  tagline: File explorer for your NAS
+  tagline: Your files at home, in the browser
   description: Browse, upload, edit and share the files on your server from the browser.
   category: Files
   role: app

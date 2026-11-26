@@ -41,7 +41,7 @@
                             <td data-label="Username"><div class="mat-table__name"><a href="/Users/Edit?id=@u.Id">@u.Username</a></div></td>
                             <td data-label="Display name" class="mat-hide-sm">@u.DisplayName</td>
                             <td data-label="Role">@u.Role</td>
-                            <td data-label="Status">
+                            <td data-label="Status" class="mv-statuscell">
                                 @if (u.IsActive)
                                 {
                                     <span class="mat-pill mat-pill--ok">Active</span>
@@ -51,7 +51,7 @@
                                     <span class="mat-pill">Inactive</span>
                                 }
                             </td>
-                            <td data-label="Last login" class="mat-hide-sm mat-muted mat-nowrap mat-mono">@(u.LastLoginAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "–")</td>
+                            <td data-label="Last login" class="mat-hide-sm mat-muted mat-nowrap">@(u.LastLoginAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "–")</td>
                             <td class="mat-table__cell-actions">
                                 <div class="mat-table__actions">
                                     <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Users/Edit?id=@u.Id" aria-label="Edit @u.Username" data-tip="Edit"><icon name="edit" /></a>
@@ -59,7 +59,7 @@
                                     {
                                         <form method="post" asp-page-handler="Delete" data-confirm="Delete the user @u.Username? They can no longer sign in." data-confirm-ok="Delete" data-confirm-danger>
                                             <input type="hidden" name="id" value="@u.Id" />
-                                            <button type="submit" class="mat-btn mat-btn--danger mat-btn--icon mat-btn--sm" aria-label="Delete @u.Username" data-tip="Delete"><icon name="trash" /></button>
+                                            <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Delete @u.Username" data-tip="Delete"><icon name="trash" /></button>
                                         </form>
                                     }
                                 </div>

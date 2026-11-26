@@ -38,4 +38,26 @@ public class DetailsModel : PageModel
 
         return Page();
     }
+
+    /// <summary>What came of a job that went well, in one plain sentence (the line over the buttons).</summary>
+    public string Result
+    {
+        get
+        {
+            var name = App?.Name ?? "The app";
+            return Job.Kind switch
+            {
+                JobKind.Install => $"{name} is installed.",
+                JobKind.Update => $"{name} is up to date.",
+                JobKind.Uninstall => $"{name} is removed.",
+                JobKind.Start => $"{name} is running.",
+                JobKind.Stop => $"{name} is stopped.",
+                JobKind.Restart => $"{name} has started again.",
+                JobKind.Backup => $"{name} is backed up.",
+                JobKind.Restore => $"{name} is restored from the backup.",
+                JobKind.Provision => $"{name} is set up.",
+                _ => "Done.",
+            };
+        }
+    }
 }

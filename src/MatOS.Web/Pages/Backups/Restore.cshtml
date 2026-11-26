@@ -12,7 +12,7 @@
     <div class="mat-card__head"><icon name="save" /><span class="mat-card__title">The backup</span></div>
     <div class="mat-card__body">
         <dl class="mat-kv">
-            <dt>Created</dt><dd><span class="mat-mono">@Format.DateTimeLocal(backup.CreatedUtc)</span> <span class="mat-muted">· @Format.Ago(backup.CreatedUtc)</span></dd>
+            <dt>Created</dt><dd>@Format.DateTimeLocal(backup.CreatedUtc) <span class="mat-muted">· @Format.Ago(backup.CreatedUtc)</span></dd>
             <dt>Kind</dt><dd>@backup.Kind @backup.Note</dd>
             <dt>Kept by</dt><dd>@MatOS.Web.Pages.Backups.IndexModel.EngineLabel(backup.Engine)</dd>
             <dt>Content</dt><dd>@backup.VolumeCount volume@(backup.VolumeCount == 1 ? "" : "s"), @Format.Size(backup.SizeBytes)</dd>

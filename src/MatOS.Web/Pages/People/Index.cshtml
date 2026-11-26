@@ -34,7 +34,7 @@ else
                 <span class="mat-empty__icon"><icon name="users" /></span>
                 <div class="mat-empty__title">@(list.Toolbar.Total == 0 ? "No people yet" : "Nothing matches")</div>
                 <p>@(list.Toolbar.Total == 0 ? "Add the people who use the apps; MatIdentity sends each an invitation." : "No person matches. Change the search or the filter.")</p>
-                <a class="mat-btn mat-btn--secondary" href="@(list.Toolbar.Total == 0 ? "/People/Edit" : "/People")">@(list.Toolbar.Total == 0 ? "New person" : "Reset the tools")</a>
+                <a class="mat-btn @(list.Toolbar.Total == 0 ? "mat-btn--primary" : "mat-btn--secondary")" href="@(list.Toolbar.Total == 0 ? "/People/Edit" : "/People")"><icon name="@(list.Toolbar.Total == 0 ? "plus" : "x")" /><span>@(list.Toolbar.Total == 0 ? "New person" : "Reset the tools")</span></a>
             </div>
         }
         else
@@ -50,10 +50,10 @@ else
                         {
                             <tr>
                                 <td data-label="Name"><div class="mat-table__name"><a href="/People/Edit?id=@Uri.EscapeDataString(p.Subject)">@p.DisplayName</a></div>@if (p.Email is not null) { <div class="mat-muted">@p.Email</div> }</td>
-                                <td data-label="User name" class="mat-hide-sm mat-mono">@p.UserName</td>
+                                <td data-label="User name" class="mat-hide-sm mat-muted">@p.UserName</td>
                                 <td data-label="Groups" class="mat-hide-sm">@(p.Groups.Count == 0 ? "–" : string.Join(", ", p.Groups.Select(g => g.Name)))</td>
                                 <td data-label="Apps">@(p.Administrator ? "All" : p.Access.Count.ToString())</td>
-                                <td data-label="Status">
+                                <td data-label="Status" class="mv-statuscell">
                                     @if (!p.Active)
                                     {
                                         <span class="mat-pill">Disabled</span>

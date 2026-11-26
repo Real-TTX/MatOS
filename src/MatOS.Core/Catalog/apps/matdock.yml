@@ -2,11 +2,11 @@
 x-matos:
   id: matdock
   name: MatDock
-  tagline: Advanced Docker management
+  tagline: See and run everything on this computer
   description: >-
     Stacks, containers, volumes, live logs, a web terminal and scheduled backups across many hosts over SSH.
     Use it where MatOS stops: managing other servers, migrating volumes and backups to a NAS.
-  category: Infrastructure
+  category: System
   role: docker
   state: integrated
   stateNote: Runs and backs up the apps; platform contract 1, no home-screen contributions yet.

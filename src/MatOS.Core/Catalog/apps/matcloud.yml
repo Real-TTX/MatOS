@@ -2,7 +2,7 @@
 x-matos:
   id: matcloud
   name: MatCloud
-  tagline: The cloud of the Thix apps – clipboard and notes on every device
+  tagline: Clipboard and notes on every device
   description: The Thix desktop apps sign their devices in here and keep their data the same on every PC and Mac. ThixClip gets its clipboard history in the browser (searchable, also the text in pictures); ThixNote and the other apps sync through the general sync. Devices sign in in the browser with a code, also with MatIdentity.
   category: Productivity
   role: app

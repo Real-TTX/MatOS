@@ -6,7 +6,7 @@ x-matos:
   description: >-
     Proxy hosts, redirects and free Let's Encrypt certificates, managed in a web UI.
     MatOS cannot create the routes for you; add a proxy host that forwards to the container name shown on the app page.
-  category: Infrastructure
+  category: System
   role: proxy
   state: third-party
   stateNote: Needs the ports 80 and 443 that Matcad uses.

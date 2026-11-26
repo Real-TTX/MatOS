@@ -2,11 +2,11 @@
 x-matos:
   id: matsmtp
   name: MatSMTP
-  tagline: SMTP relay
+  tagline: Sends the mail of your apps
   description: >-
     One place where all mail of your apps leaves: they hand it to MatSMTP, and MatSMTP delivers it through your mail account, with rules, a queue,
     retries and a history of every message. MatOS gives every app that sends mail its own relay user there.
-  category: Infrastructure
+  category: System
   role: mail
   state: integrated
   stateNote: Sends the mail of the apps.

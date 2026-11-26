@@ -3,7 +3,7 @@
 @model MatOS.Web.Pages.Settings.EnginesModel
 @{
     ViewData["Title"] = "Engines";
-    ViewData["PageSub"] = "The five programs that keep the configuration of MatOS.";
+    ViewData["PageSub"] = "The five programs MatOS is built on. Each keeps its own part of your setup.";
     ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Engines", null));
     ViewData["Width"] = "narrow";
     var dns = DnsProviders.Find(Model.Config.Dns.Provider);
@@ -11,86 +11,77 @@
 
 <partial name="_SettingsTabs" model="@("engines")" />
 
-<p>
-    MatOS is the launcher on top of these five programs. Each one keeps its own part of the configuration, so you see
-    the stacks in MatDock, the routes in Matcad, the DNS records in Matddns, the apps in MatIdentity and their relay users in MatSMTP, marked <em>Managed by matos</em>.
-</p>
+@* One grouped list, as the settings of a phone: an engine per row with its state; a row opens the engine (its page in the window: open it, its details, what it does for the apps). *@
+@* No heading over it: the window and the tab already say Engines. *@
+<section class="mat-stack mat-stack--sm" aria-label="Engines">
+    <ul class="mat-itemlist mat-itemlist--inset mat-itemlist--lines-inset mv-facts" aria-label="Engines">
+        @foreach (var row in Model.Rows)
+        {
+            <li class="mat-item">
+                <a class="mat-item__main" href="@(row.App is null ? $"/Store/Install?id={row.Catalog.Id}" : row.Window)">
+                    <span class="mat-item__lead"><app-icon name="@row.Catalog.Name" icon="@row.Catalog.Icon" /></span>
+                    <span class="mat-item__body">
+                        <span class="mat-item__title">@row.Catalog.Name</span>
+                        <span class="mat-item__text mat-item__text--clamp">@row.Owns</span>
+                    </span>
+                    <span class="mat-item__end">
+                        @if (row.App is null)
+                        {
+                            <span class="mat-pill">Not installed</span>
+                        }
+                        else if (row.App.Lifecycle != MatOS.Core.Entities.AppLifecycle.Installed)
+                        {
+                            <span class="mat-pill mat-pill--busy">@row.App.Lifecycle</span>
+                        }
+                        else if (row.Status is { ApiVersion: >= 1 })
+                        {
+                            <span class="mat-pill mat-pill--ok mv-pill-dot"><span>Connected</span></span>
+                        }
+                        else
+                        {
+                            <span class="mat-pill mat-pill--warn">Not answering</span>
+                        }
+                        <icon name="chevron-right" />
+                    </span>
+                </a>
+            </li>
+        }
+    </ul>
+</section>
 
-@foreach (var row in Model.Rows)
-{
-    <div class="mat-card">
-        <div class="mat-card__body mat-stack">
-            <div class="mv-apphead">
-                <app-icon name="@row.Catalog.Name" icon="@row.Catalog.Icon" size="lg" />
-                <div class="mv-apphead__text">
-                    <h2>@row.Catalog.Name</h2>
-                    <div class="mat-muted">@row.Owns</div>
-                    @if (row.Status is { } status)
-                    {
-                        <div class="mat-muted mat-small">Version <code>@status.Version</code> · API v@(status.ApiVersion)</div>
-                    }
-                </div>
-                @if (row.App is null)
-                {
-                    <span class="mat-pill mat-ms-auto">Not installed</span>
-                }
-                else if (row.App.Lifecycle != MatOS.Core.Entities.AppLifecycle.Installed)
-                {
-                    <span class="mat-pill mat-pill--busy mat-ms-auto">@row.App.Lifecycle</span>
-                }
-                else if (row.Status is { ApiVersion: >= 1 })
-                {
-                    <span class="mat-pill mat-pill--ok mat-ms-auto">Connected</span>
-                }
-                else
-                {
-                    <span class="mat-pill mat-pill--warn mat-ms-auto">API not answering</span>
-                }
-            </div>
-            @if (row.App is not null && row.App.Lifecycle == MatOS.Core.Entities.AppLifecycle.Installed && row.Status is not { ApiVersion: >= 1 })
-            {
-                <p class="mat-muted mat-small">It may still be starting, or this image is older than its API.</p>
-            }
-            <div class="mat-actions">
-                @if (row.App is null)
-                {
-                    <a class="mat-btn mat-btn--primary mat-btn--sm" href="/Store/Install?id=@row.Catalog.Id"><icon name="plus" /><span>Install</span></a>
-                }
-                else
-                {
-                    @if (row.OpenUrl is not null)
-                    {
-                        <a class="mat-btn mat-btn--primary mat-btn--sm" href="@row.OpenUrl" target="_blank" rel="noopener"><icon name="external" /><span>Open @row.Catalog.Name</span></a>
-                    }
-                    <a class="mat-btn mat-btn--secondary mat-btn--sm" asp-page="/Apps/Details" asp-route-id="@row.App.Id"><icon name="info" /><span>Details</span></a>
-                }
-            </div>
-        </div>
-    </div>
-}
+<section class="mat-stack mat-stack--sm" aria-labelledby="engines-handover">
+    <h2 class="mat-itemlist__header" id="engines-handover">What MatOS hands over</h2>
+    <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-labelledby="engines-handover">
+        <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Apps are run by</span></span><span class="mat-item__end"><span>@(Model.DeployedByMatDock ? "MatDock" : "MatOS itself, until MatDock answers")</span></span></div></li>
+        <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Domain</span></span><span class="mat-item__end"><span>@(string.IsNullOrEmpty(Model.Config.BaseDomain) ? "None: apps use their ports" : "*." + Model.Config.BaseDomain)</span></span></div></li>
+        <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">DNS provider</span>@if (dns is null) {<span class="mat-item__text">Certificates come without one; you look after DNS yourself.</span>}</span><span class="mat-item__end"><span>@(dns is null ? "None" : dns.Name)</span></span></div></li>
+        @if (Model.Config.WizardCompleted)
+        {
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Setup wizard</span></span><span class="mat-item__end"><span>@(Model.Config.WizardCompletedAt is { } at ? "Last run " + Format.DateTimeLocal(at) : "Done")</span></span></div></li>
+        }
+    </ul>
+</section>
 
-<div class="mat-card">
-    <div class="mat-card__head"><icon name="route" /><span class="mat-card__title">What MatOS hands over</span></div>
-    <div class="mat-card__body mat-stack">
-        <dl class="mat-kv">
-            <dt>Apps are run by</dt><dd>@(Model.DeployedByMatDock ? "MatDock (new apps become stacks there)" : "MatOS itself, with docker compose, until MatDock answers")</dd>
-            <dt>Domain</dt><dd>@(string.IsNullOrEmpty(Model.Config.BaseDomain) ? "none: apps use their ports" : "*." + Model.Config.BaseDomain)</dd>
-            <dt>DNS provider</dt><dd>@(dns is null ? "none: certificates use the HTTP challenge and you manage DNS yourself" : dns.Name)</dd>
-            <dt>May show the engines in its window</dt><dd>@foreach (var origin in Model.FrameOrigins) { <code>@origin</code> } <span class="mat-muted">(an engine gets them with its next update)</span></dd>
-        </dl>
-        <div class="mat-actions">
-            <form method="post" asp-page-handler="Reconnect">
-                <button type="submit" class="mat-btn mat-btn--primary"><icon name="refresh" /><span>Connect again</span></button>
-            </form>
-            <form method="post" asp-page-handler="Adopt">
-                <button type="submit" class="mat-btn mat-btn--secondary"><icon name="restore" /><span>Look for apps in MatDock</span></button>
-            </form>
-            <a href="/Wizard" class="mat-btn mat-btn--ghost"><icon name="sparkles" /><span>Run the setup wizard</span></a>
-        </div>
-    </div>
+<div class="mat-actions">
+    <form method="post" asp-page-handler="Reconnect">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="refresh" /><span>Connect again</span></button>
+    </form>
+    <form method="post" asp-page-handler="Adopt">
+        <button type="submit" class="mat-btn mat-btn--secondary"><icon name="restore" /><span>Look for apps in MatDock</span></button>
+    </form>
+    <a href="/Wizard" class="mat-btn mat-btn--ghost"><icon name="sparkles" /><span>Run the setup wizard</span></a>
 </div>
 
-@if (Model.Config.WizardCompleted)
-{
-    <p class="mat-muted">Last run of the wizard: @(Model.Config.WizardCompletedAt is { } at ? Format.DateTimeLocal(at) : "unknown").</p>
-}
+<details class="mat-collapse mv-details">
+    <summary><span>Technical details</span><span class="mat-accordion__chev" aria-hidden="true"><icon name="chevron-down" /></span></summary>
+    <div class="mat-accordion__body">
+        <p class="mat-muted">Each engine shows what MatOS keeps in it with the mark <em>Managed by matos</em>: the stacks in MatDock, the routes in Matcad, the DNS records in Matddns, the apps in MatIdentity and their mail users in MatSMTP.</p>
+        <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-label="Versions and addresses">
+            @foreach (var row in Model.Rows.Where(r => r.Status is not null))
+            {
+                <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">@row.Catalog.Name</span></span><span class="mat-item__end"><span>Version <code>@row.Status!.Version</code> · API v@(row.Status!.ApiVersion)</span></span></div></li>
+            }
+            <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">May show the engines in its window</span><span class="mat-item__text">An engine learns these addresses with its next update.</span></span><span class="mat-item__end">@foreach (var origin in Model.FrameOrigins) { <code>@origin</code> }</span></div></li>
+        </ul>
+    </div>
+</details>

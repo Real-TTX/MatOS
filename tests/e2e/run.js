@@ -382,7 +382,8 @@ const pages = [
     await page.mouse.click(1300, 800, { button: 'right' });
     await entry('Reset the home screen').click();
     await Promise.all([page.waitForEvent('load'), page.locator('dialog[open] button[value="ok"]').click()]);
-    expectEqual(await page.locator('.os-page:not([data-continues])').count(), 1, 'reset: one page of the person');
+    // reset: the home screen as it comes (HomeLayout.OrDefault): the person's page and the page of the machine (engines, Docker, Task Manager, System)
+    expectEqual(await page.locator('.os-page:not([data-continues])').count(), 2, 'reset: the two pages of the home screen as it comes');
     expectEqual(await page.locator('.os-page [data-home-key="w:docker"]').count(), 1, 'reset: Docker is back');
   });
   await check('the home screen never scrolls: what does not fit on the screen is on the next page (a large screen, a phone)', async () => {
@@ -446,9 +447,9 @@ const pages = [
     expectTrue(await page.locator('.mat-pager').count() === 1, 'a pager under the gallery');
     await page.click('[data-dialog-open="store-filter"]');
     expectEqual(await page.locator('dialog#store-filter[open]').count(), 1, 'the dialog opens');
-    await page.selectOption('#store-f-category', 'Infrastructure');
+    await page.selectOption('#store-f-category', 'System');
     await page.click('dialog#store-filter button[type=submit]');
-    await page.waitForURL(/category=Infrastructure/);
+    await page.waitForURL(/category=System/);
     expectEqual(await page.locator('.mat-chip').count(), 1, 'a chip for the filter');
     expectTrue(await page.locator('.mat-gallery .mat-card').count() >= 1, 'apps of the category');
   });

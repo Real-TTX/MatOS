@@ -137,7 +137,7 @@ public class AppFilesTests
 
         var block = (IDictionary<object, object>)compose["x-matdock"];
         Assert.Equal("Matddns (home)", block["name"]);
-        Assert.Equal("Infrastructure", block["category"]);
+        Assert.Equal("System", block["category"]);
         Assert.True(compose.ContainsKey("x-matos"));
     }
 

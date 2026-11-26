@@ -92,7 +92,7 @@ public class IndexModel : PageModel
             Action = "/Tasks",
             Label = "Task Manager",
             Search = q,
-            SearchPlaceholder = "Search containers",
+            SearchPlaceholder = "Search what runs",
             SearchField = true,
             Filters =
             [
@@ -106,7 +106,7 @@ public class IndexModel : PageModel
             DefaultDescending = true,
             Total = Total,
             Matching = matching.Count,
-            Noun = Total == 1 ? "container" : "containers",
+            Noun = Total == 1 ? "program" : "programs",
         };
 
         var pages = Math.Max(1, (int)Math.Ceiling(matching.Count / (double)PageSize));

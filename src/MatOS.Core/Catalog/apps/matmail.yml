@@ -2,7 +2,7 @@
 x-matos:
   id: matmail
   name: MatMail
-  tagline: Mail gateway with a web mail client
+  tagline: All your mail accounts in one place
   description: >-
     Connect your mail accounts (Strato, Netcup, ...) once and work with them in the web client, in Outlook or Thunderbird,
     or send through MatMail as a smart host. Tenants keep the provider credentials off your customers' devices.

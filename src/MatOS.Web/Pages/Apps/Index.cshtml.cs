@@ -18,15 +18,18 @@ public class IndexModel : PageModel
     private readonly AppService _apps;
     private readonly CatalogService _catalog;
     private readonly PersonAccess _person;
+    private readonly AppUrls _urls;
 
-    public IndexModel(AppService apps, CatalogService catalog, PersonAccess person)
+    public IndexModel(AppService apps, CatalogService catalog, PersonAccess person, AppUrls urls)
     {
         _apps = apps;
         _catalog = catalog;
         _person = person;
+        _urls = urls;
     }
 
-    public sealed record Row(InstalledApp App, AppStatusView Status, string? Icon, string Kind);
+    /// <summary>An installed app as the list shows it; <c>Address</c> is the one the browser opens, as a person reads it (without http://), or null.</summary>
+    public sealed record Row(InstalledApp App, AppStatusView Status, string? Icon, string Kind, string? Address = null);
 
     public ListView<Row> List { get; private set; } = default!;
 
@@ -46,9 +49,9 @@ public class IndexModel : PageModel
             _catalog.IconOf(a.CatalogId),
             a.Role switch
             {
-                AppRoles.Proxy => "Reverse proxy",
-                AppRoles.Ddns => "DynDNS client",
-                AppRoles.Docker => "Docker management",
+                AppRoles.Proxy => "Addresses and certificates",
+                AppRoles.Ddns => "Keeps your address current",
+                AppRoles.Docker => "Runs your apps",
                 AppRoles.Identity => "Single sign-on",
                 AppRoles.Mail => "Mail relay",
                 _ => _catalog.Get(a.CatalogId)?.Category ?? "App",
@@ -102,7 +105,16 @@ public class IndexModel : PageModel
             Noun = all.Count == 1 ? "app" : "apps",
         };
 
-        var (items, pager) = ListQuery.Slice(list, Request, PageSize, toolbar.UrlWithPage);
+        var (page, pager) = ListQuery.Slice(list, Request, PageSize, toolbar.UrlWithPage);
+
+        // Every app shows its address the same way (host:port, or the name the reverse proxy gave it), only for the rows of this page.
+        var items = new List<Row>(page.Count);
+        foreach (var row in page)
+        {
+            var url = await _urls.OpenUrlAsync(row.App, Request, ct, path: string.Empty);
+            items.Add(row with { Address = url?.Replace("https://", "").Replace("http://", "").TrimEnd('/') });
+        }
+
         List = new ListView<Row> { Items = items, Toolbar = toolbar, Pager = pager };
     }
 }

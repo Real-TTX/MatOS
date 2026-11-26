@@ -1,15 +1,80 @@
 @page
 @model MatOS.Web.Pages.Store.IndexModel
 @using MatOS.Core.Catalog
+@using MatOS.Web.Pages.Store
+@*
+    The store (css/store.css): the toolbar of a list on top, then "Start here" (a few Mat apps that work together with MatOS, on the plain first page only),
+    the categories as a row of links, and the gallery: each app a card with its icon, its line, its state and one button (Install, or Open when it is installed).
+*@
 @{
     ViewData["Title"] = "Store";
-    ViewData["PageSub"] = "Your Mat apps and a few more, installed with one click.";
+    ViewData["PageSub"] = "Apps for your MatOS, each installed with one click.";
     ViewData["Crumbs"] = Crumbs.Of(("Store", null));
+    ViewData["Store"] = true;
     var list = Model.List;
+
+    void StoreButton(CatalogApp app, string css)
+    {
+        var action = Model.ActionFor(app);
+        switch (action.Kind)
+        {
+            case StoreActionKind.Install:
+            case StoreActionKind.Open:
+                <a class="mat-btn mat-btn--sm mv-store-get @css" href="@action.Href" aria-label="@action.AriaLabel">@action.Label</a>
+                break;
+            case StoreActionKind.Status:
+                <a class="mat-btn mat-btn--ghost mat-btn--sm @css" href="@action.Href" aria-label="@action.AriaLabel">@action.Label</a>
+                break;
+            case StoreActionKind.Soon:
+                @* Not ready to install: a quiet word where the button would be, so the card still ends like the others. *@
+                <span class="mv-store-soon @css">@action.Label</span>
+                break;
+        }
+    }
 }
 
-<div class="mat-list">
+<div class="mat-list mv-store">
     <partial name="_Toolbar" model="list.Toolbar" />
+
+    @if (Model.Featured.Count > 0)
+    {
+        <section class="mv-store-hero" aria-labelledby="store-start">
+            <div class="mv-store-hero__head">
+                <h2 class="mv-store-hero__title" id="store-start">Start here</h2>
+                <p class="mv-store-hero__lead">Made for MatOS: one sign-in for all of them, and backups with one click.</p>
+            </div>
+            <ul class="mv-store-hero__apps">
+                @foreach (var app in Model.Featured)
+                {
+                    <li class="mv-store-tile">
+                        <a class="mv-store-tile__main" href="/Store/Install?id=@app.Id">
+                            <app-icon name="@app.Name" icon="@app.Icon" size="xl" />
+                            <span class="mv-store-tile__name">@app.Name</span>
+                            <span class="mv-store-tile__tagline">@app.Tagline</span>
+                        </a>
+                        <span class="mv-store-tile__foot">
+                            <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@StoreWords.State(app.State)">@AppStates.Label(app.State)</span>
+                            @{ StoreButton(app, string.Empty); }
+                        </span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <div class="mv-store-browse">
+        @if (Model.Featured.Count > 0)
+        {
+            <h2 class="mv-store-browse__title">All apps</h2>
+        }
+        <nav class="mv-store-cats" aria-label="Categories">
+            <a class="mv-store-cat" href="@Model.CategoryUrl(null)" aria-current="@(Model.Category is null ? "page" : null)">All</a>
+            @foreach (var category in Model.Categories)
+            {
+                <a class="mv-store-cat" href="@Model.CategoryUrl(category)" aria-current="@(category == Model.Category ? "page" : null)">@category</a>
+            }
+        </nav>
+    </div>
 
     @if (list.Items.Count == 0)
     {
@@ -22,48 +87,55 @@
     }
     else
     {
-        <div class="mat-gallery">
+        <div class="mat-gallery mv-store-gallery">
             @foreach (var app in list.Items)
             {
-                var installed = Model.InstalledCounts.GetValueOrDefault(app.Id);
-                <a class="mat-card mat-card--link mv-store-card" href="/Store/Install?id=@app.Id">
-                    <app-icon name="@app.Name" icon="@app.Icon" size="lg" />
-                    <span class="mv-store-card__body">
-                        <span class="mv-store-card__name">
-                            @app.Name
-                            @if (app.Recommended)
-                            {
-                                <span class="mat-pill mat-pill--accent mat-pill--plain">Recommended</span>
-                            }
+                var installed = Model.Installed.GetValueOrDefault(app.Id)?.Count ?? 0;
+                <article class="mat-card mv-store-app">
+                    <a class="mv-store-app__main" href="/Store/Install?id=@app.Id">
+                        <app-icon name="@app.Name" icon="@app.Icon" size="lg" />
+                        <span class="mv-store-app__text">
+                            <span class="mv-store-app__name">@app.Name</span>
+                            <span class="mv-store-app__tagline">@app.Tagline</span>
+                            <span class="mv-store-app__meta">
+                                <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@StoreWords.State(app.State)">@AppStates.Label(app.State)</span>
+                                @if (app.Recommended && installed == 0)
+                                {
+                                    <span class="mat-pill mat-pill--accent mat-pill--plain">Recommended</span>
+                                }
+                                @if (!app.BuiltIn)
+                                {
+                                    <span class="mat-pill mat-pill--plain">Your own</span>
+                                }
+                                @if (Model.Category is null)
+                                {
+                                    <span class="mv-store-app__category">@app.Category</span>
+                                }
+                                @if (installed > 1)
+                                {
+                                    <span class="mv-store-app__category">Installed ×@installed</span>
+                                }
+                            </span>
                         </span>
-                        <span class="mv-store-card__tagline">@app.Tagline</span>
-                        <span class="mv-store-card__meta">
-                            <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@(app.StateNote ?? AppStates.Meaning(app.State))">@AppStates.Label(app.State)</span>
-                            <span class="mat-pill mat-pill--plain">@app.Category</span>
-                            @if (installed > 0)
-                            {
-                                <span class="mat-pill mat-pill--ok">Installed@(installed > 1 ? $" ×{installed}" : "")</span>
-                            }
-                            @if (!app.BuiltIn)
-                            {
-                                <span class="mat-pill mat-pill--plain">Custom</span>
-                            }
-                        </span>
-                    </span>
-                </a>
+                    </a>
+                    @{ StoreButton(app, "mv-store-app__action"); }
+                </article>
             }
         </div>
     }
 
     <partial name="_Pager" model="list.Pager" />
-
-    <div class="mat-actions">
-        <form method="post" asp-page-handler="Reload">
-            <button type="submit" class="mat-btn mat-btn--secondary" data-tip="Pick up files you added to /data/catalog"><icon name="refresh" /><span>Reload catalog</span></button>
-        </form>
-    </div>
 </div>
 
-<p class="mat-muted">
-    Missing an app? An app is a compose file with an <code>x-matos</code> block: drop it into <code>/data/catalog</code> and reload the catalog.
-</p>
+<details class="mat-collapse mv-store-own">
+    <summary>Add an app of your own<icon name="chevron-down" class="mat-accordion__chev" /></summary>
+    <div class="mat-accordion__body mat-stack">
+        <p class="mat-muted">
+            An app of the store is a compose file with an <code>x-matos</code> block. Put yours into <code>/data/catalog</code> and read the catalog again:
+            it shows up here, marked as your own.
+        </p>
+        <form method="post" asp-page-handler="Reload">
+            <button type="submit" class="mat-btn mat-btn--secondary"><icon name="refresh" /><span>Read the catalog again</span></button>
+        </form>
+    </div>
+</details>

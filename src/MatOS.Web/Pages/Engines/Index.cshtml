@@ -31,7 +31,7 @@
             }
             else
             {
-                <span class="mat-pill mat-pill--warn">API not answering</span>
+                <span class="mat-pill mat-pill--warn">Not answering</span>
             }
         </div>
     </div>
@@ -61,7 +61,7 @@
 
 @if (Model.Frame is { Embeddable: false } frame)
 {
-    <p class="mat-muted">It opens in a new tab: @frame.Reason An update of @e.Catalog.Name that knows <code>MAT_FRAME_ANCESTORS</code> shows it here; MatOS gives it its addresses when it updates the engine.</p>
+    <p class="mat-muted">It opens in a new tab: @frame.Reason A newer version of @e.Catalog.Name can open right here, in this window.</p>
 }
 
 @if (e.App is not null && lifecycle == MatOS.Core.Entities.AppLifecycle.Installed && e.Status is not { ApiVersion: >= 1 })
@@ -93,7 +93,7 @@
                     {
                         <tr>
                             <td data-label="App"><a href="/Apps/Details?id=@app.Id">@app.Name</a></td>
-                            <td data-label="What" class="mat-mono">@what</td>
+                            <td data-label="What" class="mat-muted">@what</td>
                         </tr>
                     }
                 </tbody>

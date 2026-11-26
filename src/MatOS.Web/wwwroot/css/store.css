@@ -1,0 +1,153 @@
+/* =====================================================================
+   MatOS: the store (Pages/Store). An app store a newcomer enjoys, made of the toolkit's tokens only (rules CODE-02, CODE-04, COLOR-01):
+   "Start here" with a few Mat apps, the categories as a row of links, the apps as cards with one button each, and the page of an app.
+   Loaded by _Head on the store's pages only (ViewData["Store"]). Classes: mv-store-* and mv-storepage-*.
+   ===================================================================== */
+
+/* ---- The order in the list block: the toolbar and its chips first, then "Start here" and the categories, then the gallery (the toolkit orders the rest) ---- */
+.mat-list > .mv-store-hero, .mat-list > .mv-store-browse { order: 1; }
+
+/* ---- Start here: a calm, tinted panel with a few big tiles ---- */
+.mv-store-hero {
+  display: flex; flex-direction: column; gap: var(--mat-space-4);
+  padding: var(--mat-space-5);
+  border: 1px solid var(--mat-border);
+  border-radius: var(--mat-radius-xl);
+  background: linear-gradient(160deg, var(--mat-accent-soft-strong), var(--mat-accent-soft) 55%, var(--mat-surface));
+}
+.mv-store-hero__head { display: flex; flex-direction: column; gap: var(--mat-space-1); }
+.mv-store-hero__title { font-size: var(--mat-fs-xl); }
+.mv-store-hero__lead { margin: 0; max-width: 60ch; color: var(--mat-text-muted); }
+.mv-store-hero__apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: var(--mat-gap); margin: 0; padding: 0; list-style: none; }
+
+.mv-store-tile {
+  display: flex; flex-direction: column; gap: var(--mat-space-3); min-width: 0;
+  padding: var(--mat-space-4);
+  border: 1px solid var(--mat-border);
+  border-radius: var(--mat-radius-lg);
+  background: var(--mat-surface);
+  box-shadow: var(--mat-shadow-1);
+  transition: background-color var(--mat-dur-fast) var(--mat-ease), border-color var(--mat-dur-fast) var(--mat-ease);
+}
+.mv-store-tile:has(.mv-store-tile__main:hover) { border-color: var(--mat-border-strong); background: var(--mat-surface-2); }
+.mv-store-tile__main { display: flex; flex-direction: column; gap: var(--mat-space-1); min-width: 0; color: inherit; text-decoration: none; border-radius: var(--mat-radius); }
+.mv-store-tile__main:hover { text-decoration: none; }
+.mv-store-tile__main:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); }
+.mv-store-tile .mv-appicon { width: 72px; height: 72px; margin-bottom: var(--mat-space-2); box-shadow: var(--mat-shadow-1); }
+.mv-store-tile__name { font-size: var(--mat-fs-lg); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-store-tile__tagline { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+.mv-store-tile__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--mat-space-2); margin-top: auto; }
+
+/* ---- The categories: a row of links; the current one is a tint behind the whole item ---- */
+.mv-store-browse { display: flex; flex-direction: column; gap: var(--mat-space-3); min-width: 0; }
+.mv-store-browse__title { font-size: var(--mat-fs-lg); }
+.mv-store-cats { display: flex; gap: var(--mat-space-2); min-width: 0; overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
+.mv-store-cats::-webkit-scrollbar { display: none; }
+.mv-store-cat {
+  flex: none; display: inline-flex; align-items: center;
+  min-height: var(--mat-control-h-sm); padding: 0 var(--mat-space-4);
+  border: 1px solid var(--mat-border); border-radius: var(--mat-radius-pill);
+  background: var(--mat-surface); color: var(--mat-text-muted);
+  font-size: var(--mat-fs-sm); font-weight: 600; white-space: nowrap; text-decoration: none;
+  transition: background-color var(--mat-dur-fast) var(--mat-ease), color var(--mat-dur-fast) var(--mat-ease);
+}
+.mv-store-cat:hover { background: var(--mat-surface-3); color: var(--mat-text); text-decoration: none; }
+.mv-store-cat[aria-current="page"] { border-color: transparent; background: var(--mat-accent-soft-strong); color: var(--mat-accent-text); }
+/* The row already shows the category: when it is the only filter, the toolbar's chip for it would say the same twice (All takes it away). */
+.mv-store:has(.mv-store-cat[aria-current="page"]:not(:first-child)) > .mat-chips:has(> .mat-chip:only-child) { display: none; }
+@media (pointer: coarse) { .mv-store-cat { min-height: 40px; } }
+
+/* ---- The gallery: a card per app, the icon, the name and the line, the state, and one button at the end ---- */
+.mv-store .mat-gallery.mv-store-gallery { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
+.mat-card.mv-store-app {
+  display: flex; align-items: center; gap: var(--mat-space-3);
+  padding: var(--mat-space-3) var(--mat-space-4) var(--mat-space-3) var(--mat-space-3);
+  transition: background-color var(--mat-dur-fast) var(--mat-ease), border-color var(--mat-dur-fast) var(--mat-ease);
+}
+.mat-card.mv-store-app:has(.mv-store-app__main:hover) { border-color: var(--mat-border-strong); background: var(--mat-surface-2); }
+.mv-store-app__main { flex: 1 1 auto; display: flex; align-items: center; gap: var(--mat-space-4); min-width: 0; padding: var(--mat-space-1); color: inherit; text-decoration: none; border-radius: var(--mat-radius); }
+.mv-store-app__main:hover { text-decoration: none; }
+.mv-store-app__main:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); }
+.mv-store-app .mv-appicon { width: 64px; height: 64px; }
+.mv-store-app__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mv-store-app__name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-store-app__tagline { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+.mv-store-app__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--mat-space-1) var(--mat-space-2); margin-top: var(--mat-space-1); }
+.mv-store-app__category { color: var(--mat-text-faint); font-size: var(--mat-fs-xs); font-weight: 600; }
+.mv-store-app__action { flex: none; }
+
+/* The button of an app: a soft pill in the accent (Install, Open), as app stores have it. */
+.mat-btn.mv-store-get { min-width: 4.75rem; justify-content: center; border-color: transparent; border-radius: var(--mat-radius-pill); background: var(--mat-accent-soft-strong); color: var(--mat-accent-text); font-weight: 650; }
+.mat-btn.mv-store-get:hover { background: var(--mat-accent); color: var(--mat-on-accent); }
+/* An announced app cannot be had yet: a quiet word in the place of the button, as wide as it, so the cards still line up. */
+.mv-store-soon { flex: none; min-width: 4.75rem; text-align: center; color: var(--mat-text-faint); font-size: var(--mat-fs-sm); font-weight: 600; }
+
+/* The pictures of the apps are their own tiles: no grey behind them, which would show as a rim around art with a margin. */
+.mv-store .mv-appicon:has(> img), .mv-storepage .mv-appicon:has(> img) { background: transparent; }
+
+/* ---- Adding an app of one's own: folded under the list ---- */
+.mv-store-own { margin-top: var(--mat-space-2); }
+.mv-store-own > .mat-accordion__body { padding-top: 0; }
+
+/* ---- The page of an app ---- */
+.mv-storepage { display: flex; flex-direction: column; gap: var(--mat-space-6); }
+.mv-storepage__head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--mat-space-3) var(--mat-space-5); }
+.mv-storepage__head .mv-appicon { width: 112px; height: 112px; font-size: var(--mat-fs-3xl); box-shadow: var(--mat-shadow-2); }
+.mv-storepage__title { display: flex; flex-direction: column; gap: var(--mat-space-1); min-width: 0; }
+.mv-storepage__title h1 { font-size: var(--mat-fs-3xl); overflow-wrap: anywhere; }
+.mv-storepage__tagline { margin: 0; color: var(--mat-text-muted); font-size: var(--mat-fs-lg); }
+.mv-storepage__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--mat-space-2) var(--mat-space-3); margin: var(--mat-space-2) 0 0; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+.mv-storepage__installed { display: inline-flex; align-items: center; gap: var(--mat-space-1); color: var(--mat-success-text); font-weight: 600; }
+.mv-storepage__get { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--mat-space-3); }
+.mat-btn.mv-storepage__install { min-width: 10rem; justify-content: center; border-radius: var(--mat-radius-pill); }
+
+/* The state of the app, said once and quietly: a tinted line, the icon in the colour of the state, the words in the colour of the text. */
+.mv-storepage__note { display: flex; align-items: flex-start; gap: var(--mat-space-3); margin: 0; padding: var(--mat-space-3) var(--mat-space-4); border-radius: var(--mat-radius-lg); background: var(--mat-surface-2); color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+.mv-storepage__note > .mat-icon { flex: none; margin-top: 2px; color: var(--mat-info-text); font-size: 1.1rem; }
+.mv-storepage__note--warn > .mat-icon { color: var(--mat-warning-text); }
+.mv-storepage__note strong { color: var(--mat-text); }
+
+.mv-storepage__section { display: flex; flex-direction: column; gap: var(--mat-space-3); }
+.mv-storepage__h { font-size: var(--mat-fs-lg); }
+.mv-storepage__text { margin: 0; max-width: 65ch; line-height: var(--mat-lh); }
+.mv-storepage__section p { margin: 0; }
+.mv-storepage__notes { display: flex; flex-direction: column; gap: var(--mat-space-2); margin: 0; padding-left: var(--mat-space-5); color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+
+/* The technical notes and the options: folded, with what is in there named beside the word, so nobody has to open it to know. */
+.mv-storepage__folds { display: flex; flex-direction: column; gap: var(--mat-space-1); }
+.mv-storepage__fold > summary { flex-wrap: wrap; row-gap: 0; }
+.mv-storepage__optnames { color: var(--mat-text-muted); font-size: var(--mat-fs-sm); font-weight: 400; }
+.mv-storepage__options > .mat-accordion__body { display: flex; flex-direction: column; gap: var(--mat-space-4); }
+
+/* ---- A phone: the icon a little smaller, the button the width of the page ---- */
+@media (max-width: 600px) {
+  .mv-store-hero { padding: var(--mat-space-4); }
+  /* The count of the apps would stand alone on a row under the search field: kept for a screen reader only (the gallery shows what was found). */
+  .mv-store .mat-toolbar__info { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Start here scrolls sideways, a tile and a bit of the next one in view; the row runs to the edges of the panel, the categories to the edges of the screen. */
+  .mv-store-hero__apps {
+    grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 68%;
+    margin-inline: calc(-1 * var(--mat-space-4)); padding: 2px var(--mat-space-4) var(--mat-space-1);
+    overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--mat-space-4); scrollbar-width: none; overscroll-behavior-x: contain;
+  }
+  .mv-store-hero__apps::-webkit-scrollbar { display: none; }
+  .mv-store-tile { scroll-snap-align: start; }
+  .mv-store-cats { margin-inline: calc(-1 * var(--mat-content-pad)); padding-inline: var(--mat-content-pad); }
+  .mv-store-app .mv-appicon { width: 56px; height: 56px; }
+  .mv-store-app__main { gap: var(--mat-space-3); }
+  .mv-storepage__head { gap: var(--mat-space-4); }
+  .mv-storepage__head .mv-appicon { width: 88px; height: 88px; font-size: var(--mat-fs-2xl); }
+  .mv-storepage__title h1 { font-size: var(--mat-fs-2xl); }
+  .mv-storepage__tagline { font-size: var(--mat-fs-md); }
+  .mv-storepage__get { grid-column: 1 / -1; }
+  .mv-storepage__get > .mv-storepage__install { flex: 1 1 100%; }
+}
+
+/* ---- In the window of the home screen: the window is the frame, the page is quieter ---- */
+.mv-in-window .mv-store-tile { box-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mv-store-tile, .mv-store-cat, .mat-card.mv-store-app { transition: none; }
+  .mv-store-hero__apps { scroll-behavior: auto; }
+}

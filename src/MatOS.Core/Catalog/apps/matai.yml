@@ -2,7 +2,7 @@
 x-matos:
   id: matai
   name: MatAi
-  tagline: AI gateway, chat and assistants
+  tagline: Chat with AI and build assistants
   description: One place for the AI of your apps - an OpenAI-compatible gateway in front of OpenAI, Anthropic, Gemini, Mistral, Azure OpenAI and your own Ollama, with routes, fallbacks, limits and costs, a chat for the people of this MatOS and public assistants for websites.
   category: Productivity
   role: app

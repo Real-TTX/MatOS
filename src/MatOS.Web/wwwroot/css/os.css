@@ -18,6 +18,9 @@
   --os-bar: rgba(246, 246, 248, .72);
   --os-line: rgba(0, 0, 0, .08);
   --os-hover: rgba(0, 0, 0, .06);
+  /* a value of its own inside a widget (the tiles of an app's widget): lighter than the glass, not a grey box in a box */
+  --os-tile: rgba(255, 255, 255, .5);
+  --os-folder-bg: rgba(250, 250, 252, .86);
   --os-accent: #6164ec;
   --os-warn: #b25c00;
   --os-danger: #e5383b;
@@ -35,6 +38,26 @@
   --os-status-h: 34px;
   --os-wall: none;
   --os-ease: cubic-bezier(.2, .9, .25, 1);
+  --os-spring: cubic-bezier(.3, 1.35, .5, 1);
+  /* a tint behind the whole of what is chosen or under the pointer (a menu entry), never a bar on one side */
+  --os-tint: rgba(97, 100, 236, .14);
+  --os-ok: #1f9d4c;
+  --os-dot-ok: #30d158;
+  --os-dot-warn: #ff9f0a;
+  --os-dot-bad: #ff3b30;
+  --os-dot-busy: #0a84ff;
+  --os-dot-off: #8e8e93;
+  --os-badge-ring: rgba(255, 255, 255, .9);
+  --os-scrim: rgba(236, 232, 250, .38);
+  --os-folder-title: #1d1d1f;
+  --os-shadow-lift: 0 18px 44px rgba(24, 18, 70, .26);
+  --os-shadow-icon: 0 1px 2px rgba(0, 0, 0, .16), 0 6px 16px rgba(0, 0, 0, .18);
+  --os-shadow-icon-lift: 0 2px 4px rgba(0, 0, 0, .16), 0 12px 24px rgba(0, 0, 0, .24);
+  --os-gloss: linear-gradient(180deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, 0) 50%);
+  --os-gloss-edge: rgba(255, 255, 255, .24);
+  --os-tip: rgba(30, 30, 36, .86);
+  --os-tip-fg: #ffffff;
+  --os-widget-r: 24px;
 
   margin: 0;
   /* a screen, not a page: exactly the window, nothing scrolls (what does not fit is on the next page, js/os.js) */
@@ -48,12 +71,12 @@
   background: #000;
   -webkit-font-smoothing: antialiased;
 }
-:root[data-theme="dark"] .os { --os-fg: #f5f5f7; --os-fg-soft: rgba(245, 245, 247, .66); --os-label: #ffffff; --os-label-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 1px 12px rgba(0, 0, 0, .45); --os-glass: rgba(30, 30, 36, .55); --os-glass-strong: rgba(36, 36, 42, .9); --os-glass-line: rgba(255, 255, 255, .12); --os-bar: rgba(28, 28, 32, .7); --os-line: rgba(255, 255, 255, .1); --os-hover: rgba(255, 255, 255, .1); --os-accent: #8f92ff; --os-warn: #ffb340; --os-danger: #ff6b6b; --os-window-bg: #161616; --os-shadow: 0 12px 40px rgba(0, 0, 0, .4); --os-veil: rgba(0, 0, 0, .1); --os-shadow-window: 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 6px rgba(0, 0, 0, .3), 0 28px 80px rgba(0, 0, 0, .65); --os-shadow-window-back: 0 0 0 1px rgba(255, 255, 255, .09), 0 10px 30px rgba(0, 0, 0, .45); --os-bar-solid: #232326; --os-light-off: rgba(255, 255, 255, .2); --os-shine: rgba(255, 255, 255, .1); --os-snap: rgba(143, 146, 255, .18); --os-snap-line: rgba(143, 146, 255, .6); }
+:root[data-theme="dark"] .os { --os-fg: #f5f5f7; --os-fg-soft: rgba(245, 245, 247, .66); --os-label: #ffffff; --os-label-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 1px 12px rgba(0, 0, 0, .45); --os-glass: rgba(30, 30, 36, .55); --os-glass-strong: rgba(36, 36, 42, .9); --os-glass-line: rgba(255, 255, 255, .12); --os-bar: rgba(28, 28, 32, .7); --os-line: rgba(255, 255, 255, .1); --os-hover: rgba(255, 255, 255, .1); --os-tile: rgba(255, 255, 255, .07); --os-folder-bg: rgba(40, 36, 64, .72); --os-accent: #8f92ff; --os-warn: #ffb340; --os-danger: #ff6b6b; --os-window-bg: #161616; --os-shadow: 0 12px 40px rgba(0, 0, 0, .4); --os-veil: rgba(0, 0, 0, .1); --os-shadow-window: 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 6px rgba(0, 0, 0, .3), 0 28px 80px rgba(0, 0, 0, .65); --os-shadow-window-back: 0 0 0 1px rgba(255, 255, 255, .09), 0 10px 30px rgba(0, 0, 0, .45); --os-bar-solid: #232326; --os-light-off: rgba(255, 255, 255, .2); --os-shine: rgba(255, 255, 255, .1); --os-snap: rgba(143, 146, 255, .18); --os-snap-line: rgba(143, 146, 255, .6); --os-tint: rgba(143, 146, 255, .22); --os-ok: #4ade80; --os-dot-ok: #32d74b; --os-badge-ring: rgba(30, 30, 36, .9); --os-scrim: rgba(0, 0, 0, .38); --os-folder-title: #ffffff; --os-shadow-lift: 0 18px 44px rgba(0, 0, 0, .5); --os-tip: rgba(245, 245, 247, .92); --os-tip-fg: #1d1d1f; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .os { --os-fg: #f5f5f7; --os-fg-soft: rgba(245, 245, 247, .66); --os-label: #ffffff; --os-label-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 1px 12px rgba(0, 0, 0, .45); --os-glass: rgba(30, 30, 36, .55); --os-glass-strong: rgba(36, 36, 42, .9); --os-glass-line: rgba(255, 255, 255, .12); --os-bar: rgba(28, 28, 32, .7); --os-line: rgba(255, 255, 255, .1); --os-hover: rgba(255, 255, 255, .1); --os-accent: #8f92ff; --os-warn: #ffb340; --os-danger: #ff6b6b; --os-window-bg: #161616; --os-shadow: 0 12px 40px rgba(0, 0, 0, .4); --os-veil: rgba(0, 0, 0, .1); --os-shadow-window: 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 6px rgba(0, 0, 0, .3), 0 28px 80px rgba(0, 0, 0, .65); --os-shadow-window-back: 0 0 0 1px rgba(255, 255, 255, .09), 0 10px 30px rgba(0, 0, 0, .45); --os-bar-solid: #232326; --os-light-off: rgba(255, 255, 255, .2); --os-shine: rgba(255, 255, 255, .1); --os-snap: rgba(143, 146, 255, .18); --os-snap-line: rgba(143, 146, 255, .6); }
+  :root:not([data-theme]) .os { --os-fg: #f5f5f7; --os-fg-soft: rgba(245, 245, 247, .66); --os-label: #ffffff; --os-label-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 1px 12px rgba(0, 0, 0, .45); --os-glass: rgba(30, 30, 36, .55); --os-glass-strong: rgba(36, 36, 42, .9); --os-glass-line: rgba(255, 255, 255, .12); --os-bar: rgba(28, 28, 32, .7); --os-line: rgba(255, 255, 255, .1); --os-hover: rgba(255, 255, 255, .1); --os-tile: rgba(255, 255, 255, .07); --os-folder-bg: rgba(40, 36, 64, .72); --os-accent: #8f92ff; --os-warn: #ffb340; --os-danger: #ff6b6b; --os-window-bg: #161616; --os-shadow: 0 12px 40px rgba(0, 0, 0, .4); --os-veil: rgba(0, 0, 0, .1); --os-shadow-window: 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 6px rgba(0, 0, 0, .3), 0 28px 80px rgba(0, 0, 0, .65); --os-shadow-window-back: 0 0 0 1px rgba(255, 255, 255, .09), 0 10px 30px rgba(0, 0, 0, .45); --os-bar-solid: #232326; --os-light-off: rgba(255, 255, 255, .2); --os-shine: rgba(255, 255, 255, .1); --os-snap: rgba(143, 146, 255, .18); --os-snap-line: rgba(143, 146, 255, .6); --os-tint: rgba(143, 146, 255, .22); --os-ok: #4ade80; --os-dot-ok: #32d74b; --os-badge-ring: rgba(30, 30, 36, .9); --os-scrim: rgba(0, 0, 0, .38); --os-folder-title: #ffffff; --os-shadow-lift: 0 18px 44px rgba(0, 0, 0, .5); --os-tip: rgba(245, 245, 247, .92); --os-tip-fg: #1d1d1f; }
 }
 /* A dark picture in the light theme: white labels like on a phone, the widgets stay light glass. */
-:root:not([data-theme="dark"]) .os-desktop--dark-wall { --os-label: #ffffff; --os-label-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 1px 12px rgba(0, 0, 0, .45); }
+:root:not([data-theme="dark"]) .os-desktop--dark-wall { --os-label: #ffffff; --os-label-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 1px 12px rgba(0, 0, 0, .45); --os-scrim: rgba(0, 0, 0, .3); --os-folder-title: #ffffff; }
 .os :focus-visible { outline: 2px solid var(--os-accent); outline-offset: 2px; }
 .os button { font: inherit; color: inherit; }
 
@@ -106,59 +129,109 @@
 .os-theme[data-theme-state="light"] [data-theme-icon="light"],
 .os-theme[data-theme-state="dark"] [data-theme-icon="dark"] { display: inline-block; }
 
-/* ---- The home screen ---- */
+/* ---- The home screen ----
+   The grid has an even number of columns (8 on a large screen, 6 in between, 4 on a phone), so the widgets (two columns, two by two, four by two) line
+   up without a lonely column at the end of a row. The things take their places in their order (no back-filling of a hole by a later icon: that wedged
+   icons between widgets); js/os.js starts a widget that follows icons on a row of its own, or at least on a pair of columns (os-at-N). */
 .os-home { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1120px; margin: 0 auto; padding: 30px 28px 0; display: flex; flex-direction: column; gap: 22px; }
-.os-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); grid-auto-rows: 118px; gap: 20px 16px; grid-auto-flow: dense; }
-.os-w2 { grid-column: span 2; }
-.os-w2x2 { grid-column: span 2; grid-row: span 2; }
-.os-w4x2 { grid-column: span 4; grid-row: span 2; }
+.os-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 118px; gap: 20px 16px; }
+@media (max-width: 999px) { .os-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.os-w2 { grid-column: var(--os-at, auto) / span 2; }
+.os-w2x2 { grid-column: var(--os-at, auto) / span 2; grid-row: span 2; }
+.os-w4x2 { grid-column: var(--os-at, auto) / span 4; grid-row: span 2; }
+.os-page > .os-app { grid-column-start: var(--os-at, auto); }
+.os-at-1 { --os-at: 1; }
+.os-at-3 { --os-at: 3; }
+.os-at-5 { --os-at: 5; }
+.os-at-7 { --os-at: 7; }
 
-/* A widget: glass on the picture, like on a phone */
+/* A widget: glass on the picture, like on a phone. The same inside spacing everywhere: the heading on top, the value below it, the line at the foot. */
 .os-widget {
-  position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;
+  position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 2px;
   min-width: 0; min-height: 0; overflow: hidden;
-  padding: 14px 16px;
-  border-radius: 22px;
+  padding: 15px 18px 16px;
+  border-radius: var(--os-widget-r);
   background: var(--os-glass);
   -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
   border: 1px solid var(--os-glass-line);
-  box-shadow: var(--os-shadow), inset 0 1px 0 var(--os-shine);
+  box-shadow: var(--os-shadow);
   color: var(--os-fg); text-decoration: none; text-align: left;
   cursor: default;
 }
-.os-widget[data-window] { cursor: pointer; transition: transform .22s var(--os-ease), box-shadow .22s var(--os-ease); }
-.os-widget[data-window]:hover { transform: translateY(-3px); text-decoration: none; box-shadow: 0 18px 48px rgba(24, 18, 70, .28), inset 0 1px 0 var(--os-shine); }
+.os-widget[data-window] { cursor: pointer; transition: transform .25s var(--os-ease), box-shadow .25s var(--os-ease); }
 .os-widget[data-window]:active { transform: scale(.98); }
+@media (hover: hover) and (pointer: fine) {
+  .os-widget[data-window]:hover { transform: translateY(-2px); text-decoration: none; box-shadow: var(--os-shadow-lift); }
+}
 .os-widget[hidden] { display: none; }
-.os-widget__head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--os-fg-soft); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
-.os-widget__head .mat-icon { font-size: 14px; color: var(--os-accent); }
-.os-widget__value { font-size: 27px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.os-widget__value small { font-size: 15px; font-weight: 600; color: var(--os-fg-soft); }
-.os-widget__note { font-size: 13px; color: var(--os-fg-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.os-widget__head { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; font-weight: 650; color: var(--os-fg-soft); white-space: nowrap; }
+.os-widget__head > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.os-widget__head .mat-icon { flex: none; font-size: 15px; color: var(--os-accent); }
+.os-widget__aside { flex: none; margin-left: auto; padding-left: 8px; font-size: 12px; font-weight: 600; }
+/* the heading of an app's widget: the app's own small icon, and its name at the end, quiet (two widgets alike are told apart at a glance) */
+.os-widget__head .mv-appicon { flex: none; width: 17px; height: 17px; border-radius: 5px; font-size: 7px; letter-spacing: 0; box-shadow: 0 0 0 .5px var(--os-line); }
+.os-widget__from { flex: 0 1 auto; font-weight: 500; opacity: .85; }
+.os-widget__value { margin-top: auto; font-size: 26px; font-weight: 700; line-height: 1.15; letter-spacing: -.015em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.os-widget__value small { font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--os-fg-soft); }
+.os-widget__note { display: block; min-width: 0; font-size: 13px; color: var(--os-fg-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a state in words gets a dot of its colour in front: all is well, or at work */
+.os-widget__note--ok::before, .os-widget__aside--ok::before, .os-widget__note--busy::before { content: ""; flex: none; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--os-dot-ok); }
+.os-widget__note--ok::before, .os-widget__aside--ok::before, .os-widget__note--busy::before { margin-right: 6px; vertical-align: 1px; }
+.os-widget__note--busy::before { background: var(--os-dot-busy); }
 .os-widget--warn .os-widget__note, .os-widget--warn .os-widget__head .mat-icon { color: var(--os-warn); }
+/* a widget with nothing to show: a quiet line in the middle, not an empty box */
+.os-widget__empty { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0; font-size: 13px; color: var(--os-fg-soft); text-align: center; }
+.os-widget__empty .mat-icon { font-size: 22px; color: var(--os-accent); opacity: .7; }
 /* the widgets of the apps (contract 2): a meter, rows of values, a list */
-.os-meter { display: block; width: 100%; height: 6px; border: 0; border-radius: 999px; background: var(--os-line); -webkit-appearance: none; appearance: none; overflow: hidden; }
+.os-meter { display: block; width: 100%; height: 6px; margin: 6px 0 2px; border: 0; border-radius: 999px; background: var(--os-line); -webkit-appearance: none; appearance: none; overflow: hidden; }
 .os-meter::-webkit-meter-bar { height: 6px; border: 0; border-radius: 999px; background: var(--os-line); }
 .os-meter::-webkit-meter-optimum-value, .os-meter::-webkit-meter-suboptimum-value, .os-meter::-webkit-meter-even-less-good-value { border-radius: 999px; background: var(--os-accent); }
 .os-meter::-moz-meter-bar { border-radius: 999px; background: var(--os-accent); }
-.os-wrows { display: grid; gap: 3px; margin: 6px 0 auto; min-height: 0; overflow: hidden; }
-.os-wrows__row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; }
+.os-wrows { display: grid; align-content: start; gap: 4px; margin: 8px 0 auto; min-height: 0; overflow: hidden; }
+.os-wrows__row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; font-size: 14px; }
 .os-wrows dt { min-width: 0; color: var(--os-fg-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .os-wrows dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .os-wrows__row.is-warn dd { color: var(--os-warn); }
-.os-wlist { display: grid; align-content: start; gap: 2px; min-height: 0; margin: 6px 0 auto; padding: 0; list-style: none; overflow: hidden; }
-.os-wlist__item { display: flex; flex-direction: column; min-width: 0; margin: 0 -8px; padding: 4px 8px; border-radius: 10px; color: var(--os-fg); text-decoration: none; }
+/* Tiles in a larger widget (it is a container: what fits depends on its own width, not the screen's). From about 200 px inside, each value is a
+   small tile of its own (its label on top, the number large at its foot), two side by side; an odd last one is a quiet line under them, number and label
+   side by side. Narrower (a two by two on a phone) the tiles would split their words: then plain rows, the label left and the value right. */
+.os-appwidget { container-type: inline-size; }
+@container (min-width: 200px) {
+  .os-w2x2 .os-wrows, .os-w4x2 .os-wrows { flex: 1 1 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); align-content: stretch; gap: 8px; margin: 10px 0 0; }
+  .os-w4x2 .os-wrows { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .os-w2x2 .os-wrows__row, .os-w4x2 .os-wrows__row { flex-direction: column-reverse; justify-content: center; align-items: flex-start; gap: 4px; min-height: 0; padding: 9px 12px 10px; border-radius: 14px; background: var(--os-tile); }
+  .os-w2x2 .os-wrows dd, .os-w4x2 .os-wrows dd { font-size: 28px; line-height: 1.05; letter-spacing: -.02em; }
+  /* a label may take two lines in a tile ("Overdue tasks" beside another tile), always between words */
+  .os-w2x2 .os-wrows dt, .os-w4x2 .os-wrows dt { max-width: 100%; font-size: 12.5px; line-height: 1.2; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  .os-w2x2 .os-wrows:has(> :nth-child(3):last-child) { grid-template-rows: minmax(0, 1fr) auto; }
+  .os-w2x2 .os-wrows:has(> :nth-child(5):last-child) { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .os-w2x2 .os-wrows__row:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row-reverse; justify-content: flex-end; align-items: baseline; gap: 6px; padding: 2px 12px 0; border-radius: 0; background: none; }
+  .os-w2x2 .os-wrows__row:last-child:nth-child(odd) dd { font-size: 15px; }
+  .os-w2x2 .os-wrows__row:last-child:nth-child(odd) dt { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@container (max-width: 199.98px) {
+  /* the rows of a narrow widget take its height evenly, so a two by two is not three lines at its top */
+  .os-w2x2 .os-wrows, .os-w4x2 .os-wrows { flex: 1 1 auto; align-content: space-evenly; gap: 6px; margin: 6px 0 0; }
+  .os-w2x2 .os-wrows dd, .os-w4x2 .os-wrows dd { font-size: 17px; letter-spacing: -.01em; }
+}
+@container (max-width: 169.98px) {
+  /* a small widget on a phone: the app's icon in the heading tells where it comes from */
+  .os-widget__from { display: none; }
+}
+.os-wlist { display: grid; align-content: start; gap: 2px; min-height: 0; margin: 8px 0 auto; padding: 0; list-style: none; overflow: hidden; }
+.os-wlist__item { display: flex; flex-direction: column; min-width: 0; margin: 0 -8px; padding: 5px 8px; border-radius: 10px; color: var(--os-fg); text-decoration: none; }
 a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-wlist__title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .os-wlist__text { font-size: 12px; color: var(--os-fg-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* the first widget: today, with the time large */
-.os-today { justify-content: flex-start; }
-.os-today__day { font-size: 13px; font-weight: 700; color: var(--os-danger); text-transform: uppercase; letter-spacing: .04em; }
-.os-today__time { margin-top: 2px; font-size: 64px; font-weight: 300; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.os-today__greet { margin: auto 0 0; font-family: var(--os-font); font-size: 17px; font-weight: 700; line-height: 1.25; color: var(--os-fg); }
-.os-today__sub { font-size: 13px; color: var(--os-fg-soft); }
+/* the first widget: today, with the time large and the greeting at its foot */
+.os-today { justify-content: flex-start; gap: 0; }
+.os-today__day { font-size: 13px; font-weight: 700; color: var(--os-accent); text-transform: uppercase; letter-spacing: .06em; }
+.os-today__time { margin-top: 4px; font-size: 64px; font-weight: 250; line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.os-today__greet { margin: auto 0 0; font-family: var(--os-font); font-size: 18px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; color: var(--os-fg); }
+.os-today__sub { margin-top: 6px; font-size: 13px; color: var(--os-fg-soft); }
+.os-today.os-w4x2 .os-today__time { font-size: 76px; }
 
-/* An app: an icon and its name, no frame; it lifts a little under the pointer */
+/* An app: an icon and its name, no frame; it lifts a little under a mouse */
 .os-app {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px;
   min-width: 0; padding-top: 8px;
@@ -167,27 +240,31 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 }
 .os-app:hover { text-decoration: none; }
 .os-app[hidden] { display: none; }
-.os-app__icon { position: relative; width: 66px; height: 66px; border-radius: 22.5%; box-shadow: 0 1px 2px rgba(0, 0, 0, .18), 0 8px 18px rgba(0, 0, 0, .22); transition: transform .22s cubic-bezier(.3, 1.4, .5, 1), filter .18s, box-shadow .22s; }
-/* a soft gloss on every icon: lit from above, a fine edge */
-.os-app__icon::before, .os-dock__app > .os-ico::after, .os-dock__app > .mv-appicon::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 46%); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .28), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.os-app:focus-visible { outline: none; box-shadow: none; }
+.os-app:focus-visible .os-app__icon { outline: 2px solid var(--os-accent); outline-offset: 3px; }
+.os-app__icon { position: relative; width: 66px; height: 66px; border-radius: 22.5%; box-shadow: var(--os-shadow-icon); transition: transform .24s var(--os-spring), filter .18s, box-shadow .24s; }
+/* a soft gloss on every icon: lit from above, with a fine edge all round */
+.os-app__icon::before, .os-dock__app > .os-ico::after, .os-dock__app > .mv-appicon::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; background: var(--os-gloss); box-shadow: inset 0 0 0 .5px var(--os-gloss-edge); }
 .os-dock__app > .os-ico, .os-dock__app > .mv-appicon { position: relative; overflow: hidden; }
 .os-badge, .os-count { z-index: 2; }
-.os-app:hover .os-app__icon { transform: translateY(-4px) scale(1.06); box-shadow: 0 2px 4px rgba(0, 0, 0, .18), 0 14px 26px rgba(0, 0, 0, .28); }
-.os-app:active .os-app__icon { transform: scale(.92); filter: brightness(.88); }
+@media (hover: hover) and (pointer: fine) {
+  .os-app:hover .os-app__icon { transform: translateY(-3px) scale(1.05); box-shadow: var(--os-shadow-icon-lift); }
+}
+.os-app:active .os-app__icon { transform: scale(.92); filter: brightness(.9); }
 .os-app__icon > .mv-appicon, .os-app__icon > .os-ico { width: 100%; height: 100%; border-radius: 22.5%; }
-.os-app__label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; text-shadow: var(--os-label-shadow); }
+.os-app__label { max-width: calc(100% + 8px); margin: 0 -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; letter-spacing: .005em; text-shadow: var(--os-label-shadow); }
 /* the state of an app that is not running: a badge with an icon on the corner */
-.os-badge { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #8e8e93; color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
+.os-badge { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--os-dot-off); color: #fff; box-shadow: 0 0 0 2px var(--os-badge-ring); }
 .os-badge .mat-icon { font-size: 12px; }
-.os-badge--warn { background: #ff9f0a; }
-.os-badge--offline { background: #ff3b30; }
-.os-badge--busy { background: #0a84ff; }
+.os-badge--warn { background: var(--os-dot-warn); }
+.os-badge--offline { background: var(--os-dot-bad); }
+.os-badge--busy { background: var(--os-dot-busy); }
 .os-badge--busy .mat-icon { animation: os-spin 1.6s linear infinite; }
-.os-count { position: absolute; top: -7px; right: -9px; min-width: 22px; height: 22px; padding: 0 6px; display: grid; place-items: center; border-radius: 11px; background: #ff3b30; color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
+.os-count { position: absolute; top: -7px; right: -9px; min-width: 22px; height: 22px; padding: 0 6px; display: grid; place-items: center; border-radius: 11px; background: var(--os-dot-bad); color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 0 0 2px var(--os-badge-ring); }
 /* an app that has a window (on the screen or put away): a dot under it; in the dock the window in front has a longer one */
 .os-app.is-running::after { content: ""; position: absolute; top: 79px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--os-label); box-shadow: var(--os-label-shadow); }
-.os-dock__app.is-running::before { content: ""; position: absolute; bottom: -8px; left: 50%; width: 5px; height: 4px; transform: translateX(-50%); border-radius: 2px; background: var(--os-fg); opacity: .55; transition: width .2s var(--os-ease), opacity .2s; }
-.os-dock__app.is-front::before { width: 16px; opacity: .9; }
+.os-dock__app.is-running::before { content: ""; position: absolute; bottom: -8px; left: 50%; width: 5px; height: 4px; transform: translateX(-50%); border-radius: 2px; background: var(--os-fg); opacity: .5; transition: width .2s var(--os-ease), opacity .2s; }
+.os-dock__app.is-front::before { width: 16px; opacity: .85; }
 
 /* The icons of the parts of MatOS: colour like the apps of a phone */
 .os-ico { display: grid; place-items: center; color: #fff; }
@@ -202,40 +279,57 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-ico--account { background: linear-gradient(165deg, #d0b6ff, #7c3aed); }
 
 /* ---- Search and dock at the bottom ---- */
-.os-bottom { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px 0 calc(14px + env(safe-area-inset-bottom)); }
+.os-bottom { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 calc(14px + env(safe-area-inset-bottom)); }
 .os-search {
-  display: flex; align-items: center; gap: 8px; width: min(100%, 280px); height: 34px; padding: 0 14px;
-  border-radius: 17px; background: var(--os-glass); border: 1px solid var(--os-glass-line);
+  display: flex; align-items: center; gap: 8px; width: min(100%, 280px); height: 36px; padding: 0 8px 0 14px;
+  border-radius: 18px; background: var(--os-glass); border: 1px solid var(--os-glass-line);
   -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
   color: var(--os-fg-soft); box-shadow: var(--os-shadow);
+  cursor: text;
 }
-.os-search { transition: width .28s var(--os-ease), background-color .2s, box-shadow .2s; }
-.os-search:focus-within { width: min(100%, 420px); color: var(--os-fg); background: var(--os-glass-strong); box-shadow: var(--os-shadow), 0 0 0 3px var(--os-snap); }
+.os-search { transition: width .3s var(--os-ease), background-color .2s, box-shadow .2s; }
+.os-search:focus-within { width: min(100%, 440px); color: var(--os-fg); background: var(--os-glass-strong); box-shadow: var(--os-shadow), 0 0 0 3px var(--os-snap); }
 .os-search .mat-icon { font-size: 15px; flex: none; }
 .os-search input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none; color: var(--os-fg); font: 500 14px var(--os-font); }
 .os-search input::placeholder { color: var(--os-fg-soft); }
-.os-search kbd { font: 600 11px var(--os-font); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--os-line); color: var(--os-fg-soft); }
+.os-search input::-webkit-search-cancel-button { cursor: pointer; }
+.os-search kbd { flex: none; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; font: 600 11px var(--os-font); border-radius: 6px; background: var(--os-hover); color: var(--os-fg-soft); }
+.os-search:focus-within kbd { display: none; }
 /* The dock is the taskbar too: it stays above the windows, an app with a window has a dot (a longer one for the window in front), and a window
    whose app is not in the dock has its icon there for as long as it is open. */
 .os-dock {
   position: relative; z-index: 55;
-  display: flex; align-items: center; gap: 14px; max-width: 100%; padding: 11px 14px;
+  display: flex; align-items: center; gap: 12px; max-width: 100%; padding: 10px 12px;
   border-radius: 28px; background: var(--os-glass); border: 1px solid var(--os-glass-line);
   -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
-  box-shadow: var(--os-shadow), inset 0 1px 0 var(--os-shine);
+  box-shadow: var(--os-shadow);
 }
 .os-has-window .os-dock { background: var(--os-glass-strong); }
-.os-dock__open { display: flex; align-items: center; gap: 14px; }
-.os-dock__sep { flex: none; width: 1px; height: 38px; margin: 0 -3px; border-radius: 1px; background: var(--os-line); }
+.os-dock__open { display: flex; align-items: center; gap: 12px; }
+.os-dock__sep { flex: none; width: 1px; height: 36px; margin: 0 2px; border-radius: 1px; background: var(--os-line); }
 .os-dock__sep[hidden] { display: none; }
 .os-dock__win { flex: none; padding: 0; border: 0; background: none; cursor: pointer; }
-.os-dock__app > .mv-appicon { width: 100%; height: 100%; border-radius: 22.5%; box-shadow: 0 4px 12px rgba(0, 0, 0, .2); }
+.os-dock__app > .mv-appicon { width: 100%; height: 100%; border-radius: 22.5%; box-shadow: var(--os-shadow-icon); }
 .os-ico--window { background: linear-gradient(165deg, #8e9aaf, #4a5568); }
-.os-dock__app { position: relative; flex: none; display: block; width: 58px; height: 58px; border-radius: 22.5%; transition: transform .22s cubic-bezier(.3, 1.5, .5, 1); -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
-.os-dock__app:hover { transform: translateY(-7px) scale(1.12); }
+.os-dock__app { position: relative; flex: none; display: block; width: 56px; height: 56px; border-radius: 22.5%; transition: transform .26s var(--os-spring); transform-origin: 50% 100%; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 .os-dock__app:active { transform: scale(.92); }
-.os-dock__app > .os-ico { width: 100%; height: 100%; border-radius: 22.5%; box-shadow: 0 4px 12px rgba(0, 0, 0, .2); }
-.os-dock__app > .os-ico .mat-icon { font-size: 28px; }
+.os-dock__app > .os-ico { width: 100%; height: 100%; border-radius: 22.5%; box-shadow: var(--os-shadow-icon); }
+.os-dock__app > .os-ico .mat-icon { font-size: 27px; }
+.os-dock__app:focus-visible { outline: none; box-shadow: none; }
+.os-dock__app:focus-visible > .os-ico, .os-dock__app:focus-visible > .mv-appicon { outline: 2px solid var(--os-accent); outline-offset: 3px; }
+/* Under a mouse the icon grows a little (from its foot, like a dock), and its name shows above it: a label of the shell's own look. A finger has
+   neither (a phone dock does not move). */
+@media (hover: hover) and (pointer: fine) {
+  .os-dock__app:hover { transform: scale(1.1) translateY(-3px); }
+  .os-dock__app:active { transform: scale(.94); }
+}
+.os .os-dock__app[data-tip]::after {
+  bottom: calc(100% + 14px); padding: 5px 10px; border-radius: 8px;
+  background: var(--os-tip); color: var(--os-tip-fg);
+  -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
+  font: 600 12px var(--os-font); letter-spacing: .01em;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+}
 
 /* ---- The windows: several side by side, like a desktop (js/os.js places them: left, top, width and height are set there) ----
    The layer lies over the home screen and under the dock and the status bar; it takes no click itself. A window is a bar and the page (an iframe);
@@ -254,10 +348,10 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-window.is-settling { transition: left .24s var(--os-ease), top .24s var(--os-ease), width .24s var(--os-ease), height .24s var(--os-ease), box-shadow .2s ease; }
 .os-window.is-max { --os-win-r: 0px; border-radius: 0 0 12px 12px; }
 .os-window.is-max .os-window__frame { border-radius: 0 0 12px 12px; }
-.os-window.is-opening { animation: os-open .34s var(--os-ease) both; }
+.os-window.is-opening { animation: os-open .38s var(--os-ease) both; }
 .os-window.is-closing { animation: os-close .26s cubic-bezier(.5, 0, .9, .5) both; pointer-events: none; }
 .os-window.is-appearing { animation: os-appear .22s var(--os-ease) both; }
-.os-window.is-leaving { animation: os-leave .16s ease-in both; pointer-events: none; }
+.os-window.is-leaving { animation: os-leave .18s cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
 .os-window__bar {
   position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 14px;
   border-radius: var(--os-win-r) var(--os-win-r) 0 0;
@@ -314,8 +408,9 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-snap {
   position: absolute; border-radius: 14px;
   background: var(--os-snap); border: 1.5px solid var(--os-snap-line);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  animation: os-pop .16s var(--os-ease) both;
+  -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 12px 40px rgba(24, 18, 70, .18);
+  animation: os-snap-in .2s var(--os-ease) both;
   transition: left .16s var(--os-ease), top .16s var(--os-ease), width .16s var(--os-ease), height .16s var(--os-ease);
 }
 .os-snap[hidden] { display: none; }
@@ -325,7 +420,7 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
   position: fixed; z-index: 80; min-width: 230px; max-width: min(92vw, 320px); padding: 6px;
   border-radius: 14px; background: var(--os-glass-strong); border: 1px solid var(--os-glass-line);
   -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
-  box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .12), 0 22px 60px rgba(0, 0, 0, .3), inset 0 1px 0 var(--os-shine); color: var(--os-fg);
+  box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .12), 0 22px 60px rgba(0, 0, 0, .3); color: var(--os-fg);
   animation: os-pop .16s var(--os-ease) both; transform-origin: top left;
 }
 .os-menu[hidden] { display: none; }
@@ -340,9 +435,13 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 10px;
   border: 0; border-radius: 9px; background: none; color: inherit; font: 500 14px var(--os-font); text-align: left; text-decoration: none; cursor: pointer;
 }
-.os-menu__item:hover, .os-menu__item:focus-visible { background: var(--os-accent); color: #fff; text-decoration: none; outline: none; }
-.os-menu__item .mat-icon { font-size: 16px; flex: none; }
-.os-menu__item[aria-checked="true"]::after { content: "✓"; margin-left: auto; font-weight: 700; }
+/* the entry under the pointer or the keys: a tint behind the whole entry */
+.os-menu__item:hover, .os-menu__item:focus-visible { background: var(--os-tint); color: var(--os-fg); text-decoration: none; outline: none; }
+.os-menu__item:active { background: var(--os-snap); }
+.os-menu__item .mat-icon { font-size: 16px; flex: none; color: var(--os-fg-soft); }
+.os-menu__item:hover .mat-icon, .os-menu__item:focus-visible .mat-icon { color: var(--os-accent); }
+.os-menu__item > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-menu__item[aria-checked="true"]::after { content: "✓"; margin-left: auto; padding-left: 10px; font-weight: 700; color: var(--os-accent); }
 .os-menu__item--danger { color: var(--os-danger); }
 .os-menu__sep { height: 1px; margin: 4px 6px; background: var(--os-line); }
 .os-menu__foot { padding: 6px 10px 4px; color: var(--os-fg-soft); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -354,11 +453,15 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 @keyframes os-leave { to { opacity: 0; transform: scale(.97); } }
 @keyframes os-fade { from { opacity: 0; } }
 @keyframes os-pop { from { opacity: 0; transform: scale(.94); } }
+@keyframes os-snap-in { from { opacity: 0; transform: scale(.97); } }
 @keyframes os-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .os-window.is-opening, .os-window.is-closing, .os-window.is-appearing, .os-window.is-leaving, .os-snap, .os-menu { animation: none; }
   .os-window.is-settling, .os-snap { transition: none; }
-  .os-app__icon, .os-dock__app, .os-widget[data-window] { transition: none; }
+  .os-app__icon, .os-dock__app, .os-widget[data-window], .os-search { transition: none; }
+  /* nothing grows, lifts or spins by itself */
+  .os-app:hover .os-app__icon, .os-dock__app:hover, .os-widget[data-window]:hover { transform: none; }
+  .os-status__busy .mat-icon, .os-badge--busy .mat-icon { animation: none; }
 }
 .os-has-window { overflow: hidden; }
 
@@ -376,18 +479,25 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
   .os-app__icon { width: 60px; height: 60px; }
   .os-app__label { font-size: 11.5px; }
   .os-app.is-running::after { top: 71px; }
-  .os-widget { padding: 12px 14px; border-radius: 20px; }
+  .os { --os-widget-r: 22px; }
+  .os-widget { padding: 13px 14px 14px; }
+  .os-widget__head { font-size: 12.5px; }
   .os-widget__value { font-size: 21px; }
-  .os-today__time { font-size: 48px; }
-  .os-dock { width: 100%; justify-content: space-around; padding: 12px 10px; border-radius: 30px; }
+  .os-widget__value small { font-size: 13px; }
+  .os-widget__note { font-size: 12.5px; }
+  .os-today__time { font-size: 50px; }
+  .os-today__greet { font-size: 16px; }
+  /* the dock of a phone: its icons spread evenly over its width (a grid of equal columns); more than fit scroll sideways */
+  .os-dock { width: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(66px, 1fr); justify-items: center; gap: 0; padding: 12px 6px; border-radius: 30px; }
+  .os-dock__open { display: contents; }
+  .os-dock__sep { display: none; }
   .os-dock__app { width: 60px; height: 60px; }
-  .os-dock__app:hover { transform: none; }
   .os-windows { z-index: 56; }
   .os-window, .os-window.is-max, .os-window.is-active { left: 0 !important; top: var(--os-status-h) !important; width: 100% !important; height: calc(100% - var(--os-status-h)) !important; --os-win-r: 0px; border-radius: 0; box-shadow: none; }
   .os-window .os-window__frame, .os-window.is-max .os-window__frame { border-radius: 0; }
   .os-window__grip, .os-snap { display: none; }
   .os-status__app { display: none; }
-  .os-dock { overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+  .os-dock { overflow-x: auto; scrollbar-width: none; }
   .os-lights { display: none; }
   .os-wbtn--x { display: grid; }
   .os-window__title { max-width: 60%; }
@@ -396,57 +506,62 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
   .os-menu--user { right: 8px; }
 }
 
-/* ---- The engines: a widget with their state, and the folder System with them as apps ---- */
-.os-engines { justify-content: flex-start; gap: 10px; }
-.os-engines.os-w2x2 { grid-column: span 3; }
-.os-engines__list { display: flex; flex-direction: column; gap: 2px; margin: 0 -8px; }
-.os-engine { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 3px 8px; border-radius: 10px; color: var(--os-fg); text-decoration: none; }
+/* ---- The engines: a widget with their state, and the folder System with them as apps ----
+   A running engine shows its green dot alone (the word is there for a screen reader); the heading says "All running" once. Only an engine that needs
+   a look says so in words: calm while all is well. */
+.os-engines { justify-content: flex-start; gap: 8px; }
+.os-engines__list { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; gap: 0; min-height: 0; margin: 0 -8px; }
+.os-engine { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 2px 8px; border-radius: 10px; color: var(--os-fg); text-decoration: none; }
 .os-engine:hover { background: var(--os-hover); text-decoration: none; }
-.os-engine .mv-appicon { width: 26px; height: 26px; border-radius: 7px; flex: none; }
+.os-engine .mv-appicon { width: 24px; height: 24px; border-radius: 7px; flex: none; }
 .os-engine__name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.os-engine__state { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--os-fg-soft); }
-.os-engine__state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #8e8e93; }
-.os-engine__state--online::before { background: #30d158; }
-.os-engine__state--warn::before { background: #ff9f0a; }
-.os-engine__state--offline::before { background: #ff3b30; }
-.os-engine__state--busy::before { background: #0a84ff; }
+.os-engine__state { flex: none; display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--os-fg-soft); }
+.os-engine__state::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--os-dot-off); }
+.os-engine__text { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-engine__state--online::before { background: var(--os-dot-ok); }
+.os-engine__state--warn::before { background: var(--os-dot-warn); }
+.os-engine__state--warn { color: var(--os-warn); }
+.os-engine__state--offline::before { background: var(--os-dot-bad); }
+.os-engine__state--offline { color: var(--os-danger); }
+.os-engine__state--busy::before { background: var(--os-dot-busy); }
 .os-engine__state--absent { opacity: .75; }
-.os-engine__state--absent::before { background: transparent; box-shadow: inset 0 0 0 1.5px #8e8e93; }
+.os-engine__state--absent::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--os-dot-off); }
 
 .os-app--absent .os-app__icon { filter: grayscale(1); opacity: .55; }
 
 /* the folder on the screen: a glass tile with the small icons of what is in it */
 .os-folderbtn { border: 0; background: none; cursor: pointer; font: inherit; }
 .os-folderbtn__icon {
-  display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; gap: 5px; padding: 9px;
+  display: grid; grid-template-columns: repeat(3, 1fr); align-content: center; gap: 5px; padding: 9px;
   background: var(--os-glass); border: 1px solid var(--os-glass-line);
   -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
 }
-.os-folderbtn__icon .mv-appicon { width: 100%; height: auto; aspect-ratio: 1; border-radius: 4px; font-size: 6px; }
-/* the folder open: the screen behind dimmed and blurred (the windows too), the apps in a panel of glass */
+.os-folderbtn__icon .mv-appicon { width: 100%; height: auto; aspect-ratio: 1; border-radius: 4px; font-size: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, .14); }
+/* the folder open: the screen behind veiled and blurred (the windows too), the apps in a panel of glass */
 .os-folder {
   position: fixed; inset: 0; z-index: 58; display: grid; place-items: center; padding: 20px;
-  background: rgba(0, 0, 0, .25); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
-  animation: os-fade .2s ease both;
+  background: var(--os-scrim); -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3);
+  animation: os-fade .22s ease both;
 }
 .os-folder[hidden] { display: none; }
-.os-folder__panel { width: min(560px, 100%); animation: os-pop .22s var(--os-ease) both; }
-.os-folder__title { margin: 0 0 14px; text-align: center; font: 700 26px var(--os-font); color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, .4); }
+.os-folder__panel { width: min(540px, 100%); animation: os-folder-in .3s var(--os-ease) both; }
+.os-folder__title { margin: 0 0 16px; text-align: center; font: 700 26px var(--os-font); letter-spacing: -.01em; color: var(--os-folder-title); }
 .os-folder__grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 112px; gap: 14px;
-  padding: 22px; border-radius: 34px;
-  background: var(--os-glass); border: 1px solid var(--os-glass-line);
+  padding: 24px 22px; border-radius: 34px;
+  background: var(--os-folder-bg); border: 1px solid var(--os-glass-line);
   -webkit-backdrop-filter: var(--os-blur); backdrop-filter: var(--os-blur);
-  box-shadow: var(--os-shadow);
+  box-shadow: var(--os-shadow-lift);
 }
 .os-folder__grid .os-app { color: var(--os-fg); }
 .os-folder__grid .os-app__label { text-shadow: none; }
+@keyframes os-folder-in { from { opacity: 0; transform: scale(.9); } }
 @media (max-width: 700px) {
   .os-folder__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 100px; padding: 18px 12px; border-radius: 28px; }
   .os-folderbtn__icon { padding: 7px; gap: 4px; }
   .os-engines { gap: 4px; }
-  .os-engines.os-w2x2 { grid-column: span 4; }
-  .os-engine { min-height: 30px; padding: 1px 8px; }
+  .os-engines.os-w2x2 { grid-column: var(--os-at, auto) / span 4; }
+  .os-engine { min-height: 28px; padding: 1px 8px; }
   .os-engine .mv-appicon { width: 22px; height: 22px; border-radius: 6px; }
   .os-engine__name { font-size: 13.5px; }
   /* a phone: the dock alone at the bottom, like a phone; the search is the key / of a keyboard, which a phone has not */
@@ -469,8 +584,11 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-pages::-webkit-scrollbar { display: none; }
 .os-page { flex: 0 0 100%; min-width: 0; align-content: start; scroll-snap-align: start; }
 /* the search: the apps of all pages in one grid */
-.os-pages.is-searching { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); grid-auto-rows: 118px; gap: 20px 16px; grid-auto-flow: dense; align-content: start; overflow-x: hidden; overflow-y: auto; }
+.os-pages.is-searching { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 118px; gap: 20px 16px; grid-auto-flow: dense; align-content: start; overflow-x: hidden; overflow-y: auto; }
+@media (max-width: 999px) { .os-pages.is-searching { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .os-pages.is-searching > .os-page { display: contents; }
+/* the search has its own grid: the places of the pages (os-at-N, js/os.js) do not count there */
+.os-pages.is-searching > .os-page > * { --os-at: auto; }
 /* the things of a page do not take a selection of text: a press drags them */
 .os-page > [data-home-key] { -webkit-user-select: none; user-select: none; }
 .os-hidden { display: none; }
@@ -479,7 +597,7 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-dots { display: flex; justify-content: center; gap: 2px; margin-bottom: -6px; }
 .os-dots[hidden] { display: none; }
 .os-dot { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
-.os-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--os-label); box-shadow: var(--os-label-shadow); opacity: .38; transition: opacity .2s, transform .2s var(--os-ease); }
+.os-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--os-label); box-shadow: var(--os-label-shadow); opacity: .35; transition: opacity .2s, transform .2s var(--os-ease); }
 .os-dot[aria-selected="true"]::before { opacity: 1; }
 .os-dot:hover::before { opacity: .75; }
 .os-dot.is-target::before { opacity: 1; transform: scale(1.8); }
@@ -527,7 +645,8 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 /* the menus: a heading above a group of entries, an entry without an icon, the entry that takes something away */
 .os-menu__label { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--os-fg-soft); }
 .os-menu__blank { width: 16px; flex: none; }
-.os-menu__item--danger:hover, .os-menu__item--danger:focus-visible { background: var(--os-danger); color: #fff; }
+.os-menu__item--danger .mat-icon, .os-menu__item--danger:hover .mat-icon, .os-menu__item--danger:focus-visible .mat-icon { color: var(--os-danger); }
+.os-menu__item--danger:hover, .os-menu__item--danger:focus-visible { background: color-mix(in srgb, var(--os-danger) 14%, transparent); color: var(--os-danger); }
 
 @media (max-width: 700px) {
   /* a phone: the edge of the screen is the edge of the strip (a shadow cut there is the screen's own edge) */

@@ -1,0 +1,5 @@
+@model MatOS.Web.Support.AppWidgetView
+@inject MatOS.Core.Catalog.CatalogService Catalog
+@* The heading of a widget of an app: the app's own small icon (so two widgets alike, "Active users" of two apps, are told apart at a glance), the label,
+   and the app's name at the end, quiet. *@
+<span class="os-widget__head os-widget__head--app"><app-icon name="@Model.App.Name" icon="@Catalog.IconOf(Model.App.CatalogId)" size="sm" /><span>@Model.Widget.Label</span><span class="os-widget__aside os-widget__from">@Model.App.Name</span></span>

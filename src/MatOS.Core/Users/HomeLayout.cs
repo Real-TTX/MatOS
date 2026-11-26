@@ -22,7 +22,7 @@ public sealed partial record HomeLayout(IReadOnlyList<IReadOnlyList<string>> Pag
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>The layout of a person who never arranged anything: one page in the order of the home screen.</summary>
+    /// <summary>The layout of a person who never arranged anything: the home screen as it comes (<see cref="OrDefault"/>).</summary>
     public static HomeLayout Empty { get; } = new([], [], new Dictionary<string, string>());
 
     public bool IsEmpty => Pages.Count == 0 && Hidden.Count == 0 && Sizes.Count == 0;
@@ -113,6 +113,12 @@ public sealed partial record HomeLayout(IReadOnlyList<IReadOnlyList<string>> Pag
 
         return new ArrangedHome(pages.Select(p => (IReadOnlyList<string>)p).ToList(), hidden);
     }
+
+    /// <summary>
+    /// The layout as it is, or, for a person who never placed anything (no pages), the home screen as it comes: <paramref name="pages"/>, with the sizes and
+    /// what they took off the screen kept. The person's own arrangement is never replaced.
+    /// </summary>
+    public HomeLayout OrDefault(IReadOnlyList<IReadOnlyList<string>> pages) => Pages.Count > 0 ? this : this with { Pages = pages };
 
     /// <summary>The size of a widget: the one the person chose when the widget offers it, else its own.</summary>
     public string SizeOf(string key, IReadOnlyCollection<string> offered, string fallback)

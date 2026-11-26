@@ -58,7 +58,7 @@
                                     </div>
                                 </td>
                                 <td data-label="Apps">@Model.AppNameOf(schedule.AppSlug)</td>
-                                <td data-label="When" class="mat-nowrap">@(schedule.Frequency == BackupFrequency.Daily ? "Daily" : $"Weekly, {schedule.Weekday}") at <span class="mat-mono">@TimeSpan.FromMinutes(schedule.MinuteOfDay).ToString(@"hh\:mm")</span></td>
+                                <td data-label="When" class="mat-nowrap">@(schedule.Frequency == BackupFrequency.Daily ? "Daily" : $"Weekly, {schedule.Weekday}") at @TimeSpan.FromMinutes(schedule.MinuteOfDay).ToString(@"hh\:mm")</td>
                                 <td data-label="Keeps" class="mat-hide-sm mat-nowrap">@schedule.Retention backups</td>
                                 <td data-label="Last run" class="mat-hide-sm mat-muted">@(schedule.LastStatus ?? "not yet")</td>
                                 <td class="mat-table__cell-actions">
@@ -122,9 +122,9 @@ else if (Model.History is { } history)
                                         <span>@(backup.AppName)@if (!string.IsNullOrEmpty(backup.Note)) {<small>@backup.Note</small>}</span>
                                     </div>
                                 </td>
-                                <td data-label="Created" class="mat-nowrap"><span class="mat-mono">@Format.DateTimeLocal(backup.CreatedUtc)</span><small class="mat-muted mat-d-block">@Format.Ago(backup.CreatedUtc)</small></td>
+                                <td data-label="Created" class="mat-nowrap"><span class="mv-when"><span>@Format.DateTimeLocal(backup.CreatedUtc)</span>@if (Format.AgoBesideDate(backup.CreatedUtc) is { } ago) {<small>@ago</small>}</span></td>
                                 <td data-label="Kind" class="mat-hide-sm">@backup.Kind<small class="mat-muted mat-d-block">kept by @IndexModel.EngineLabel(backup.Engine)</small></td>
-                                <td data-label="Size" class="mat-hide-sm mat-num mat-mono">@Format.Size(backup.SizeBytes)<small class="mat-muted mat-d-block">@backup.VolumeCount volume@(backup.VolumeCount == 1 ? "" : "s")</small></td>
+                                <td data-label="Size" class="mat-hide-sm mat-num">@Format.Size(backup.SizeBytes)<small class="mat-muted mat-d-block">@backup.VolumeCount data folder@(backup.VolumeCount == 1 ? "" : "s")</small></td>
                                 <td data-label="Status">
                                     <span class="mat-pill @(backup.Status == BackupStatus.Succeeded ? "mat-pill--ok" : backup.Status == BackupStatus.Failed ? "mat-pill--error" : "mat-pill--busy")">@backup.Status</span>
                                     @if (backup.Status == BackupStatus.Succeeded && !backup.Consistent)
@@ -144,7 +144,7 @@ else if (Model.History is { } history)
                                             <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" asp-page="/Backups/Index" asp-page-handler="Download" asp-route-id="@backup.Id" aria-label="Download the backup of @backup.AppName as tar" data-tip="Download as tar"><icon name="download" /></a>
                                         }
                                         <form method="post" asp-page-handler="Delete" asp-route-id="@backup.Id" data-confirm="Delete the backup of @backup.AppName from @Format.DateTimeLocal(backup.CreatedUtc)? Its files are removed." data-confirm-ok="Delete" data-confirm-danger>
-                                            <button type="submit" class="mat-btn mat-btn--danger mat-btn--icon mat-btn--sm" aria-label="Delete the backup of @backup.AppName" data-tip="Delete"><icon name="trash" /></button>
+                                            <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Delete the backup of @backup.AppName" data-tip="Delete"><icon name="trash" /></button>
                                         </form>
                                     </div>
                                 </td>

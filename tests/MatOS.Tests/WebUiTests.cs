@@ -172,6 +172,47 @@ public partial class WebUiTests
         Assert.All(selectors, c => Assert.True(c.StartsWith("mv-") || c.StartsWith("mat-") || c is "is-active" or "is-invalid", $".{c} is neither of the app nor of the toolkit"));
     }
 
+    /// <summary>The look of the store (css/store.css) is made of the toolkit's tokens, and it moves only when motion is welcome.</summary>
+    [Fact]
+    public void The_stylesheet_of_the_store_uses_tokens_and_no_literal_colours()
+    {
+        var css = Regex.Replace(Read("wwwroot", "css", "store.css"), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        Assert.DoesNotMatch(@"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(", css);
+        Assert.DoesNotMatch(@":\s*(white|black|red|green|blue|gray|grey)\b", css);
+        Assert.Contains("prefers-reduced-motion", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_classes_of_the_store_are_its_own_or_the_toolkits()
+    {
+        var css = Regex.Replace(Read("wwwroot", "css", "store.css"), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        var selectors = Regex.Matches(css, @"(?<![\w-])\.([a-z][a-z0-9_-]*)").Select(m => m.Groups[1].Value).Distinct().ToList();
+        Assert.Contains("mv-store-app", selectors);
+        Assert.All(selectors, c => Assert.True(
+            c.StartsWith("mv-store") || c.StartsWith("mat-") || c is "mv-appicon" or "mv-in-window",
+            $".{c} is neither of the store nor of the toolkit"));
+    }
+
+    [Fact]
+    public void The_pages_of_the_store_load_its_stylesheet()
+    {
+        var store = Directory.EnumerateFiles(Path.Combine(Web, "Pages", "Store"), "*.cshtml").Where(f => !Path.GetFileName(f).StartsWith('_')).ToList();
+        Assert.NotEmpty(store);
+        Assert.All(store, f => Assert.Contains("ViewData[\"Store\"] = true", File.ReadAllText(f), StringComparison.Ordinal));
+        Assert.Matches(@"ViewData\[""Store""\] is true\)\s*\{[^}]*css/store\.css", Read("Pages", "Shared", "_Head.cshtml"));
+    }
+
+    /// <summary>The store says how far an app is in plain words: the catalog's note on the state (tests, integration) stands among the technical notes only.</summary>
+    [Fact]
+    public void The_store_speaks_of_the_state_in_plain_words()
+    {
+        Assert.DoesNotContain("StateNote", Read("Pages", "Store", "Index.cshtml"), StringComparison.Ordinal);
+        var page = Read("Pages", "Store", "Install.cshtml");
+        Assert.Contains("StoreWords.State(", page, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(page, @"app\.StateNote\b"));
+        Assert.Matches(@"app\.StateNote[^;]*app\.Notes\.Prepend", page);
+    }
+
     /// <summary>The look of the first start (css/onboarding.css) is made of tokens too: the --os-* of the home screen and the --mat-* of the toolkit.</summary>
     [Fact]
     public void The_stylesheet_of_the_first_start_uses_tokens_and_no_literal_colours()

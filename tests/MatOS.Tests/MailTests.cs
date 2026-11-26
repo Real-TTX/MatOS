@@ -69,7 +69,7 @@ public class MailTests
         var smtp = CreateCatalog().Get(MatSmtpClient.CatalogIdValue);
         Assert.NotNull(smtp);
         Assert.Equal(AppRoles.Mail, smtp.Role);
-        Assert.Equal("Infrastructure", smtp.Category);
+        Assert.Equal("System", smtp.Category);
         Assert.True(smtp.Platform);
         Assert.True(smtp.Uses(Capabilities.IdentityOidc));
         Assert.False(smtp.Uses(Capabilities.MailSmtp));

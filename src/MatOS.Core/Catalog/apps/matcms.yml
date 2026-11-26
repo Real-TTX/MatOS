@@ -2,7 +2,7 @@
 x-matos:
   id: matcms
   name: MatCMS
-  tagline: Block-based CMS for websites
+  tagline: Build your own website from blocks
   description: Build and publish websites from blocks, with plugins, multi-site support and built-in backups.
   category: Websites
   role: app

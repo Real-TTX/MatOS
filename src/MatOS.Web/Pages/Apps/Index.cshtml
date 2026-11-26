@@ -54,22 +54,9 @@
                                     </span>
                                 </div>
                             </td>
-                            <td data-label="Status"><partial name="_StatusPill" model="row.Status" /></td>
-                            <td data-label="Address" class="mat-hide-sm mat-mono">
-                                @if (!string.IsNullOrEmpty(app.PublicUrl))
-                                {
-                                    @app.PublicUrl.Replace("https://", "").Replace("http://", "")
-                                }
-                                else if (app.HostPort is { } port)
-                                {
-                                    <text>port @port</text>
-                                }
-                                else
-                                {
-                                    <text>–</text>
-                                }
-                            </td>
-                            <td data-label="Last backup" class="mat-hide-sm mat-nowrap">@(app.LastBackupAt is { } backup ? Format.Ago(backup) : "never")</td>
+                            <td data-label="Status" class="mv-statuscell"><partial name="_StatusPill" model="row.Status" /></td>
+                            <td data-label="Address" class="mat-hide-sm mat-muted mat-text-break">@(row.Address ?? "–")</td>
+                            <td data-label="Last backup" class="mat-hide-sm mat-muted mat-nowrap">@(app.LastBackupAt is { } backup ? Format.Ago(backup) : "Never")</td>
                             <td class="mat-table__cell-actions">
                                 <div class="mat-table__actions">
                                     @if (app.Lifecycle == AppLifecycle.Installed && app.UiService is not null)

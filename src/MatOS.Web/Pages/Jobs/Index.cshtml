@@ -46,12 +46,12 @@
                         };
                         <tr>
                             <td data-label="Task"><div class="mat-table__name"><a href="/Jobs/Details?id=@job.Id">@job.Title</a></div></td>
-                            <td data-label="Status"><span class="mat-pill @pill">@(job.Status == JobStatus.Succeeded ? "Done" : job.Status.ToString())</span></td>
+                            <td data-label="Status" class="mv-statuscell"><span class="mat-pill @pill">@(job.Status == JobStatus.Succeeded ? "Done" : job.Status.ToString())</span></td>
                             <td data-label="Started" class="mat-hide-sm mat-muted mat-nowrap">@Format.Ago(job.StartedAt ?? job.CreateDate)</td>
-                            <td data-label="Duration" class="mat-hide-sm mat-muted mat-nowrap mat-mono">@Format.Duration(job.StartedAt, job.FinishedAt)</td>
+                            <td data-label="Duration" class="mat-hide-sm mat-muted mat-nowrap">@Format.Duration(job.StartedAt, job.FinishedAt)</td>
                             <td class="mat-table__cell-actions">
                                 <div class="mat-table__actions">
-                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Jobs/Details?id=@job.Id" aria-label="Show the log of @job.Title" data-tip="Show the log"><icon name="terminal" /></a>
+                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Jobs/Details?id=@job.Id" aria-label="See what happened: @job.Title" data-tip="See what happened"><icon name="chevron-right" /></a>
                                 </div>
                             </td>
                         </tr>

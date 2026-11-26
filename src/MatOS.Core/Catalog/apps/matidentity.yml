@@ -2,11 +2,11 @@
 x-matos:
   id: matidentity
   name: MatIdentity
-  tagline: Single sign-on for all Mat apps
+  tagline: One sign-in for all your apps
   description: >-
     One sign-in for all your apps: people sign in once and every Mat app lets them in. Groups, roles per app, an authenticator app and passkeys.
     MatOS registers every app it installs there and gives it its sign-in.
-  category: Infrastructure
+  category: System
   role: identity
   state: integrated
   stateNote: One sign-in for all apps.

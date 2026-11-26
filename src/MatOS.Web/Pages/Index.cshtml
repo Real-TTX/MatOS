@@ -73,60 +73,90 @@
                 break;
 
             case Kind.Engines:
-                @* The engines at a glance: the programs MatOS runs on. Each row opens its window. *@
-                <section class="os-widget @size os-engines" aria-label="Engines" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("layers")Engines</span>
-                    <div class="os-engines__list">
-                        @foreach (var en in Model.Engines)
-                        {
-                            var css = en.Status?.Css ?? "absent";
-                            <a class="os-engine" href="@en.Row.Window" data-window="@en.Row.Window" data-title="@en.Row.Catalog.Name">
-                                <app-icon name="@en.Row.Catalog.Name" icon="@en.Row.Catalog.Icon" size="sm" />
-                                <span class="os-engine__name">@en.Row.Catalog.Name</span>
-                                <span class="os-engine__state os-engine__state--@css">@(en.Status?.Text ?? "Not installed")</span>
-                            </a>
-                        }
-                    </div>
-                </section>
-                break;
+                {
+                    @* The engines at a glance: the programs MatOS runs on. Each row opens its window. A running engine shows only its green dot (the word is
+                       there for a screen reader); one that needs a look says so in words. *@
+                    var allRunning = Model.Engines.All(en => en.Status?.Css == "online");
+                    <section class="os-widget @size os-engines" aria-label="System" data-widget @Home(item)>
+                        <span class="os-widget__head">@Ui.Icon("layers")<span>System</span>@if (allRunning) {<span class="os-widget__aside os-widget__aside--ok">All running</span>}</span>
+                        <div class="os-engines__list">
+                            @foreach (var en in Model.Engines)
+                            {
+                                var css = en.Status?.Css ?? "absent";
+                                var state = en.Status?.Text ?? "Not installed";
+                                <a class="os-engine" href="@en.Row.Window" data-window="@en.Row.Window" data-title="@en.Row.Catalog.Name">
+                                    <app-icon name="@en.Row.Catalog.Name" icon="@en.Row.Catalog.Icon" size="sm" />
+                                    <span class="os-engine__name">@en.Row.Catalog.Name</span>
+                                    <span class="os-engine__state os-engine__state--@css"><span class="@(css == "online" ? "mat-sr-only" : "os-engine__text")">@state</span></span>
+                                </a>
+                            }
+                        </div>
+                    </section>
+                    break;
+                }
 
             case Kind.Apps:
-                <a class="os-widget @size" href="/Apps" data-window="/Apps" data-title="Apps" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("apps")Apps</span>
-                    <span class="os-widget__value">@Model.Running<small> / @Model.Tiles.Count</small></span>
-                    <span class="os-widget__note">running</span>
+                @* The person's apps at a glance: how many, and whether all of them run. *@
+                <a class="os-widget @size@(Model.NotRunning > 0 ? " os-widget--warn" : string.Empty)" href="/Apps" data-window="/Apps" data-title="Apps" data-widget @Home(item)>
+                    <span class="os-widget__head">@Ui.Icon("apps")<span>Apps</span></span>
+                    @if (Model.Tiles.Count == 0)
+                    {
+                        <span class="os-widget__value">No apps yet</span>
+                        <span class="os-widget__note">@(isAdmin ? "The store has them" : "Ask an administrator")</span>
+                    }
+                    else if (Model.NotRunning == 0)
+                    {
+                        <span class="os-widget__value">@Model.Running<small> @(Model.Running == 1 ? "app" : "apps")</small></span>
+                        <span class="os-widget__note os-widget__note--ok">@(Model.Running == 1 ? "Running" : "All running")</span>
+                    }
+                    else
+                    {
+                        <span class="os-widget__value">@Model.Running<small> of @Model.Tiles.Count running</small></span>
+                        <span class="os-widget__note">@Model.NotRunning @(Model.NotRunning == 1 ? "needs" : "need") a look</span>
+                    }
                 </a>
                 break;
 
             case Kind.Backups:
-                <a class="os-widget @size @(Model.BackupNeedsLook ? "os-widget--warn" : "")" href="/Backups" data-window="/Backups" data-title="Backups" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("save")Backups</span>
-                    <span class="os-widget__value">@(Model.LastBackup is { } last ? Format.Ago(last) : "Never")</span>
-                    <span class="os-widget__note">@(Model.LastBackup is null ? "Back up your apps" : Model.BackupNeedsLook ? "Time for a new one" : "The newest one")</span>
+                <a class="os-widget @size@(Model.BackupNeedsLook ? " os-widget--warn" : string.Empty)" href="/Backups" data-window="/Backups" data-title="Backups" data-widget @Home(item)>
+                    <span class="os-widget__head">@Ui.Icon("save")<span>Backups</span></span>
+                    <span class="os-widget__value">@Model.BackupWhen</span>
+                    <span class="os-widget__note@(Model.LastBackup is not null && !Model.BackupNeedsLook ? " os-widget__note--ok" : string.Empty)">@Model.BackupNote</span>
                 </a>
                 break;
 
             case Kind.Activity:
                 <a class="os-widget @size" href="/Jobs" data-window="/Jobs" data-title="Activity" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("activity")Activity</span>
-                    <span class="os-widget__value">@(Model.ActiveJobs == 0 ? "All quiet" : $"{Model.ActiveJobs} running")</span>
-                    <span class="os-widget__note">@(Model.ActiveJobs == 0 ? "Nothing is running" : Model.ActiveJobs == 1 ? "A task is running" : "Tasks are running")</span>
+                    <span class="os-widget__head">@Ui.Icon("activity")<span>Activity</span></span>
+                    @if (Model.ActiveJobs == 0)
+                    {
+                        <span class="os-widget__value">All quiet</span>
+                        <span class="os-widget__note">Nothing is running</span>
+                    }
+                    else
+                    {
+                        <span class="os-widget__value">@Model.ActiveJobs<small> @(Model.ActiveJobs == 1 ? "task" : "tasks")</small></span>
+                        <span class="os-widget__note os-widget__note--busy">At work now</span>
+                    }
                 </a>
                 break;
 
             case Kind.Docker when Model.Engine.Available:
-                <div class="os-widget @size" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("whale")Docker</span>
-                    <span class="os-widget__value">@Model.Engine.ContainersRunning<small> containers</small></span>
-                    <span class="os-widget__note">Docker @Model.Engine.Version@(Model.Engine.Load is { } load ? $" · CPU {load.CpuPercent:0} %" : "")</span>
-                </div>
+                @* The machine: how many programs run on it, in plain words (MatOS is for people who do not know Docker). It opens the Task Manager, which lists
+                   them; the version of Docker is only in the tooltip. *@
+                <a class="os-widget @size" href="/Tasks" data-window="/Tasks" data-title="Task Manager" title="Docker @Model.Engine.Version" data-widget @Home(item)>
+                    <span class="os-widget__head">@Ui.Icon("server")<span>This machine</span></span>
+                    <span class="os-widget__value">@Model.Engine.ContainersRunning<small> @(Model.Engine.ContainersRunning == 1 ? "program" : "programs") running</small></span>
+                    <span class="os-widget__note">@(Model.Engine.Load is { } load ? $"CPU {load.CpuPercent:0} %" : "Open the Task Manager")</span>
+                </a>
                 break;
 
             case Kind.Docker:
-                <div class="os-widget @size os-widget--warn" role="alert" data-widget @Home(item)>
-                    <span class="os-widget__head">@Ui.Icon("alert")Docker</span>
+                @* Plain words on the screen; the technical hint (what to mount) only in the tooltip, for the one who knows what it means. *@
+                <div class="os-widget @size os-widget--warn" role="alert" title="Mount /var/run/docker.sock into the container of MatOS" data-widget @Home(item)>
+                    <span class="os-widget__head">@Ui.Icon("alert")<span>This machine</span></span>
                     <span class="os-widget__value">Not reachable</span>
-                    <span class="os-widget__note">Mount /var/run/docker.sock into the container</span>
+                    <span class="os-widget__note">MatOS cannot reach the machine</span>
                 </div>
                 break;
 
@@ -263,10 +293,10 @@
         if (w.Widget.Kind == "list")
         {
             <section class="@css" aria-label="@w.Widget.Label · @w.App.Name" data-widget @Home(item)>
-                <span class="os-widget__head">@Ui.Icon(w.Icon)@w.Widget.Label</span>
+                <partial name="_AppWidgetHead" model="w" />
                 @if (w.Rows.Count == 0)
                 {
-                    <span class="os-widget__note">Nothing yet</span>
+                    <span class="os-widget__empty">@Ui.Icon("check-circle")<span>Nothing here yet</span></span>
                 }
                 else
                 {
@@ -312,7 +342,7 @@
 }
 
 @* data-autorefresh only when there is a value: Razor writes data-x="" for a null, and the script would reload every 5 seconds. *@
-<div class="os-pages" data-os-pages @(Model.RefreshMs is { } refreshMs ? Html.Raw($"data-autorefresh=\"{refreshMs}\"") : null)>
+<div class="os-pages" data-os-pages @(Model.AsItComes ? Html.Raw("data-os-default") : null) @(Model.RefreshMs is { } refreshMs ? Html.Raw($"data-autorefresh=\"{refreshMs}\"") : null)>
     @for (var p = 0; p < Model.Pages.Count; p++)
     {
         <div class="os-grid os-page" data-page role="group" aria-label="Page @(p + 1) of @Model.Pages.Count">
@@ -344,9 +374,9 @@
                 {
                     @EngineApp(en)
                 }
-                <a class="os-app" href="/Settings/Engines" data-window="/Settings/Engines" data-title="Engines" data-name="engines">
+                <a class="os-app" href="/Settings/Engines" data-window="/Settings/Engines" data-title="Engines" data-name="overview engines">
                     <span class="os-app__icon"><span class="os-ico os-ico--settings" aria-hidden="true">@Ui.Icon("layers")</span></span>
-                    <span class="os-app__label">All engines</span>
+                    <span class="os-app__label">Overview</span>
                 </a>
             </div>
         </div>
@@ -364,7 +394,7 @@
     </div>
     <label class="os-search">
         @Ui.Icon("search")
-        <input type="search" id="home-find" placeholder="Search" data-os-search aria-label="Search apps" autocomplete="off" />
+        <input type="search" id="home-find" placeholder="Search your apps" data-os-search aria-label="Search apps" autocomplete="off" />
         <kbd aria-hidden="true">/</kbd>
     </label>
     <nav class="os-dock" aria-label="Dock">

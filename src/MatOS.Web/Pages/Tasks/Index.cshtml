@@ -3,7 +3,7 @@
 @model MatOS.Web.Pages.Tasks.IndexModel
 @{
     ViewData["Title"] = "Task Manager";
-    ViewData["PageSub"] = "What runs on this host and what it uses, as MatDock measures it.";
+    ViewData["PageSub"] = "Everything that runs on this machine and what it uses.";
     ViewData["Crumbs"] = Crumbs.Of(("Task Manager", null));
     var list = Model.List;
     string Percent(double value) => value.ToString(value < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " %";
@@ -43,7 +43,7 @@
         <span class="mv-stat__icon"><icon name="box" /></span>
         <div class="mv-stat__body">
             <div class="mat-stat__value">@Model.Running <small>of @Model.Total</small></div>
-            <div class="mat-stat__label">Containers running</div>
+            <div class="mat-stat__label">Programs running</div>
         </div>
     </div>
 </section>
@@ -52,7 +52,7 @@
 {
     <div class="mat-alert mat-alert--warn" role="status">
         <icon name="alert" />
-        <div>MatDock does not answer, so only the containers of MatOS are listed, without what they use, and nothing can be changed here.</div>
+        <div>MatDock does not answer, so only the programs of MatOS are listed, without what they use, and nothing can be changed here.</div>
     </div>
 }
 
@@ -72,8 +72,8 @@
                 }
                 else
                 {
-                    <div class="mat-empty__title">No containers</div>
-                    <p>Nothing runs on this host yet.</p>
+                    <div class="mat-empty__title">Nothing runs yet</div>
+                    <p>Programs appear here once an app is installed.</p>
                 }
             </div>
         }
@@ -81,9 +81,9 @@
         {
             <div class="mat-table-wrap">
                 <table class="mat-table mv-tasks">
-                    <caption class="mat-sr-only">Containers</caption>
+                    <caption class="mat-sr-only">Programs</caption>
                     <thead>
-                        <tr><th scope="col">Container</th><th scope="col">State</th><th scope="col">Processor</th><th scope="col">Memory</th><th scope="col" class="mat-hide-sm">Since</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
+                        <tr><th scope="col">Program</th><th scope="col">State</th><th scope="col">Processor</th><th scope="col">Memory</th><th scope="col" class="mat-hide-sm">How long</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
                     </thead>
                     <tbody>
                         @foreach (var task in list.Items)
@@ -91,15 +91,15 @@
                             var c = task.Container;
                             var of = c.Project.Length == 0 ? c.Image : c.Service.Length == 0 ? c.Project : $"{c.Project} · {c.Service}";
                             <tr>
-                                <td data-label="Container">
+                                <td data-label="Program">
                                     <div class="mat-table__name">
                                         <span class="mv-task__dot @(c.IsRunning ? "is-running" : "")" aria-hidden="true"></span>
                                         <span><a href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)">@c.Name</a><small>@of</small></span>
                                     </div>
                                 </td>
                                 <td data-label="State">
-                                    <span class="mat-pill @(c.IsRunning ? "mat-pill--ok" : "mat-pill--plain")">@(c.IsRunning ? "Running" : "Stopped")</span>
-                                    @if (task.Own) { <span class="mat-pill mat-pill--accent">MatOS</span> }
+                                    <span class="mv-cellgroup"><span class="mat-pill @(c.IsRunning ? "mat-pill--ok" : "mat-pill--plain")">@(c.IsRunning ? "Running" : "Stopped")</span>
+                                    @if (task.Own) { <span class="mat-pill mat-pill--accent">MatOS</span> }</span>
                                 </td>
                                 <td data-label="Processor">
                                     @if (task.CpuPercent is { } cpu)
@@ -114,17 +114,17 @@
                                 <td data-label="Memory" class="mat-nowrap">
                                     @if (task.MemoryBytes is { } bytes)
                                     {
-                                        <span class="mv-task__mem">@Format.Size(bytes)</span> <span class="mat-muted">@Percent(task.MemoryPercent ?? 0)</span>
+                                        <span class="mv-cellgroup"><span class="mv-task__mem">@Format.Size(bytes)</span> <span class="mat-muted">@Percent(task.MemoryPercent ?? 0)</span></span>
                                     }
                                     else
                                     {
                                         <span class="mat-muted">–</span>
                                     }
                                 </td>
-                                <td data-label="Since" class="mat-hide-sm mat-muted">@c.Status</td>
+                                <td data-label="How long" class="mat-hide-sm mat-muted">@MatOS.Core.Docker.ContainerStatusText.Plain(c.Status)</td>
                                 <td class="mat-table__cell-actions">
                                     <div class="mat-table__actions">
-                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)" aria-label="Show the log of @c.Name" data-tip="Show the log"><icon name="terminal" /></a>
+                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)" aria-label="Show the log of @c.Name" data-tip="Show the log"><icon name="file-text" /></a>
                                         @if (Model.CanAct(task))
                                         {
                                             @if (c.IsRunning)

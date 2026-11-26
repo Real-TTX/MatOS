@@ -21,6 +21,10 @@ public static class Format
             : utc.ToLocalTime().ToString("yyyy-MM-dd");
     }
 
+    /// <summary>How long ago, beside a date that is already shown: <c>null</c> when it would only repeat the date (two weeks and older).</summary>
+    public static string? AgoBesideDate(DateTime utc, DateTime? now = null)
+        => ((now ?? DateTime.UtcNow) - utc).TotalDays < 14 ? Ago(utc, now) : null;
+
     public static string Size(long bytes) => BackupService.FormatSize(bytes);
 
     public static string Duration(DateTime? start, DateTime? end)

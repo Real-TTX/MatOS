@@ -28,11 +28,11 @@ public sealed class EngineOverview
 {
     private static readonly IReadOnlyDictionary<string, string> OwnsText = new Dictionary<string, string>
     {
-        [EngineIds.MatDock] = "Stacks, containers, backups, schedules and updates of your apps.",
-        [EngineIds.Matcad] = "Routes, certificates and logins: the address of every app.",
-        [EngineIds.Matddns] = "Sources of your IP, DNS records and the rules that keep them current.",
-        [EngineIds.MatIdentity] = "People, groups, and which app each of them may open: one sign-in for all apps.",
-        [EngineIds.MatSmtp] = "The relay user of every app that sends mail, the account the mail leaves through, the queue.",
+        [EngineIds.MatDock] = "Runs your apps, keeps them up to date and keeps their backups.",
+        [EngineIds.Matcad] = "Gives every app its own address, with a certificate for a safe connection.",
+        [EngineIds.Matddns] = "Keeps your domain pointing at this machine when its internet address changes.",
+        [EngineIds.MatIdentity] = "One sign-in for all apps: the people, their groups and which apps each may open.",
+        [EngineIds.MatSmtp] = "Sends the mail of your apps.",
     };
 
     private readonly AppService _apps;

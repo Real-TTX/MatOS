@@ -2,7 +2,7 @@
 x-matos:
   id: matpaper
   name: MatPaper
-  tagline: Document management system
+  tagline: Your papers scanned, filed and found
   description: Scan or upload documents, let them be recognised and filed, and find them again in seconds.
   category: Files
   role: app

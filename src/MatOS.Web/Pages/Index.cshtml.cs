@@ -78,8 +78,27 @@ public class IndexModel : PageModel
     /// <summary>The widget Setup is on the home screen: nothing chosen yet, or the first start still works or has lines to try again.</summary>
     public bool SetupOpen => SetupProgress is { } p ? !p.Finished || p.AnyFailed : !Config.WizardCompleted;
 
-    /// <summary>No backup at all, or the newest one is older than <see cref="BackupIsOld"/>.</summary>
-    public bool BackupNeedsLook => LastBackup is not { } last || DateTime.UtcNow - last > BackupIsOld;
+    /// <summary>No backup at all, or the newest one is older than <see cref="BackupIsOld"/>; with no app there is nothing to back up yet (no amber for a newcomer).</summary>
+    public bool BackupNeedsLook => Tiles.Count > 0 && (LastBackup is not { } last || DateTime.UtcNow - last > BackupIsOld);
+
+    /// <summary>When the newest backup was, in plain words for the widget: today, yesterday, 3 days ago, then its date.</summary>
+    public string BackupWhen => LastBackup is not { } last ? (Tiles.Count == 0 ? "None yet" : "Never")
+        : (DateTime.UtcNow.Date - last.Date).Days switch
+        {
+            <= 0 => "Today",
+            1 => "Yesterday",
+            var days and < 60 => $"{days} days ago",
+            _ => last.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+        };
+
+    /// <summary>The line under it: what to do about it, or that all is well.</summary>
+    public string BackupNote => Tiles.Count == 0 && LastBackup is null ? "Nothing to back up yet"
+        : LastBackup is null ? "Back up your apps"
+        : BackupNeedsLook ? "Time for a new one"
+        : "Your apps are safe";
+
+    /// <summary>Apps that are not running (stopped, starting, installing, with a problem).</summary>
+    public int NotRunning => Tiles.Count - Running;
 
     /// <summary>An engine on the home screen: its row, and its state from Docker (<c>null</c> when it is not installed). Its window is <see cref="EngineRow.Window"/>.</summary>
     public sealed record EngineTile(EngineRow Row, AppStatusView? Status);
@@ -130,6 +149,12 @@ public class IndexModel : PageModel
 
     /// <summary>What the person took off the home screen: drawn out of sight, so that it can come back without a reload.</summary>
     public IReadOnlyList<HomeItem> HiddenItems { get; private set; } = [];
+
+    /// <summary>
+    /// The person never arranged their home screen, so it is drawn as it comes (<c>data-os-default</c>): js/os.js keeps this order and lets later things fill
+    /// what is left of a full screen before the next page begins. An arrangement of their own is drawn just as they left it.
+    /// </summary>
+    public bool AsItComes { get; private set; }
 
     /// <summary>The widget Today, which has the page's heading, is off the screen: the heading is there for a screen reader alone.</summary>
     public bool TodayHidden => HiddenItems.Any(i => i.Kind == HomeKind.Today);
@@ -199,8 +224,16 @@ public class IndexModel : PageModel
     }
 
     /// <summary>
-    /// Everything on the home screen in its own order (the widgets of the system, the ones of the apps, the apps, the parts of MatOS, the folder System), then
-    /// placed on the pages as the person left them (<see cref="HomeLayout.Arrange"/>): what is new joins the end of the first page.
+    /// What a newcomer finds on the second page instead of the first: the parts that speak of the machine (the engines, Docker, the running tasks, the
+    /// folder System), in this order. They stay a swipe away; the first page leads with the person's apps and the friendly widgets.
+    /// </summary>
+    public static readonly IReadOnlyList<string> MachineKeys = ["w:engines", "w:docker", "s:tasks", "s:jobs", "f:system"];
+
+    /// <summary>
+    /// Everything on the home screen in its own order (today, the first start, the widgets Apps, Backups and Activity, the apps and People, the widgets of
+    /// the apps; then what speaks of the machine), placed on the pages as the person left them (<see cref="HomeLayout.Arrange"/>): what is new joins the end of
+    /// the first page. A person who never arranged anything gets the home screen as it comes: the first page for them, the second for the machine
+    /// (<see cref="MachineKeys"/>).
     /// </summary>
     private async Task ArrangeAsync()
     {
@@ -210,19 +243,6 @@ public class IndexModel : PageModel
             => items.Add(new HomeItem(key, kind, name, data, sizes, size, size));
 
         Widget("w:today", HomeKind.Today, "Today", MediumOrWide, "medium");
-        if (Engines.Count > 0)
-        {
-            Widget("w:engines", HomeKind.Engines, "Engines", MediumOrWide, "medium");
-        }
-
-        Widget("w:apps", HomeKind.Apps, "Apps", SmallOrMedium, "small");
-        if (isAdmin)
-        {
-            Widget("w:backups", HomeKind.Backups, "Backups", SmallOrMedium, "small");
-            Widget("w:activity", HomeKind.Activity, "Activity", SmallOrMedium, "small");
-        }
-
-        Widget("w:docker", HomeKind.Docker, "Docker", SmallOrMedium, "small");
         if (isAdmin && SetupOpen)
         {
             Widget("w:setup", HomeKind.Setup, "Setup", SmallOrMedium, "small");
@@ -233,12 +253,15 @@ public class IndexModel : PageModel
             Widget("w:start", HomeKind.Start, isAdmin ? "Get started" : "No apps yet", SmallOrMedium, "small");
         }
 
-        foreach (var w in Additions.Widgets)
+        Widget("w:apps", HomeKind.Apps, "Apps", SmallOrMedium, "small");
+        if (isAdmin)
         {
-            var own = w.Widget.Size is { } s && HomeLayout.SizeNames.Contains(s) ? s : "small";
-            Widget($"w:{w.App.Slug}/{w.Widget.Id}", HomeKind.AppWidget, $"{w.Widget.Label} · {w.App.Name}", HomeLayout.SizeNames, own, w);
+            Widget("w:backups", HomeKind.Backups, "Backups", SmallOrMedium, "small");
+            Widget("w:activity", HomeKind.Activity, "Activity", SmallOrMedium, "small");
         }
 
+        // Then the apps as a row of icons (beside Today, under the small widgets) and People, then the widgets of the apps, which js/os.js starts on a row of
+        // their own under the icons. So the first page is calm: no icon wedged into a hole between widgets, and on a phone the apps are on the first page.
         foreach (var tile in Tiles)
         {
             if (Additions.Launchers.TryGetValue(tile.App.Id, out var launchers))
@@ -252,6 +275,24 @@ public class IndexModel : PageModel
         }
 
         items.AddRange(SystemApps.Select(app => new HomeItem("s:" + app.Href.Trim('/').Replace('/', '-').ToLowerInvariant(), HomeKind.SystemApp, app.Name, app)));
+
+        foreach (var w in Additions.Widgets)
+        {
+            var own = w.Widget.Size is { } s && HomeLayout.SizeNames.Contains(s) ? s : "small";
+            Widget($"w:{w.App.Slug}/{w.Widget.Id}", HomeKind.AppWidget, $"{w.Widget.Label} · {w.App.Name}", HomeLayout.SizeNames, own, w);
+        }
+
+        // The machine, an administrator's. Docker means nothing to a person who only uses the apps.
+        if (Engines.Count > 0)
+        {
+            Widget("w:engines", HomeKind.Engines, "System", MediumOrWide, "medium");
+        }
+
+        if (isAdmin)
+        {
+            Widget("w:docker", HomeKind.Docker, "This machine", SmallOrMedium, "small");
+        }
+
         if (Engines.Count > 0)
         {
             items.Add(new HomeItem("f:system", HomeKind.Folder, "System"));
@@ -264,6 +305,10 @@ public class IndexModel : PageModel
             byKey.TryAdd(item.Key, item);
         }
 
+        var keys = byKey.Keys.ToList();
+        var asItComes = new List<IReadOnlyList<string>> { keys.Where(k => !MachineKeys.Contains(k)).ToList(), MachineKeys.Where(byKey.ContainsKey).ToList() }
+            .Where(p => p.Count > 0)
+            .ToList();
         var layout = User.GetUserId() is { } userId ? await _users.GetHomeLayoutAsync(userId, HttpContext.RequestAborted) : HomeLayout.Empty;
         HomeItem Sized(string key)
         {
@@ -271,7 +316,8 @@ public class IndexModel : PageModel
             return item.Sizes is { Count: > 0 } sizes ? item with { Size = layout.SizeOf(key, sizes.ToList(), item.DefaultSize ?? sizes[0]) } : item;
         }
 
-        var arranged = layout.Arrange(byKey.Keys.ToList());
+        AsItComes = layout.Pages.Count == 0;
+        var arranged = layout.OrDefault(asItComes).Arrange(keys);
         Pages = arranged.Pages.Select(p => (IReadOnlyList<HomeItem>)p.Select(Sized).ToList()).ToList();
         HiddenItems = arranged.Hidden.Select(Sized).ToList();
     }

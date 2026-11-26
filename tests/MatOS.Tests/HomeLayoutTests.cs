@@ -20,6 +20,23 @@ public class HomeLayoutTests
     }
 
     [Fact]
+    public void NoLayout_TakesTheHomeScreenAsItComes_ButAPersonsPagesWin()
+    {
+        IReadOnlyList<IReadOnlyList<string>> asItComes = [["w:today", "w:apps", "a:matdo", "a:matdrive"], ["s:jobs", "f:system"]];
+
+        var fresh = HomeLayout.Empty.OrDefault(asItComes).Arrange(Screen);
+        Assert.Equal(asItComes, fresh.Pages);
+
+        // only a size chosen: still the pages as they come, with the size kept
+        var sized = Layout("""{"sizes":{"w:today":"wide"}}""").OrDefault(asItComes);
+        Assert.Equal(asItComes, sized.Arrange(Screen).Pages);
+        Assert.Equal("wide", sized.SizeOf("w:today", HomeLayout.SizeNames.ToList(), "medium"));
+
+        var own = Layout("""{"pages":[["f:system","w:today"]]}""").OrDefault(asItComes).Arrange(Screen);
+        Assert.Equal(["f:system", "w:today", "w:apps", "a:matdo", "a:matdrive", "s:jobs"], Assert.Single(own.Pages));
+    }
+
+    [Fact]
     public void Arrange_KeepsThePagesAndTheOrderOfThePerson()
     {
         var layout = Layout("""{"pages":[["a:matdrive","w:today"],["a:matdo","s:jobs","f:system"]],"hidden":["w:apps"]}""");

@@ -1,5 +1,7 @@
 // Draws the "Orbit" wallpaper of MatOS (a planet with rings), a dark and a light variant, as SVG.
 // node orbit.js <out folder> (render.js calls it)
+// The small things (the moon, the galaxy, the bright star, the streak) sit at the far left and right, outside the middle 1120 px where the widgets
+// are: half hidden behind a widget, a small round thing reads as a broken part of the screen, not as a picture. Only the planet is large enough to sit behind them.
 const fs = require('fs');
 const path = require('path');
 const OUT = process.argv[2];
@@ -100,9 +102,9 @@ function svg(t) {
 <ellipse cx="1200" cy="600" rx="1500" ry="150" transform="rotate(16 1200 600)" fill="${t.milky}" opacity="${t.milkyOp}" filter="url(#blur-xl)"/>
 <rect width="${W}" height="${H}" filter="url(#gas)" opacity="${t.gasOp}"/>
 ${stars(t.stars, 11)}
-<g transform="translate(520 330) rotate(-28)"><ellipse rx="90" ry="26" fill="url(#galaxy)" filter="url(#blur-s)"/><ellipse rx="40" ry="12" fill="url(#galaxy)"/></g>
+<g transform="translate(130 330) rotate(-28)"><ellipse rx="90" ry="26" fill="url(#galaxy)" filter="url(#blur-s)"/><ellipse rx="40" ry="12" fill="url(#galaxy)"/></g>
 ${t.sparkles.map(([x, y, s, op]) => sparkle(x, y, s, t.sparkle, op)).join('')}
-<line x1="1880" y1="250" x2="2160" y2="150" stroke="url(#streak)" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="2150" y1="240" x2="2380" y2="158" stroke="url(#streak)" stroke-width="2.5" stroke-linecap="round"/>
 <circle cx="${PX}" cy="${PY}" r="${PR * 1.45}" fill="url(#halo)"/>
 <g transform="translate(${PX} ${PY}) rotate(${TILT})">
   <g filter="url(#blur-s)">${ringArcs(rings, false)}</g>
@@ -120,7 +122,7 @@ ${t.sparkles.map(([x, y, s, op]) => sparkle(x, y, s, t.sparkle, op)).join('')}
   <g filter="url(#blur-s)">${ringArcs(rings, true)}</g>
   <circle cx="${PR * 1.78}" cy="-26" r="16" fill="url(#moon)"/>
 </g>
-<g transform="translate(980 520)">
+<g transform="translate(150 1080)">
   <circle r="58" fill="url(#halo)" opacity=".6"/>
   <circle r="44" fill="url(#moon)"/>
   <circle cx="-12" cy="-10" r="8" fill="${t.crater}" opacity=".35"/><circle cx="14" cy="8" r="5" fill="${t.crater}" opacity=".3"/><circle cx="-4" cy="18" r="4" fill="${t.crater}" opacity=".3"/><circle cx="18" cy="-16" r="3" fill="${t.crater}" opacity=".3"/>
@@ -134,7 +136,7 @@ const dark = {
   nebula: [[380, 380, 560, 320, '#5a3fd2', 0.32], [900, 900, 520, 300, '#b0479e', 0.16], [2050, 380, 520, 360, '#2b6cd6', 0.2], [1700, 1100, 760, 520, '#6d5cff', 0.22]],
   milky: '#c9c2ff', milkyOp: 0.07,
   stars: { tiny: 520, medium: 70, op: 1, colors: ['#ffffff', '#d7deff', '#ffe9d8', '#e4dcff'] },
-  sparkles: [[300, 230, 3.2, 0.95], [1460, 170, 2.6, 0.85], [2210, 610, 2.8, 0.8], [760, 1180, 2.2, 0.7], [1180, 820, 1.8, 0.6], [2000, 120, 2, 0.7]],
+  sparkles: [[120, 210, 3.2, 0.95], [1460, 170, 2.6, 0.85], [2210, 610, 2.8, 0.8], [760, 1180, 2.2, 0.7], [1180, 820, 1.8, 0.6], [2000, 120, 2, 0.7]],
   sparkle: '#e9e5ff', glow: '#a99dff', streak: '#ffffff', galaxy: '#d9d2ff',
   halo: '#7c6cff', haloOp: 0.3,
   body: [[0, '#cfc6ff'], [0.35, '#8c7af0'], [0.7, '#4c39c2'], [1, '#1d1460']],
@@ -150,7 +152,7 @@ const light = {
   nebula: [[380, 380, 560, 320, '#c5baff', 0.55], [900, 950, 520, 300, '#ffc7df', 0.4], [2050, 360, 520, 360, '#bcd9ff', 0.45], [1700, 1100, 760, 520, '#d8d0ff', 0.5]],
   milky: '#ffffff', milkyOp: 0.35,
   stars: { tiny: 160, medium: 26, op: 0.55, colors: ['#9e92e8', '#b7acf2', '#d8a8d8'] },
-  sparkles: [[300, 230, 3.2, 0.7], [1460, 170, 2.6, 0.6], [2210, 610, 2.8, 0.55], [1180, 820, 1.8, 0.45]],
+  sparkles: [[120, 210, 3.2, 0.7], [1460, 170, 2.6, 0.6], [2210, 610, 2.8, 0.55], [1180, 820, 1.8, 0.45]],
   sparkle: '#ffffff', glow: '#ffffff', streak: '#ffffff', galaxy: '#a99cf0',
   halo: '#b8acff', haloOp: 0.35,
   body: [[0, '#f1edff'], [0.35, '#b6a9ff'], [0.7, '#7a67e4'], [1, '#4a38bd']],
