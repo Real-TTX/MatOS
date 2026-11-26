@@ -93,6 +93,18 @@ public sealed class MatIdentitySignIn : IConfigureNamedOptions<OpenIdConnectOpti
         options.ClientId = identity.ClientId;
         options.ClientSecret = _config.GetIdentitySecretAsync().GetAwaiter().GetResult();
         options.RequireHttpsMetadata = identity.Authority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (!options.RequireHttpsMetadata)
+        {
+            // A MatIdentity on http (no domain yet): the correlation and nonce cookies cannot be "Secure; SameSite=None" there, a browser drops them on any
+            // address but localhost, and the sign-in at http://<this machine>:<port> ends in "Correlation failed". As Lax they come back on a top-level GET
+            // only, so MatIdentity answers with a redirect (response_mode=query) instead of a cross-site form post; the code is bound to PKCE all the same.
+            options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+            options.NonceCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.NonceCookie.SameSite = SameSiteMode.Lax;
+            options.ResponseMode = OpenIdConnectResponseMode.Query;
+        }
+
         if (!string.IsNullOrWhiteSpace(identity.InternalUrl) && !string.Equals(identity.InternalUrl.TrimEnd('/'), identity.Authority.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
         {
             options.BackchannelHttpHandler = new InternalUrlRewriter(identity.Authority, identity.InternalUrl) { InnerHandler = new HttpClientHandler() };
