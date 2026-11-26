@@ -35,6 +35,8 @@ apps' launchers, quick actions and widgets on the home screen). **No code that k
   (`-Fresh` wipes the volume, `-Port` changes the host port). Dev stack: `docker-compose.dev.yml` (app + `sqlite-web` on 8021).
   In `Development` the account `admin@example.com` / `Start12345` exists (the test account of every Mat app).
 - **Release stack:** `docker-compose.yml`, image `ghcr.io/real-ttx/matos`, one service and one volume: keep it that simple.
+- **MatOS Services** (`services.mattiverse.de`, the free address `<name>.my.mattiverse.de`; contract docs/SERVICES.md): its own project and image `ghcr.io/real-ttx/matos-services`
+  (`Dockerfile.services`, `deploy/services/` with the setup on the owner's server1). It runs on the internet: deploy it only when the owner says so.
 - **Real tests are end-to-end against Docker.** The pattern that worked: install apps through the UI with Playwright
   (installed Edge, see the `screenshots` skill), then check with `docker ps` / `docker exec` / `curl`. Remember
   `MSYS_NO_PATHCONV=1` for Git Bash arguments that start with `/`.
@@ -90,7 +92,10 @@ src/MatOS.Web         Razor Pages, controls, JS/CSS, Program.cs
   Infrastructure/            cookie session validation, setup guard, DB bootstrap, API endpoints (the job log, the theme, PUT/DELETE /api/home: the arrangement of the home screen), AddressEndpoints (GET /api/address/name: the live check of a free address, open during the first-run setup), OnboardingEndpoints (GET /api/setup/progress, POST /api/home/tour), health check, MatIdentitySignIn, BackchannelLogout (POST /signout-backchannel)
   Support/                   Toolkit (the icon sprite), Ui (Icon, Logo), Navigation (the menus: NavSet, NavItem, NavBadge), Launcher (the parts of MatOS as apps on the home screen and in its dock), EngineOverview (the five engines for the settings, the home screen and /Engines), HomeContributions (the launchers, quick actions and widgets of the apps for the home screen), Crumbs, AppUrls, FrameProbe, AppStatus, Format
   wwwroot/matui/             the toolkit, a copy of MatDesign's; wwwroot/css/matos.css the few classes only this app has (mv-*, mv-in-window); css/os.css the home screen (os-*); css/onboarding.css the first start and the tour (ob-*, tokens only); js/matos.js its behaviour, js/os.js the home screen, js/onboarding.js the first start and the tour, js/window-mode.js a page in the window
+src/MatOS.Services         MatOS Services: names and keys (Instances/), the tunnel (Tunnel/), the edge that passes TLS by SNI and HTTP by Host without decrypting (Edge/),
+                             the DNS of the zone (Dns/), DynDNS2 for Matddns, the status and admin pages
 tests/MatOS.Tests       unit tests + WebUiTests (they read the source of the pages)
+tests/MatOS.Services.Tests its unit tests and in-process end-to-end tests (free ports; the DNS binds TCP first, then UDP on the same number)
 tests/e2e                    run.js: the pages in a real browser against the running dev stack; run.js --first-start: the first start on a MatOS without an account
 ```
 
