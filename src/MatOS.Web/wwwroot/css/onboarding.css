@@ -185,6 +185,12 @@
 .ob-tour__steps li[hidden] { display: none; }
 .ob-tour__title { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--os-fg); }
 .ob-tour__steps p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--os-fg-soft); }
+/* the words of a mark for a large screen or a phone (os.css: a window fills the screen below 700px, js/os.js: no dragging, a long press for the menu) */
+.ob-tour__steps .ob-tour__narrow { display: none; }
+@media (max-width: 700px) {
+  .ob-tour__steps .ob-tour__wide { display: none; }
+  .ob-tour__steps .ob-tour__narrow { display: block; }
+}
 .ob-tour__foot { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .ob-tour__count { margin-right: auto; font-size: 12px; font-weight: 600; color: var(--os-fg-soft); font-variant-numeric: tabular-nums; }
 .ob-tour__btn { height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--os-hover); color: var(--os-fg); font-size: 13px; font-weight: 600; cursor: pointer; }

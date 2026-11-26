@@ -25,7 +25,8 @@ public sealed record DockerAdvice(bool Ready, string Title, string Text, string?
     {
         if (info.Available)
         {
-            return new DockerAdvice(true, "This computer is ready", $"Docker {info.Version} answers, so MatOS can install and run your apps.");
+            // Plain words for people who do not know Docker: no program name, no version (the version is in Settings, System).
+            return new DockerAdvice(true, "This computer is ready", "MatOS can install your apps here and keep them running.");
         }
 
         var error = info.Error ?? string.Empty;

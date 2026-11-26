@@ -5,12 +5,18 @@
 // "Set up MatOS" (MATOS_FIRST_START_INSTALL=1 presses it too, and the engines are installed).
 // It signs in with the account of the development stack (admin@example.com / Start12345, set MATOS_USER and MATOS_PASSWORD for another one) and
 // changes nothing that it does not remove again: the one schedule it creates is deleted at the end. Exit code 1 when a check fails.
+// After a first start the person signs in through MatIdentity (MatOS forgot the local password, docs/ARCHITECTURE.md "The first start"): MATOS_SSO=1 signs in there.
+// A test install reached at its free address through a local edge (CLAUDE.md, "Testing the engines"): MATOS_BROWSER_ARGS passes arguments to the browser
+// (--host-resolver-rules="MAP *.<name>.my.mattiverse.de:443 127.0.0.1:18443"), MATOS_INSECURE=1 accepts a certificate of a test CA.
 const { chromium } = require('playwright-core');
 
 const FIRST_START = process.argv.includes('--first-start');
 const BASE = (process.argv.slice(2).find(a => !a.startsWith('--')) || process.env.BASE || 'http://localhost:8030').replace(/\/$/, '');
 const USER = process.env.MATOS_USER || 'admin@example.com';
 const PASSWORD = process.env.MATOS_PASSWORD || 'Start12345';
+const SSO = process.env.MATOS_SSO === '1';
+// each argument starts with -- (a value may hold spaces, as the rules of the resolver do)
+const BROWSER_ARGS = (process.env.MATOS_BROWSER_ARGS || '').trim().split(/\s+(?=--)/).filter(Boolean);
 const results = [];
 
 async function check(name, fn) {
@@ -40,7 +46,11 @@ const pages = [
 ];
 
 (async () => {
-  const browser = await chromium.launch({ channel: 'msedge', headless: true }).catch(() => chromium.launch({ channel: 'chrome', headless: true }));
+  const browser = await chromium.launch({ channel: 'msedge', headless: true, args: BROWSER_ARGS }).catch(() => chromium.launch({ channel: 'chrome', headless: true, args: BROWSER_ARGS }));
+  if (process.env.MATOS_INSECURE === '1') {
+    const plain = browser.newContext.bind(browser);
+    browser.newContext = options => plain({ ...options, ignoreHTTPSErrors: true });
+  }
   const errors = [];
 
   if (FIRST_START) {
@@ -54,6 +64,14 @@ const pages = [
     page.on('pageerror', e => errors.push(page.url() + ': ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/status of 40[34]/.test(m.text())) { errors.push(page.url() + ': ' + m.text()); } });
     // MatOS's own form (?local=1): with MatIdentity connected the page would go there, and its address may not be reachable from this browser
+    if (SSO) {
+      // MatOS's sign-in goes on to MatIdentity, which brings the person back
+      await page.goto(BASE + '/Account/Login');
+      await page.locator('input[type=email], input[name*="user" i], input[name*="mail" i]').first().fill(USER);
+      await page.locator('input[type=password]').first().fill(PASSWORD);
+      await Promise.all([page.waitForURL(u => u.origin === new URL(BASE).origin && !u.pathname.startsWith('/Account/')), page.locator('button[type=submit]').first().click()]);
+      return { ctx, page };
+    }
     await page.goto(BASE + '/Account/Login?local=1');
     await page.fill('#Input_Username', USER);
     await page.fill('#Input_Password', PASSWORD);

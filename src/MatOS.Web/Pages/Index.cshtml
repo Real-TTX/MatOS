@@ -398,7 +398,9 @@
                 }
                 <li data-ob-tour-step data-target=".os-page .os-app, .os-page .os-widget">
                     <h2 class="ob-tour__title">Windows</h2>
-                    <p>Apps open in windows, like on a desktop. Drag a window by its bar, or to the side of the screen to fill half of it. A right click shows more.</p>
+                    @* A phone has no windows to drag and no right click: a window fills the screen there (js/os.js), so it gets its own words (css/onboarding.css). *@
+                    <p class="ob-tour__wide">Apps open in windows, like on a desktop. Drag a window by its bar, or to the side of the screen to fill half of it. A right click shows more.</p>
+                    <p class="ob-tour__narrow">Apps open in windows that fill the screen. The bar at the bottom of a window takes you home. Press and hold an app to see more.</p>
                 </li>
                 @if (isAdmin)
                 {
