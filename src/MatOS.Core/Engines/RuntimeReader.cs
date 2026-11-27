@@ -84,14 +84,14 @@ public sealed class RuntimeReader
                 return new ContainerTask(info, own);
             }
 
-            // cpuOfHostPercent (MatDock with apiVersion 5) is the share of the host; an older MatDock says cpuPercent only, the share of one core.
+            // cpuOfHostPercent (MatDock with apiVersion 6) is the share of the host; an older MatDock says cpuPercent only, the share of one core.
             var cpu = Maybe(c, "cpuOfHostPercent") ?? Number(c, "cpuPercent");
             var io = new ContainerIo(Bytes(c, "netRxBytes"), Bytes(c, "netTxBytes"), Bytes(c, "blockReadBytes"), Bytes(c, "blockWriteBytes"));
             return new ContainerTask(info, own, cpu, Number(c, "memoryPercent"), (long)Number(c, "memoryBytes"), io is { Net: null, Disk: null } ? null : io);
         }).ToList();
 
     /// <summary>
-    /// The host as the Task Manager shows it: live from MatDock (<c>/host</c>, apiVersion 5), else the last reading of its environment (percent only, up to
+    /// The host as the Task Manager shows it: live from MatDock (<c>/host</c>, apiVersion 6), else the last reading of its environment (percent only, up to
     /// five minutes old), else nothing.
     /// </summary>
     public async Task<HostReading?> GetHostAsync(CancellationToken ct = default)

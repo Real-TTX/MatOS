@@ -22,7 +22,7 @@ public sealed record TaskSnapshot(
 
     public int Running => Groups.Sum(g => g.Running);
 
-    /// <summary>Network and disk I/O are known (MatDock with apiVersion 5).</summary>
+    /// <summary>Network and disk I/O are known (MatDock with apiVersion 6).</summary>
     public bool HasIo => Groups.Any(g => g.Rows.Any(r => r.Task.Io is not null));
 }
 
