@@ -23,7 +23,7 @@ public sealed record SetupStart(SetupRun? Run, IReadOnlyList<SetupProblem> Probl
 /// <summary>
 /// "Set up MatOS" of the first start and its progress (docs/ARCHITECTURE.md "The first start"), in two phases. Leaving the screen of the engines queues the
 /// first ones (<see cref="BeginAsync"/>: MatDock, then MatSMTP); confirming the way to the apps sets it (the free address registered at the address service,
-/// the own domain with its DNS account, or none) and queues the rest (<see cref="ContinueAsync"/>): the engines that follow from the answers, the first apps,
+/// the own domain with its DNS account, or none) and queues the rest (<see cref="ContinueAsync"/>): the engines that follow from the answers,
 /// the connection, the sign-in, the records, the address, the checks. Every line names the lines it runs on (<see cref="SetupRunStep.Needs"/>); its job
 /// waits for theirs (<see cref="AppJobs.Gated"/>). The progress screen reads their state, and "Try again" queues a failed line once more, with the lines that
 /// follow from it behind it.
@@ -91,23 +91,9 @@ public sealed class SetupService
         }
     }
 
-    /// <summary>The apps the person can pick as their first ones (<see cref="SetupPlan.Pickable"/>).</summary>
-    public IReadOnlyList<CatalogApp> PickableApps() => SetupPlan.Pickable(_catalog.GetAll());
 
     /// <summary>The name of a catalog entry, for the lines of the progress screen.</summary>
     public string? NameOf(string catalogId) => _catalog.Get(catalogId)?.Name;
-
-    /// <summary>
-    /// Both phases at once (the screen of the choices that asks for the engines and the way together): the first engines the person chose
-    /// (<see cref="BeginAsync"/>), then the rest (<see cref="ContinueAsync"/>). A problem with the answers leaves the run in phase 1 (the first engines go on), and
-    /// the screen of the choices stays until a later call confirms the way (<see cref="SetupPlan.Continued"/>).
-    /// </summary>
-    public async Task<SetupStart> StartAsync(SetupChoices choices, SetupDns dns, CancellationToken ct = default)
-    {
-        var first = choices.Engines.Where(e => e is EngineIds.MatDock or EngineIds.MatSmtp).ToHashSet(StringComparer.Ordinal);
-        await BeginAsync(first, ct);
-        return await ContinueAsync(choices, dns, ct);
-    }
 
     /// <summary>
     /// The first phase, when the person leaves the screen of the engines: MatDock and MatSMTP (<see cref="SetupPlan.FirstSteps"/>; <paramref name="chosen"/>
@@ -190,13 +176,10 @@ public sealed class SetupService
             return new SetupStart(done, []);
         }
 
-        var pickable = PickableApps().Select(a => a.Id).ToHashSet(StringComparer.Ordinal);
-
-        // What is there already (an engine taken over from MatDock, or one the first phase is installing): its box is ticked and fixed, and a fixed box is not
-        // sent. A failed install is not "there".
+        // What is there already (an engine taken over from MatDock, or one the first phase is installing). A failed install is not "there".
         var installedApps = await _apps.ListAsync(ct);
         var installed = await InstalledAsync(installedApps, ct);
-        var problems = SetupPlan.Problems(choices, pickable, config, installed);
+        var problems = SetupPlan.Problems(choices, config, installed);
         if (problems.Count > 0)
         {
             return new SetupStart(null, problems);

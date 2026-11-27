@@ -22,8 +22,8 @@ They live in the folder *System*; open one and you see what MatOS set up there.
 ## What this is about
 
 Self-hosting usually means a terminal, a pile of `docker-compose.yml` files and a browser full of `:8080` tabs. MatOS is a calm
-layer on top: a **home screen** that feels like a phone or a tablet, a **store** with one-click installs, a **first start** that needs no Docker knowledge (an account, how you reach
-your apps, your first apps, one button) and wires the engines together, and **backups** you can actually restore.
+layer on top: a **home screen** that feels like a phone or a tablet, a **store** with one-click installs, a **first start** that needs no Docker knowledge (an account, the engines, how you reach
+your apps, one button) and wires the engines together, and **backups** you can actually restore.
 
 It replaces **matOS**, the older desktop for the Docker host (now [Real-TTX/MatOS-legacy](https://github.com/Real-TTX/MatOS-legacy), retired), and was called **Mattiverse** until November 2026. Its home screen is a phone's, its windows are a desktop's: several open side by side over the home screen, and the dock is the taskbar. Every app is a plain `docker compose` stack in MatDock:
 you can edit it there, and MatOS keeps your change when it updates the app.
@@ -51,8 +51,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
   [MatDesign](https://github.com/Real-TTX/MatDesign), with its lists, forms, dialogs and dark mode
 
 **First start**, and the **setup wizard** to change it later
-- One calm assistant: Welcome (is this computer ready?), your account, how you reach your apps (a free address `<name>.my.mattiverse.de`, your own domain, or only at home), your first apps, one button, and a live progress screen with *Try again*
-- Installs the five **engines** by itself: MatDock (required), Matcad, Matddns, MatIdentity (one sign-in) and MatSMTP (the mail of all apps); under *Advanced* you can skip one if something else on the host does its job
+- One calm assistant: Welcome (is this computer ready?), your account, how you reach your apps (a free address `<name>.my.mattiverse.de`, your own domain, or only at home), one button, and a live progress screen with *Try again*
+- Installs its **engines** by itself: MatDock, Matcad, MatIdentity (one sign-in) and MatSMTP (the mail of all apps), and Matddns when your own domain needs an address updater; which ones follows from your answers
 - The account of the first start is the one sign-in afterwards: MatIdentity gets the same e-mail and password
 - A short tour of the home screen on the first visit
 - Your **domain** and your **DNS provider** (Cloudflare, Hetzner, Netcup), asked once: Matcad gets one wildcard certificate through the
@@ -200,11 +200,11 @@ Open **http://localhost:8030** and the assistant of the first start takes over, 
 
 1. **Welcome**: it checks that this computer is ready (and says the one line to add when the Docker socket is missing).
 2. **Your account**: your name, your e-mail (it is your user name) and a password.
-3. **How do you reach your apps?** A free address `<name>.my.mattiverse.de` (recommended: from anywhere, HTTPS included, no router settings),
-   your own domain with the account of its DNS provider, or only at home. *Advanced* has the engines and the address of this computer.
-4. **Pick your first apps** (or skip it: the store has them all).
+3. **Engines**: what MatOS installs, in plain words. *Next* starts the app manager and mail right away, while you answer the next question.
+4. **How do you reach your apps?** A free address `<name>.my.mattiverse.de` (recommended: from anywhere, HTTPS included, no router settings),
+   your own domain with the account of its DNS provider, or only at home. *Advanced* has the address of this computer.
 5. **Set up MatOS**: one button. A calm screen shows every step (the app manager, web addresses and HTTPS, the address updater, one sign-in
-   for all apps, mail, your apps, your address) as it happens, with *Try again* and the details for a step that did not work. The last step
+   for all apps, mail, your address) as it happens, with *Try again* and the details for a step that did not work. The last step
    checks whether your apps can be reached from the internet, and the end says it in one sentence.
 
 ### Your own domain

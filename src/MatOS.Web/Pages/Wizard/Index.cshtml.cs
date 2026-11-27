@@ -75,10 +75,15 @@ public class IndexModel : PageModel
     public DnsFormModel Dns { get; private set; } = new();
     public bool AlreadyCompleted { get; private set; }
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
         var ct = HttpContext.RequestAborted;
         var config = await _config.GetAsync(ct);
+        if (Unfinished(config) is { } redirect)
+        {
+            return redirect;
+        }
+
         AlreadyCompleted = config.WizardCompleted;
         PublicHost = config.PublicHost ?? Request.Host.Host;
         BaseDomain = config.BaseDomain;
@@ -89,12 +94,18 @@ public class IndexModel : PageModel
         InstallMatIdentity = Wanted(installed, EngineIds.MatIdentity, config.Selection.IdentityAppId, config);
         InstallMatSmtp = Wanted(installed, EngineIds.MatSmtp, config.Selection.MailAppId, config);
         await LoadAsync(config, installed, await DnsFormAsync(config));
+        return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
         var ct = HttpContext.RequestAborted;
         var config = await _config.GetAsync(ct);
+        if (Unfinished(config) is { } redirect)
+        {
+            return redirect;
+        }
+
         var installed = await _apps.ListAsync(ct);
         var provider = DnsProviders.Find(DnsProvider);
         var credentials = DnsForm.CredentialsOf(DnsProvider, DnsCredentials);
@@ -183,6 +194,13 @@ public class IndexModel : PageModel
             ? RedirectToPage("/Index")
             : RedirectToPage("/Wizard/Progress", new { jobs = string.Join(',', jobIds) });
     }
+
+    /// <summary>
+    /// A first start that is not finished (a run in phase 1, or one whose lines could not all be queued) is the first start's, not the wizard's: the wizard
+    /// would start a second set of installs beside it. The person goes where the first start stands.
+    /// </summary>
+    private IActionResult? Unfinished(SystemConfig config)
+        => config.Setup is not null && !config.WizardCompleted ? Redirect(MatOS.Core.Setup.SetupFlow.NextPage(config)) : null;
 
     private async Task LoadAsync(SystemConfig config, List<InstalledApp> installed, DnsFormModel dns)
     {

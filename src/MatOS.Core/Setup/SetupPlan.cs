@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using MatOS.Core.Catalog;
 using MatOS.Core.Configuration;
 using MatOS.Core.Engines;
 using MatOS.Core.Integrations;
@@ -21,7 +20,7 @@ public static class Reach
     public static readonly IReadOnlyList<string> All = [Free, Domain, Home];
 }
 
-/// <summary>What the person chose in the first start: the way to the apps, the engines (Advanced) and the first apps.</summary>
+/// <summary>What the person chose in the first start: the way to the apps, the engines that follow from it (<see cref="SetupPlan.EnginesFor"/>) and the first apps (none yet).</summary>
 /// <param name="Reach">One of <see cref="Setup.Reach"/>.</param>
 /// <param name="Name">The name of the free address (<see cref="Reach.Free"/>).</param>
 /// <param name="BaseDomain">The own domain (<see cref="Reach.Domain"/>).</param>
@@ -47,8 +46,8 @@ public sealed record SetupProblem(string Field, string Message);
 public sealed record PlannedStep(string Key, string Kind, string Label, string? CatalogId);
 
 /// <summary>
-/// The rules of the first start without any side effect (docs/ARCHITECTURE.md "The first start"): the plain names of the engines, which apps the person can pick
-/// as their first ones, whether the choices fit together, and the steps "Set up MatOS" queues, in their order.
+/// The rules of the first start without any side effect (docs/ARCHITECTURE.md "The first start"): the plain names of the engines, which engines follow from the
+/// answers, whether the choices fit together, and the steps "Set up MatOS" queues, in their order.
 /// </summary>
 public static partial class SetupPlan
 {
@@ -189,25 +188,22 @@ public static partial class SetupPlan
     };
 
     /// <summary>
-    /// The apps a person can pick in the first start: no engine, nothing that is only announced (preview) or not a Mat app (third-party), and nothing that needs
-    /// an answer before it can be installed (a required variable without a default or a generated value). The most finished first, then the recommended ones.
+    /// The engines that follow from the answers of the first start, in the order they are installed. Always MatDock, Matcad, MatIdentity and MatSMTP: Matcad
+    /// also at home, where it publishes the ports of the apps (<c>BindingBroker.PortsAsync</c>; every app is reached through Matcad, with or without a
+    /// domain). Matddns only for an own domain with the account of a DNS provider MatOS knows (<see cref="DnsProviders"/>) whose internet address changes or
+    /// may change (<paramref name="ipMode"/> not <see cref="DnsIp.Fixed"/>): it keeps the records on that address. A fixed address or records by hand need no
+    /// address updater.
     /// </summary>
-    public static IReadOnlyList<CatalogApp> Pickable(IEnumerable<CatalogApp> catalog)
-        => catalog
-            .Where(a => !a.Core && !EngineIds.IsEngine(a.Id) && a.Role == AppRoles.App)
-            .Where(a => a.State is AppStates.Integrated or AppStates.Beta or AppStates.Alpha)
-            .Where(a => !NeedsAnswers(a))
-            .OrderBy(a => AppStates.Rank(a.State))
-            .ThenByDescending(a => a.Recommended)
-            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+    public static IReadOnlyList<string> EnginesFor(string? reach, string? provider, string? ipMode)
+    {
+        var engines = new List<string> { EngineIds.MatDock, EngineIds.Matcad, EngineIds.MatIdentity, EngineIds.MatSmtp };
+        if (reach == Reach.Domain && DnsProviders.Find(provider) is not null && !string.Equals(ipMode?.Trim(), DnsIp.Fixed, StringComparison.OrdinalIgnoreCase))
+        {
+            engines.Add(EngineIds.Matddns);
+        }
 
-    /// <summary>Shown at once (integrated and beta); the alphas wait behind "Show more".</summary>
-    public static bool IsFeatured(CatalogApp app) => app.State is AppStates.Integrated or AppStates.Beta;
-
-    /// <summary>The app asks something before it can be installed: a required value that is neither given nor generated.</summary>
-    public static bool NeedsAnswers(CatalogApp app)
-        => app.Variables.Any(v => v.Required && !v.Generate && string.IsNullOrEmpty(v.Default));
+        return EnginesOf(engines);
+    }
 
     /// <summary>The engines in the order they are installed, MatDock always among them.</summary>
     public static IReadOnlyList<string> EnginesOf(IEnumerable<string> chosen)
@@ -218,10 +214,10 @@ public static partial class SetupPlan
 
     /// <summary>
     /// What does not fit: a name of the free address that breaks the rules, an own domain that is missing or one of the free addresses, a way to the apps without
-    /// Matcad, an app that cannot be picked. The DNS account of an own domain is checked by the page (its fields are the web project's). An engine in
-    /// <paramref name="installed"/> (the catalog ids that are there already) counts as chosen: its box is ticked and fixed, so it is not sent.
+    /// Matcad. The DNS account of an own domain is checked by the page (its fields are the web project's). An engine in <paramref name="installed"/> (the
+    /// catalog ids that are there already) counts as chosen.
     /// </summary>
-    public static IReadOnlyList<SetupProblem> Problems(SetupChoices choices, IReadOnlyCollection<string> pickable, SystemConfig config, IReadOnlySet<string>? installed = null)
+    public static IReadOnlyList<SetupProblem> Problems(SetupChoices choices, SystemConfig config, IReadOnlySet<string>? installed = null)
     {
         var problems = new List<SetupProblem>();
         var engines = EnginesOf(choices.Engines.Concat(installed?.Where(EngineIds.IsEngine) ?? []));
@@ -271,7 +267,7 @@ public static partial class SetupPlan
 
         if (choices.Reach is Reach.Free or Reach.Domain && !engines.Contains(EngineIds.Matcad))
         {
-            problems.Add(new SetupProblem(string.Empty, "An address for your apps needs \"Web addresses and HTTPS (Matcad)\". Turn it on under Advanced, or choose \"Only here at home\"."));
+            problems.Add(new SetupProblem(string.Empty, "An address for your apps needs \"Web addresses and HTTPS (Matcad)\". Choose \"Only here at home\", or set up Matcad first."));
         }
 
         if (!string.IsNullOrWhiteSpace(choices.PublicHost) && !HostPattern().IsMatch(choices.PublicHost.Trim()))
@@ -279,10 +275,6 @@ public static partial class SetupPlan
             problems.Add(new SetupProblem("PublicHost", "Enter a name or an IP address like nas.local or 192.168.1.20."));
         }
 
-        foreach (var app in choices.Apps.Where(a => !pickable.Contains(a)))
-        {
-            problems.Add(new SetupProblem("Apps", $"\"{app}\" cannot be installed here. Add it later from the store."));
-        }
 
         return problems;
     }
@@ -370,9 +362,8 @@ public static partial class SetupPlan
     /// <summary>The choices in one sentence, above the button "Set up MatOS" (onboarding.js says the same while the person chooses).</summary>
     public static string Summary(SetupChoices choices, Func<string, string?> nameOf, string zone = HostedAddress.DefaultZone)
     {
-        var engines = EnginesOf(choices.Engines).Count;
         var apps = choices.Apps.Select(a => nameOf(a) ?? a).ToList();
-        var what = engines == EngineIds.All.Count ? "MatOS sets up its engines" : engines == 1 ? "MatOS sets up its app manager" : $"MatOS sets up {engines} of its engines";
+        var what = EnginesSentence(choices.Engines);
         if (apps.Count > 0)
         {
             what += ", then " + Join(apps);
@@ -392,6 +383,13 @@ public static partial class SetupPlan
         // An own domain with a DNS account: where its records point, in a second sentence.
         return choices.Reach == Reach.Domain && !string.IsNullOrWhiteSpace(choices.BaseDomain) && choices.Ip is { } ip ? $"{sentence} {ip.Sentence}." : sentence;
     }
+
+    /// <summary>
+    /// The first half of <see cref="Summary"/>: what MatOS installs, without a number (the person does not pick the engines; which ones follow from the
+    /// answers, <see cref="EnginesFor"/>). The screen of the choices writes it per way to the apps, and js/onboarding.js picks the one of the chosen way.
+    /// </summary>
+    public static string EnginesSentence(IEnumerable<string> engines)
+        => EnginesOf(engines).Count == 1 ? "MatOS sets up its app manager" : "MatOS sets up its engines";
 
     private static string Join(IReadOnlyList<string> names) => names.Count switch
     {

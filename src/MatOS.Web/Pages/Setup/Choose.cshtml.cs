@@ -1,4 +1,3 @@
-using MatOS.Core.Catalog;
 using MatOS.Core.Configuration;
 using MatOS.Core.Engines;
 using MatOS.Core.Entities;
@@ -12,11 +11,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace MatOS.Web.Pages.Setup;
 
 /// <summary>
-/// The first start, steps 3 to 5 (docs/ARCHITECTURE.md "The first start"): how the person reaches their apps (a free address, an own domain, or only at home;
-/// the engines and the address of this machine under Advanced), the first apps, and the one button "Set up MatOS" (<see cref="SetupService.StartAsync"/>). A
-/// problem (a name that was taken meanwhile, an address service that cannot be reached) keeps the person on the step of the address with the message; the
-/// first engines it queued before (phase 1) go on meanwhile, and the page stays until the way to the apps is confirmed (<see cref="SetupPlan.Continued"/>).
-/// Then the page is the progress screen; later changes are the setup wizard's (<c>/Wizard</c>).
+/// The first start, step 4 (docs/ARCHITECTURE.md "The first start"): how the person reaches their apps (a free address, an own domain, or only at home; the
+/// address of this machine under Advanced) and the one button "Set up MatOS" (<see cref="SetupService.ContinueAsync"/>). The engines follow from the answers
+/// (<see cref="SetupPlan.EnginesFor"/>). The page belongs to phase 1: MatDock and MatSMTP install meanwhile (queued when the person left the screen of the
+/// engines; a person who came here without it gets them queued now). A problem (a name that was taken meanwhile, an address service that cannot be reached)
+/// keeps the person here with the message, until the way to the apps is confirmed (<see cref="SetupPlan.Continued"/>); then the progress screen follows.
 /// </summary>
 public class ChooseModel : PageModel
 {
@@ -44,29 +43,23 @@ public class ChooseModel : PageModel
     /// <summary>An own domain under Advanced: MatOS chooses how it is reached from outside (the default), or only through the router.</summary>
     // Nullable on purpose: the choice is shown (and posted) only for an own domain; a hidden field posts nothing, and a non-nullable string would be required.
     [BindProperty] public string? RoutePolicy { get; set; } = DomainRoute.Auto;
-    [BindProperty] public bool InstallMatcad { get; set; } = true;
-    [BindProperty] public bool InstallMatddns { get; set; } = true;
-    [BindProperty] public bool InstallMatIdentity { get; set; } = true;
-    [BindProperty] public bool InstallMatSmtp { get; set; } = true;
-    [BindProperty] public List<string> Apps { get; set; } = new();
-
-    /// <summary>The apps shown at once (integrated and beta) and the ones behind "Show more" (alpha).</summary>
-    public IReadOnlyList<CatalogApp> Featured { get; private set; } = [];
-    public IReadOnlyList<CatalogApp> More { get; private set; } = [];
 
     public DnsFormModel Dns { get; private set; } = new();
 
     /// <summary>The zone of the free addresses (shown beside the name).</summary>
     public string Zone => HostedAddress.DefaultZone;
 
-    /// <summary>The step the page opens at: 0 the address (after a problem with it), 1 the apps.</summary>
-    public int StartAt { get; private set; }
-
-    /// <summary>The engines that are installed already (their box is ticked and fixed).</summary>
+    /// <summary>The engines that are there or being installed (Matcad: no warning about the ports it holds itself).</summary>
     public IReadOnlySet<string> InstalledEngines { get; private set; } = new HashSet<string>();
 
-    /// <summary>The first sentence above the button, for a browser without the script (js/onboarding.js writes it while the person chooses).</summary>
+    /// <summary>The sentence above the button, for a browser without the script (js/onboarding.js writes it while the person chooses).</summary>
     public string Summary { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// What MatOS installs for each way to the apps (<see cref="SetupPlan.EnginesSentence"/> of <see cref="SetupPlan.EnginesFor"/>), by the value of the
+    /// radio Reach: js/onboarding.js picks the one of the chosen way and adds where the apps are reached.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> EngineSentences { get; private set; } = new Dictionary<string, string>();
 
     /// <summary>This MatOS has its free address already (Settings, Address): the name is shown as its own, not checked again.</summary>
     public string? OwnAddress { get; private set; }
@@ -90,15 +83,10 @@ public class ChooseModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var config = await _config.GetAsync(HttpContext.RequestAborted);
-        if (SetupPlan.Continued(config.Setup))
+        var (config, elsewhere) = await PhaseOneAsync();
+        if (elsewhere is not null)
         {
-            return RedirectToPage("/Setup/Progress");
-        }
-
-        if (config.WizardCompleted)
-        {
-            return RedirectToPage("/Wizard/Index");
+            return elsewhere;
         }
 
         PublicHost = config.PublicHost ?? (IsLocalHost(Request.Host.Host) ? null : Request.Host.Host);
@@ -109,19 +97,12 @@ public class ChooseModel : PageModel
     public async Task<IActionResult> OnPostAsync()
     {
         var ct = HttpContext.RequestAborted;
-        var config = await _config.GetAsync(ct);
-        if (SetupPlan.Continued(config.Setup))
+        var (config, elsewhere) = await PhaseOneAsync();
+        if (elsewhere is not null)
         {
-            return RedirectToPage("/Setup/Progress");
+            return elsewhere;
         }
 
-        if (config.WizardCompleted)
-        {
-            return RedirectToPage("/Wizard/Index");
-        }
-
-        // An engine that is there already has its box ticked and fixed, and a fixed box is not sent: it counts as chosen.
-        await LoadInstalledAsync();
         var provider = DnsProviders.Find(DnsProvider);
         var credentials = DnsForm.CredentialsOf(DnsProvider, DnsCredentials);
         if (Reach == MatOS.Core.Setup.Reach.Domain && provider is not null)
@@ -139,7 +120,7 @@ public class ChooseModel : PageModel
         var choices = Choices();
         if (ModelState.IsValid)
         {
-            var started = await _setup.StartAsync(choices, new SetupDns(provider?.Id ?? "none", DnsZone, credentials), ct);
+            var started = await _setup.ContinueAsync(choices, new SetupDns(provider?.Id ?? "none", DnsZone, credentials), ct);
             if (started.Started)
             {
                 return RedirectToPage("/Setup/Progress");
@@ -151,39 +132,43 @@ public class ChooseModel : PageModel
             }
         }
 
-        // Back to the step the problem belongs to: the apps when only they are wrong, else the address.
-        StartAt = ModelState.Keys.Where(k => ModelState[k]!.Errors.Count > 0).All(k => k == nameof(Apps)) ? 1 : 0;
         await LoadAsync(await _config.GetAsync(ct));
         return Page();
     }
 
+    /// <summary>
+    /// The page belongs to phase 1. Without a run (the screen of the engines was skipped) the first engines are queued now; a run that is further, or a MatOS
+    /// set up before the runs, goes where the first start stands (<see cref="SetupFlow.NextPage"/>).
+    /// </summary>
+    private async Task<(SystemConfig Config, IActionResult? Elsewhere)> PhaseOneAsync()
+    {
+        var ct = HttpContext.RequestAborted;
+        var config = await _config.GetAsync(ct);
+        if (config.Setup is null && !config.WizardCompleted)
+        {
+            await _setup.BeginAsync(null, ct);
+            config = await _config.GetAsync(ct);
+        }
+
+        var next = SetupFlow.NextPage(config);
+        return (config, next == SetupFlow.ChoosePage ? null : Redirect(next));
+    }
+
+    /// <summary>The engines that follow from the answers of the form (<see cref="SetupPlan.EnginesFor"/>).</summary>
+    private IReadOnlyList<string> EnginesOf(string reach) => SetupPlan.EnginesFor(reach, DnsProviders.Find(DnsProvider)?.Id, DnsIp);
+
     private SetupChoices Choices()
     {
-        var engines = new HashSet<string>(InstalledEngines) { EngineIds.MatDock };
-        if (InstallMatcad) { engines.Add(EngineIds.Matcad); }
-        if (InstallMatddns) { engines.Add(EngineIds.Matddns); }
-        if (InstallMatIdentity) { engines.Add(EngineIds.MatIdentity); }
-        if (InstallMatSmtp) { engines.Add(EngineIds.MatSmtp); }
         // Where the records of an own domain point: only with a DNS account (without one, nothing writes records).
         var ip = Reach == MatOS.Core.Setup.Reach.Domain && DnsProviders.Find(DnsProvider) is not null
             ? MatOS.Core.Configuration.DnsIp.FromForm(DnsIp, DnsFixedIp).Ip ?? MatOS.Core.Configuration.DnsIp.Default
             : null;
-        return new SetupChoices(Reach, Name, BaseDomain, PublicHost, engines, Apps.Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().ToList(), ip,
-            DomainRoute.NormalizePolicy(RoutePolicy));
+        return new SetupChoices(Reach, Name, BaseDomain, PublicHost, EnginesOf(Reach).ToHashSet(StringComparer.Ordinal), [], ip, DomainRoute.NormalizePolicy(RoutePolicy));
     }
-
-    private async Task LoadInstalledAsync()
-        => InstalledEngines = (await _apps.ListAsync(HttpContext.RequestAborted))
-            .Where(a => EngineIds.IsEngine(a.CatalogId) && a.Lifecycle != AppLifecycle.Failed)
-            .Select(a => a.CatalogId)
-            .ToHashSet();
 
     private async Task LoadAsync(SystemConfig config)
     {
         var ct = HttpContext.RequestAborted;
-        var pickable = _setup.PickableApps();
-        Featured = pickable.Where(SetupPlan.IsFeatured).ToList();
-        More = pickable.Where(a => !SetupPlan.IsFeatured(a)).ToList();
         Dns = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct));
         if (Request.HasFormContentType)
         {
@@ -200,23 +185,13 @@ public class ChooseModel : PageModel
         }
 
         LocalBrowser = IsLocalHost(Request.Host.Host);
-        await LoadInstalledAsync();
+        InstalledEngines = (await _apps.ListAsync(ct))
+            .Where(a => EngineIds.IsEngine(a.CatalogId) && a.Lifecycle != AppLifecycle.Failed)
+            .Select(a => a.CatalogId)
+            .ToHashSet();
         WebPorts = _setup.MatcadWebPorts();
         BusyPorts = InstalledEngines.Contains(EngineIds.Matcad) ? [] : await _setup.BusyWebPortsAsync(ct);
-        InstallMatcad = EngineOn(EngineIds.Matcad);
-        InstallMatddns = EngineOn(EngineIds.Matddns);
-        InstallMatIdentity = EngineOn(EngineIds.MatIdentity);
-        InstallMatSmtp = EngineOn(EngineIds.MatSmtp);
+        EngineSentences = MatOS.Core.Setup.Reach.All.ToDictionary(r => r, r => SetupPlan.EnginesSentence(EnginesOf(r)));
         Summary = SetupPlan.Summary(Choices(), _setup.NameOf);
     }
-
-    /// <summary>The box of an engine: on when chosen (or there already).</summary>
-    public bool EngineOn(string id) => InstalledEngines.Contains(id) || id switch
-    {
-        EngineIds.Matcad => InstallMatcad,
-        EngineIds.Matddns => InstallMatddns,
-        EngineIds.MatIdentity => InstallMatIdentity,
-        EngineIds.MatSmtp => InstallMatSmtp,
-        _ => true,
-    };
 }

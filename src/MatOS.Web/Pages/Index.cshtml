@@ -172,12 +172,21 @@
                         <span class="os-widget__note">@(setup.Finished ? $"{failed} step{(failed == 1 ? " needs" : "s need")} another try" : $"{setup.Percent} % · {setup.Estimate}")</span>
                     </a>
                 }
+                else if (Model.Config.Setup is not null)
+                {
+                    @* Phase 1: the first engines install, the way to the apps is not confirmed yet. *@
+                    <a class="os-widget @size os-widget--warn" href="@MatOS.Core.Setup.SetupFlow.ChoosePage" data-widget @Home(item)>
+                        <span class="os-widget__head">@Ui.Icon("sparkles")Setup</span>
+                        <span class="os-widget__value">Not finished</span>
+                        <span class="os-widget__note">Answer how you reach your apps</span>
+                    </a>
+                }
                 else
                 {
-                    <a class="os-widget @size os-widget--warn" href="/Setup/Choose" data-widget @Home(item)>
+                    <a class="os-widget @size os-widget--warn" href="@MatOS.Core.Setup.SetupFlow.NextPage(Model.Config)" data-widget @Home(item)>
                         <span class="os-widget__head">@Ui.Icon("sparkles")Setup</span>
                         <span class="os-widget__value">Not set up yet</span>
-                        <span class="os-widget__note">Choose how you reach your apps and your first apps</span>
+                        <span class="os-widget__note">Set up the engines and how you reach your apps</span>
                     </a>
                 }
                 break;

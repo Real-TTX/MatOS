@@ -1,8 +1,9 @@
 /* MatOS: the first start and the tour of the home screen (docs/ARCHITECTURE.md "The first start"). Plain JavaScript, no build step.
    Switched on by data-* attributes:
-     <form data-ob-flow data-ob-offset="2" data-ob-start="0">   steps in one form (data-ob-step), one shown at a time; data-ob-next / data-ob-prev move,
-                                                                the dots (data-ob-dots) follow; a step is checked before Next; Enter goes on; the summary
-                                                                (data-ob-summary) is written from the choices
+     <form data-ob-flow data-ob-offset="3" data-ob-start="0">   steps in one form (data-ob-step), one shown at a time; data-ob-next / data-ob-prev move,
+                                                                the dots (data-ob-dots) follow (dot offset+n, or the step's data-ob-dot); a step is
+                                                                checked before Next; Enter goes on; the summary (data-ob-summary) is written from the
+                                                                choices; data-ob-phase1 says how far the first engines are
      <div data-ob-progress="/api/setup/progress">              the progress screen: polled, only what changed is exchanged; "Try again" (data-ob-retry),
                                                                 "Show details" (data-ob-details), the way home when it is done (data-ob-countdown)
      <div data-ob-tour="/api/home/tour">                        the tour of the home screen: one mark at a time (data-ob-tour-step, data-target)
@@ -54,11 +55,13 @@
         s.classList.toggle('is-active', n === index);
         s.classList.toggle('is-back', n === index && !!back);
       });
+      // the dot of the step: its own (several cards of one screen share a dot), else the one after the offset
+      var own = parseInt(steps[index].getAttribute('data-ob-dot'), 10);
+      var current = isNaN(own) ? offset + index : own;
       dots.forEach(function (d, n) {
-        var at = n - offset;
-        d.classList.toggle('is-done', at < index);
-        d.classList.toggle('is-active', at === index);
-        if (at === index) { d.setAttribute('aria-current', 'step'); } else { d.removeAttribute('aria-current'); }
+        d.classList.toggle('is-done', n < current);
+        d.classList.toggle('is-active', n === current);
+        if (n === current) { d.setAttribute('aria-current', 'step'); } else { d.removeAttribute('aria-current'); }
       });
       var summary = $('[data-ob-summary]', steps[index]);
       if (summary) { summary.textContent = summarize(); }
@@ -92,11 +95,7 @@
       var prev = e.target.closest('[data-ob-prev]');
       if (next) {
         e.preventDefault();
-        if (next.hasAttribute('data-ob-skip')) {
-          $$('input[name="Apps"]', steps[index]).forEach(function (b) { b.checked = false; });
-        } else if (!stepIsValid(steps[index])) {
-          return;
-        }
+        if (!next.hasAttribute('data-ob-skip') && !stepIsValid(steps[index])) { return; }
         show(index + 1, true);
       } else if (prev) {
         e.preventDefault();
@@ -138,26 +137,20 @@
       });
     });
 
-    // The sentence above "Set up MatOS": what will happen, from the choices (SetupPlan.Summary says the same on the server).
+    // The sentence above "Set up MatOS": what will happen, from the choices (SetupPlan.Summary says the same on the server). What MatOS installs follows from
+    // the way to the apps: the server wrote it for each way (data-ob-summary-<reach>), the chosen one is taken.
     function summarize() {
       var reach = $('input[name="Reach"]:checked', flow);
-      var engines = $$('[data-ob-engine] input[type=checkbox]', flow).filter(function (b) { return b.checked; }).length || 1;
-      var apps = $$('input[name="Apps"]', flow).filter(function (b) { return b.checked; }).map(function (b) {
-        var card = b.closest('[data-ob-app]');
-        return card ? card.getAttribute('data-ob-app') : b.value;
-      });
-      var total = parseInt(flow.getAttribute('data-ob-engines-total'), 10) || 1;
-      var text = engines >= total ? 'MatOS sets up its engines' : engines === 1 ? 'MatOS sets up its app manager' : 'MatOS sets up ' + engines + ' of its engines';
-      if (apps.length) { text += ', then ' + (apps.length === 1 ? apps[0] : apps.slice(0, -1).join(', ') + ' and ' + apps[apps.length - 1]); }
       var value = reach ? reach.value : '';
-      var close = apps.length ? ',' : ''; // "then MatDo, and makes ...": a comma closes the list of the apps
+      var holder = $('[data-ob-summary]', flow);
+      var text = (holder && holder.getAttribute('data-ob-summary-' + value)) || 'MatOS sets up its engines';
       var name = $('[name="Name"]', flow), domain = $('[name="BaseDomain"]', flow);
       if (value === 'free' && name && name.value.trim()) {
         // the address people open: MatOS is a host below the free address (ProxyPublisher.SelfHost)
-        text += close + ' and makes everything reachable from anywhere: you open MatOS at ' + (flow.getAttribute('data-ob-self') || 'matos') + '.' +
+        text += ' and makes everything reachable from anywhere: you open MatOS at ' + (flow.getAttribute('data-ob-self') || 'matos') + '.' +
           name.value.trim().toLowerCase() + '.' + (flow.getAttribute('data-ob-zone') || 'my.mattiverse.de');
       }
-      else if (value === 'domain' && domain && domain.value.trim()) { text += close + ' and puts your apps under ' + domain.value.trim().toLowerCase(); }
+      else if (value === 'domain' && domain && domain.value.trim()) { text += ' and puts your apps under ' + domain.value.trim().toLowerCase(); }
       else if (value === 'home') { text += ' for use here at home'; }
       text += '.';
       // an own domain with a DNS account: where its records point (DnsIp.Sentence says the same)
@@ -171,15 +164,6 @@
       return text;
     }
 
-    // A label of the Next button of the apps: how many are picked.
-    var appsNext = $('[data-ob-apps-next]', flow);
-    if (appsNext) {
-      flow.addEventListener('change', function (e) {
-        if (!e.target.matches('input[name="Apps"]')) { return; }
-        var n = $$('input[name="Apps"]', flow).filter(function (b) { return b.checked; }).length;
-        appsNext.textContent = n === 0 ? 'Next' : n === 1 ? 'Next with 1 app' : 'Next with ' + n + ' apps';
-      });
-    }
 
     // Sent (the toolkit found nothing to correct): the button waits, so a second click does not start it twice.
     flow.addEventListener('submit', function (e) {
@@ -191,6 +175,37 @@
     flow.classList.add('is-ready');
     show(parseInt(flow.getAttribute('data-ob-start'), 10) || 0, false);
   });
+
+  // ------------------------------------------------------------------ the first engines while the way to the apps is chosen (phase 1)
+
+  // One line under the dots: how far MatDock and MatSMTP are, asked every 5 seconds until they are over. A failed one links to the progress screen and its
+  // "Try again". When MatOS does not answer on localhost (Docker Desktop may stop answering it once MatOS joined its network), the line offers 127.0.0.1.
+  var phase1 = $('[data-ob-phase1]');
+  if (phase1) {
+    var phaseWords = { waiting: 'waiting', working: 'installing', done: 'ready', failed: 'did not work' };
+    var link = function (href, text) { var a = document.createElement('a'); a.href = href; a.textContent = text; return a; };
+    var pollPhase1 = function () {
+      fetch(phase1.getAttribute('data-ob-phase1'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { if (!r.ok || (r.headers.get('Content-Type') || '').indexOf('json') < 0) { throw new Error('HTTP ' + r.status); } return r.json(); })
+        .then(function (d) {
+          var lines = d.steps.map(function (s) { return s.label + ': ' + (phaseWords[s.state] || s.state); });
+          var failed = d.steps.some(function (s) { return s.state === 'failed'; });
+          phase1.textContent = lines.join(' · ') + (lines.length ? (failed ? '. ' : '.') : '');
+          if (failed) { phase1.appendChild(link('/Setup/Progress', 'Try again')); }
+          phase1.hidden = !lines.length;
+          if (!d.finished) { setTimeout(pollPhase1, 5000); }
+        })
+        .catch(function () {
+          if (window.location.hostname === 'localhost') {
+            phase1.textContent = 'MatOS does not answer as localhost right now. ';
+            phase1.appendChild(link(window.location.protocol + '//127.0.0.1' + (window.location.port ? ':' + window.location.port : '') + window.location.pathname, 'Open it as 127.0.0.1'));
+            phase1.hidden = false;
+          }
+          setTimeout(pollPhase1, 5000);
+        });
+    };
+    pollPhase1();
+  }
 
   // ------------------------------------------------------------------ the progress screen
 

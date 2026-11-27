@@ -1,39 +1,21 @@
 @page
-@using MatOS.Core.Catalog
 @using MatOS.Core.Engines
 @using MatOS.Core.Setup
 @model MatOS.Web.Pages.Setup.ChooseModel
 @{
     Layout = "_Onboarding";
     ViewData["Title"] = "Set up MatOS";
-
-    // A card of the store, as a box to tick: the icon, the name, what it is for and how far it is along. What the state means is written out (a tooltip does
-    // not exist on touch) in the store's words for a person (the catalog's stateNote speaks of tests and branches); the alphas have theirs above their group.
-    async Task AppChoice(CatalogApp app)
-    {
-        var note = app.State == AppStates.Beta ? MatOS.Web.Pages.Store.StoreWords.State(app.State) : null;
-        <label class="mat-choice ob-app" data-ob-app="@app.Name">
-            <input type="checkbox" name="Apps" value="@app.Id" checked="@Model.Apps.Contains(app.Id)" />
-            <app-icon name="@app.Name" icon="@app.Icon" />
-            <span class="mat-choice__text">
-                <strong>@app.Name</strong>
-                <small>@app.Tagline</small>
-                <span><span class="mat-pill @AppStatePill.Css(app.State)">@AppStates.Label(app.State)</span></span>
-                @if (note is not null)
-                {
-                    <small class="ob-app__note">@note</small>
-                }
-            </span>
-        </label>
-    }
 }
 
-@* The first start, steps 3 to 5: the way to the apps, the first apps, "Set up MatOS". One form; js/onboarding.js shows one step at a time. *@
-<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="2" data-ob-start="@Model.StartAt" data-ob-zone="@Model.Zone" data-ob-self="@MatOS.Core.Integrations.ProxyPublisher.SelfSlug" data-ob-engines-total="@EngineIds.All.Count">
-    <partial name="_Steps" model="2" />
+@* The first start, step 4: the way to the apps and "Set up MatOS". One form; js/onboarding.js shows one card at a time, both on the dot of this step
+   (data-ob-dot). Meanwhile MatDock and MatSMTP install (phase 1): one line says how far they are (data-ob-phase1). *@
+<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="3" data-ob-zone="@Model.Zone" data-ob-self="@MatOS.Core.Integrations.ProxyPublisher.SelfSlug">
+    <partial name="_Steps" model="3" />
 
-    @* ------------------------------------------------------------ 3. how the apps are reached *@
-    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-reach">
+    <p class="ob-small ob-phase1" role="status" data-ob-phase1="@MatOS.Web.Infrastructure.OnboardingEndpoints.ProgressPath" hidden></p>
+
+    @* ------------------------------------------------------------ 4. how the apps are reached *@
+    <section class="ob-card ob-step" data-ob-step data-ob-dot="3" aria-labelledby="ob-reach">
         <div class="ob-head">
             <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("globe")</span>
             <h1 class="ob-title ob-title--step" id="ob-reach">How do you reach your apps?</h1>
@@ -127,7 +109,7 @@
                 <icon name="alert" />
                 <div class="mat-alert__body">
                     @(Model.BusyPorts.Count == 1 ? "Port" : "Ports") @string.Join(" and ", Model.BusyPorts.Select(p => p.Port)) of this computer @(Model.BusyPorts.Count == 1 ? "is" : "are") used by @string.Join(" and ", Model.BusyPorts.Select(p => p.Holder).Distinct()) already.
-                    @SetupPlan.EngineLabel(EngineIds.Matcad) needs the ports @string.Join(" and ", Model.WebPorts): stop that program first, or choose "Only here at home" and turn off Web addresses under Advanced.
+                    @SetupPlan.EngineLabel(EngineIds.Matcad) needs the ports @string.Join(" and ", Model.WebPorts), also at home (it gives every app its address or port): stop that program first.
                 </div>
             </div>
         }
@@ -161,41 +143,6 @@
                         </label>
                     </div>
                 </fieldset>
-                <fieldset class="mat-field mat-fieldset">
-                    <legend class="mat-legend">The engines MatOS installs</legend>
-                    <div class="mat-choices ob-engines">
-                        @foreach (var id in EngineIds.All)
-                        {
-                            var fixedOn = id == EngineIds.MatDock || Model.InstalledEngines.Contains(id);
-                            <label class="mat-choice" data-ob-engine="@SetupPlan.EngineLabel(id)">
-                                @if (id == EngineIds.Matcad)
-                                {
-                                    <input asp-for="InstallMatcad" type="checkbox" disabled="@fixedOn" />
-                                }
-                                else if (id == EngineIds.Matddns)
-                                {
-                                    <input asp-for="InstallMatddns" type="checkbox" disabled="@fixedOn" />
-                                }
-                                else if (id == EngineIds.MatIdentity)
-                                {
-                                    <input asp-for="InstallMatIdentity" type="checkbox" disabled="@fixedOn" />
-                                }
-                                else if (id == EngineIds.MatSmtp)
-                                {
-                                    <input asp-for="InstallMatSmtp" type="checkbox" disabled="@fixedOn" />
-                                }
-                                else
-                                {
-                                    <input type="checkbox" id="engine-@id" checked disabled />
-                                }
-                                <span class="mat-choice__text">
-                                    <strong>@SetupPlan.EngineLabel(id)</strong>
-                                    <small>@SetupPlan.EngineDoes(id)</small>
-                                </span>
-                            </label>
-                        }
-                    </div>
-                </fieldset>
             </div>
         </details>
 
@@ -204,61 +151,13 @@
         </div>
     </section>
 
-    @* ------------------------------------------------------------ 4. the first apps *@
-    <section class="ob-card ob-card--wide ob-step" data-ob-step aria-labelledby="ob-apps">
-        <div class="ob-head">
-            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("apps")</span>
-            <h2 class="ob-title ob-title--step" id="ob-apps">Pick your first apps</h2>
-            <p class="ob-lead">They are installed right after MatOS itself. The store has them all, any time.</p>
-        </div>
-
-        <span class="mat-error" asp-validation-for="Apps"></span>
-        @if (Model.Featured.Count == 0 && Model.More.Count == 0)
-        {
-            <p class="ob-note">@Ui.Icon("info")<span>There is nothing to pick yet: the store has every app once MatOS is set up.</span></p>
-        }
-        else
-        {
-            <fieldset class="ob-apps">
-                <legend class="mat-sr-only">Your first apps</legend>
-                <div class="mat-choices">
-                    @foreach (var app in Model.Featured)
-                    {
-                        await AppChoice(app);
-                    }
-                </div>
-                @if (Model.More.Count > 0)
-                {
-                    <details class="mat-collapse ob-more" open="@Model.More.Any(a => Model.Apps.Contains(a.Id))">
-                        <summary><span>Show more: early versions (@Model.More.Count)</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
-                        <div class="mat-accordion__body">
-                            <p class="ob-note">@Ui.Icon("info")<span>@AppStates.Meaning(AppStates.Alpha)</span></p>
-                            <div class="mat-choices">
-                                @foreach (var app in Model.More)
-                                {
-                                    await AppChoice(app);
-                                }
-                            </div>
-                        </div>
-                    </details>
-                }
-            </fieldset>
-        }
-
-        <div class="mat-btn-row mat-btn-row--plain ob-actions">
-            <button type="button" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-next><span data-ob-apps-next>Next</span><icon name="arrow-right" /></button>
-            <button type="button" class="mat-btn mat-btn--ghost" data-ob-prev><icon name="chevron-left" /><span>Back</span></button>
-            <span class="mat-btn-row__spacer"></span>
-            <button type="button" class="mat-btn mat-btn--ghost" data-ob-next data-ob-skip><span>Skip</span></button>
-        </div>
-    </section>
-
-    @* ------------------------------------------------------------ 5. one button *@
-    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-go">
+    @* ------------------------------------------------------------ one button (still the dot of the way to the apps) *@
+    <section class="ob-card ob-step" data-ob-step data-ob-dot="3" aria-labelledby="ob-go">
         <div class="ob-hero ob-hero--go">
             <span class="ob-planet ob-planet--sm" aria-hidden="true"><img src="/img/logo.svg" alt="" width="128" height="128" /></span>
             <h2 class="ob-title ob-title--step" id="ob-go">Ready when you are</h2>
-            <p class="ob-lead ob-summary" data-ob-summary>@Model.Summary</p>
+            <p class="ob-lead ob-summary" data-ob-summary data-ob-summary-free="@Model.EngineSentences[Reach.Free]" data-ob-summary-domain="@Model.EngineSentences[Reach.Domain]"
+               data-ob-summary-home="@Model.EngineSentences[Reach.Home]">@Model.Summary</p>
             <p class="ob-small">This takes a few minutes. You can watch, or come back later: it goes on by itself.</p>
         </div>
         <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">

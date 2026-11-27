@@ -56,9 +56,8 @@ public class ProgressModel : PageModel
         WithIdentity = config.Setup?.WithIdentity == true;
         SelfUrl = config.Setup is { Reach: { } r } ? SetupPlan.SelfUrl(r, config) : null;
         Reach = config.Setup?.Steps.Any(s => s.Key == SetupPlan.ReachKey) == true ? await ReachView.BuildAsync(config, _db, ct) : null;
-        LoopbackUrl = string.Equals(Request.Host.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-            ? $"{Request.Scheme}://127.0.0.1{(Request.Host.Port is { } port ? $":{port}" : string.Empty)}/Setup/Progress"
-            : null;
+        LoopbackUrl = Request.LoopbackOf(SetupFlow.ProgressPage);
+
         return Page();
     }
 

@@ -1,8 +1,8 @@
 // End-to-end checks of the pages of MatOS in a real browser (the installed Edge, or Chrome) against a running stack.
 //   ./scripts/redeploy.ps1 && cd tests/e2e && npm install && node run.js [http://localhost:8030]
-// The first start (Welcome, the account, the way to the apps, the first apps) needs a MatOS without any account: a throwaway stack (./scripts/redeploy.ps1 -Fresh,
-// in Production, or a second MatOS with its own volume), then  node run.js --first-start [url]. It creates the account anna@example.com and stops before
-// "Set up MatOS" (MATOS_FIRST_START_INSTALL=1 presses it too, and the engines are installed).
+// The first start (Welcome, the account, the engines, the way to the apps) needs a MatOS without any account: a throwaway stack (./scripts/redeploy.ps1 -Fresh,
+// in Production, or a second MatOS with its own volume), then  node run.js --first-start [url]. It creates the account anna@example.com and stops on the
+// screen of the engines (its Next starts real installs): MATOS_FIRST_START_INSTALL=1 goes on, and the engines are installed.
 // It signs in with the account of the development stack (admin@example.com / Start12345, set MATOS_USER and MATOS_PASSWORD for another one) and
 // changes nothing that it does not remove again: the one schedule it creates is deleted at the end. Exit code 1 when a check fails.
 // After a first start the person signs in through MatIdentity (MatOS forgot the local password, docs/ARCHITECTURE.md "The first start"): MATOS_SSO=1 signs in there.
@@ -600,7 +600,7 @@ const pages = [
   process.exit(failed ? 1 : 0);
 })();
 
-// The first start on a MatOS without any account (--first-start): Welcome, the account, the way to the apps, the first apps, the one button.
+// The first start on a MatOS without any account (--first-start): Welcome, the account, the engines, the way to the apps, the one button.
 async function firstStart(browser, errors) {
   console.log('The first start');
   const looks = [
@@ -628,7 +628,7 @@ async function firstStart(browser, errors) {
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
   const page = await ctx.newPage();
   page.on('pageerror', e => errors.push(page.url() + ': ' + e.message));
-  await check('the account: the browser checks the fields, the server the password, then the way to the apps', async () => {
+  await check('the account: the browser checks the fields, the server the password, then the engines', async () => {
     await page.goto(BASE + '/Setup');
     await page.click('.ob-step.is-active [data-ob-next]');
     await page.click('button[type=submit]');
@@ -642,41 +642,72 @@ async function firstStart(browser, errors) {
     expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Your account', 'back at the account');
     await page.fill('#Input_Password', 'blue-river-42');
     await page.fill('#Input_ConfirmPassword', 'blue-river-42');
-    await Promise.all([page.waitForURL(/\/Setup\/Choose/), page.click('button[type=submit]')]);
+    await Promise.all([page.waitForURL(/\/Setup\/Engines/), page.click('button[type=submit]')]);
   });
-  let engineCount = 0; // the engines of EngineIds.All, read from the page (data-ob-engines-total)
-  await check('the way to the apps: three choices, the name checked while typing, the engines under Advanced', async () => {
-    expectEqual(await page.locator('.ob-choice input[name=Reach]').count(), 3, 'three choices');
-    expectTrue(await page.locator('input[name=Reach][value=free]').isChecked(), 'the free address is the default');
-    await page.fill('#Name', 'e2e-' + Date.now().toString(36));
-    await page.waitForFunction(() => { const f = document.querySelector('#Name').closest('.mat-field'); return f.classList.contains('is-valid') || f.classList.contains('is-invalid'); }, null, { timeout: 15000 });
-    await page.locator('label.ob-choice', { has: page.locator('input[value=home]') }).click();
-    expectTrue(await page.locator('#Name').isDisabled(), 'the name is not sent for "at home"');
-    await page.click('.ob-advanced summary');
-    engineCount = parseInt(await page.getAttribute('[data-ob-flow]', 'data-ob-engines-total'), 10);
-    expectEqual(await page.locator('.ob-engines input[type=checkbox]').count(), engineCount, 'a box per engine (EngineIds.All)');
-    await page.click('.ob-step.is-active [data-ob-next]');
-    expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Pick your first apps', 'on to the apps');
+  // A browser that came as localhost went on at 127.0.0.1 at Welcome (the cookie is made there): the rest of the first start stays on that origin.
+  const origin = new URL(page.url()).origin;
+  await check('the engines: three fixed rows and MatAi coming later, nothing to tick, no Back', async () => {
+    expectEqual(await page.locator('.ob-engine:not(.ob-engine--later)').count(), 3, 'three fixed rows');
+    expectEqual(await page.locator('.ob-engine--later[aria-disabled=true]').count(), 1, 'MatAi, coming later');
+    expectEqual(await page.locator('.ob-engines input').count(), 0, 'no box to tick');
+    expectEqual(await page.locator('[data-ob-prev]').count(), 0, 'no Back');
   });
-  await check('the first apps: no engine, no preview; the alphas behind Show more; Skip; one sentence above the button', async () => {
-    const names = await page.locator('.ob-step.is-active [data-ob-app]').evaluateAll(l => l.map(e => e.getAttribute('data-ob-app')));
-    expectTrue(names.length > 0 && !names.some(n => /^(MatDock|Matcad|Matddns|MatIdentity|MatSMTP|MatAI|Portainer)$/.test(n)), 'apps: ' + names.join(', '));
-    expectEqual(await page.locator('.ob-more').count(), 1, 'Show more');
-    await page.click('.ob-step.is-active [data-ob-skip]');
-    expectEqual(await page.locator('[data-ob-summary]').innerText(), 'MatOS sets up its engines for use here at home.', 'the summary');
-  });
+  const state = await ctx.storageState();
+  for (const [mode, options] of looks) {
+    const lookCtx = await browser.newContext({ ...options, storageState: state });
+    const look = await lookCtx.newPage();
+    look.on('pageerror', e => errors.push(look.url() + ': ' + e.message));
+    await check(mode + ': the engines, nothing sideways', async () => {
+      await look.goto(origin + '/Setup/Engines');
+      expectEqual(new URL(look.url()).pathname, '/Setup/Engines', 'on the engines');
+      expectEqual(await look.locator('h1').count(), 1, 'h1');
+      expectEqual(await look.locator('[style]').count(), 0, 'elements with an inline style');
+      const wide = await look.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expectTrue(wide <= 1, 'scrolls sideways by ' + wide + 'px');
+    });
+    await lookCtx.close();
+  }
+  // Next starts real installs (MatDock and MatSMTP): only with MATOS_FIRST_START_INSTALL=1 (catalog copies with subnets of their own, CLAUDE.md).
   if (process.env.MATOS_FIRST_START_INSTALL === '1') {
+    let first = [];
+    await check('Next on the engines queues MatDock and MatSMTP, once', async () => {
+      await Promise.all([page.waitForURL(/\/Setup\/Choose/), page.click('.ob-step.is-active button[type=submit]')]);
+      const progress = await (await page.request.get(origin + '/api/setup/progress')).json();
+      first = progress.steps.map(s => s.key + '#' + s.jobId);
+      expectEqual(progress.steps.map(s => s.key), ['engine:matdock', 'engine:matsmtp'], 'the first lines');
+      expectEqual(progress.phase, 1, 'phase 1');
+      // a second visit (the back button, a second tab) does not start a second run
+      await page.goto(origin + '/Setup/Engines');
+      expectEqual(new URL(page.url()).pathname, '/Setup/Choose', 'the engines lead on to the choices');
+      const again = await (await page.request.get(origin + '/api/setup/progress')).json();
+      expectEqual(again.steps.map(s => s.key + '#' + s.jobId), first, 'the same lines and jobs');
+    });
+    await check('the way to the apps: three choices, the name checked while typing, the first engines said in one line', async () => {
+      expectEqual(await page.locator('.ob-choice input[name=Reach]').count(), 3, 'three choices');
+      expectTrue(await page.locator('input[name=Reach][value=free]').isChecked(), 'the free address is the default');
+      expectEqual(await page.locator('.ob-engines').count(), 0, 'no engines to tick');
+      await page.waitForFunction(() => { const p = document.querySelector('[data-ob-phase1]'); return p && !p.hidden && p.textContent.indexOf('MatDock') >= 0; }, null, { timeout: 15000 });
+      await page.fill('#Name', 'e2e-' + Date.now().toString(36));
+      await page.waitForFunction(() => { const f = document.querySelector('#Name').closest('.mat-field'); return f.classList.contains('is-valid') || f.classList.contains('is-invalid'); }, null, { timeout: 15000 });
+      await page.locator('label.ob-choice', { has: page.locator('input[value=home]') }).click();
+      expectTrue(await page.locator('#Name').isDisabled(), 'the name is not sent for "at home"');
+      await page.click('.ob-step.is-active [data-ob-next]');
+      expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Ready when you are', 'on to the button');
+      expectEqual(await page.locator('[data-ob-dots] li.is-active').count(), 1, 'one dot');
+      expectEqual(await page.locator('[data-ob-dots] li').nth(3).getAttribute('aria-current'), 'step', 'still the dot of the way to the apps');
+      expectEqual(await page.locator('[data-ob-summary]').innerText(), 'MatOS sets up its engines for use here at home.', 'the summary');
+    });
     await check('Set up MatOS: a line per engine in plain words, followed live until MatOS is ready', async () => {
       await Promise.all([page.waitForURL(/\/Setup\/Progress/), page.click('[data-ob-go]')]);
-      expectTrue(await page.locator('[data-ob-task]').count() >= engineCount, 'a line per engine at least');
+      expectTrue(await page.locator('[data-ob-task]').count() >= 4, 'a line per engine at least');
       const labels = await page.locator('[data-ob-task] .ob-task__label').allInnerTexts();
       expectEqual(labels[0], 'App manager (MatDock)', 'MatDock first, in plain words');
       expectEqual(labels[1], 'Mail (MatSMTP)', 'MatSMTP second (the first phase)');
+      expectTrue(!labels.includes('Address updater (Matddns)'), 'no address updater at home');
       await page.waitForFunction(() => document.querySelector('[data-ob-progress]').getAttribute('data-ob-phase') !== 'working', null, { timeout: 15 * 60 * 1000 });
       expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
     });
-  }
-  await ctx.close();
+  }  await ctx.close();
 
   await check('no script errors in the first start', async () => { expectEqual(errors, [], 'errors'); });
   await browser.close();

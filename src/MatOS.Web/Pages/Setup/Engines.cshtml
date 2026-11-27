@@ -1,0 +1,81 @@
+@page
+@using MatOS.Core.Setup
+@model MatOS.Web.Pages.Setup.EnginesModel
+@{
+    Layout = "_Onboarding";
+    ViewData["Title"] = "Engines";
+    var docker = Model.Docker;
+}
+
+@* The first start, step 3: the engines, fixed rows (nothing to tick). Next queues MatDock and MatSMTP while the person answers the next screen. No Back: the
+   account exists. One step in a flow, so the busy button and the dots of js/onboarding.js apply. *@
+<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="2">
+    <partial name="_Steps" model="2" />
+
+    <section class="ob-card ob-step" data-ob-step aria-labelledby="ob-engines-title">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("layers")</span>
+            <h1 class="ob-title ob-title--step" id="ob-engines-title">The engines of MatOS</h1>
+            <p class="ob-lead">MatOS runs on a few engines of its own. It installs them for you; you do not have to choose anything.</p>
+        </div>
+
+        <ul class="ob-engines">
+            @foreach (var id in MatOS.Web.Pages.Setup.EnginesModel.Shown)
+            {
+                <li class="ob-engine">
+                    <span class="ob-engine__icon" aria-hidden="true">@Ui.Icon("check")</span>
+                    <span class="ob-engine__text">
+                        <strong>@SetupPlan.EngineLabel(id)</strong>
+                        <small>@SetupPlan.EngineDoes(id)</small>
+                    </span>
+                    @if (Model.There.Contains(id))
+                    {
+                        <span class="mat-pill mat-pill--ok">There already</span>
+                    }
+                </li>
+            }
+            <li class="ob-engine ob-engine--later" aria-disabled="true">
+                <span class="ob-engine__icon" aria-hidden="true">@Ui.Icon("sparkles")</span>
+                <span class="ob-engine__text">
+                    <strong>MatAi</strong>
+                    <small>AI for your apps. Nothing is installed for it yet.</small>
+                </span>
+                <span class="mat-pill">Coming later</span>
+            </li>
+        </ul>
+
+        <p class="ob-note">@Ui.Icon("info")<span>MatOS adds web addresses for your apps and, if your internet address changes, an address updater - depending on your answers on the next screen.</span></p>
+
+        @if (!docker.Ready)
+        {
+            <div class="ob-check ob-check--bad" role="status">
+                <span class="ob-check__icon" aria-hidden="true">@Ui.Icon("alert")</span>
+                <div class="ob-check__body">
+                    <strong>@docker.Title</strong>
+                    <p>@docker.Text</p>
+                    @if (docker.Fix is { } fix)
+                    {
+                        <p class="ob-check__where">The line goes @docker.FixWhere:</p>
+                        <div class="ob-fix">
+                            <code id="ob-fix">@fix</code>
+                            <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-copy="#ob-fix"><icon name="copy" /><span>Copy</span></button>
+                        </div>
+                    }
+                    <p id="ob-engines-wait">Next waits until Docker answers: nothing can be installed without it.</p>
+                </div>
+            </div>
+        }
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            @if (docker.Ready)
+            {
+                <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg"><span>Next</span><icon name="arrow-right" /></button>
+            }
+            else
+            {
+                <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg" disabled aria-describedby="ob-engines-wait"><span>Next</span><icon name="arrow-right" /></button>
+                <a href="/Setup/Engines" class="mat-btn mat-btn--ghost"><icon name="refresh" /><span>Check again</span></a>
+            }
+        </div>
+    </section>
+</form>

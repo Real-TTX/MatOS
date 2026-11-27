@@ -120,7 +120,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
-    // The first start: Welcome and the account before there is any; the rest of it (/Setup/Choose, /Setup/Progress) is for the administrator it made.
+    // The first start: Welcome and the account before there is any; the rest of it (/Setup/Engines, /Setup/Choose, /Setup/Progress) is for the administrator it made.
     options.Conventions.AllowAnonymousToPage("/Setup/Index");
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/Account/External");

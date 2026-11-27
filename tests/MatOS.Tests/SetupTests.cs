@@ -1,23 +1,18 @@
-using MatOS.Core.Catalog;
 using MatOS.Core.Configuration;
 using MatOS.Core.Docker;
 using MatOS.Core.Engines;
 using MatOS.Core.Entities;
 using MatOS.Core.Integrations;
 using MatOS.Core.Setup;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MatOS.Tests;
 
 /// <summary>
-/// The first start (docs/ARCHITECTURE.md "The first start") without Docker: the plain names of the engines, the apps a person can pick, whether the choices fit,
+/// The first start (docs/ARCHITECTURE.md "The first start") without Docker: the plain names of the engines, the engines that follow from the answers, whether the choices fit,
 /// the steps "Set up MatOS" queues in their order, the progress screen, the check of Docker in plain words and the rules of the account.
 /// </summary>
 public class SetupTests
 {
-    private static IReadOnlyList<CatalogApp> BuiltIn()
-        => new CatalogService(new AppPaths(Path.Combine(Path.GetTempPath(), "matos-tests-" + Guid.NewGuid().ToString("N"))), NullLogger<CatalogService>.Instance)
-            .GetAll();
 
     private static readonly IReadOnlySet<string> AllEngines = EngineIds.All.ToHashSet();
 
@@ -51,45 +46,6 @@ public class SetupTests
         Assert.Equal(EngineIds.All, SetupPlan.EnginesOf(EngineIds.All.Reverse()));
     }
 
-    // ------------------------------------------------------------------ the apps a person can pick
-
-    [Fact]
-    public void The_first_apps_are_neither_engines_nor_previews_nor_third_party()
-    {
-        var pickable = SetupPlan.Pickable(BuiltIn());
-        Assert.NotEmpty(pickable);
-        Assert.All(pickable, a =>
-        {
-            Assert.False(EngineIds.IsEngine(a.Id), a.Id);
-            Assert.False(a.Core, a.Id);
-            Assert.Contains(a.State, new[] { AppStates.Integrated, AppStates.Beta, AppStates.Alpha });
-            Assert.False(SetupPlan.NeedsAnswers(a), a.Id + " needs an answer before it can be installed");
-        });
-        Assert.DoesNotContain(pickable, a => a.Id is "matai" or "portainer" or "nginx-proxy-manager");
-    }
-
-    [Fact]
-    public void The_finished_apps_come_first_and_the_alphas_wait_behind_show_more()
-    {
-        var pickable = SetupPlan.Pickable(BuiltIn());
-        var ranks = pickable.Select(a => AppStates.Rank(a.State)).ToList();
-        Assert.Equal(ranks.Order().ToList(), ranks);
-        Assert.All(pickable.Where(SetupPlan.IsFeatured), a => Assert.Contains(a.State, new[] { AppStates.Integrated, AppStates.Beta }));
-        Assert.All(pickable.Where(a => !SetupPlan.IsFeatured(a)), a => Assert.Equal(AppStates.Alpha, a.State));
-    }
-
-    [Fact]
-    public void An_app_that_asks_something_first_is_not_offered()
-    {
-        var app = new CatalogApp { Id = "asks", Name = "Asks", State = AppStates.Beta, Role = AppRoles.App };
-        app.Variables.Add(new CatalogVariable { Key = "LICENSE", Label = "License", Required = true });
-        var generated = new CatalogApp { Id = "fine", Name = "Fine", State = AppStates.Beta, Role = AppRoles.App };
-        generated.Variables.Add(new CatalogVariable { Key = "SECRET", Label = "Secret", Required = true, Generate = true });
-
-        Assert.True(SetupPlan.NeedsAnswers(app));
-        Assert.Equal(["fine"], SetupPlan.Pickable([app, generated]).Select(a => a.Id));
-    }
-
     // ------------------------------------------------------------------ do the choices fit?
 
     [Theory]
@@ -99,7 +55,7 @@ public class SetupTests
     [InlineData("www", "reserved")]
     public void A_free_address_needs_a_name_that_follows_the_rules(string? name, string message)
     {
-        var problems = SetupPlan.Problems(Choices(Reach.Free, name), [], new SystemConfig());
+        var problems = SetupPlan.Problems(Choices(Reach.Free, name), new SystemConfig());
         var problem = Assert.Single(problems);
         Assert.Equal("Name", problem.Field);
         Assert.Contains(message, problem.Message);
@@ -107,7 +63,7 @@ public class SetupTests
 
     [Fact]
     public void A_good_name_has_no_problem()
-        => Assert.Empty(SetupPlan.Problems(Choices(Reach.Free, "Anna-Home"), [], new SystemConfig()));
+        => Assert.Empty(SetupPlan.Problems(Choices(Reach.Free, "Anna-Home"), new SystemConfig()));
 
     [Theory]
     [InlineData(null, "Please enter your domain")]
@@ -115,7 +71,7 @@ public class SetupTests
     [InlineData("anna.my.mattiverse.de", "come from the address service")]
     public void An_own_domain_must_be_one(string? domain, string message)
     {
-        var problem = Assert.Single(SetupPlan.Problems(Choices(Reach.Domain, domain: domain), [], new SystemConfig()));
+        var problem = Assert.Single(SetupPlan.Problems(Choices(Reach.Domain, domain: domain), new SystemConfig()));
         Assert.Equal("BaseDomain", problem.Field);
         Assert.Contains(message, problem.Message);
     }
@@ -124,23 +80,16 @@ public class SetupTests
     public void An_address_needs_Matcad_and_at_home_needs_nothing()
     {
         var withoutMatcad = new HashSet<string> { EngineIds.MatDock, EngineIds.MatIdentity };
-        Assert.Contains(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), [], new SystemConfig()), p => p.Message.Contains("Matcad"));
-        Assert.Contains(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", engines: withoutMatcad), [], new SystemConfig()), p => p.Message.Contains("Matcad"));
-        Assert.Empty(SetupPlan.Problems(Choices(Reach.Home, engines: withoutMatcad), [], new SystemConfig()));
-        Assert.Single(SetupPlan.Problems(Choices("somewhere"), [], new SystemConfig()), p => p.Field == "Reach");
+        Assert.Contains(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig()), p => p.Message.Contains("Matcad"));
+        Assert.Contains(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", engines: withoutMatcad), new SystemConfig()), p => p.Message.Contains("Matcad"));
+        Assert.Empty(SetupPlan.Problems(Choices(Reach.Home, engines: withoutMatcad), new SystemConfig()));
+        Assert.Single(SetupPlan.Problems(Choices("somewhere"), new SystemConfig()), p => p.Field == "Reach");
     }
 
-    [Fact]
-    public void Only_pickable_apps_can_be_chosen()
-    {
-        var problem = Assert.Single(SetupPlan.Problems(Choices(Reach.Home, apps: ["matfile", "matai"]), ["matfile"], new SystemConfig()));
-        Assert.Equal("Apps", problem.Field);
-        Assert.Contains("matai", problem.Message);
-    }
 
     // ------------------------------------------------------------------ the steps "Set up MatOS" queues
 
-    /// <summary>Both phases as <c>SetupService.StartAsync</c> plans them: the first engines, then the rest without them.</summary>
+    /// <summary>Both phases as <c>SetupService.BeginAsync</c> and <c>ContinueAsync</c> plan them: the first engines, then the rest without them.</summary>
     private static IReadOnlyList<PlannedStep> BothPhases(SetupChoices choices, bool handOver = false)
     {
         var first = SetupPlan.FirstSteps(new HashSet<string>(), choices.Engines);
@@ -187,9 +136,9 @@ public class SetupTests
         // The box of an installed Matcad is ticked and disabled, so the form sends InstallMatcad=false.
         var withoutMatcad = EngineIds.All.Where(e => e != EngineIds.Matcad).ToHashSet();
         var installed = new HashSet<string> { EngineIds.MatDock, EngineIds.Matcad, "matfile" };
-        Assert.Empty(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), [], new SystemConfig(), installed));
-        Assert.Empty(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", engines: withoutMatcad), [], new SystemConfig(), installed));
-        Assert.Contains(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), [], new SystemConfig(), new HashSet<string> { "matfile" }), p => p.Message.Contains("Matcad"));
+        Assert.Empty(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig(), installed));
+        Assert.Empty(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", engines: withoutMatcad), new SystemConfig(), installed));
+        Assert.Contains(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig(), new HashSet<string> { "matfile" }), p => p.Message.Contains("Matcad"));
     }
 
     [Fact]
@@ -217,6 +166,47 @@ public class SetupTests
             SetupPlan.Summary(Choices(Reach.Free, "Anna", apps: ["matfile", "matdo", "matdrive"]), NameOf));
         Assert.Equal("MatOS sets up its engines and puts your apps under example.com.", SetupPlan.Summary(Choices(Reach.Domain, domain: "Example.com"), NameOf));
         Assert.Equal("MatOS sets up its app manager for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string>()), NameOf));
+    }
+
+    // ------------------------------------------------------------------ the engines that follow from the answers
+
+    [Fact]
+    public void EnginesFor_free_and_home_have_Matcad_but_no_Matddns()
+    {
+        string[] expected = [EngineIds.MatDock, EngineIds.Matcad, EngineIds.MatIdentity, EngineIds.MatSmtp];
+        Assert.Equal(expected, SetupPlan.EnginesFor(Reach.Free, null, null));
+        Assert.Equal(expected, SetupPlan.EnginesFor(Reach.Home, null, null));
+
+        // A provider or an IP answer left over from another way changes nothing there.
+        Assert.Equal(expected, SetupPlan.EnginesFor(Reach.Free, "netcup", DnsIp.Dynamic));
+        Assert.Equal(expected, SetupPlan.EnginesFor(Reach.Home, "cloudflare", DnsIp.Unsure));
+    }
+
+    [Theory]
+    [InlineData("netcup", DnsIp.Dynamic, true)]
+    [InlineData("cloudflare", DnsIp.Unsure, true)]
+    [InlineData("hetzner", null, true)]
+    [InlineData("Netcup", "", true)]
+    [InlineData("netcup", DnsIp.Fixed, false)]
+    [InlineData("hetzner", "FIXED", false)]
+    [InlineData("manual", DnsIp.Dynamic, false)]
+    [InlineData("none", DnsIp.Dynamic, false)]
+    [InlineData(null, DnsIp.Unsure, false)]
+    public void EnginesFor_a_domain_with_a_provider_and_a_changing_or_unsure_IP_has_Matddns(string? provider, string? ipMode, bool matddns)
+    {
+        var engines = SetupPlan.EnginesFor(Reach.Domain, provider, ipMode);
+        Assert.Equal(matddns, engines.Contains(EngineIds.Matddns));
+
+        // Always the rest, in the order they are installed (MatDock first, MatSMTP last).
+        Assert.Equal(EngineIds.All.Where(e => matddns || e != EngineIds.Matddns), engines);
+    }
+
+    [Fact]
+    public void The_engines_that_follow_from_the_answers_fit_the_choices()
+    {
+        Assert.Empty(SetupPlan.Problems(new SetupChoices(Reach.Free, "anna", null, null, SetupPlan.EnginesFor(Reach.Free, null, null).ToHashSet(), []), new SystemConfig()));
+        Assert.Empty(SetupPlan.Problems(new SetupChoices(Reach.Domain, null, "example.com", null, SetupPlan.EnginesFor(Reach.Domain, null, null).ToHashSet(), []), new SystemConfig()));
+        Assert.Equal("MatOS sets up its engines", SetupPlan.EnginesSentence(SetupPlan.EnginesFor(Reach.Home, null, null)));
     }
 
     // ------------------------------------------------------------------ the progress screen
@@ -318,7 +308,8 @@ public class SetupTests
         Assert.Equal("MatOS sets up its engines for use here at home.", all);
         Assert.DoesNotContain(EngineIds.All.Count.ToString(), all);
         Assert.DoesNotContain("five", all);
-        Assert.Equal("MatOS sets up 2 of its engines for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), NameOf));
+        Assert.Equal("MatOS sets up its engines for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), NameOf));
+        Assert.DoesNotContain("2", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), NameOf));
     }
 
     // ------------------------------------------------------------------ the two phases, the needs, "Try again"
@@ -367,7 +358,7 @@ public class SetupTests
     [Fact]
     public void A_problem_after_the_first_phase_keeps_the_person_on_the_choices()
     {
-        // StartAsync queues MatDock and MatSMTP (phase 1, stored) before the answers are checked; a name taken meanwhile returns a problem. The run stays in
+        // BeginAsync queued MatDock and MatSMTP (phase 1, stored) before the answers are checked; in ContinueAsync a name taken meanwhile returns a problem. The run stays in
         // phase 1 and WizardCompleted false: /Setup/Choose and the Setup widget stay on the choices, so the person can correct the answer.
         var config = new SystemConfig
         {

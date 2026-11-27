@@ -76,8 +76,11 @@ public class IndexModel : PageModel
     /// </summary>
     public MatOS.Core.Setup.SetupProgressView? SetupProgress { get; private set; }
 
-    /// <summary>The widget Setup is on the home screen: nothing chosen yet, or the first start still works or has lines to try again.</summary>
-    public bool SetupOpen => SetupProgress is { } p ? !p.Finished || p.AnyFailed : !Config.WizardCompleted;
+    /// <summary>
+    /// The widget Setup is on the home screen: nothing chosen yet, the run in phase 1 (the first engines, the way to the apps not confirmed), or the first start
+    /// still works or has lines to try again.
+    /// </summary>
+    public bool SetupOpen => SetupProgress is { } p ? !p.Finished || p.AnyFailed : !Config.WizardCompleted || (Config.Setup is not null && !MatOS.Core.Setup.SetupPlan.Continued(Config.Setup));
 
     /// <summary>No backup at all, or the newest one is older than <see cref="BackupIsOld"/>; with no app there is nothing to back up yet (no amber for a newcomer).</summary>
     public bool BackupNeedsLook => Tiles.Count > 0 && (LastBackup is not { } last || DateTime.UtcNow - last > BackupIsOld);
