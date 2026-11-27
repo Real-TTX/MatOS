@@ -10,9 +10,10 @@ namespace MatOS.Core.Setup;
 
 /// <summary>
 /// What the screen "Notifications / mail" shows of MatSMTP: installed, answering, the number of its SMTP accounts and their health (its platform state
-/// <c>accounts</c> and <c>accountsHealth</c>), where its accounts are, and whether it can check its account (the action <c>testAccount</c>).
+/// <c>accounts</c> and <c>accountsHealth</c>), where its accounts are, and whether it can check its account (the action <c>testAccount</c>; null while its
+/// definition could not be read: no answer is not "no check").
 /// </summary>
-public sealed record MailStatus(bool Installed, bool Answers, int? Accounts, string? HealthLevel, string? HealthText, string? AccountsUrl, bool CanTest);
+public sealed record MailStatus(bool Installed, bool Answers, int? Accounts, string? HealthLevel, string? HealthText, string? AccountsUrl, bool? CanTest);
 
 /// <summary>The answer of "Check the mail account" in plain words.</summary>
 public sealed record MailCheck(bool Ok, string Message);
@@ -38,6 +39,9 @@ public sealed class MailSetup
 
     /// <summary>The words of a check that worked without words of its own.</summary>
     public const string Works = "The mail account works.";
+
+    /// <summary>What the check says while MatSMTP's definition cannot be read (it does not answer yet).</summary>
+    public const string NoAnswer = "MatSMTP does not answer right now. Check the mail account again in a moment.";
 
     private readonly MatOSDbContext _db;
     private readonly MatSmtpClient _smtp;
@@ -79,9 +83,12 @@ public sealed class MailSetup
             return new MailCheck(false, "MatSMTP is not installed yet.");
         }
 
-        if (!await CanTestAsync(app, ct))
+        switch (await CanTestAsync(app, ct))
         {
-            return Say(null);
+            case null:
+                return new MailCheck(false, NoAnswer);
+            case false:
+                return Say(null);
         }
 
         var check = Say(await _platform.RunActionAsync(app, TestAction, ct));
@@ -128,6 +135,10 @@ public sealed class MailSetup
     private Task<InstalledApp?> AppAsync(CancellationToken ct)
         => _db.InstalledApps.AsNoTracking().FirstOrDefaultAsync(a => a.CatalogId == MatSmtpClient.CatalogIdValue && a.Lifecycle == AppLifecycle.Installed, ct);
 
-    private async Task<bool> CanTestAsync(InstalledApp app, CancellationToken ct)
-        => (await _platform.GetDefinitionAsync(app, ct))?.Actions?.Any(a => string.Equals(a.Id, TestAction, StringComparison.Ordinal)) == true;
+    /// <summary>Whether the definition has the check: null when there is no definition to read (no answer, a timeout), else whether it names <see cref="TestAction"/>.</summary>
+    public static bool? HasTest(PlatformDefinition? definition)
+        => definition is null ? null : definition.Actions?.Any(a => string.Equals(a.Id, TestAction, StringComparison.Ordinal)) == true;
+
+    private async Task<bool?> CanTestAsync(InstalledApp app, CancellationToken ct)
+        => HasTest(await _platform.GetDefinitionAsync(app, ct));
 }

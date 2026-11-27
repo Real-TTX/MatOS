@@ -77,9 +77,9 @@
 
         <div class="mat-btn-row mat-btn-row--plain ob-mail-actions">
             <a class="mat-btn mat-btn--secondary" href="@s.AccountsUrl" target="_blank" rel="noopener" data-ob-mail-accounts hidden="@(s.AccountsUrl is null)"><icon name="external" /><span>Open the SMTP accounts</span></a>
-            <button type="button" class="mat-btn mat-btn--secondary" data-ob-mail-test="@MatOS.Web.Infrastructure.SetupEndpoints.MailTestPath" hidden="@(!s.CanTest)"><icon name="check-circle" /><span>Check the mail account</span></button>
+            <button type="button" class="mat-btn mat-btn--secondary" data-ob-mail-test="@MatOS.Web.Infrastructure.SetupEndpoints.MailTestPath" hidden="@(s.CanTest != true)"><icon name="check-circle" /><span>Check the mail account</span></button>
         </div>
-        <p class="ob-small" data-ob-mail-cannot hidden="@(s.CanTest || !s.Installed)">@MailSetup.CannotCheck</p>
+        <p class="ob-small" data-ob-mail-cannot hidden="@(s.CanTest != false || !s.Installed)">@MailSetup.CannotCheck</p>
         <p class="ob-small" role="status" aria-live="polite" data-ob-mail-say></p>
 
         <form method="post" class="mat-form" novalidate>

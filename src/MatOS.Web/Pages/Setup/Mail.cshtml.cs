@@ -85,6 +85,13 @@ public class MailModel : PageModel
     /// <summary>Later: the mail stays on the list "Getting started", and the assistant ends on the home screen.</summary>
     public async Task<IActionResult> OnPostLaterAsync()
     {
+        // the same guard as the page: before the choices Later is not an answer yet
+        var next = SetupFlow.NextPage(await _config.GetAsync(HttpContext.RequestAborted));
+        if (next is SetupFlow.EnginesPage or SetupFlow.ChoosePage)
+        {
+            return Redirect(next);
+        }
+
         await _config.UpdateAsync(c => c.GettingStarted.MailLater = true, HttpContext.RequestAborted);
         return Redirect(SetupFlow.DesktopUrl());
     }

@@ -773,8 +773,14 @@ async function firstStart(browser, errors) {
         expectEqual(path, '/Setup/Account', 'on the sign-in');
         await page.waitForFunction(() => { const p = document.querySelector('[data-ob-progress]'); return !p || p.getAttribute('data-ob-phase') !== 'working'; }, null, { timeout: 5 * 60 * 1000 });
         await page.waitForLoadState('load');
-        if (await page.locator('[data-ob-when="ready"]:not([hidden])').count()) {
-          expectTrue((await page.locator('.ob-card').innerText()).includes('anna@example.com'), 'the ready block names the e-mail');
+        const accountPhase = await page.locator('[data-ob-progress]').getAttribute('data-ob-phase').catch(() => null);
+        if (await page.locator('[data-ob-progress][data-ob-wait]').count()) {
+          // with the line "signin" the screen ends ready (or partial: then its line says why); ready names the e-mail
+          expectTrue(accountPhase === 'ready' || accountPhase === 'partial', 'the sign-in line is over: ' + accountPhase);
+          if (accountPhase === 'ready') {
+            expectTrue(await page.locator('.ob-card > [data-ob-when="ready"]:not(.ob-done)').isVisible(), 'the ready block is shown');
+            expectTrue((await page.locator('.ob-card').innerText()).includes('anna@example.com'), 'the ready block names the e-mail');
+          }
         }
         expectTrue((await page.locator('.ob-note').innerText()).includes('admin'), 'the break-glass note');
         await Promise.all([page.waitForURL(/\/Setup\/Mail/), page.click('[data-ob-next-screen]')]);
@@ -793,9 +799,20 @@ async function firstStart(browser, errors) {
       const look = await lookCtx.newPage();
       look.on('pageerror', e => errors.push(look.url() + ': ' + e.message));
       await check(mode + ': the sign-in and the mail, nothing sideways', async () => {
+        const own = { '/Setup/Account': 'Your account in MatIdentity', '/Setup/Mail': 'Notifications and mail' };
         for (const screen of ['/Setup/Account', '/Setup/Mail']) {
           await look.goto(origin + screen);
           expectEqual(await look.locator('h1').count(), 1, screen + ': h1');
+          // a poll of its line (asked at once when the tab is shown again) keeps the screen's own headline and title
+          if (await look.locator('[data-ob-progress][data-ob-wait]').count()) {
+            await Promise.all([
+              look.waitForResponse(r => r.url().includes('/api/setup/progress'), { timeout: 15000 }),
+              look.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))),
+            ]);
+            await look.waitForTimeout(200);
+          }
+          expectEqual((await look.locator('h1').innerText()).trim(), own[screen], screen + ': its own headline');
+          expectTrue((await look.title()).startsWith(own[screen]), screen + ': its own title, not ' + (await look.title()));
           expectEqual(await look.locator('[style]').count(), 0, screen + ': elements with an inline style');
           const wide = await look.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
           expectTrue(wide <= 1, screen + ' scrolls sideways by ' + wide + 'px');

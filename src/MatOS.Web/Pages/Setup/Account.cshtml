@@ -27,7 +27,8 @@
    block of its state); once it is over the page comes again with what happened. "Test the sign-in" opens a tab of its own; this tab asks again when it is
    shown again. Next is always there. *@
 <div class="ob-flow" data-ob-progress="@(Model.HasSigninLine ? MatOS.Web.Infrastructure.OnboardingEndpoints.ProgressPath : null)" data-ob-wait="@(Model.HasSigninLine ? SetupPlan.SignInKey : null)"
-     data-ob-phase="@phase" data-ob-reload data-ob-can-test="@(Model.CanTest ? "true" : "false")" data-ob-tested="@(Model.SignInTested ? "true" : "false")">
+     data-ob-phase="@phase" data-ob-reload data-ob-can-test="@(Model.CanTest ? "true" : "false")" data-ob-tested="@(Model.SignInTested ? "true" : "false")"
+     data-ob-revisit="@(Model.HasSigninLine ? null : string.Empty)">
     <partial name="_Steps" model="5" />
 
     <section class="ob-card ob-card--wide" aria-labelledby="ob-account-title">
@@ -101,12 +102,16 @@
             {
                 <p class="ob-small">Test it once: a new tab signs you in through MatIdentity. @password Your session here stays as it is.</p>
                 <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
-                    <a class="mat-btn mat-btn--secondary" href="/Setup/Account?handler=Test" target="_blank" rel="opener"><icon name="login" /><span>Test the sign-in</span></a>
+                    <a class="mat-btn mat-btn--secondary" href="/Setup/Account?handler=Test" target="_blank" rel="opener" data-ob-test-signin><icon name="login" /><span>Test the sign-in</span></a>
                 </div>
+            }
+            else if (Model.HasSigninLine)
+            {
+                <p class="ob-small">Your addresses are still getting ready: test it from the Getting started list later.</p>
             }
             else
             {
-                <p class="ob-small">Your addresses are still getting ready: test it from the Getting started list later.</p>
+                <p class="ob-small">MatOS does not sign in through MatIdentity yet: test it from the Getting started list once it does.</p>
             }
         </div>
 

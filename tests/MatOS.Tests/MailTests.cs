@@ -385,4 +385,17 @@ public class MailTests
         Assert.Equal(MatOS.Core.Setup.MailSetup.CannotCheck, none.Message);
         Assert.Contains("cannot check its account yet", none.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void No_definition_is_no_answer_not_no_check()
+    {
+        Assert.Null(MatOS.Core.Setup.MailSetup.HasTest(null));
+
+        static PlatformDefinition With(params string[] actions)
+            => new(2, new PlatformAppInfo("matsmtp", "MatSMTP", null, "1"), [], [], [], [.. actions.Select(a => new PlatformAction(a, a, null, "run", null, null, null))]);
+
+        Assert.True(MatOS.Core.Setup.MailSetup.HasTest(With(MatOS.Core.Setup.MailSetup.TestAction)));
+        Assert.False(MatOS.Core.Setup.MailSetup.HasTest(With("other")));
+        Assert.False(MatOS.Core.Setup.MailSetup.HasTest(With()));
+    }
 }

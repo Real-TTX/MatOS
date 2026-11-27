@@ -95,6 +95,13 @@ public class AccountModel : PageModel
             return Page();
         }
 
+        // The button is offered only then; an address typed in waits the same (the public address of MatIdentity is ready only after the self check).
+        if (!CanTest)
+        {
+            TestResult = "The sign-in cannot be tested yet: wait until the line above and your addresses are ready, then test again.";
+            return Page();
+        }
+
         // An address of MatOS that MatIdentity does not know yet (127.0.0.1 since Welcome) is registered first, as the sign-in page does.
         var origin = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
         if (!identity.Origins.Contains(origin, StringComparer.OrdinalIgnoreCase))

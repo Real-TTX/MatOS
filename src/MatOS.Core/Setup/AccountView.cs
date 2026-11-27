@@ -16,7 +16,9 @@ public static class AccountView
 
     /// <summary>
     /// What the test of the sign-in says: a sign-in through MatIdentity as this account (<paramref name="subject"/> is its <c>ExternalSubject</c>) works;
-    /// another person, an account not linked yet, or no answer, in plain words.
+    /// another person, an account not linked yet, or no answer, in plain words. An account without a link yet (the password was lost, a run without the line
+    /// "signin") counts as itself when MatIdentity signed in its user name (<paramref name="signedInAs"/>, the claim <c>preferred_username</c>): the first real
+    /// sign-in links it by exactly that (<c>UserService.FindOrCreateExternalAsync</c>). The test stores no link.
     /// </summary>
     public static (bool Ok, string Words) Verdict(string? subject, string? signedInAs, Entities.User? user, string email)
     {
@@ -25,9 +27,21 @@ public static class AccountView
             return (false, "The sign-in did not finish. Test it again; MatIdentity asks for your password.");
         }
 
-        if (user is null || string.IsNullOrEmpty(user.ExternalSubject))
+        if (user is null)
         {
             return (false, "Your MatOS account is not linked to MatIdentity yet. Add yourself in People, then test again.");
+        }
+
+        if (string.IsNullOrEmpty(user.ExternalSubject))
+        {
+            if (string.Equals(signedInAs, user.Username, StringComparison.Ordinal))
+            {
+                return (true, $"The sign-in works: MatIdentity knows you as {email}. Your first sign-in through it links the two accounts.");
+            }
+
+            return (false, string.IsNullOrWhiteSpace(signedInAs)
+                ? "Your MatOS account is not linked to MatIdentity yet. Add yourself in People, then test again."
+                : $"MatIdentity signed in {signedInAs}, not {user.Username}. Add yourself in People as {user.Username}, or test again and sign in as {user.Username}.");
         }
 
         if (!string.Equals(subject, user.ExternalSubject, StringComparison.Ordinal))

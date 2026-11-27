@@ -57,4 +57,22 @@ public class AccountTests
         Assert.False(AccountView.Verdict(null, null, anna, "anna@example.com").Ok);
         Assert.False(AccountView.Verdict("sub-anna", null, new User { Username = "anna@example.com" }, "anna@example.com").Ok);
     }
+
+    [Fact]
+    public void An_account_without_a_link_yet_counts_when_MatIdentity_signed_in_its_user_name()
+    {
+        // the password was lost, or a run without the line "signin": the person added themselves in People, and the first real sign-in links by the user name
+        var unlinked = new User { Username = "anna@example.com" };
+
+        var (ok, words) = AccountView.Verdict("sub-anna", "anna@example.com", unlinked, "anna@example.com");
+        Assert.True(ok);
+        Assert.Contains("links", words, StringComparison.Ordinal);
+
+        var other = AccountView.Verdict("sub-ben", "ben@example.com", unlinked, "anna@example.com");
+        Assert.False(other.Ok);
+        Assert.Contains("ben@example.com", other.Words, StringComparison.Ordinal);
+
+        // the link itself matches the user name exactly, so the test does too
+        Assert.False(AccountView.Verdict("sub-anna", "Anna@Example.com", unlinked, "anna@example.com").Ok);
+    }
 }

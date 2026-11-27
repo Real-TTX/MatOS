@@ -8,7 +8,9 @@
      <div data-ob-records="/api/setup/ip">                      the records of an own domain by hand: the domain and the addresses written in
      <div data-ob-progress="/api/setup/progress">              the progress screen: polled, only what changed is exchanged; "Try again" (data-ob-retry),
                                                                 "Show details" (data-ob-details); data-ob-wait="signin" follows one line (the sign-in, the
-                                                                mail), data-ob-reload brings the page again when it is over
+                                                                mail; the page keeps its own headline), data-ob-reload brings the page again (at its
+                                                                plain address) when it is over
+     <div data-ob-revisit>                                     the page comes again when its tab is shown after the test of the sign-in was opened
      <dl data-ob-mail="/api/setup/mail">                        the facts of MatSMTP (data-ob-fact) and "Check the mail account" (data-ob-mail-test)
      <div data-ob-tour="/api/home/tour">                        the tour of the home screen: one mark at a time (data-ob-tour-step, data-target)
    The toolkit's script does the rest (validation on submit, data-show-if, data-copy). */
@@ -378,6 +380,9 @@
     }
 
     // The page comes again (data-ob-reload): the line is over now, or the test of the sign-in can be offered, or it was made in the other tab.
+    // Always at its plain address: the test tab stands on ?handler=Tested (its answer is gone once read) or ?handler=Test (a new sign-in); neither runs again.
+    function again() { window.location.replace(window.location.pathname); }
+
     function stale(d, next) {
       if (!reloads) { return false; }
       if (phase === 'working' && next !== 'working') { return true; }
@@ -387,11 +392,12 @@
 
     function apply(d) {
       var next = !d.finished ? 'working' : d.anyFailed ? 'partial' : 'ready';
-      if (stale(d, next)) { window.location.reload(); return; }
+      if (stale(d, next)) { again(); return; }
       if (bar) { bar.value = d.percent; bar.textContent = d.percent + ' %'; }
       if (percent) { percent.textContent = String(d.percent); }
       if (estimate) { estimate.textContent = d.estimate || ''; }
-      if (headline && headline.textContent !== d.headline) { headline.textContent = d.headline; document.title = d.headline + ' · MatOS'; }
+      // the headline of the whole run, on the progress screen only: a screen that waits for one line (data-ob-wait) keeps its own
+      if (headline && !wait && headline.textContent !== d.headline) { headline.textContent = d.headline; document.title = d.headline + ' · MatOS'; }
       d.steps.forEach(function (s) {
         var li = task(s.key);
         if (!li) { return; }
@@ -484,9 +490,19 @@
     if (phase === 'working') { poll(); } else { timer = setTimeout(poll, 15000); }
   });
 
+  // A screen with the test of the sign-in but no line to follow (data-ob-revisit: a run without the line "signin"): once the test was opened in its own tab,
+  // the page comes again when this tab is shown again, so it says what the test found.
+  $$('[data-ob-revisit]').forEach(function (screen) {
+    var opened = false;
+    screen.addEventListener('click', function (e) { if (e.target.closest('[data-ob-test-signin]')) { opened = true; } });
+    document.addEventListener('visibilitychange', function () {
+      if (opened && document.visibilityState === 'visible') { window.location.replace(window.location.pathname); }
+    });
+  });
+
   // ------------------------------------------------------------------ the facts of the mail
 
-  // What MatSMTP says (GET /api/setup/mail), every 5 seconds until it is installed and answers; "Check the mail account" posts with the token, waits while it
+  // What MatSMTP says (GET /api/setup/mail), every 5 seconds until it is installed, answers and its definition was read; "Check the mail account" posts with the token, waits while it
   // runs and 30 seconds after (the server refuses a second one within that time too), and says the result in the polite line.
   var mail = $('[data-ob-mail]');
   if (mail) {
@@ -512,14 +528,15 @@
         if (d.accountsUrl) { mailAccounts.href = d.accountsUrl; }
         mailAccounts.hidden = !d.accountsUrl;
       }
-      if (mailTest && !mailBusy) { mailTest.hidden = !d.canTest; }
-      if (mailCannot) { mailCannot.hidden = !!d.canTest || !d.installed; }
+      // canTest: true or false once MatSMTP's definition was read, null while it was not (no answer yet: the button and the sentence wait)
+      if (mailTest && !mailBusy) { mailTest.hidden = d.canTest !== true; }
+      if (mailCannot) { mailCannot.hidden = d.canTest !== false || !d.installed; }
     };
 
     var pollMail = function () {
       fetch(mail.getAttribute('data-ob-mail'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function (r) { if (!r.ok || (r.headers.get('Content-Type') || '').indexOf('json') < 0) { throw new Error('HTTP ' + r.status); } return r.json(); })
-        .then(function (d) { applyMail(d); if (!(d.installed && d.answers)) { setTimeout(pollMail, 5000); } })
+        .then(function (d) { applyMail(d); if (!(d.installed && d.answers && typeof d.canTest === 'boolean')) { setTimeout(pollMail, 5000); } })
         .catch(function () { setTimeout(pollMail, 5000); });
     };
 
