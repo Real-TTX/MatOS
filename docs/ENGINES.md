@@ -147,6 +147,20 @@ Backups (a stack bundle: all volumes + compose + env + image references; MatDock
 | `GET /api/v1/backups/{id}/download` | the bundle as a `.tar` stream |
 | `GET /api/v1/backup-schedules`, `PUT /api/v1/backup-schedules/{name}`, `DELETE /api/v1/backup-schedules/{name}` | a **bundle** schedule: `{stack: string\|null, managedBy, frequency: "daily"\|"weekly", time: "03:00", weekday: "Sunday", retention: 7, stopContainers: true, enabled: true}`. `stack: null` = every stack whose `managedBy` equals the schedule's. Retention keeps the newest *scheduled* bundles per stack. Shows up in MatDock's Schedules page with the badge. |
 
+Backup targets (apiVersion 5, branch `feature/backup-targets-api`; where a bundle is kept besides MatDock's data volume, which is the implicit target `null`):
+
+| Endpoint | Contract |
+|---|---|
+| `GET /api/v1/backup-targets`, `GET /api/v1/backup-targets/{id}` | `[{id, name, type: "smb"|"webdav"|"sftp"|"restic", isDefault, managedBy, smbHost, smbShare, smbDirectory, smbUsername, smbDomain, hasSmbPassword, webDavUrl, webDavUsername, hasWebDavPassword, sftpHost, sftpPort, sftpDirectory, sftpUsername, hasSftpPassword, hasSftpPrivateKey, sftpHostKey, resticRepository (redacted), hasResticPassword, backupCount, schedules: [name]}]`. A password or key is **never** returned, only `has…` |
+| `POST /api/v1/backup-targets` | the fields above plus `smbPassword`, `webDavPassword`, `sftpPassword`, `sftpPrivateKey` (OpenSSH or PEM, no passphrase), `resticPassword`, `resticEnv`; `managedBy` is set on create only. `201` with the target, `400 {error}` with the reason |
+| `PUT /api/v1/backup-targets/{id}` | the same; a blank or missing secret keeps the stored one, the `type` cannot change (`400`), `resetSftpHostKey: true` forgets the saved host key; another `sftpHost`/`sftpPort` forgets it too |
+| `DELETE /api/v1/backup-targets/{id}` | `204`; `409 {error}` while bundles or volume backups are kept there or a schedule writes to it (the reason names them) |
+| `POST /api/v1/backup-targets/{id}/test` | writes and deletes a test file: `{ok, message, sftpHostKey}`; the first success of an SFTP target saves the server's host key (trust on first use), a different key later is refused |
+| `POST /api/v1/backup-targets/test` | the same for unsaved input (the body of `POST`); `id` fills blank secrets from that target. Always `200 {ok, message}` |
+
+`targetId` on `POST /stacks/{name}/backups` and on a bundle schedule chooses the target; `GET /backups` answers `targetId` and `targetName` per bundle.
+A restore reads the bundle from the target it was written to. MatOS only changes and deletes targets with its mark (`managedBy: matos` or `mattiverse`); the others can be chosen.
+
 The compose text that MatOS sends carries the block `x-matdock` (name, description, category) that MatDock's launchpad already understands, so the
 stack appears there as an app tile.
 

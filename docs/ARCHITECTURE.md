@@ -333,8 +333,26 @@ in MatDock, a schedule for an app runs where the app runs.
 - **Consistent by default.** Containers are stopped while the volumes are copied and started again afterwards, whatever happens. A live copy is
   possible and marked as such.
 - **Restore** first backs up the current state (switchable) and re-creates the app even when it was uninstalled.
-- **Download** as a `.tar` to copy a backup off the host. Remote targets (SMB, NAS) are MatDock's backup targets.
+- **Download** as a `.tar` to copy a backup off the host.
 - Limits: backups contain secrets (the `.env`), so protect the location like the volumes; no encryption.
+
+### Backup targets
+
+Besides this machine a backup can be kept on another one: an **SFTP** folder (an SSH server, a NAS), a **WebDAV** folder (Nextcloud, ownCloud) or a
+**network share** (SMB). The targets are **MatDock's** (`/api/v1/backup-targets`, docs/ENGINES.md): MatDock writes the bundle there while it is made, lists
+it with its target and reads it back for a restore, so a target needs nothing in MatOS but its settings. MatOS shows them in its own words under
+*Backups, Targets* (`Pages/Backups/Targets`, `TargetEdit`; `Core/Backups/BackupTargets.cs`) and never names the engine there:
+
+- **Create, change, test, delete.** A new target is tested at once (a file is written and deleted); *Test connection* tests the form as it is. A
+  password or key is never sent back to the page (`hasSftpPassword` …): the field says *Stored* and a blank field keeps it. The kind cannot change.
+- **SFTP pins the server's key** on the first connection (as MatDock's SSH environments do) and refuses another one later; *Forget it* is for a
+  server that was set up again. Password or private key (OpenSSH/PEM, no passphrase), both encrypted in MatDock.
+- **Where a backup goes**: *New backup* and a schedule choose *This machine* or a target; the **default target** is preselected and also takes the
+  backups MatOS starts itself (before an update, before an uninstall: `BackupDestination.Default`). Retention is the schedule's.
+- **Only MatOS's own targets** (`managedBy: matos`) are changed or deleted; one set up in MatDock is listed and can be chosen. MatDock refuses to
+  delete a target that still keeps backups or that a schedule writes to, and MatOS shows its reason.
+- The apps MatOS runs itself (the engines) keep their backups on this machine: MatOS's own runner has no targets.
+- A MatDock without the API (older than apiVersion 5) makes the page say that targets cannot be used now; backups stay on this machine.
 
 ## Where are the compose files?
 

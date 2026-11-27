@@ -120,9 +120,10 @@ public sealed class MatDockClient : EngineClient
 
     // ------------------------------------------------------------------ backups
 
-    public async Task<string> StartBackupAsync(string stack, bool stopContainers, string? note, CancellationToken ct = default)
+    /// <summary>Starts a bundle backup of a stack; <paramref name="targetId"/> null = MatDock's own data volume.</summary>
+    public async Task<string> StartBackupAsync(string stack, bool stopContainers, string? note, long? targetId = null, CancellationToken ct = default)
     {
-        var body = new JsonObject { ["stopContainers"] = stopContainers, ["note"] = note };
+        var body = new JsonObject { ["stopContainers"] = stopContainers, ["note"] = note, ["targetId"] = targetId };
         var answer = await SendAsync(HttpMethod.Post, $"stacks/{Uri.EscapeDataString(stack)}/backups", body, null, ct);
         return answer?["operationId"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock did not start the backup.");
     }
@@ -153,6 +154,62 @@ public sealed class MatDockClient : EngineClient
 
     public Task DeleteScheduleAsync(string name, CancellationToken ct = default)
         => SendAsync(HttpMethod.Delete, $"backup-schedules/{Uri.EscapeDataString(name)}", null, null, ct);
+
+    // ------------------------------------------------------------------ backup targets (apiVersion 5)
+
+    /// <summary>The backup targets (SMB, WebDAV, SFTP, restic) without their secrets. Null when this MatDock has no targets API yet (HTTP 404).</summary>
+    public async Task<JsonArray?> ListTargetsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetAsync("backup-targets", ct) as JsonArray ?? [];
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
+        {
+            return null;
+        }
+    }
+
+    public async Task<JsonObject?> GetTargetAsync(long id, CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetAsync($"backup-targets/{id}", ct) as JsonObject;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Creates a target with the mark of MatOS; returns it as MatDock answers it.</summary>
+    public async Task<JsonObject> CreateTargetAsync(JsonObject body, CancellationToken ct = default)
+    {
+        body["managedBy"] = Owner.Name;
+        return await SendAsync(HttpMethod.Post, "backup-targets", body, null, ct) as JsonObject
+            ?? throw new InvalidOperationException("MatDock did not create the target.");
+    }
+
+    /// <summary>Changes a target (a blank password or key keeps the stored one; the type stays).</summary>
+    public Task UpdateTargetAsync(long id, JsonObject body, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Put, $"backup-targets/{id}", body, null, ct);
+
+    /// <summary>Deletes a target; MatDock refuses (HTTP 409, with the reason) while backups are kept there or a schedule writes to it.</summary>
+    public Task DeleteTargetAsync(long id, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Delete, $"backup-targets/{id}", null, null, ct);
+
+    private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>Writes and deletes a test file at a saved target (an SFTP target keeps the host key it sees the first time).</summary>
+    public async Task<(bool Ok, string Message)> TestTargetAsync(long id, CancellationToken ct = default)
+        => TestResult(await SendAsync(HttpMethod.Post, $"backup-targets/{id}/test", new JsonObject(), TestTimeout, ct));
+
+    /// <summary>Tests unsaved input; <c>id</c> in the body fills blank secrets from that saved target.</summary>
+    public async Task<(bool Ok, string Message)> TestTargetInputAsync(JsonObject body, CancellationToken ct = default)
+        => TestResult(await SendAsync(HttpMethod.Post, "backup-targets/test", body, TestTimeout, ct));
+
+    private static (bool Ok, string Message) TestResult(JsonNode? answer)
+        => (answer?["ok"]?.GetValue<bool>() ?? false, answer?["message"]?.GetValue<string>() ?? "No answer.");
 
     // ------------------------------------------------------------------ the mark of Mattiverse
 

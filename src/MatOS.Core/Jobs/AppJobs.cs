@@ -24,12 +24,12 @@ public static class AppJobs
     public static Func<JobContext, Task> Lifecycle(long appId, string command)
         => ctx => ctx.Services.GetRequiredService<AppService>().RunLifecycleAsync(appId, command, ctx.Log, ctx.Cancellation);
 
-    public static Func<JobContext, Task> Backup(long appId, BackupKind kind, bool stopContainers, string? note)
+    public static Func<JobContext, Task> Backup(long appId, BackupKind kind, bool stopContainers, string? note, BackupDestination? destination = null)
         => async ctx =>
         {
             var app = await ctx.Services.GetRequiredService<AppService>().GetAsync(appId, ctx.Cancellation)
                 ?? throw new InvalidOperationException("The app does not exist (any more).");
-            await ctx.Services.GetRequiredService<BackupHub>().RunAsync(app, kind, stopContainers, note, ctx.Log, ctx.Cancellation);
+            await ctx.Services.GetRequiredService<BackupHub>().RunAsync(app, kind, stopContainers, note, ctx.Log, ctx.Cancellation, destination);
         };
 
     /// <summary>

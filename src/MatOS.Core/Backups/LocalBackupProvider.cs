@@ -30,7 +30,7 @@ public sealed class LocalBackupProvider : IBackupProvider
         return backup is null ? null : ToItem(backup);
     }
 
-    public Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, Action<string> log, CancellationToken ct = default)
+    public Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, BackupDestination destination, Action<string> log, CancellationToken ct = default)
         => _backups.RunBackupAsync(app, kind, stopContainers, note, log, ct);
 
     public Task RestoreAsync(string id, bool backupCurrentFirst, Action<string> log, CancellationToken ct = default)
