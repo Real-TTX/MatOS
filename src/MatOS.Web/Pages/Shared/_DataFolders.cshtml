@@ -1,0 +1,20 @@
+@model MatOS.Web.Support.DataFoldersView
+@* The data folders of an app (docs/CATALOG.md "Data folders"): each on the app's own volume (the default) or on a volume of MatOS. *@
+@foreach (var folder in Model.Folders)
+{
+    var chosen = Model.Values.GetValueOrDefault(folder.Key) ?? string.Empty;
+    var hint = (folder.Purpose is null ? string.Empty : folder.Purpose + " ") + $"Inside the app: {MatOS.Web.Support.DataFoldersView.MountsOf(folder)}" + (folder.ReadOnly ? ", read-only." : ".");
+    <mat-field label="@folder.Name" for-id="folder-@folder.Key" hint="@hint" full="true">
+        <select id="folder-@folder.Key" name="Values[@folder.Key]" class="mat-select" data-folder="@folder.Volume">
+            <option value="" selected="@(chosen.Length == 0)">Its own volume (on this machine)</option>
+            @foreach (var volume in Model.Choices)
+            {
+                <option value="@volume.Name" selected="@(chosen == volume.Name)">@MatOS.Web.Support.DataFoldersView.Label(volume)</option>
+            }
+            @if (chosen.Length > 0 && Model.Choices.All(v => v.Name != chosen))
+            {
+                <option value="@chosen" selected>@chosen (not found)</option>
+            }
+        </select>
+    </mat-field>
+}

@@ -100,6 +100,7 @@ public static class Navigation
             new(null,
             [
                 new("Backups", "/Backups", "save"),
+                new("Volumes", "/Volumes", "hard-drive"),
                 new("Activity", "/Jobs", "activity", activeJobs > 0 ? NavBadge.Count(activeJobs, "info", activeJobs == 1 ? "task running" : "tasks running") : null),
                 new("Task Manager", "/Tasks", "bar-chart"),
                 new("People", "/People", "users"),

@@ -125,6 +125,7 @@ public static partial class CatalogParser
             throw new FormatException($"{source}: 'platform' and 'identity.oidc' need a 'ui' (the service that answers /api and /signin-oidc).");
         }
 
+        ReadFolders(app, yaml, source);
         AddManagedVariables(app);
         return app;
     }
@@ -233,6 +234,77 @@ public static partial class CatalogParser
                         app.FixedPorts.Add(parsed);
                     }
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The data folders (docs/CATALOG.md "Data folders"): each names a volume of the top-level <c>volumes</c> that a service mounts, once; its mounts are read
+    /// from the services (short <c>volume:/path[:ro]</c> or long <c>{type: volume, source, target}</c>). A folder of an external volume makes no sense: refused.
+    /// </summary>
+    private static void ReadFolders(CatalogApp app, string yaml, string source)
+    {
+        app.Folders ??= new List<CatalogFolder>();
+        if (app.Folders.Count == 0)
+        {
+            return;
+        }
+
+        var root = GenericDeserializer.Deserialize<object>(yaml) as IDictionary<object, object>;
+        var declared = root is not null && root.TryGetValue("volumes", out var volumesRaw) && volumesRaw is IDictionary<object, object> volumes ? volumes : new Dictionary<object, object>();
+        var services = root is not null && root.TryGetValue("services", out var servicesRaw) && servicesRaw is IDictionary<object, object> s ? s : new Dictionary<object, object>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var folder in app.Folders)
+        {
+            folder.Volume = folder.Volume?.Trim() ?? string.Empty;
+            folder.Name = folder.Name?.Trim() ?? string.Empty;
+            folder.Purpose = string.IsNullOrWhiteSpace(folder.Purpose) ? null : folder.Purpose.Trim();
+            if (!declared.ContainsKey(folder.Volume))
+            {
+                throw new FormatException($"{source}: folders: '{folder.Volume}' is not a volume of the compose file (its top-level volumes).");
+            }
+
+            if (declared[folder.Volume] is IDictionary<object, object> definition && definition.TryGetValue("external", out var external) && external?.ToString() is "true" or "True")
+            {
+                throw new FormatException($"{source}: folders: '{folder.Volume}' is an external volume already.");
+            }
+
+            if (folder.Name.Length == 0)
+            {
+                throw new FormatException($"{source}: folders: '{folder.Volume}' needs a name (what it holds, in a few words).");
+            }
+
+            if (!seen.Add(folder.Volume))
+            {
+                throw new FormatException($"{source}: folders: '{folder.Volume}' is named twice.");
+            }
+
+            foreach (var (serviceName, serviceRaw) in services)
+            {
+                if (serviceRaw is not IDictionary<object, object> service || !service.TryGetValue("volumes", out var mountsRaw) || mountsRaw is not IList<object> mounts)
+                {
+                    continue;
+                }
+
+                foreach (var mount in mounts)
+                {
+                    var target = mount switch
+                    {
+                        string text when text.Split(':') is { Length: >= 2 } parts && parts[0] == folder.Volume => parts[1],
+                        IDictionary<object, object> map when map.TryGetValue("source", out var src) && src?.ToString() == folder.Volume
+                            && map.TryGetValue("target", out var dst) => dst?.ToString(),
+                        _ => null,
+                    };
+                    if (target is not null)
+                    {
+                        folder.Mounts.Add($"{serviceName}:{target}");
+                    }
+                }
+            }
+
+            if (folder.Mounts.Count == 0)
+            {
+                throw new FormatException($"{source}: folders: no service mounts the volume '{folder.Volume}'.");
             }
         }
     }

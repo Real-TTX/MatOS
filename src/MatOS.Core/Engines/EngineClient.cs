@@ -252,6 +252,55 @@ public abstract class EngineClient
         await response.Content.CopyToAsync(destination, ct);
     }
 
+    /// <summary>Sends <paramref name="content"/> as the raw body (an upload) and returns the JSON answer; an error answer becomes an <see cref="InvalidOperationException"/>.</summary>
+    protected async Task<JsonNode?> SendStreamAsync(HttpMethod method, string path, Stream content, long? length, TimeSpan timeout, CancellationToken ct)
+    {
+        var endpoint = await FindAsync(ct) ?? throw new InvalidOperationException($"{DisplayName} is not installed.");
+        using var request = new HttpRequestMessage(method, $"{endpoint.BaseUrl}/api/v1/{path}");
+        request.Headers.Add("X-Api-Key", endpoint.ApiKey);
+        request.Content = new StreamContent(content);
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        if (length is { } bytes)
+        {
+            request.Content.Headers.ContentLength = bytes;
+        }
+
+        var client = _http.CreateClient("engine");
+        client.Timeout = timeout;
+        using var response = await SendRequestAsync(client, request, HttpCompletionOption.ResponseContentRead, ct);
+        var text = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"{DisplayName} answered HTTP {(int)response.StatusCode}: {ErrorOf(text)}");
+        }
+
+        return string.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text);
+    }
+
+    /// <summary>
+    /// Opens an answer to be streamed on (a download): the body with its length when the engine says it. The caller disposes the result. An error answer becomes an
+    /// <see cref="InvalidOperationException"/> before anything is read.
+    /// </summary>
+    protected async Task<EngineDownload> OpenAsync(string path, CancellationToken ct)
+    {
+        var endpoint = await FindAsync(ct) ?? throw new InvalidOperationException($"{DisplayName} is not installed.");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{endpoint.BaseUrl}/api/v1/{path}");
+        request.Headers.Add("X-Api-Key", endpoint.ApiKey);
+        var client = _http.CreateClient("engine");
+        client.Timeout = TimeSpan.FromHours(2);
+        var response = await SendRequestAsync(client, request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            using (response)
+            using (request)
+            {
+                throw new InvalidOperationException($"{DisplayName} answered HTTP {(int)response.StatusCode}: {ErrorOf(await response.Content.ReadAsStringAsync(ct))}");
+            }
+        }
+
+        return new EngineDownload(await response.Content.ReadAsStreamAsync(ct), response.Content.Headers.ContentLength, response, request);
+    }
+
     private static string ErrorOf(string text)
     {
         try
@@ -274,3 +323,18 @@ public abstract class EngineClient
 
 /// <summary>What <c>GET /api/v1/status</c> of an engine said.</summary>
 public sealed record EngineStatus(string Version, int ApiVersion);
+
+/// <summary>A streamed answer of an engine (a download): its body and length; disposing it ends the request.</summary>
+public sealed class EngineDownload(Stream body, long? length, IDisposable response, IDisposable request) : IDisposable
+{
+    public Stream Body { get; } = body;
+
+    public long? Length { get; } = length;
+
+    public void Dispose()
+    {
+        Body.Dispose();
+        response.Dispose();
+        request.Dispose();
+    }
+}

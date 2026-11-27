@@ -453,6 +453,39 @@ The machine MatOS runs on is MatDock's local environment, *This machine*; every 
 - **What a node needs:** Docker with the compose plugin, SSH reachable from MatDock's container, a user in the group `docker`, and the ports of its apps
   reachable from this machine (the proxy) and from the browsers (an app without a domain is opened at the node's address).
 
+## Volumes and the file explorer
+
+The owner (2026-11-27): the apps need data volumes one can point them at, network shares too (the photos of MatPhoto on the NAS), and MatOS a volume management
+with a file explorer, even where an app could reach the share itself. The volumes are **MatDock's** (the rule "read and change through the engines"): MatOS keeps no
+list of its own, it asks `/api/v1/volumes` (MatDock apiVersion 9, branch `feature/volumes-api`, docs/ENGINES.md) and writes there with `managedBy: matos`.
+
+- **The list** (`Pages/Volumes/Index`, `Core/Volumes/VolumeService`): the volumes of the apps (the compose project of the app is the volume's stack), MatOS's own and
+  every volume an app uses; the kind (on this machine, SMB, NFS), the app it belongs to, what uses it (the containers that mount it, by app) and its size (Docker's
+  `system df`; a share says *On the share*). A share is tested from the list. Without MatDock's volumes API the page says so and nothing else.
+- **A volume of MatOS** (`Volumes/Edit`): on this machine (a plain local volume) or a network share, **SMB/CIFS** (server, share, a folder in it, user, password, domain,
+  version) or **NFS** (server, exported path, version), read-only or not, more mount options. MatDock makes it with Docker's local driver (`type=cifs`/`nfs`, `addr=` so
+  Docker resolves the name, `file_mode/dir_mode=0777` so every container user can write) and the labels `matdock.managedBy` and `matdock.description`.
+  A share is **tested before it is saved** (MatDock mounts a throwaway volume with these options in a helper, lists it and writes a file) and can be tested from the list.
+- **The password** of a share is kept by Docker (its volume options, readable only by root on the host and by whoever has the Docker socket) and **never comes back**:
+  MatDock answers `hasSmbPassword` and the options with `password=***`; a blank field keeps it (MatDock takes it from Docker). Commas are refused in user, password
+  and domain (the mount options are separated by commas).
+- **Changing a share** removes it and makes it again with the same name (Docker cannot change a volume), only while nothing uses it; the new settings are tested first.
+  A volume on this machine keeps its settings (its data lies in it). **Removing** is for MatOS's own volumes only, never one a container uses or an app has chosen for a data
+  folder; a share loses only the connection, its files stay on the share.
+- **Data folders of the apps** (docs/CATALOG.md "Data folders"): an entry names the volumes the person may put elsewhere. The install form (*More options*) and the app's page
+  *Data folders* (`Apps/Folders`) offer the app's own volume (the default) or a volume of MatOS. The choice is the variable `MATOS_FOLDER_<VOLUME>` (kept with the
+  app's variables and in its `.env`, so a stack taken back by `AppReconciler` keeps it); `ComposeRenderer` writes the chosen volume as `external: true` with its name, and a
+  folder the app only reads (`readOnly`) is mounted read-only. A change deploys the app again without new images (job `Redeploy`); the files of the old place are not
+  moved. An app on another node keeps its own volumes (the volumes of MatOS are on this machine). MatDock leaves a share out of the app's backups (its data is elsewhere).
+- **The file explorer** (`Volumes/Files`, administrators only, in the window like every page): the folders and files of a volume with a path bar, a search and a sort; a
+  preview of pictures (up to 25 MB, served with `Content-Security-Policy: sandbox` and `nosniff`, so an SVG never runs) and of texts (the first 512 KB); upload (several
+  files, up to 2 GB in one go, an existing file is replaced only when asked), download, a new folder, rename, move (never over an existing name) and delete (`data-confirm`).
+  A read-only share is shown without the tools that write; a volume of an app warns that the app may stop working when its files change.
+- **Safe paths, twice.** MatOS takes a path apart first (`VolumePaths.Normalize`: no `..`, no control character, no `:`, at most 1024 characters; a name is one segment).
+  MatDock works in a throwaway helper with the volume at `/data` and checks again where a path **really** leads (`readlink -f`): the path itself for reading, the nearest
+  folder that exists above it for writing; one that leaves `/data` through a symbolic link is refused (403). A link inside the volume is followed; deleting a link removes
+  the link, never what it points to.
+
 ## How a long task runs
 
 Nothing slow runs inside a web request. The page validates and records, then queues a **job** (`Job` table): a single
@@ -621,7 +654,8 @@ class for every capability and no code that knows an app (`Core/Integrations/Bin
 
 - **No `mssql-server` / `pgadmin` service.** The project template names them; with SQLite neither is needed. The release
   stack is the single service `matos`; the dev stack adds a SQLite web viewer.
-- No management of the Docker hosts beyond what an app needs (the nodes are MatDock's environments: "Nodes" above), no file explorer or terminal (the older matOS desktop / MatDock).
+- No management of the Docker hosts beyond what an app needs (the nodes are MatDock's environments: "Nodes" above), no terminal (the older matOS desktop / MatDock).
+  The volumes and their files are here since 2026-11-27 ("Volumes and the file explorer"), through MatDock.
 - No deep integration of alternatives (Nginx Proxy Manager, Portainer): they are installed as plain apps.
 
 ## MatIdentity, the single sign-on

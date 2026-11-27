@@ -332,6 +332,107 @@ public sealed class MatDockClient : EngineClient
         return body;
     }
 
+    // ------------------------------------------------------------------ volumes and their files (apiVersion 9)
+
+    /// <summary>The API version that has the volumes of MatOS (kinds, users, sizes, shares, the files of a volume).</summary>
+    public const int VolumesApiVersion = 9;
+
+    private static string Volume(string name) => "volumes/" + Uri.EscapeDataString(name);
+
+    private static string Path(string? path) => Uri.EscapeDataString(path ?? string.Empty);
+
+    /// <summary>Every volume of this machine (or a node): kind, mark, users, the settings of a share without its password; <paramref name="sizes"/> adds the sizes.</summary>
+    public async Task<JsonArray> ListVolumesAsync(bool sizes, CancellationToken ct = default, long? node = null)
+        => await SendAsync(HttpMethod.Get, At(sizes ? "volumes?size=true" : "volumes", node), null, TimeSpan.FromSeconds(sizes ? 120 : 20), ct) as JsonArray ?? [];
+
+    /// <summary>One volume, or null when there is none of that name.</summary>
+    public async Task<JsonObject?> GetVolumeAsync(string name, bool size, CancellationToken ct = default, long? node = null)
+    {
+        try
+        {
+            return await SendAsync(HttpMethod.Get, At(Volume(name) + (size ? "?size=true" : string.Empty), node), null, TimeSpan.FromSeconds(size ? 120 : 20), ct) as JsonObject;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Makes a volume with the mark of MatOS (a local one, or a share by the body).</summary>
+    public async Task CreateVolumeAsync(JsonObject body, CancellationToken ct = default, long? node = null)
+    {
+        body["managedBy"] = Owner.Name;
+        await SendAsync(HttpMethod.Post, At("volumes", node), body, TimeSpan.FromSeconds(60), ct);
+    }
+
+    /// <summary>Changes a share of MatOS (MatDock makes it again with the same name; a blank password keeps the stored one).</summary>
+    public async Task ReplaceVolumeAsync(string name, JsonObject body, string owner, CancellationToken ct = default, long? node = null)
+    {
+        body["managedBy"] = owner;
+        await SendAsync(HttpMethod.Put, At(Volume(name), node), body, TimeSpan.FromSeconds(60), ct);
+    }
+
+    /// <summary>Removes a volume of MatOS that no container uses (MatDock refuses another, HTTP 409 with the reason).</summary>
+    public Task DeleteVolumeAsync(string name, CancellationToken ct = default) => DeleteOwnedAsync(Volume(name), ct);
+
+    /// <summary>Mounts the settings of a share once: <c>(ok, message)</c>; <c>name</c> in the body fills a blank password from that volume.</summary>
+    public async Task<(bool Ok, string Message)> TestVolumeInputAsync(JsonObject body, CancellationToken ct = default, long? node = null)
+        => Outcome(await SendAsync(HttpMethod.Post, At("volumes/test", node), body, TimeSpan.FromSeconds(120), ct));
+
+    /// <summary>Mounts a saved volume in a helper: does it work, can it be written.</summary>
+    public async Task<(bool Ok, string Message)> TestVolumeAsync(string name, CancellationToken ct = default, long? node = null)
+        => Outcome(await SendAsync(HttpMethod.Post, At(Volume(name) + "/test", node), new JsonObject(), TimeSpan.FromSeconds(120), ct));
+
+    private static (bool Ok, string Message) Outcome(JsonNode? answer)
+        => (answer?["ok"]?.GetValue<bool>() == true, answer?["message"]?.GetValue<string>() ?? "MatDock did not say.");
+
+    /// <summary>The entries of a folder of a volume: <c>{path, entries: [{name, isDirectory, size}]}</c>; null when there is no such folder.</summary>
+    public async Task<JsonObject?> ListFilesAsync(string volume, string path, CancellationToken ct = default)
+    {
+        try
+        {
+            return await SendAsync(HttpMethod.Get, $"{Volume(volume)}/files?path={Path(path)}", null, TimeSpan.FromSeconds(60), ct) as JsonObject;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>What a path is (<c>{name, isDirectory, size}</c>), or null when there is nothing.</summary>
+    public async Task<JsonObject?> StatFileAsync(string volume, string path, CancellationToken ct = default)
+    {
+        try
+        {
+            return await SendAsync(HttpMethod.Get, $"{Volume(volume)}/files/stat?path={Path(path)}", null, TimeSpan.FromSeconds(30), ct) as JsonObject;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The beginning of a text file (512 KB at most): <c>{content, truncated, isBinary, nonUtf8, size}</c>.</summary>
+    public async Task<JsonObject?> ReadFileAsync(string volume, string path, CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Get, $"{Volume(volume)}/files/read?path={Path(path)}", null, TimeSpan.FromSeconds(60), ct) as JsonObject;
+
+    /// <summary>A file as it is, to stream on.</summary>
+    public Task<EngineDownload> DownloadFileAsync(string volume, string path, CancellationToken ct = default)
+        => OpenAsync($"{Volume(volume)}/files/download?path={Path(path)}", ct);
+
+    /// <summary>Writes <paramref name="content"/> into a file of a volume; <paramref name="overwrite"/> false refuses an existing one (HTTP 409).</summary>
+    public Task UploadFileAsync(string volume, string path, Stream content, long? length, bool overwrite, CancellationToken ct = default)
+        => SendStreamAsync(HttpMethod.Put, $"{Volume(volume)}/files?path={Path(path)}&overwrite={(overwrite ? "true" : "false")}", content, length, TimeSpan.FromHours(1), ct);
+
+    public Task MakeFolderAsync(string volume, string path, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Post, $"{Volume(volume)}/files/folder", new JsonObject { ["path"] = path }, TimeSpan.FromSeconds(30), ct);
+
+    public Task MoveFileAsync(string volume, string from, string to, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Post, $"{Volume(volume)}/files/move", new JsonObject { ["from"] = from, ["to"] = to }, TimeSpan.FromMinutes(10), ct);
+
+    public Task DeleteFileAsync(string volume, string path, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Delete, $"{Volume(volume)}/files?path={Path(path)}", null, TimeSpan.FromMinutes(10), ct);
+
     // ------------------------------------------------------------------ the operating system of this computer (apiVersion 7)
 
     /// <summary>The API version that has the updates of the host (<c>/host/updates</c>, <c>/host/reboot</c>).</summary>

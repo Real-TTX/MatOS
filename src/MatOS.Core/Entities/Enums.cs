@@ -46,7 +46,10 @@ public enum JobKind
     Provision = 8,
 
     /// <summary>An app moves to another node (docs/ARCHITECTURE.md "Nodes").</summary>
-    Move = 9
+    Move = 9,
+
+    /// <summary>An app is deployed again with what changed in MatOS (a data folder put on another volume), without newer images.</summary>
+    Redeploy = 10
 }
 
 public enum JobStatus

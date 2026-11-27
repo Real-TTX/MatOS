@@ -176,6 +176,26 @@ Backup targets (apiVersion 5, branch `feature/backup-targets-api`; where a bundl
 | `POST /api/v1/backup-targets/{id}/test` | writes and deletes a test file: `{ok, message, sftpHostKey}`; the first success of an SFTP target saves the server's host key (trust on first use), a different key later is refused |
 | `POST /api/v1/backup-targets/test` | the same for unsaved input (the body of `POST`); `id` fills blank secrets from that target. Always `200 {ok, message}` |
 
+Volumes and their files (apiVersion 9, MatDock branch `feature/volumes-api`; MatOS's side: docs/ARCHITECTURE.md "Volumes and the file explorer", `MatDockClient`,
+`Core/Volumes/VolumeService.cs`). An older MatDock lists the volumes without these fields and has none of the other endpoints: MatOS then says volumes need a newer MatDock.
+
+| Endpoint | Contract |
+|---|---|
+| `GET /api/v1/volumes?size=` | every volume of the environment: `{name, driver, kind: "local"\|"smb"\|"nfs"\|"other", mountpoint, createdAt, managedBy, description, stack, composeVolume, inUse, containers: [name], sizeBytes, labels, options (the password as ***), readOnly, smbHost, smbShare, smbPath, smbUsername, smbDomain, smbVersion, hasSmbPassword, nfsServer, nfsPath, nfsVersion, extraOptions}`; `sizeBytes` only with `size=true` (Docker's `system df -v`; null for a share). The password is **never** returned |
+| `GET /api/v1/volumes/{name}?size=` | one of them, `404` |
+| `POST /api/v1/volumes` | `{name, managedBy, kind: "local"\|"smb"\|"nfs", description, readOnly, options, smbHost, smbShare, smbPath, smbUsername, smbPassword, smbDomain, smbVersion, nfsServer, nfsPath, nfsVersion}`: Docker's local driver with `type=cifs` (`addr=`, `username`/`password` or `guest`, `vers`, `file_mode/dir_mode=0777`) or `type=nfs` (`addr`, `nfsvers`), the labels `matdock.managedBy` and `matdock.description`. `201` with the volume; `400 {error}` (a comma in user, password or domain, a `password=` in `options`, an unsafe host or share), `409` when the name exists |
+| `PUT /api/v1/volumes/{name}` | a share with the same `managedBy` changed: removed and made again with the same name; a blank password keeps the stored one; `409` while a container uses it, for a local volume and for another mark; `400` when the kind would change; the old one comes back when the new one cannot be made |
+| `DELETE /api/v1/volumes/{name}?managedBy=` | `200`; `409` while a container (running or not) mounts it, or for another mark |
+| `POST /api/v1/volumes/test`, `POST /api/v1/volumes/{name}/test` | the settings (the body of `POST`; `name` fills a blank password from that volume) or a saved volume mounted in a throwaway helper, listed and written to: always `200 {ok, message}` ("Mounted: 3 entries at the top, writable.") |
+| `GET /api/v1/volumes/{name}/files?path=` | `{path, entries: [{name, isDirectory, size}]}`; `404` when the folder does not exist |
+| `GET .../files/stat?path=`, `GET .../files/read?path=` | `{name, isDirectory, size}`; the beginning of a text file `{content, truncated, isBinary, nonUtf8, size}` (512 KB) |
+| `GET .../files/download?path=` | the file as it is, with its length |
+| `PUT .../files?path=&overwrite=` | the raw body into the file (written to a temporary file and moved into place); `overwrite=false` refuses an existing one (`409`) |
+| `POST .../files/folder {path}`, `POST .../files/move {from, to}`, `DELETE .../files?path=` | a new folder; move or rename (the target must not exist, a folder not into itself); delete a file or a folder with all it holds |
+
+Every path is relative to the root of the volume; `..`, control characters and `:` are refused, and a path that leads out of the volume through a symbolic link is
+`403` (MatDock's helper resolves it with `readlink -f` below `/data`). The files are reached through a throwaway `busybox` helper with the volume mounted.
+
 `targetId` on `POST /stacks/{name}/backups` and on a bundle schedule chooses the target; `GET /backups` answers `targetId` and `targetName` per bundle.
 A restore reads the bundle from the target it was written to. MatOS only changes and deletes targets with its mark (`managedBy: matos` or `mattiverse`); the others can be chosen.
 

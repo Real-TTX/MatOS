@@ -28,9 +28,12 @@ public class InstallModel : PageModel
     private readonly SystemConfigService _config;
     private readonly MatOS.Core.Nodes.NodeService _nodes;
 
+    private readonly MatOS.Core.Volumes.VolumeService _volumes;
+
     public InstallModel(CatalogService catalog, AppService apps, JobService jobs, PortPlanner ports, MatOSDbContext db, SystemConfigService config,
-        MatOS.Core.Nodes.NodeService nodes)
+        MatOS.Core.Nodes.NodeService nodes, MatOS.Core.Volumes.VolumeService volumes)
     {
+        _volumes = volumes;
         _nodes = nodes;
         _catalog = catalog;
         _apps = apps;
@@ -74,6 +77,9 @@ public class InstallModel : PageModel
     /// <summary>The other questions (a default or a generated value is fine): folded under Options.</summary>
     public List<CatalogVariable> Optional { get; private set; } = new();
 
+    /// <summary>The volumes a data folder of the app can be put on (docs/CATALOG.md "Data folders"); empty without data folders.</summary>
+    public List<MatOS.Core.Volumes.VolumeView> FolderChoices { get; private set; } = new();
+
     /// <summary>What the app gets from MatOS, in plain words.</summary>
     public List<StoreConnection> Connections { get; private set; } = new();
 
@@ -103,6 +109,25 @@ public class InstallModel : PageModel
             return NotFound();
         }
 
+        // A data folder goes only on a volume MatOS offers (its own, on this machine).
+        if (App.Folders.Count > 0)
+        {
+            var choices = await _volumes.ChoicesAsync(HttpContext.RequestAborted);
+            foreach (var folder in App.Folders)
+            {
+                if (Values.GetValueOrDefault(folder.Key) is { Length: > 0 } chosen && choices.All(v => v.Name != chosen))
+                {
+                    Errors.Add($"{folder.Name}: the volume {chosen} is not one of MatOS's volumes (any more).");
+                }
+            }
+
+            if (Errors.Count > 0)
+            {
+                await LoadAsync();
+                return Page();
+            }
+        }
+
         var result = await _apps.PrepareInstallAsync(new InstallRequest(App.Id, null, Name, Values, Node is > 0 ? Node : null), HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
@@ -128,6 +153,7 @@ public class InstallModel : PageModel
         Optional = app.Variables.Where(v => !v.Hidden && !MustAsk(v)).OrderBy(v => v.Advanced).ToList();
         Installed = await _db.InstalledApps.Where(a => a.CatalogId == app.Id).OrderBy(a => a.Id).ToListAsync(ct);
         Nodes = app.Core ? [] : await _nodes.ChoicesAsync(ct);
+        FolderChoices = app.Folders.Count > 0 ? await _volumes.ChoicesAsync(ct) : [];
         if (Nodes.Count(n => !n.IsLocal) == 0)
         {
             Nodes = [];

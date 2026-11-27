@@ -385,6 +385,10 @@
             @if (isAdmin && app.Lifecycle is not (AppLifecycle.Removing or AppLifecycle.Failed) && !app.IsCore)
             {
                 <div class="mat-actions">
+                    @if (Model.Catalog is { Folders.Count: > 0 })
+                    {
+                        <a href="/Apps/Folders?id=@app.Id" class="mat-btn mat-btn--secondary @(Model.IsBusy ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy ? "true" : null)"><icon name="hard-drive" /><span>Data folders</span></a>
+                    }
                     @if (Model.CanMove)
                     {
                         <a href="/Apps/Move?id=@app.Id" class="mat-btn mat-btn--secondary @(Model.IsBusy ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy ? "true" : null)"><icon name="server" /><span>Move to another node</span></a>

@@ -47,7 +47,7 @@ public sealed class ComposeFiles
             }
         }
 
-        return new(app.ProjectName, app.Slug, _renderer.Render(catalog, app, added, ports), AppVariables.BuildEnvFile(BuiltIns(app, publicHost), all), app.NodeId);
+        return new(app.ProjectName, app.Slug, _renderer.Render(catalog, app, added, ports, AppVariables.Folders(catalog, variables)), AppVariables.BuildEnvFile(BuiltIns(app, publicHost), all), app.NodeId);
     }
 
     public async Task WriteAsync(StackSpec spec, CancellationToken ct = default)

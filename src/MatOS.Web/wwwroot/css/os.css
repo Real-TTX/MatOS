@@ -275,6 +275,7 @@ a.os-wlist__item:hover { background: var(--os-hover); text-decoration: none; }
 .os-ico--settings { background: linear-gradient(165deg, #b5b5bd, #5b5b66); }
 .os-ico--activity { background: linear-gradient(165deg, #ffc073, #f56a00); }
 .os-ico--tasks { background: linear-gradient(165deg, #ff8fa3, #d6336c); }
+.os-ico--volumes { background: linear-gradient(165deg, #ffd66b, #e0a100); }
 .os-ico--users { background: linear-gradient(165deg, #5ee9d0, #0b8f86); }
 .os-ico--account { background: linear-gradient(165deg, #d0b6ff, #7c3aed); }
 

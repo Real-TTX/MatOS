@@ -24,6 +24,10 @@ public static class AppJobs
     public static Func<JobContext, Task> Lifecycle(long appId, string command)
         => ctx => ctx.Services.GetRequiredService<AppService>().RunLifecycleAsync(appId, command, ctx.Log, ctx.Cancellation);
 
+    /// <summary>Deploys an app again with what changed in MatOS (its data folders), without newer images.</summary>
+    public static Func<JobContext, Task> Redeploy(long appId)
+        => ctx => ctx.Services.GetRequiredService<AppService>().RunRedeployAsync(appId, ctx.Log, ctx.Cancellation);
+
     /// <summary>Moves an app to another node (<paramref name="target"/> null = this machine): docs/ARCHITECTURE.md "Nodes".</summary>
     public static Func<JobContext, Task> Move(long appId, long? target)
         => ctx => ctx.Services.GetRequiredService<AppService>().RunMoveAsync(appId, target, ctx.Log, ctx.Cancellation);

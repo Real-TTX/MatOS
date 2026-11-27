@@ -66,8 +66,33 @@ public static class AppVariables
             result[variable.Key] = value;
         }
 
+        // The data folders: the name of the chosen volume, or empty for the app's own (docs/CATALOG.md "Data folders").
+        foreach (var folder in app.Folders)
+        {
+            var chosen = input.TryGetValue(folder.Key, out var typed) ? typed?.Trim() : null;
+            if (chosen is null && existing is not null && existing.TryGetValue(folder.Key, out var known))
+            {
+                chosen = known;
+            }
+
+            chosen ??= string.Empty;
+            if (chosen.Length > 0 && !Volumes.VolumePaths.IsVolumeName(chosen))
+            {
+                errors.Add($"{folder.Name}: the volume '{chosen}' is not a name of a volume.");
+                chosen = string.Empty;
+            }
+
+            result[folder.Key] = chosen;
+        }
+
         return result;
     }
+
+    /// <summary>The data folders that lie on a volume the person chose: the compose volume of the entry and the name of that volume.</summary>
+    public static Dictionary<string, string> Folders(CatalogApp app, IReadOnlyDictionary<string, string> variables)
+        => app.Folders
+            .Where(f => variables.TryGetValue(f.Key, out var v) && !string.IsNullOrEmpty(v))
+            .ToDictionary(f => f.Volume, f => variables[f.Key], StringComparer.Ordinal);
 
     private static string LabelOf(CatalogVariable variable)
         => string.IsNullOrWhiteSpace(variable.Label) ? variable.Key : variable.Label;

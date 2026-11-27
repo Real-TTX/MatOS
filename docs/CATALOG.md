@@ -55,6 +55,11 @@ x-matos:
     - key: TIMEZONE
       default: Europe/Berlin
       advanced: true          # below "Advanced" in the form
+  folders:                    # optional: data folders the person may put on a volume of their own (see "Data folders")
+    - volume: wiki-files      # a named volume of the compose file (top-level volumes) that a service mounts
+      name: Attachments       # what it holds, in a few words
+      purpose: The files people attach to pages.   # optional, one sentence: the hint of the choice
+      readOnly: false         # true: the app only reads it, a chosen volume is mounted read-only
   credentials:                # the "Initial credentials" card of the app (admins only)
     - label: Username
       value: admin
@@ -71,9 +76,11 @@ services:
       TZ: ${TIMEZONE:-UTC}
     volumes:
       - wiki-data:/data
+      - wiki-files:/data/files
 
 volumes:
   wiki-data:
+  wiki-files:
 ```
 
 ## Rules
@@ -90,6 +97,22 @@ volumes:
   implementing `IAppProvisioner`. An engine also needs its API key as a generated, hidden variable (`MATCAD_API_KEY`, `MATDDNS_API_KEY`,
   `MATDOCK_API_KEY`, `MATSMTP_API_KEY`; MatIdentity uses `MAT_API_KEY`) that the compose file passes to the container the way the engine expects it (see [ENGINES.md](ENGINES.md)).
   The five engines are `core: true` (the wizard installs them, the app list cannot remove them); `EngineIds.All` names them in the order they are installed.
+
+## Data folders
+
+Some apps keep files the person wants elsewhere: the photos of a photo app on the NAS, the documents of a file app on a bigger disk. `folders` names the volumes of the
+entry that may be put on a **volume of MatOS** (made under *Volumes*: on this machine, an SMB share or an NFS share; docs/ARCHITECTURE.md "Volumes and the file explorer"):
+
+- `volume`: a key of the top-level `volumes` of the compose file, mounted by at least one service (short `wiki-files:/path` or long `{type: volume, source, target}`);
+  not an `external` one. The parser reads where it is mounted (shown as the hint) and refuses a folder that names no such volume, has no `name` or is named twice.
+- `name` and `purpose`: what the install form (*More options*) and the app's page *Data folders* show; `readOnly: true` for an app that only reads the folder (a chosen
+  volume is mounted read-only: `:ro`, or `read_only: true` in the long form).
+- **Without a choice nothing changes**: the volume stays the app's own, as compose makes it. With one, MatOS renders it as `external: true` with the name of the chosen
+  volume; the rest of the entry stays as it is. The choice is kept as the variable `MATOS_FOLDER_<VOLUME>` (upper case, other characters `_`; empty = its own volume),
+  which the entry neither declares nor uses.
+- Keep the folder a volume of its own (not the data volume of the app with its database), so a share holds only what belongs there. MatDock leaves a network share out of
+  the app's backups.
+- In use: **MatPhoto** (`matphoto-photos` at `/storage/photos`, the *Photo library*, which MatPhoto reads as a local storage).
 
 ## The store
 
