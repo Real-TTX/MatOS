@@ -392,6 +392,26 @@ public sealed partial class DockerService
         return parts.Length == 2 ? (parts[0], parts[1]) : null;
     }
 
+    /// <summary>Every repo digest (<c>repo@sha256:...</c>) of an image: one per repository it was pulled from; empty for an image built here.</summary>
+    public async Task<List<string>> GetRepoDigestsAsync(string image, CancellationToken ct = default)
+    {
+        var result = await _cli.RunAsync(["image", "inspect", "--format", "{{json .RepoDigests}}", image], ct: ct);
+        return result.Success ? ParseRepoDigests(result.StdOut) : [];
+    }
+
+    /// <summary>Reads <c>{{json .RepoDigests}}</c> (<c>["ghcr.io/x/y@sha256:..."]</c>, or <c>null</c>/<c>[]</c>).</summary>
+    public static List<string> ParseRepoDigests(string? json)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(json) ? [] : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json.Trim()) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
     /// <summary>The repo digest (<c>repo@sha256:...</c>) of a container's image, if it came from a registry.</summary>
     public async Task<string?> GetContainerImageDigestAsync(string container, CancellationToken ct = default)
     {

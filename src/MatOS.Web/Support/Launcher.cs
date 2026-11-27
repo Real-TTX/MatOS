@@ -13,13 +13,16 @@ public sealed record SystemApp(string Name, string Href, string Icon, string Loo
 public static class Launcher
 {
     /// <summary>The dock at the bottom: what is used most.</summary>
-    public static IReadOnlyList<SystemApp> Dock(bool isAdmin) => isAdmin
+    /// <param name="updateAvailable">A newer MatOS is there: a mark on Settings (an administrator's), which leads to Settings, Updates.</param>
+    public static IReadOnlyList<SystemApp> Dock(bool isAdmin, bool updateAvailable = false) => isAdmin
         ?
         [
             new("Store", "/Store", "store", "os-ico--store"),
             new("Apps", "/Apps", "apps", "os-ico--apps"),
             new("Backups", "/Backups", "save", "os-ico--backups"),
-            new("Settings", "/Settings", "settings", "os-ico--settings"),
+            updateAvailable
+                ? new("Settings", "/Settings/Updates", "settings", "os-ico--settings", 1, "new version of MatOS")
+                : new("Settings", "/Settings", "settings", "os-ico--settings"),
         ]
         :
         [

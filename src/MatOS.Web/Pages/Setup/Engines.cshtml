@@ -46,6 +46,34 @@
 
         <p class="ob-note">@Ui.Icon("info")<span>MatOS adds web addresses for your apps and, if your internet address changes, an address updater - depending on your answers on the next screen.</span></p>
 
+        @* The one question of the updates (docs/ARCHITECTURE.md "How MatOS updates itself"); Settings, Updates changes it later. *@
+        <fieldset class="mat-field">
+            <legend class="mat-legend">Updates</legend>
+            <div class="mat-choices">
+                <label class="mat-choice">
+                    <input type="radio" name="Updates" value="@MatOS.Core.Updates.UpdateMode.Apps" checked="@(Model.Updates == MatOS.Core.Updates.UpdateMode.Apps)" />
+                    <span class="mat-choice__text">
+                        <strong>Keep my apps up to date at night@(MatOS.Core.Updates.UpdateMode.Recommended == MatOS.Core.Updates.UpdateMode.Apps ? " (recommended)" : "")</strong>
+                        <small>Apps and engines update by themselves; MatOS tells you when it has a new version.</small>
+                    </span>
+                </label>
+                <label class="mat-choice">
+                    <input type="radio" name="Updates" value="@MatOS.Core.Updates.UpdateMode.All" checked="@(Model.Updates == MatOS.Core.Updates.UpdateMode.All)" />
+                    <span class="mat-choice__text">
+                        <strong>Everything at night, MatOS too@(MatOS.Core.Updates.UpdateMode.Recommended == MatOS.Core.Updates.UpdateMode.All ? " (recommended)" : "")</strong>
+                        <small>MatOS restarts on a new version by itself; one that does not start is put back.</small>
+                    </span>
+                </label>
+                <label class="mat-choice">
+                    <input type="radio" name="Updates" value="@MatOS.Core.Updates.UpdateMode.Off" checked="@(Model.Updates == MatOS.Core.Updates.UpdateMode.Off)" />
+                    <span class="mat-choice__text">
+                        <strong>Only when I click Update</strong>
+                        <small>Nothing changes by itself.</small>
+                    </span>
+                </label>
+            </div>
+        </fieldset>
+
         @if (!docker.Ready)
         {
             <div class="ob-check ob-check--bad" role="status">

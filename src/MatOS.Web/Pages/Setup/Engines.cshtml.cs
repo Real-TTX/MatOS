@@ -41,6 +41,10 @@ public class EnginesModel : PageModel
     /// <summary>The engines that are installed already ("There already").</summary>
     public IReadOnlySet<string> There { get; private set; } = new HashSet<string>();
 
+    /// <summary>The answer to the one question of the updates (<see cref="MatOS.Core.Updates.UpdateMode"/>); the recommended one until it is given.</summary>
+    [BindProperty]
+    public string? Updates { get; set; }
+
     public async Task<IActionResult> OnGetAsync()
     {
         if (await ElsewhereAsync() is { } redirect)
@@ -65,6 +69,10 @@ public class EnginesModel : PageModel
             // Nothing can be installed: the screen says why, and Next stays off until Docker answers.
             return Page();
         }
+
+        // The updates: whatever was chosen (an unknown answer counts as the recommended one), changeable in Settings, Updates.
+        var mode = MatOS.Core.Updates.UpdateMode.Normalize(Updates) ?? MatOS.Core.Updates.UpdateMode.Recommended;
+        await _config.UpdateAsync(c => c.Updates.Mode = mode, HttpContext.RequestAborted);
 
         // Once: a second click or a second tab gets the stored run back (BeginAsync holds one lock for all of the first start).
         try
@@ -99,6 +107,7 @@ public class EnginesModel : PageModel
     {
         var ct = HttpContext.RequestAborted;
         Docker = IndexModel.AdviceFor(await _docker.GetEngineInfoAsync(ct));
+        Updates ??= MatOS.Core.Updates.UpdateMode.Normalize((await _config.GetAsync(ct)).Updates.Mode) ?? MatOS.Core.Updates.UpdateMode.Recommended;
         There = (await _apps.ListAsync(ct))
             .Where(a => EngineIds.IsEngine(a.CatalogId) && a.Lifecycle == AppLifecycle.Installed)
             .Select(a => a.CatalogId)

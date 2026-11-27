@@ -62,6 +62,10 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<JobService>();
 
+        // Updates: whether a newer image is there (the registry), MatOS's own update.
+        services.AddScoped<Updates.RegistryClient>();
+        services.AddScoped<Updates.SelfUpdateService>();
+
         // Matcad (routes, certificates) and Matddns (DNS records).
         services.AddScoped<MatcadClient>();
         services.AddScoped<MatddnsClient>();
@@ -129,6 +133,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(sp => sp.GetRequiredService<TunnelClient>());
         // The check of the reachability every day (and an hour after one that could not be made).
         services.AddHostedService<ReachWatcher>();
+        // The automatic updates in their window, the look for a newer MatOS, the report of a self-update after the restart.
+        services.AddHostedService<Updates.AutoUpdateService>();
         return services;
     }
 }
