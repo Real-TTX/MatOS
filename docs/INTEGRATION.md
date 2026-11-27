@@ -98,3 +98,30 @@ Not in the catalog: **msBi** (no anonymously pullable image), **Matgate** (four 
   and the shared network `matos`, and both name `ghcr.io/real-ttx/matos` (the older desktop's workflows publish it). They **cannot run side by side** on
   one host any more. **Decided (the owner, 2026-11-26): the older desktop is retired**: repository `Real-TTX/MatOS-legacy` (archived), images
   `ghcr.io/real-ttx/matos-legacy`; this app publishes `ghcr.io/real-ttx/matos` (and for a while also `ghcr.io/real-ttx/mattiverse`, `LEGACY_IMAGE_NAME` in `build.yml`).
+
+## The Mat apps in the store (surveyed 2026-11-27)
+
+Every Mat app of the development folder with a published image, read on the branch its `:latest` image is built from (`main` everywhere; `dev` builds `:nightly`).
+**Sign-in**: reads `MATIDENTITY_*` (the MatPlatform kit: callbacks `/signin-oidc`, `/signout-callback-oidc`, `/signout-backchannel`; its login page goes straight on to
+MatIdentity unless `?local=1`). **Mail**: really sends mail through `MATSMTP_*` (every app on the kit reads them, only these send). **Window**: reads `MAT_FRAME_ANCESTORS`
+(the entry names it, so MatOS writes no frame headers on its route); without it MatOS sets `frame-ancestors` on the route unless the app sends a CSP of its own.
+
+| App | State | Sign-in | Mail | Window | `/api` | What is missing |
+|---|---|---|---|---|---|---|
+| MatBoard, MatDrive, MatOffice, MatShape | beta | ✅ | ✅ | ✅ | ✅ | an end-to-end test through MatOS |
+| MatBu | beta | ✅ (`/Login`) | ✅ | ✅ | ✅ | the same |
+| MatDo, MatCloud, MatPaper | beta | ✅ | – | ✅ | ✅ | the same (MatPaper's database password is fixed in its config) |
+| MatPhoto, MatContactHub, MatDown, MatRegistry | beta (new) | ✅ | ✅ | ✅ | ✅ | the same; MatRegistry: `docker push` of big layers through Matcad is untested, remote pushes need HTTPS (a domain); MatContactHub publishes LDAP on 389/636 |
+| MatGame | beta (new) | ✅ | – | ✅ | ✅ | pictures (its repository has none) |
+| MatFile, MatPlay, MatSplit, MatTrakr, MatMail | beta | ✅ | – | route headers | ✅ (kit 1.4) | `MAT_FRAME_ANCESTORS` (kit 2.x); MatMail's note "not in the window" may be stale (it sends no CSP of its own) |
+| MatNotes, MatBill, MatTicket, MatPhone, MatCan | alpha (new) | – | – (own settings) | – (`frame-ancestors 'self'`) | – | the MatPlatform kit: the one sign-in, `MAT_API_KEY` and `/api`, `MAT_FRAME_ANCESTORS`, a seeded administrator (today the first visitor becomes it); MatPhone publishes SIP 5060 and RTP 6100-6199/udp |
+| MatCMS, Matmon | alpha | – | – (own settings) | – | – | the kit; their entries no longer claim `mail.smtp` (the images never read `MATSMTP_*`, the binding only made a relay user) |
+| MatDesign | alpha | – | – | – | – | – |
+| MatAi | preview | ✅ | – | – (own CSP) | ✅ | a remote and a published image |
+| MatBiz | preview (new) | ✅ (in the code) | – | – | ✅ | `:latest` is still the old Matbiz (repository `Matbiz-old`) and there is no `:nightly`: push `main` of the new MatBiz, then make the entry a beta |
+
+Not in the store: **MatHub** (its image is private), **MatCMS.Cloud** (the hosted side of MatCMS, not an app to install), **MatGame2**, **Matarchive**, **Matlan**, **Matstat** (no image).
+
+Changes made to the entries with the survey: `ui.signIn` for MatPlay, MatSplit, MatTrakr, MatMail, MatPaper, MatBu and MatAi (MatFile opens its sign-in by itself);
+`MAT_FRAME_ANCESTORS` named for the apps that read it; the icons of MatPaper, MatMail, MatBu and MatTrakr (an SVG now) taken from their repositories; pictures for every app
+that has some. No app repository was changed.

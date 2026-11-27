@@ -1,0 +1,78 @@
+# MatGame – the server of the Mat games: a portal, one account, every game, in the browser and in the apps.
+x-matos:
+  id: matgame
+  name: MatGame
+  tagline: The server of the Mat games
+  description: A portal with every Mat game as a card (BunnyWarfare, King Bee, TurboToys, DriftKing, VectorWings and more) - one account for all of them, online matches in the browser and in the desktop apps, and an administration with accounts, devices and each game's own settings.
+  category: Fun
+  role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
+  icon: matgame.svg
+  homepage: https://github.com/Real-TTX/MatGame
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds it when MatIdentity is installed and passes the variables
+  # of the binding to the web service by itself. MatGame says the same in its /api (it sends no mail).
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+  ui:
+    service: web
+    port: 2770
+    hostPort: 2770
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: MATGAME_GAMES
+      label: Games
+      default: ""
+      advanced: true
+      help: Only these games, comma-separated (e.g. bunnywarfare,kingbee); empty for all.
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first account that signs in is the administrator (with MatIdentity the first person who opens MatGame, without it the first who registers); the administration is /Admin.
+    - The desktop apps of the games sign in through MatGame's public address, so give it a domain when you play from other machines.
+    - Back up the database volume matgame-db together with matgame-data.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matgame
+      POSTGRES_USER: matgame
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matgame-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matgame -d matgame"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matgame:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matgame;Username=matgame;Password=${DB_PASSWORD}"
+      MATGAME_GAMES: ${MATGAME_GAMES:-}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+    volumes:
+      - matgame-data:/data
+
+volumes:
+  matgame-db:
+  matgame-data:

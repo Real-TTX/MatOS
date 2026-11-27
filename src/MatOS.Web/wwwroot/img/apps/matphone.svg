@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MatPhone">
+  <!-- The small logo (favicon, 32 px icons): the handset alone, large and solid; the sound waves of the full logo are noise below 32 px. -->
+  <rect width="64" height="64" rx="14" fill="#ffd200"/>
+  <g transform="translate(9 9) scale(1.95)" fill="#1a1400" stroke="#1a1400" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384z"/>
+  </g>
+</svg>

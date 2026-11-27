@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matoffice.svg
   homepage: https://github.com/Real-TTX/MatOffice
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matoffice/docs.webp
+      caption: Documents
+    - src: matoffice/sheets.webp
+      caption: Spreadsheets
+    - src: matoffice/slides.webp
+      caption: Slides
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -74,6 +82,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=matoffice;Username=matoffice;Password=${DB_PASSWORD}"
       TZ: ${TIMEZONE:-Europe/Berlin}
       MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
       MATOFFICE_ADMIN_PASSWORD: ${MATOFFICE_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}

@@ -1,0 +1,81 @@
+# MatRegistry – a Docker registry of your own, and the registries you use elsewhere (Docker Hub, GHCR, ...) as a cache.
+x-matos:
+  id: matregistry
+  name: MatRegistry
+  tagline: Your own Docker registry
+  description: A Docker registry with a web interface - hosted registries for docker push and pull with roles per person, bound registries (Docker Hub, GHCR, Quay, Harbor) to browse, copy between and use as a pull-through cache, multi-platform images, signatures and SBOMs.
+  category: Developer
+  role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS (docker push through Matcad).
+  icon: matregistry.svg
+  homepage: https://github.com/Real-TTX/MatRegistry
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matregistry/overview.webp
+      caption: Overview
+    - src: matregistry/repositories.webp
+      caption: Repositories
+    - src: matregistry/manifest.webp
+      caption: An image
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed and passes the variables
+  # of the binding to the web service by itself. MatRegistry says the same in its /api (and that it provides registry.docker).
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  ui:
+    service: web
+    port: 4780
+    hostPort: 4780
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first account that signs in is the administrator (with MatIdentity the first person who opens MatRegistry, without it the first who registers).
+    - Docker talks to the same address as the web interface. Docker only allows plain http for localhost, so use MatRegistry from other machines under a domain (Matcad gives it HTTPS); its public address is also the realm of the token service.
+    - The images lie in the volume matregistry-data; back it up together with the database volume matregistry-db.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matregistry
+      POSTGRES_USER: matregistry
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matregistry-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matregistry -d matregistry"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matregistry:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matregistry;Username=matregistry;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+    volumes:
+      - matregistry-data:/data
+
+volumes:
+  matregistry-db:
+  matregistry-data:

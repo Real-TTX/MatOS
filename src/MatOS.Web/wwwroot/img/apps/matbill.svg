@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MatBill">
+  <rect width="64" height="64" rx="14" fill="#1d4ed8"/>
+  <g transform="translate(8 8) scale(2)" fill="#fff">
+    <path fill-rule="evenodd" d="M6.5 2h11A1.5 1.5 0 0 1 19 3.5V22l-2.33-1.4L14.33 22 12 20.6 9.67 22l-2.34-1.4L5 22V3.5A1.5 1.5 0 0 1 6.5 2zM8 5.6v1.6h8V5.6zm0 3.2v1.6h8V8.8zm0 3.2v1.6h5V12zm0 3.3v.9h8v-.9zm3.5 1.9v1.8H16v-1.8z"/>
+  </g>
+</svg>

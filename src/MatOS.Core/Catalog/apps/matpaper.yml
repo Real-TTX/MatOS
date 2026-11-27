@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matpaper.svg
   homepage: https://github.com/Real-TTX/MatPaper
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matpaper/inbox.webp
+      caption: The inbox
+    - src: matpaper/documents.webp
+      caption: Documents
+    - src: matpaper/document-detail.webp
+      caption: A document
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -19,6 +27,8 @@ x-matos:
     service: matpaper
     port: 8080
     hostPort: 4994
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
   variables:
     # Seeds the administrator "admin", so there is no setup page: with MatIdentity nobody needs it, without it is the first sign-in.
     - key: MATPAPER_ADMIN_PASSWORD
@@ -43,6 +53,7 @@ services:
       - db
     environment:
       MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
       MATPAPER_ADMIN_PASSWORD: ${MATPAPER_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}

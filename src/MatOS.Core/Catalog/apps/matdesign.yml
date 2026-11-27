@@ -12,6 +12,14 @@ x-matos:
   stateNote: Installs, no MatOS integration yet.
   icon: matdesign.svg
   homepage: https://github.com/Real-TTX/MatDesign
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matdesign/overview.webp
+      caption: Overview
+    - src: matdesign/components-overview.webp
+      caption: The components
+    - src: matdesign/studio-app.webp
+      caption: The studio
   ui:
     service: matdesign
     port: 8060

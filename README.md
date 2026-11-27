@@ -61,9 +61,13 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - Everything the wizard created carries a **Managed by matos** badge in the engine
 
 **Store**
-- Catalog of the Mat apps (MatMail, MatFile, MatDrive, MatOffice, MatPaper, MatPlay, MatSplit, MatTrakr, Matmon, MatCMS, MatDo, MatBoard, MatShape, MatBu),
+- Like an app store: the **app of the day** with a picture, **Made for MatOS** (the Mat apps that sign in with your MatOS account), a **shelf per category**
+  with See all, a search, filters and sorting; every app a card with its icon, its line, marks for **the one sign-in** and **mail through MatOS**, and Get or Open
+- The page of an app: its **pictures**, what it gets from MatOS, its facts, Open and **Update** when it is installed, and more apps of its category
+- Catalog of the Mat apps (MatBoard, MatBu, MatCloud, MatContactHub, MatDo, MatDown, MatDrive, MatFile, MatGame, MatMail, MatOffice, MatPaper, MatPhoto, MatPlay,
+  MatRegistry, MatShape, MatSplit, MatTrakr, and as first versions MatBill, MatCan, MatCMS, Matmon, MatNotes, MatPhone, MatTicket),
   [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all of them) and a few infrastructure apps
-- Every app shows its **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state))
+- Every app has a **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state)); the store shows it where it tells something
 - **Passwords are generated** and shown (hidden until you ask) on the app's page
 - Add your **own apps** by dropping a compose file into `/data/catalog` (see [docs/CATALOG.md](docs/CATALOG.md))
 
@@ -315,7 +319,7 @@ browser keeps the places of the windows per address, so at `matos.<domain>` they
 
 ## Apps and their state
 
-Every app of the store has a state: how far it is along in MatOS. The store shows it on every app and filters by it; an alpha says so
+Every app of the store has a state: how far it is along in MatOS. The store shows it on every app that is not yet a beta and filters by it; an alpha says so
 before you install it, and a preview cannot be installed yet. Your own apps in `/data/catalog` are a beta unless their entry says otherwise
 (`state` in the `x-matos` block, see [docs/CATALOG.md](docs/CATALOG.md)). The note says what is missing for the next state.
 
@@ -337,21 +341,32 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | [MatBoard](https://github.com/Real-TTX/MatBoard) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatBu](https://github.com/Real-TTX/MatBu) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatCloud](https://github.com/Real-TTX/MatCloud) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatContactHub](https://github.com/Real-TTX/MatContactHub) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [Matddns](https://github.com/Real-TTX/Matddns) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatDo](https://github.com/Real-TTX/MatDo) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatDown](https://github.com/Real-TTX/MatDown) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatDrive](https://github.com/Real-TTX/MatDrive) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatFile](https://github.com/Real-TTX/MatFile) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatGame](https://github.com/Real-TTX/MatGame) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatMail](https://github.com/Real-TTX/MatMail) | Beta | Not shown in the MatOS window yet. |
 | [MatOffice](https://github.com/Real-TTX/MatOffice) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatPaper](https://github.com/Real-TTX/MatPaper) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatPhoto](https://github.com/Real-TTX/MatPhoto) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatPlay](https://github.com/Real-TTX/MatPlay) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatRegistry](https://github.com/Real-TTX/MatRegistry) | Beta | Works with one sign-in; not yet tested end to end through MatOS (docker push through Matcad). |
 | [MatShape](https://github.com/Real-TTX/MatShape) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatSplit](https://github.com/Real-TTX/MatSplit) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatTrakr](https://github.com/Real-TTX/MatTrakr) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatBill](https://github.com/Real-TTX/MatBill) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
+| [MatCan](https://github.com/Real-TTX/MatCan) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
 | [MatCMS](https://github.com/Real-TTX/MatCMS) | Alpha | Installs, no MatOS integration yet. |
 | [MatDesign](https://github.com/Real-TTX/MatDesign) | Alpha | Installs, no MatOS integration yet. |
 | [Matmon](https://github.com/Real-TTX/Matmon) | Alpha | Installs, no MatOS integration yet. |
+| [MatNotes](https://github.com/Real-TTX/MatNote) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
+| [MatPhone](https://github.com/Real-TTX/MatPhone) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
+| [MatTicket](https://github.com/Real-TTX/MatTicket) | Alpha | Installs and runs; no sign-in through MatIdentity (only Microsoft Entra) and no platform contract yet. |
 | [MatAi](https://github.com/Real-TTX/MatAi) | Preview | The image is not published yet. |
+| [MatBiz](https://github.com/Real-TTX/MatBiz) | Preview | Its image is not published yet; the sign-in through MatIdentity and the platform contract are in the code. |
 | [Nginx Proxy Manager](https://nginxproxymanager.com) | Third-party | Needs the ports 80 and 443 that Matcad uses. |
 | [Portainer](https://www.portainer.io) | Third-party |  |
 <!-- app-states:end -->

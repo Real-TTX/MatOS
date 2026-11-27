@@ -54,6 +54,7 @@ public static partial class CatalogParser
         }
 
         ReadState(app, source);
+        ReadScreenshots(app, source);
         app.ComposeYaml = yaml;
         app.Source = source;
         ReadServices(app, yaml, source);
@@ -179,6 +180,26 @@ public static partial class CatalogParser
         // The variables of the bindings (MATIDENTITY_*, MATSMTP_*, MAT_FRAME_ANCESTORS, ...) are not variables of the entry: the broker passes them (BindingBroker).
     }
 
+    /// <summary>The pictures of the store page: a file below <c>wwwroot/img/store/</c> (no way out of it) or an https address, each with a caption.</summary>
+    private static void ReadScreenshots(CatalogApp app, string source)
+    {
+        app.Screenshots ??= new List<CatalogScreenshot>();
+        foreach (var shot in app.Screenshots)
+        {
+            shot.Src = shot.Src?.Trim() ?? string.Empty;
+            shot.Caption = shot.Caption?.Trim() ?? string.Empty;
+            if (!shot.IsUrl && !ScreenshotRegex().IsMatch(shot.Src))
+            {
+                throw new FormatException($"{source}: screenshots: '{shot.Src}' is neither a picture below img/store (like app/home.webp) nor an https address.");
+            }
+
+            if (shot.Caption.Length == 0)
+            {
+                throw new FormatException($"{source}: screenshots: '{shot.Src}' needs a caption (what it shows, in a few words).");
+            }
+        }
+    }
+
     private static void ReadServices(CatalogApp app, string yaml, string source)
     {
         object? root;
@@ -258,6 +279,9 @@ public static partial class CatalogParser
             ? new CatalogPort { Raw = text, HostPort = hostPort, Protocol = protocolName }
             : null;
     }
+
+    [GeneratedRegex(@"^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_.-]*)*\.(webp|png|jpg|jpeg|svg)$")]
+    private static partial Regex ScreenshotRegex();
 
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,40}$")]
     private static partial Regex IdRegex();

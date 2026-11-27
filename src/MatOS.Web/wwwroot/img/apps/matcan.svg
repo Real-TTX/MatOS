@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img">
+  <title>MatCan</title>
+  <defs><linearGradient id="dtlogo-mark-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="96" y2="96"><stop offset="0" stop-color="#18d4c0"/><stop offset="0.5" stop-color="#22b8e0"/><stop offset="1" stop-color="#2f86f6"/></linearGradient></defs>
+  <path fill="url(#dtlogo-mark-g)" fill-rule="evenodd" d="M12 0H46A48 48 0 0 1 46 96H12A10 10 0 0 1 2 86V10A10 10 0 0 1 12 0ZM12 19a8 8 0 1 0 16 0a8 8 0 1 0 -16 0ZM21 47H57A5 5 0 0 1 57 57H21A5 5 0 0 1 21 47ZM21 64H39A5 5 0 0 1 39 74H21A5 5 0 0 1 21 64Z"/>
+</svg>

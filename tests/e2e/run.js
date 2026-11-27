@@ -456,8 +456,34 @@ const pages = [
   });
 
   console.log('Lists');
-  await check('the store: the search field, a filter dialog with a chip and the pager', async () => {
+  await check('the store: the app of the day, the Mat apps, a shelf per category with See all, the marks of the one sign-in', async () => {
     await page.goto(BASE + '/Store');
+    expectEqual(await page.locator('.mv-store-spot').count(), 1, 'the spotlight');
+    expectTrue(await page.locator('.mv-store-spot__shot img').count() === 1, 'with a picture');
+    const spot = await page.locator('.mv-store-spot__name').innerText();
+    expectTrue(await page.locator('.mv-store-hero .mv-store-tile').count() >= 4, 'the row Made for MatOS');
+    expectEqual(await page.locator('.mv-store-hero .mv-store-tile__name').filter({ hasText: new RegExp('^' + spot + '$') }).count(), 0, 'the app of the day is not shown twice');
+    expectTrue(await page.locator('.mv-store-shelf').count() >= 5, 'a shelf per category');
+    expectTrue(await page.locator('.mv-store-shelf .mv-store-gallery').first().locator('.mat-card').count() <= 4, 'a shelf shows its first apps');
+    expectTrue(await page.locator('.mv-store-mark[data-tip="One sign-in with MatOS"]').count() >= 5, 'the mark of the one sign-in');
+    expectEqual(await page.locator('.mat-pager').count(), 0, 'no pager on the shelves');
+    await page.locator('.mv-store-shelf__all').first().click();
+    await page.waitForURL(/category=/);
+    expectEqual(await page.locator('.mv-store-spot, .mv-store-shelf').count(), 0, 'See all shows the gallery of the category');
+    expectTrue(await page.locator('.mv-store-results .mat-card').count() >= 5, 'every app of it');
+  });
+  await check('the page of an app: its pictures, the facts and more of its category', async () => {
+    await page.goto(BASE + '/Store/Install?id=matphoto');
+    expectTrue(await page.locator('.mv-storepage__shot img').count() >= 2, 'the pictures');
+    const shot = await page.locator('.mv-storepage__shot img').first().evaluate(img => ({ ok: img.complete && img.naturalWidth > 0, alt: img.alt }));
+    expectTrue(shot.alt.startsWith('MatPhoto: '), 'a picture says what it shows: ' + shot.alt);
+    await page.locator('.mv-storepage__shot img').first().scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => { const img = document.querySelector('.mv-storepage__shot img'); return img.complete && img.naturalWidth > 0; });
+    expectEqual(await page.locator('dl.mv-storepage__info dt').filter({ hasText: 'Sign-in' }).count(), 1, 'the facts');
+    expectTrue(await page.locator('.mv-storepage__moreapp').count() >= 1, 'more apps of its category');
+  });
+  await check('the store: the search field, a filter dialog with a chip and the pager', async () => {
+    await page.goto(BASE + '/Store?sort=name');
     expectEqual(await page.locator('.mat-gallery .mat-card').count(), 12, 'cards on the first page');
     expectTrue(await page.locator('.mat-pager').count() === 1, 'a pager under the gallery');
     await page.click('[data-dialog-open="store-filter"]');

@@ -84,6 +84,7 @@
                 @if (open is not null)
                 {
                     <a class="mat-btn mat-btn--primary mat-btn--lg mv-storepage__install" href="/Apps/Open?id=@open.Id"><icon name="external" /><span>Open</span></a>
+                    <a class="mat-btn mat-btn--secondary" href="/Apps/Update?id=@open.Id"><icon name="arrow-up" /><span>Update</span></a>
                     if (installable && Model.Ask.Count == 0)
                     {
                         await InstallButton(another: true);
@@ -157,13 +158,31 @@
         </section>
     }
 
+    @if (app.Screenshots.Count > 0)
+    {
+        @* The pictures of the app: a row that scrolls sideways and snaps to each; a picture opens full size in a new tab. *@
+        <section class="mv-storepage__section" aria-labelledby="store-shots">
+            <h2 class="mv-storepage__h" id="store-shots">Pictures</h2>
+            <ul class="mv-storepage__shots">
+                @foreach (var shot in app.Screenshots)
+                {
+                    var src = StoreImages.Url(shot);
+                    <li class="mv-storepage__shot">
+                        <figure>
+                            <a href="@src" target="_blank" rel="noopener" aria-label="@shot.Caption: open full size">
+                                <img src="@src" alt="@app.Name: @shot.Caption" loading="lazy" decoding="async" />
+                            </a>
+                            <figcaption>@shot.Caption</figcaption>
+                        </figure>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
     <section class="mv-storepage__section" aria-labelledby="store-about">
         <h2 class="mv-storepage__h" id="store-about">About</h2>
         <p class="mv-storepage__text">@app.Description</p>
-        @if (!string.IsNullOrEmpty(app.Homepage))
-        {
-            <p><a href="@app.Homepage" target="_blank" rel="noopener"><icon name="external" /> The project's page</a></p>
-        }
     </section>
 
     @if (Model.Connections.Count > 0)
@@ -186,6 +205,30 @@
             </ul>
         </section>
     }
+
+    <section class="mv-storepage__section" aria-labelledby="store-info">
+        <h2 class="mv-storepage__h" id="store-info">Information</h2>
+        <dl class="mat-kv mv-storepage__info">
+            <dt>Category</dt>
+            <dd><a href="/Store?category=@Uri.EscapeDataString(app.Category)">@app.Category</a></dd>
+            <dt>State</dt>
+            <dd>@AppStates.Label(app.State)</dd>
+            <dt>Sign-in</dt>
+            <dd>@(app.Uses(Capabilities.IdentityOidc) ? "Your MatOS account" : app.Role == AppRoles.App ? "Its own accounts" : "Through MatOS")</dd>
+            <dt>Mail</dt>
+            <dd>@(app.Uses(Capabilities.MailSmtp) ? "Through MatOS, nothing to set up" : "Sends none, or set up in the app")</dd>
+            @if (!string.IsNullOrEmpty(app.Homepage))
+            {
+                <dt>Made by</dt>
+                <dd><a href="@app.Homepage" target="_blank" rel="noopener">The project's page <icon name="external" /></a></dd>
+            }
+            @if (!app.BuiltIn)
+            {
+                <dt>Source</dt>
+                <dd>Your own catalog</dd>
+            }
+        </dl>
+    </section>
 
     <div class="mv-storepage__folds">
         @* The notes of the catalog (and its note on the state) speak to someone who knows Docker: folded, with the options, so the page stays plain for everybody else. *@
@@ -231,3 +274,25 @@
         }
     </div>
 </form>
+
+@if (Model.More.Count > 0)
+{
+    <section class="mv-storepage__section mv-storepage__more" aria-labelledby="store-more">
+        <div class="mv-store-shelf__head">
+            <h2 class="mv-storepage__h" id="store-more">More in @app.Category</h2>
+            <a class="mv-store-shelf__all" href="/Store?category=@Uri.EscapeDataString(app.Category)">See all<icon name="chevron-right" /></a>
+        </div>
+        <ul class="mv-storepage__moreapps">
+            @foreach (var other in Model.More)
+            {
+                <li>
+                    <a class="mv-storepage__moreapp" href="/Store/Install?id=@other.Id">
+                        <app-icon name="@other.Name" icon="@other.Icon" size="lg" />
+                        <span class="mv-storepage__morename">@other.Name</span>
+                        <span class="mv-storepage__moreline">@other.Tagline</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </section>
+}

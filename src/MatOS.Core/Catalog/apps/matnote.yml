@@ -1,0 +1,69 @@
+# MatNotes – your notes in folders, private by default, shared when you decide.
+x-matos:
+  id: matnote
+  name: MatNotes
+  tagline: Your notes, private until shared
+  description: Notes in folders and tags - rich text, plain text, Markdown, Word, Excel and PDF - with links between notes, export, sharing with a person or by link, two-step verification and backups to your NAS.
+  category: Productivity
+  role: app
+  state: alpha
+  stateNote: Installs and runs; no sign-in through MatIdentity and no platform contract yet.
+  icon: matnote.svg
+  homepage: https://github.com/Real-TTX/MatNote
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matnote/notes.webp
+      caption: Your notes
+    - src: matnote/editor.webp
+      caption: The editor
+    - src: matnote/share.webp
+      caption: Sharing
+  ui:
+    service: web
+    port: 2301
+    hostPort: 2301
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first visit opens the setup assistant, which creates the administrator; open the app right after the install.
+    - Back up the volume matnote-data together with the database volume matnote-db (the app can do it itself under Administration → Backups, also to a NAS over SMB).
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matnote
+      POSTGRES_USER: matnote
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matnote-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matnote -d matnote"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matnote:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MATNOTE_DB: "Host=db;Port=5432;Database=matnote;Username=matnote;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matnote-data:/data
+
+volumes:
+  matnote-db:
+  matnote-data:

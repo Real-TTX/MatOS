@@ -8,8 +8,16 @@ x-matos:
   role: app
   state: beta
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
-  icon: mattrakr.png
+  icon: mattrakr.svg
   homepage: https://github.com/Real-TTX/MatTrakr
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: mattrakr/home.webp
+      caption: Home
+    - src: mattrakr/list-books.webp
+      caption: A list
+    - src: mattrakr/item.webp
+      caption: An item
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -19,6 +27,8 @@ x-matos:
     service: mattrakr
     port: 9242
     hostPort: 9242
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
   variables:
     - key: ADMIN_PASSWORD
       label: Admin password

@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matcloud.svg
   homepage: https://github.com/Real-TTX/MatCloud
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matcloud/overview.webp
+      caption: Overview
+    - src: matcloud/clipboard.webp
+      caption: The clipboard
+    - src: matcloud/notes.webp
+      caption: Notes
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds it when MatIdentity is installed.
@@ -74,6 +82,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=matcloud;Username=matcloud;Password=${DB_PASSWORD}"
       TZ: ${TIMEZONE:-Europe/Berlin}
       MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
       MATCLOUD_ADMIN_PASSWORD: ${MATCLOUD_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}

@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matplay.svg
   homepage: https://github.com/Real-TTX/MatPlay
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matplay/home.webp
+      caption: Home
+    - src: matplay/games.webp
+      caption: The games
+    - src: matplay/qwixx.webp
+      caption: A game of Qwixx
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -19,6 +27,8 @@ x-matos:
     service: matplay
     port: 8080
     hostPort: 4664
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /account/login
   variables:
     # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
     - key: MATPLAY_ADMIN_PASSWORD

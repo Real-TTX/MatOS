@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matfile.svg
   homepage: https://github.com/Real-TTX/MatFile
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matfile/explorer.webp
+      caption: The explorer
+    - src: matfile/editor.webp
+      caption: The editor
+    - src: matfile/preview.webp
+      caption: A preview
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.

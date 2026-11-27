@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matdo.svg
   homepage: https://github.com/Real-TTX/MatDo
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matdo/today-light.webp
+      caption: Today
+    - src: matdo/project-light.webp
+      caption: A project
+    - src: matdo/task-light.webp
+      caption: A task
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   # MatDo sends no mail (reminders are Web Push), so there is no mail: {}.
   platform: true
@@ -75,6 +83,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=matdo;Username=matdo;Password=${DB_PASSWORD}"
       TZ: ${TIMEZONE:-Europe/Berlin}
       MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
       MATDO_ADMIN_PASSWORD: ${MATDO_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}
