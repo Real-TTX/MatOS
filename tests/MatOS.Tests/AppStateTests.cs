@@ -46,7 +46,7 @@ public class AppStateTests
     [Theory]
     [InlineData(AppStates.Integrated, "matcad matdock matidentity matsmtp")]
     [InlineData(AppStates.Beta, "matboard matbu matcloud matcontacthub matddns matdo matdown matdrive matfile matgame matmail matoffice matpaper matphoto matplay matregistry matshape matsplit mattrakr")]
-    [InlineData(AppStates.Alpha, "matbill matcan matcms matdesign matmon matnote matphone matticket")]
+    [InlineData(AppStates.Alpha, "matbill matcan matcms matcmscloud matdesign matmon matnote matphone matticket")]
     [InlineData(AppStates.Preview, "matai matbiz")]
     [InlineData(AppStates.ThirdParty, "nginx-proxy-manager portainer")]
     public void BuiltInCatalog_HasTheApprovedStates(string state, string ids)

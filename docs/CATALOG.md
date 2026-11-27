@@ -125,6 +125,9 @@ Every built-in entry names its state (a unit test checks); an entry in `/data/ca
   through MatSMTP, or any other (MatDesign docs/PLATFORM.md "Capabilities"). The broker binds each to an installed provider and passes the binding's variables
   (`MATIDENTITY_*`, `MATSMTP_*`, ...) to the app's web service and its `.env`; without a provider they are empty and the app does it itself. An app whose image says what it
   consumes in its own `/api` needs no entry (what the `/api` says is added; it wins for the same capability). `identity.oidc` needs a `ui`.
+  A capability another app provides works the same way: MatCMS (no `/api`) consumes `cms.cloud` in its entry, MatCMS Cloud (`platform: true`) provides it in its `/api`,
+  and the broker binds every MatCMS to the cloud (`MAT_CMS_CLOUD_URL`, `_INTERNAL_URL`, `_KEY`, a key capability: docs/INTEGRATION.md "MatCMS Cloud"). The provider must be
+  `platform: true` (the broker reads what it provides from its `/api` and binds with its `MAT_API_KEY`); the consumer need not.
 - The old keys `identity: {}` (with `callback`, `signedOut`, `backchannel`) and `mail: {}` (with `sender`) are read as `identity.oidc` and `mail.smtp` with those parameters, so a
   catalog copy of an earlier MatOS (or of Mattiverse) keeps working. The variables an earlier MatOS filled for them are taken over as the app's bindings at its next deploy.
 - A service other than the web service that needs the variables (the one that sends the mail) names them in the compose file (`MATSMTP_HOST: ${MATSMTP_HOST:-}`): the values are in the

@@ -65,7 +65,7 @@ you can edit it there, and MatOS keeps your change when it updates the app.
   with See all, a search, filters and sorting; every app a card with its icon, its line, marks for **the one sign-in** and **mail through MatOS**, and Get or Open
 - The page of an app: its **pictures**, what it gets from MatOS, its facts, Open and **Update** when it is installed, and more apps of its category
 - Catalog of the Mat apps (MatBoard, MatBu, MatCloud, MatContactHub, MatDo, MatDown, MatDrive, MatFile, MatGame, MatMail, MatOffice, MatPaper, MatPhoto, MatPlay,
-  MatRegistry, MatShape, MatSplit, MatTrakr, and as first versions MatBill, MatCan, MatCMS, Matmon, MatNotes, MatPhone, MatTicket),
+  MatRegistry, MatShape, MatSplit, MatTrakr, and as first versions MatBill, MatCan, MatCMS with MatCMS Cloud, Matmon, MatNotes, MatPhone, MatTicket),
   [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all of them) and a few infrastructure apps
 - Every app has a **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state)); the store shows it where it tells something
 - **Passwords are generated** and shown (hidden until you ask) on the app's page
@@ -378,7 +378,8 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | [MatTrakr](https://github.com/Real-TTX/MatTrakr) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatBill](https://github.com/Real-TTX/MatBill) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
 | [MatCan](https://github.com/Real-TTX/MatCan) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
-| [MatCMS](https://github.com/Real-TTX/MatCMS) | Alpha | Installs, no MatOS integration yet. |
+| [MatCMS](https://github.com/Real-TTX/MatCMS) | Alpha | Installs and joins a MatCMS Cloud installed beside it (with MatCMS's next release); no sign-in through MatIdentity yet. |
+| [MatCMS Cloud](https://github.com/Real-TTX/MatCMS) | Alpha | The one sign-in, the mail through MatSMTP and the automatic link of MatCMS sites are on MatCMS's dev branch; the image of :latest has them with its next release. |
 | [MatDesign](https://github.com/Real-TTX/MatDesign) | Alpha | Installs, no MatOS integration yet. |
 | [Matmon](https://github.com/Real-TTX/Matmon) | Alpha | Installs, no MatOS integration yet. |
 | [MatNotes](https://github.com/Real-TTX/MatNote) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |

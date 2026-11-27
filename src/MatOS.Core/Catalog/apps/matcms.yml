@@ -7,7 +7,7 @@ x-matos:
   category: Websites
   role: app
   state: alpha
-  stateNote: Installs, no MatOS integration yet.
+  stateNote: Installs and joins a MatCMS Cloud installed beside it (with MatCMS's next release); no sign-in through MatIdentity yet.
   icon: matcms.svg
   homepage: https://github.com/Real-TTX/MatCMS
   # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
@@ -18,6 +18,10 @@ x-matos:
       caption: The page editor
     - src: matcms/dashboard.webp
       caption: Overview
+  # What MatCMS uses of other apps (MatCMS has no /api of the contract, so its entry says it): cms.cloud, the link to a MatCMS Cloud
+  # installed beside it. The broker passes MAT_CMS_CLOUD_URL, _INTERNAL_URL and _KEY, and the site joins the cloud by itself (no join code).
+  consumes:
+    - capability: cms.cloud
   ui:
     service: matcms
     port: 8080
@@ -34,7 +38,6 @@ services:
   matcms:
     image: ghcr.io/real-ttx/matcms:latest
     restart: unless-stopped
-    environment:
     volumes:
       # Database, keys, uploads and backups: everything lives here.
       - matcms-data:/app/appdata

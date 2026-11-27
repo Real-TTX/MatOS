@@ -118,13 +118,39 @@ MatIdentity unless `?local=1`). **Mail**: really sends mail through `MATSMTP_*` 
 | MatGame | beta (new) | ✅ | – | ✅ | ✅ | pictures (its repository has none) |
 | MatFile, MatPlay, MatSplit, MatTrakr, MatMail | beta | ✅ | – | route headers | ✅ (kit 1.4) | `MAT_FRAME_ANCESTORS` (kit 2.x); MatMail's note "not in the window" may be stale (it sends no CSP of its own) |
 | MatNotes, MatBill, MatTicket, MatPhone, MatCan | alpha (new) | – | – (own settings) | – (`frame-ancestors 'self'`) | – | the MatPlatform kit: the one sign-in, `MAT_API_KEY` and `/api`, `MAT_FRAME_ANCESTORS`, a seeded administrator (today the first visitor becomes it); MatPhone publishes SIP 5060 and RTP 6100-6199/udp |
-| MatCMS, Matmon | alpha | – | – (own settings) | – | – | the kit; their entries no longer claim `mail.smtp` (the images never read `MATSMTP_*`, the binding only made a relay user) |
+| MatCMS Cloud | alpha (new) | ✅ (`/login`) | ✅ | ✅ | ✅ (MatPlatform 2.4.0) | the release of MatCMS `main` (`:latest` of `matcms-cloud` has none of it yet); see "MatCMS Cloud" below |
+| MatCMS | alpha | – | – (own settings) | – | – | the kit; it consumes `cms.cloud` in its entry (no `/api`): a site joins a MatCMS Cloud installed beside it with MatCMS's next release |
+| Matmon | alpha | – | – (own settings) | – | – | the kit; its entry no longer claims `mail.smtp` (the image never read `MATSMTP_*`, the binding only made a relay user) |
 | MatDesign | alpha | – | – | – | – | – |
 | MatAi | preview | ✅ | – | – (own CSP) | ✅ | a remote and a published image |
 | MatBiz | preview (new) | ✅ (in the code) | – | – | ✅ | `:latest` is still the old Matbiz (repository `Matbiz-old`) and there is no `:nightly`: push `main` of the new MatBiz, then make the entry a beta |
 
-Not in the store: **MatHub** (its image is private), **MatCMS.Cloud** (the hosted side of MatCMS, not an app to install), **MatGame2**, **Matarchive**, **Matlan**, **Matstat** (no image).
+Not in the store: **MatHub** (its image is private), **MatGame2**, **Matarchive**, **Matlan**, **Matstat** (no image).
 
 Changes made to the entries with the survey: `ui.signIn` for MatPlay, MatSplit, MatTrakr, MatMail, MatPaper, MatBu and MatAi (MatFile opens its sign-in by itself);
 `MAT_FRAME_ANCESTORS` named for the apps that read it; the icons of MatPaper, MatMail, MatBu and MatTrakr (an SVG now) taken from their repositories; pictures for every app
 that has some. No app repository was changed.
+
+## MatCMS Cloud
+
+The control plane of MatCMS websites (versions, notifications, profiles and sync) is `src/MatCMS.Cloud` in the **MatCMS** repository (one change set with the
+instance side, `src/MatCMS`), released as `ghcr.io/real-ttx/matcms-cloud` by MatCMS's `cloud-release.yml` (`main`, `:latest`) and `cloud-dev.yml` (`dev`). The standalone
+repository `Real-TTX/MatCMS.Cloud` is an older snapshot (August 2026) of the same app: it is not the source of the image (GHCR refuses its workflows, the package
+belongs to MatCMS) and nothing of the integration is there.
+
+The integration (MatCMS branch `feature/matos-integration`, merged into MatCMS `dev`):
+
+- **The platform contract** in the cloud: MatPlatform 2.4.0 copied to `src/MatCMS.Cloud/MatPlatform`, `/api` (id `matcmscloud`, the roles `admin` and `operator`, tiles
+  for the websites), `/api/health`, `/api/bindings`.
+- **The sign-in through MatIdentity** (`identity.oidc`): `/login` goes straight on to MatIdentity, the local form stays at `/login?local=1`; the first person through
+  MatIdentity is the cloud's administrator, everyone after an operator (MatIdentity's `role` wins when it sends one); an account with the same address is linked only after
+  its own password and second factor; the back-channel logout ends the cloud's cookie. The seeded account `admin` gets its password from `MATCMSCLOUD_ADMIN_PASSWORD`.
+- **The mail through MatSMTP** (`mail.smtp`, sender `cloud`): every notification and every mail the cloud relays for its sites; the SMTP settings are fixed while it is set.
+- **`cms.cloud`**, a key capability the cloud provides: the broker binds every app that consumes it (MatCMS's entry says so, MatCMS has no `/api`) and passes
+  `MAT_CMS_CLOUD_URL`, `MAT_CMS_CLOUD_INTERNAL_URL` and `MAT_CMS_CLOUD_KEY`. The site posts its registration to `POST /api/provides/cms.cloud/register` with the key as the
+  bearer token and lands in the cloud's default profile, as with that profile's join code; after that it is the ordinary instance protocol. No code in MatOS knows either app.
+- **No Docker socket** in the entry: MatOS updates the sites it installed, so the cloud classifies them as remote and only reports an update. The cloud's own local
+  updates (and its hosting on this Docker) need the socket; a catalog copy can add it.
+
+Open: the capability `cms.cloud` belongs into MatDesign's docs/PLATFORM.md table of capabilities; the cloud has no Connections area page (`<mat-connections />`, its
+admin is not MatUi's shell yet); MatCMS itself has no `/api` and no sign-in through MatIdentity (the kit).
