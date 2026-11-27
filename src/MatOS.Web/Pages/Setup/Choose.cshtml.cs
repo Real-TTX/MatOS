@@ -41,7 +41,8 @@ public class ChooseModel : PageModel
     [BindProperty] public string? DnsFixedIp { get; set; }
 
     /// <summary>An own domain under Advanced: MatOS chooses how it is reached from outside (the default), or only through the router.</summary>
-    [BindProperty] public string RoutePolicy { get; set; } = DomainRoute.Auto;
+    // Nullable on purpose: the choice is shown (and posted) only for an own domain; a hidden field posts nothing, and a non-nullable string would be required.
+    [BindProperty] public string? RoutePolicy { get; set; } = DomainRoute.Auto;
     [BindProperty] public bool InstallMatcad { get; set; } = true;
     [BindProperty] public bool InstallMatddns { get; set; } = true;
     [BindProperty] public bool InstallMatIdentity { get; set; } = true;
