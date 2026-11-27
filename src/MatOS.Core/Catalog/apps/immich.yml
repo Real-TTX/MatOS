@@ -12,6 +12,9 @@ x-matos:
   stateNote: Its single sign-on and mail are set in its own administration (or a config file that locks every setting), so MatOS does not connect them yet.
   icon: immich.svg
   homepage: https://immich.app
+  screenshots:
+    - src: immich/first-start.webp
+      caption: The first start
   ui:
     service: immich-server
     port: 2283

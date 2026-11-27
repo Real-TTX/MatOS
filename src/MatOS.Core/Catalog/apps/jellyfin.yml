@@ -12,6 +12,9 @@ x-matos:
   stateNote: Has its own accounts; the one sign-in only through a plugin of Jellyfin, which MatOS does not set up.
   icon: jellyfin.svg
   homepage: https://jellyfin.org
+  screenshots:
+    - src: jellyfin/first-start.webp
+      caption: The first start
   ui:
     service: jellyfin
     port: 8096

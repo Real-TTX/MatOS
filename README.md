@@ -389,7 +389,7 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | [Home Assistant](https://www.home-assistant.io) | Third-party | Runs in a network of its own like every app, so devices it would find by itself on the home network (mDNS, Bluetooth, USB) are added by their address. |
 | [Immich](https://immich.app) | Third-party | Its single sign-on and mail are set in its own administration (or a config file that locks every setting), so MatOS does not connect them yet. |
 | [Jellyfin](https://jellyfin.org) | Third-party | Has its own accounts; the one sign-in only through a plugin of Jellyfin, which MatOS does not set up. |
-| [Nextcloud](https://nextcloud.com) | Third-party | Signs in through MatIdentity (the app user_oidc, set up by MatOS) and sends its mail through MatSMTP; tested in the browser, not with the desktop and phone apps. |
+| [Nextcloud](https://nextcloud.com) | Third-party | Signs in through MatIdentity (the app user_oidc, set up by MatOS, only under https) and sends its mail through MatSMTP; tested in the browser, not with the desktop and phone apps. |
 | [Nginx Proxy Manager](https://nginxproxymanager.com) | Third-party | Needs the ports 80 and 443 that Matcad uses. |
 | [Paperless-ngx](https://docs.paperless-ngx.com) | Third-party | Signs in through MatIdentity and sends its mail through MatSMTP; a person who comes through the single sign-on starts without rights until the administrator gives them some. |
 | [Portainer](https://www.portainer.io) | Third-party |  |

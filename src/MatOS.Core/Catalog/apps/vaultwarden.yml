@@ -12,6 +12,9 @@ x-matos:
   stateNote: Signs in through MatIdentity and sends its mail through MatSMTP; the vault itself still opens with each person's master password, as Bitwarden's design asks.
   icon: vaultwarden.svg
   homepage: https://github.com/dani-garcia/vaultwarden
+  screenshots:
+    - src: vaultwarden/sign-in.webp
+      caption: The sign-in
   # Its single sign-on (Vaultwarden's SSO_*) and its mail (SMTP_*) are filled from the bindings when the start below finds them.
   consumes:
     - capability: identity.oidc
@@ -34,7 +37,8 @@ x-matos:
       advanced: true
   notes:
     - The web vault needs https (or the address localhost), since the browser encrypts only there. Reach it under the domain of MatOS.
-    - With MatIdentity the sign-in page of Vaultwarden has "Use single sign-on"; the vault is then unlocked with the master password the person sets on the first sign-in.
+    - With MatIdentity the sign-in page of Vaultwarden has "Use single sign-on" (any word as the SSO identifier); the vault is then unlocked with the master password the person sets on the first sign-in.
+    - Vaultwarden lets in only a person whose e-mail address is confirmed in MatIdentity (the link in its mail), so nobody takes over an account by its address.
     - Its own sign-in needs MatOS to know its public address (a domain, or the address of this machine in the settings) and MatIdentity to be reachable at its public address from the apps.
   credentials:
     - label: First sign-in
@@ -52,8 +56,9 @@ services:
       - -c
       - |
         if [ -n "$$MAT_PUBLIC_URL" ]; then export DOMAIN="$$MAT_PUBLIC_URL"; fi
+        # The authority exactly as MatIdentity's discovery names its issuer (with the slash at the end): Vaultwarden compares the two.
         if [ -n "$$MATIDENTITY_CLIENT_ID" ] && [ -n "$$MAT_PUBLIC_URL" ]; then
-          export SSO_ENABLED=true SSO_PKCE=true SSO_AUTHORITY="$$MATIDENTITY_AUTHORITY" \
+          export SSO_ENABLED=true SSO_PKCE=true SSO_AUTHORITY="$${MATIDENTITY_AUTHORITY%/}/" \
             SSO_CLIENT_ID="$$MATIDENTITY_CLIENT_ID" SSO_CLIENT_SECRET="$$MATIDENTITY_CLIENT_SECRET" SSO_SCOPES="email profile"
         fi
         if [ -n "$$MATSMTP_HOST" ]; then

@@ -9,9 +9,14 @@ x-matos:
   category: Files
   role: app
   state: third-party
-  stateNote: Signs in through MatIdentity (the app user_oidc, set up by MatOS) and sends its mail through MatSMTP; tested in the browser, not with the desktop and phone apps.
+  stateNote: Signs in through MatIdentity (the app user_oidc, set up by MatOS, only under https) and sends its mail through MatSMTP; tested in the browser, not with the desktop and phone apps.
   icon: nextcloud.svg
   homepage: https://nextcloud.com
+  screenshots:
+    - src: nextcloud/files.webp
+      caption: Your files
+    - src: nextcloud/sign-in.webp
+      caption: The sign-in
   # The sign-in through MatIdentity (Nextcloud's app user_oidc) and the mail are set by the hook below at every start, from the bindings.
   consumes:
     - capability: identity.oidc
@@ -40,7 +45,7 @@ x-matos:
       hidden: true
   notes:
     - The first start installs Nextcloud and takes a minute or two; the page answers once it is done.
-    - With MatIdentity the sign-in page has "Log in with MatIdentity" (the app user_oidc, which MatOS installs from Nextcloud's app store); the account "admin" still signs in with its password.
+    - With MatIdentity the sign-in page has "Log in with MatIdentity" (the app user_oidc, which MatOS installs from Nextcloud's app store); the account "admin" still signs in with its password. Nextcloud allows that sign-in only under https, so reach it under the domain of MatOS.
     - The desktop and phone apps of Nextcloud sign in through the same page in the browser.
   credentials:
     - label: Username
@@ -65,6 +70,9 @@ services:
         install -m 0755 /matos/nextcloud-hook.sh /docker-entrypoint-hooks.d/before-starting/50-matos.sh
         if [ -n "$$MAT_PUBLIC_URL" ]; then export OVERWRITEPROTOCOL="$${MAT_PUBLIC_URL%%://*}" OVERWRITECLIURL="$$MAT_PUBLIC_URL"; fi
         exec /entrypoint.sh apache2-foreground
+    # The first start installs Nextcloud (a minute or two), and MatOS deploys the stack again right after it binds the sign-in and the mail. The start
+    # script runs as process 1, which ignores the stop signal: the time to stop lets an install that is under way finish instead of breaking it off.
+    stop_grace_period: 5m
     configs:
       - source: matos-hook
         target: /matos/nextcloud-hook.sh

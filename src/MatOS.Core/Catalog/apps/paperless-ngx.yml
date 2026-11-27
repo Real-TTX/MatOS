@@ -12,6 +12,11 @@ x-matos:
   stateNote: Signs in through MatIdentity and sends its mail through MatSMTP; a person who comes through the single sign-on starts without rights until the administrator gives them some.
   icon: paperless-ngx.svg
   homepage: https://docs.paperless-ngx.com
+  screenshots:
+    - src: paperless-ngx/dashboard.webp
+      caption: The dashboard
+    - src: paperless-ngx/sign-in.webp
+      caption: The sign-in
   # Its single sign-on (django-allauth's OpenID Connect) and its mail (PAPERLESS_EMAIL_*) are filled from the bindings when the start below finds them.
   consumes:
     - capability: identity.oidc

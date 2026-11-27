@@ -12,6 +12,9 @@ x-matos:
   stateNote: Has its own account and no single sign-on; its notifications are set up in its own settings.
   icon: uptime-kuma.svg
   homepage: https://uptime.kuma.pet
+  screenshots:
+    - src: uptime-kuma/first-start.webp
+      caption: The first start
   ui:
     service: uptime-kuma
     port: 3001
