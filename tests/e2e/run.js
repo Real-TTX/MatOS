@@ -519,6 +519,48 @@ const pages = [
     expectEqual(await page.locator('.mat-nav__parent').first().getAttribute('aria-expanded'), 'true', 'the branch is open');
   });
 
+  // The updates of this computer (docs/ARCHITECTURE.md "The updates of this computer"): one state in words or the facts, buttons only where MatOS can act, the restart
+  // behind a clear question. Nothing is installed and nothing restarts here: the buttons are looked at, never clicked.
+  await check('Settings, Updates: the section This computer says where it stands and asks before a restart', async () => {
+    await page.goto(BASE + '/Settings/Updates');
+    const section = page.locator('[data-host-updates]');
+    expectEqual(await section.count(), 1, 'the section');
+    expectEqual(await section.locator('h2').innerText(), 'This computer', 'its heading');
+    const states = await section.locator('[data-host-state]').count();
+    const facts = await section.locator('.mv-facts').count();
+    expectTrue(states + facts >= 1, 'a state in words or the facts');
+    const state = states ? await section.locator('[data-host-state]').getAttribute('data-host-state') : 'ok';
+    console.log('      this computer: ' + state + (facts ? ', ' + (await section.locator('.mv-facts').innerText()).replace(/\s+/g, ' ').slice(0, 160) : ''));
+    if (state === 'outdated' || state === 'unavailable') {
+      expectEqual(await section.locator('button').count(), 0, 'no buttons without an answer of the engine');
+    }
+    const install = section.locator('form[action*="HostInstall"] button');
+    if (await install.count()) {
+      expectTrue((await install.getAttribute('data-confirm') || '').includes('every app restarts'), 'install asks first');
+    }
+    const restart = section.locator('form[action*="HostRestart"] button');
+    if (await restart.count()) {
+      expectTrue(await restart.getAttribute('data-confirm-danger') !== null, 'the restart is asked as a danger');
+      expectTrue((await restart.getAttribute('data-confirm') || '').includes('every app stop'), 'and says what stops');
+    }
+    expectEqual(await page.getByText('MatDock', { exact: false }).count(), 0, 'the engine stays out of sight');
+  });
+  await check('Settings, Updates: the night may take this computer too, its restart only when chosen', async () => {
+    await page.goto(BASE + '/Settings/Updates');
+    const box = page.locator('#Input_HostUpdates');
+    const restart = page.locator('#Input_HostRestart');
+    expectEqual(await box.count(), 1, 'the choice of this computer');
+    if (!(await box.isVisible())) {
+      await page.check('input[name="Input.Mode"][value="apps"]'); // the window and its choices show when something updates by itself
+    }
+    const wasChecked = await box.isChecked();
+    if (wasChecked) { await box.uncheck(); }
+    expectTrue(!(await restart.isVisible()), 'the restart is hidden while the computer is not chosen');
+    await box.check();
+    expectTrue(await restart.isVisible(), 'and shows once it is');
+    await page.goto(BASE + '/Settings/Updates'); // nothing saved
+  });
+
   console.log('Lists');
   await check('the store: the app of the day, the Mat apps, a shelf per category with See all, the marks of the one sign-in', async () => {
     await page.goto(BASE + '/Store');

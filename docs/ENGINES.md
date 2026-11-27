@@ -138,10 +138,21 @@ through the mounted socket) unless `?environment=<name or id>` says otherwise.
 | `POST /api/v1/stacks/{name}/actions/{action}` | `action` = `start` \| `stop` \| `restart` \| `pull` \| `redeploy` \| `update`. `update` = pull, re-create only if an image changed, body `{backupFirst: bool}` (a bundle backup first, abort if it fails); the operation's `result` is `{"changed": bool}`. `202 {operationId}` |
 | `DELETE /api/v1/stacks/{name}?volumes=false` | `docker compose down` (with `--volumes` if asked), then the stack is removed from MatDock. `202 {operationId}` |
 | `GET /api/v1/stacks/{name}/logs?service=&tail=300` | `{"text": "..."}` |
-| `GET /api/v1/containers?maxAge=3` | every container of the host (the Task Manager): `{id, name, image, state, status, stack, service, ports, cpuPercent (of one core), cpuOfHostPercent, hostCores, memoryPercent, memoryBytes, netRxBytes, netTxBytes, blockReadBytes, blockWriteBytes}`; the I/O are totals since the container started; `maxAge` (3-30 s) is how old MatDock's shared `docker stats` may be. The I/O, the share of the host and `maxAge` came with apiVersion 5 (MatDock branch `feature/task-manager-api`); MatOS reads an older answer too. |
-| `GET /api/v1/host` | a live reading of the host, at most three seconds old (apiVersion 5): `{cores, cpuPercent, load1, memoryTotalBytes, memoryUsedBytes, memoryPercent, diskTotalBytes, diskUsedBytes, diskPercent, uptimeSeconds, containersRunning, dockerVersion, at}`; an older MatDock answers 404 and MatOS uses the reading of `GET /api/v1/environments` |
+| `GET /api/v1/containers?maxAge=3` | every container of the host (the Task Manager): `{id, name, image, state, status, stack, service, ports, cpuPercent (of one core), cpuOfHostPercent, hostCores, memoryPercent, memoryBytes, netRxBytes, netTxBytes, blockReadBytes, blockWriteBytes}`; the I/O are totals since the container started; `maxAge` (3-30 s) is how old MatDock's shared `docker stats` may be. The I/O, the share of the host and `maxAge` came with apiVersion 6 (MatDock `dev`, 2026-11-27); MatOS reads an older answer too. |
+| `GET /api/v1/host` | a live reading of the host, at most three seconds old (apiVersion 6): `{cores, cpuPercent, load1, memoryTotalBytes, memoryUsedBytes, memoryPercent, diskTotalBytes, diskUsedBytes, diskPercent, uptimeSeconds, containersRunning, dockerVersion, at}`; an older MatDock answers 404 and MatOS uses the reading of `GET /api/v1/environments` |
 | `POST /api/v1/containers/{name}/actions/{action}`, `GET /api/v1/containers/{name}/logs?tail=` | start, stop, restart one container; its log as text |
 | `GET /api/v1/operations/{id}?offset=` | the operation, see the common rules |
+
+The operating system of this computer (`apiVersion` 7, MatDock branch `feature/host-updates-api`; MatOS's side: docs/ARCHITECTURE.md "The updates of this computer",
+`MatDockClient`, `Core/Updates/HostUpdates.cs`). An older MatDock answers `404`: MatOS then asks for an update of the engines.
+
+| Method and path | |
+|---|---|
+| `GET /api/v1/host/updates` | what MatDock's last check of the host found, asks the host nothing: `{environmentId, environment, supported, checkedAt, os, apt, listsUpdatedAt, listsStale, rebootRequired, pending, security, dockerVersion, dockerTarget, summary, error, packages[], lastRun{unit, scope, startedAt, finished, exitCode, finishedAt}, rebootRequestedAt}`; `checkedAt: null` before the first check (MatDock looks every six hours, three minutes after its start) |
+| `POST /api/v1/host/updates/check` | refresh the package lists and look again. `202 {operationId}`, the result is the same view |
+| `POST /api/v1/host/updates/apply` | body `{scope: "all"\|"docker"}`: `apt-get upgrade --with-new-pkgs` of every package (nothing removed, configuration kept), started at once on the host's systemd. `202 {operationId, unit}`, result `{unit, exitCode, rebootRequired, summary}`; `409` before a check, without apt, or while one runs |
+| `GET /api/v1/host/updates/runs/{unit}` | `{unit, finished, exitCode, log}` read from the host: the end of an upgrade after Docker, MatDock and MatOS restarted |
+| `POST /api/v1/host/reboot` | body `{confirm: "reboot"}` (else `400`): the host restarts in 15 seconds. `202 {environment, restartsAt}`; `409` while an upgrade runs |
 
 Backups (a stack bundle: all volumes + compose + env + image references; MatDock's existing bundle backup):
 

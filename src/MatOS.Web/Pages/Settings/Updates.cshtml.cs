@@ -21,12 +21,15 @@ public class UpdatesModel : PageModel
     private readonly JobService _jobs;
     private readonly MatOSDbContext _db;
 
-    public UpdatesModel(SystemConfigService config, SelfUpdateService self, JobService jobs, MatOSDbContext db)
+    private readonly HostUpdateService _host;
+
+    public UpdatesModel(SystemConfigService config, SelfUpdateService self, JobService jobs, MatOSDbContext db, HostUpdateService host)
     {
         _config = config;
         _self = self;
         _jobs = jobs;
         _db = db;
+        _host = host;
     }
 
     public sealed class InputModel
@@ -37,6 +40,12 @@ public class UpdatesModel : PageModel
         public string? WindowStart { get; set; } = "03:00";
 
         public bool BackupFirst { get; set; } = true;
+
+        /// <summary>The night installs the updates of this computer too (off unless chosen).</summary>
+        public bool HostUpdates { get; set; }
+
+        /// <summary>And restarts it when an update needs it (off unless chosen).</summary>
+        public bool HostRestart { get; set; }
     }
 
     [BindProperty]
@@ -61,6 +70,59 @@ public class UpdatesModel : PageModel
 
     public DateTime NextWindow => UpdateWindow.NextStart(Settings, DateTime.Now);
 
+    /// <summary>The updates of this computer, as MatDock answered just now (or the last answer when it did not).</summary>
+    public HostUpdateState Host { get; private set; } = new();
+
+    /// <summary>A check or an install of this computer that waits or runs (its log is the job's), or null.</summary>
+    public Job? HostJob { get; private set; }
+
+    /// <summary>Updates are installed on this computer: by a job of this MatOS, or one whose end nobody saw yet (MatOS restarted with Docker).</summary>
+    public bool HostInstalling => HostJob?.Title == HostUpdateService.InstallJobTitle || Host.Installing(DateTime.UtcNow);
+
+    /// <summary>The computer restarts: the page waits for it (data-await-restart).</summary>
+    public bool HostRestarting => Host.Restarting(DateTime.UtcNow);
+
+    /// <summary>The last install of this computer that ended, for its log.</summary>
+    public Job? LastHostInstall { get; private set; }
+
+    public async Task<IActionResult> OnPostHostCheckAsync()
+    {
+        await LoadAsync();
+        if (HostJob is null && !HostRestarting)
+        {
+            await _jobs.EnqueueAsync(JobKind.Update, HostUpdateService.CheckJobTitle, null, HostUpdateService.CheckJob(), HttpContext.RequestAborted);
+        }
+
+        return RedirectToPage(null, null, "upd-host");
+    }
+
+    public async Task<IActionResult> OnPostHostInstallAsync()
+    {
+        await LoadAsync();
+        if (HostJob is null && !HostInstalling && !HostRestarting && Host.Manageable)
+        {
+            await _jobs.EnqueueAsync(JobKind.Update, HostUpdateService.InstallJobTitle, null, HostUpdateService.InstallJob(), HttpContext.RequestAborted);
+        }
+
+        return RedirectToPage(null, null, "upd-host");
+    }
+
+    public async Task<IActionResult> OnPostHostRestartAsync()
+    {
+        try
+        {
+            await _host.RestartAsync(HttpContext.RequestAborted);
+            StatusMessage = "This computer restarts. MatOS and your apps are away for a few minutes and come back by themselves.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            StatusMessage = $"This computer was not restarted: {ex.Message}";
+            TempData["IsError"] = true;
+        }
+
+        return RedirectToPage(null, null, "upd-host");
+    }
+
     public async Task OnGetAsync()
     {
         await LoadAsync();
@@ -69,6 +131,8 @@ public class UpdatesModel : PageModel
             Mode = Settings.Chosen ? Settings.EffectiveMode : UpdateMode.Recommended,
             WindowStart = Settings.WindowStart.ToString("HH:mm"),
             BackupFirst = Settings.BackupFirst,
+            HostUpdates = Settings.HostUpdates,
+            HostRestart = Settings.HostRestart,
         };
     }
 
@@ -107,6 +171,8 @@ public class UpdatesModel : PageModel
             {
                 c.Updates.WindowStartMinute = time.Hour * 60 + time.Minute;
                 c.Updates.BackupFirst = Input.BackupFirst;
+                c.Updates.HostUpdates = Input.HostUpdates;
+                c.Updates.HostRestart = Input.HostUpdates && Input.HostRestart;
             }
         }, HttpContext.RequestAborted);
         StatusMessage = "Updates saved.";
@@ -143,5 +209,12 @@ public class UpdatesModel : PageModel
             .OrderByDescending(j => j.Id).FirstOrDefaultAsync(ct);
         LastAutomatic = await _db.Jobs.AsNoTracking().Where(j => j.Title == AutoUpdate.JobTitle).OrderByDescending(j => j.Id).FirstOrDefaultAsync(ct);
         HelperLog = Settings.Last is not null ? _self.ReadHelperLog() : null;
+        Host = await _host.ReadAsync(ct);
+        HostJob = await _db.Jobs.AsNoTracking()
+            .Where(j => (j.Title == HostUpdateService.InstallJobTitle || j.Title == HostUpdateService.CheckJobTitle)
+                        && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running))
+            .OrderByDescending(j => j.Id).FirstOrDefaultAsync(ct);
+        LastHostInstall = HostJob is not null ? null
+            : await _db.Jobs.AsNoTracking().Where(j => j.Title == HostUpdateService.InstallJobTitle).OrderByDescending(j => j.Id).FirstOrDefaultAsync(ct);
     }
 }

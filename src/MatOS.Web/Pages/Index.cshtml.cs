@@ -243,7 +243,7 @@ public class IndexModel : PageModel
                 .ToList();
         }
 
-        Dock = Launcher.Dock(isAdmin, isAdmin && Config.Updates is { Check.Available: true, Pending: null });
+        Dock = Launcher.Dock(isAdmin, isAdmin ? Config.Updates.Notice : null);
         SystemApps = Launcher.OnScreen(isAdmin, ActiveJobs);
     }
 

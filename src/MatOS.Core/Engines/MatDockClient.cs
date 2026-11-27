@@ -332,6 +332,40 @@ public sealed class MatDockClient : EngineClient
         return body;
     }
 
+    // ------------------------------------------------------------------ the operating system of this computer (apiVersion 7)
+
+    /// <summary>The API version that has the updates of the host (<c>/host/updates</c>, <c>/host/reboot</c>).</summary>
+    public const int HostUpdatesApiVersion = 7;
+
+    /// <summary>What MatDock's last check of the host found (it looks every six hours by itself); asks the host nothing.</summary>
+    public async Task<JsonObject?> GetHostUpdatesAsync(CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Get, "host/updates", null, ReadTimeout, ct) as JsonObject;
+
+    /// <summary>Refreshes the host's package lists and looks again: an operation whose result is the same view as <see cref="GetHostUpdatesAsync"/>.</summary>
+    public async Task<string> StartHostCheckAsync(CancellationToken ct = default)
+        => OperationIdOf(await SendAsync(HttpMethod.Post, "host/updates/check", new JsonObject(), null, ct));
+
+    /// <summary>Starts the upgrade of every package of the host on its systemd; returns the operation that follows it and the unit (to find it after a restart).</summary>
+    public async Task<(string OperationId, string Unit)> StartHostUpgradeAsync(CancellationToken ct = default)
+    {
+        var answer = await SendAsync(HttpMethod.Post, "host/updates/apply", new JsonObject { ["scope"] = "all" }, TimeSpan.FromMinutes(3), ct);
+        return (OperationIdOf(answer), answer?["unit"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock did not name the upgrade."));
+    }
+
+    /// <summary>How an upgrade goes, read from the host (works after Docker, MatDock and MatOS restarted): its exit code once it ended and its log.</summary>
+    public async Task<(bool Finished, int? ExitCode, string Log)> GetHostRunAsync(string unit, CancellationToken ct = default)
+    {
+        var answer = await SendAsync(HttpMethod.Get, $"host/updates/runs/{Uri.EscapeDataString(unit)}", null, TimeSpan.FromSeconds(30), ct);
+        return (answer?["finished"]?.GetValue<bool>() == true, answer?["exitCode"]?.GetValue<int>(), answer?["log"]?.GetValue<string>() ?? string.Empty);
+    }
+
+    /// <summary>Restarts this computer in a few seconds (MatDock asks for the confirmation word).</summary>
+    public Task RebootHostAsync(CancellationToken ct = default)
+        => SendAsync(HttpMethod.Post, "host/reboot", new JsonObject { ["confirm"] = "reboot" }, TimeSpan.FromSeconds(60), ct);
+
+    private static string OperationIdOf(JsonNode? answer)
+        => answer?["operationId"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock started no operation.");
+
     // ------------------------------------------------------------------ operations
 
     /// <summary>Follows an operation to its end, forwarding the output to <paramref name="log"/>. Returns the operation's <c>result</c>.</summary>
