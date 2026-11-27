@@ -324,19 +324,25 @@ public sealed partial class DockerService
                 continue;
             }
 
-            foreach (Match match in PublishedPortRegex().Matches(parts[1]))
-            {
-                var first = int.Parse(match.Groups["from"].Value);
-                var last = match.Groups["to"].Success ? int.Parse(match.Groups["to"].Value) : first;
-                var protocol = match.Groups["proto"].Value;
-                for (var port = first; port <= last && port - first < 1000; port++)
-                {
-                    ports.Add(new PublishedPort(port, protocol, parts[0]));
-                }
-            }
+            ports.AddRange(ParsePorts(parts[0], parts[1]));
         }
 
         return ports;
+    }
+
+    /// <summary>The host ports in the <c>Ports</c> column of <c>docker ps</c> (as MatDock answers it too): <c>0.0.0.0:8080-&gt;80/tcp, [::]:8080-&gt;80/tcp</c>.</summary>
+    public static IEnumerable<PublishedPort> ParsePorts(string container, string? ports)
+    {
+        foreach (Match match in PublishedPortRegex().Matches(ports ?? string.Empty))
+        {
+            var first = int.Parse(match.Groups["from"].Value);
+            var last = match.Groups["to"].Success ? int.Parse(match.Groups["to"].Value) : first;
+            var protocol = match.Groups["proto"].Value;
+            for (var port = first; port <= last && port - first < 1000; port++)
+            {
+                yield return new PublishedPort(port, protocol, container);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ volumes

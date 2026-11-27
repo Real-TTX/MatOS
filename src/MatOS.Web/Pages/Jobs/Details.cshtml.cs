@@ -55,6 +55,7 @@ public class DetailsModel : PageModel
                 JobKind.Restart => $"{name} has started again.",
                 JobKind.Backup => $"{name} is backed up.",
                 JobKind.Restore => $"{name} is restored from the backup.",
+                JobKind.Move => $"{name} runs on its new node.",
                 JobKind.Provision => $"{name} is set up.",
                 _ => "Done.",
             };

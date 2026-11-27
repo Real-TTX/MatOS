@@ -1,0 +1,46 @@
+@page
+@model MatOS.Web.Pages.Apps.MoveModel
+@{
+    ViewData["Title"] = $"Move {Model.App.Name}";
+    ViewData["PageSub"] = $"It runs on {Model.Here} now.";
+    ViewData["Crumbs"] = Crumbs.Of(("Apps", "/Apps"), (Model.App.Name, $"/Apps/Details?id={Model.App.Id}"), ("Move", null));
+    ViewData["Width"] = "narrow";
+}
+
+@* docs/ARCHITECTURE.md "Nodes": moving is a job of MatOS with MatDock (backup, restore into the new node, deploy, the old stack goes last). *@
+@if (Model.Refused is not null)
+{
+    <div class="mat-alert mat-alert--warn" role="status">
+        <icon name="alert" />
+        <div class="mat-alert__body">@Model.Refused</div>
+    </div>
+}
+
+<p>
+    @Model.App.Name is stopped and backed up on @Model.Here (the backup stays), its data is restored on the new node and it starts there. Its address under your
+    domain stays the same. Only once it runs on the new node does the copy on @Model.Here go; if something fails before, it stays where it is and starts again.
+</p>
+
+<form method="post" asp-route-id="@Model.App.Id" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+    @if (Model.Targets.Count > 0)
+    {
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <mat-field label="Move to" for-id="move-to" required="true" full="true" hint="A node that is offline cannot take the app: test it first under Settings, Nodes.">
+                    <select id="move-to" name="To" class="mat-select" required data-msg-required="Choose the node to move the app to.">
+                        @foreach (var node in Model.Targets)
+                        {
+                            <option value="@(node.IsLocal ? 0 : node.Id)" disabled="@(!node.IsOnline)">@node.DisplayName@(node.IsOnline ? string.Empty : " (" + node.StatusText.ToLowerInvariant() + ")")</option>
+                        }
+                    </select>
+                </mat-field>
+            </div>
+        </div>
+    }
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary" disabled="@(Model.Refused is not null)" data-confirm="Move @Model.App.Name? It is away for a few minutes while it moves." data-confirm-ok="Move"><icon name="server" /><span>Move</span></button>
+        <a href="/Apps/Details?id=@Model.App.Id" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    </div>
+</form>

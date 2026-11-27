@@ -450,6 +450,21 @@ public sealed class BindingBroker
             return BindOutcome.Failed;
         }
 
+        // A consumer on another node cannot reach the shared network (docs/ARCHITECTURE.md "Nodes"): the provider's internal address becomes its public one,
+        // and a binding that still names one of the provider's containers cannot work from there: it goes again, and the app keeps its own settings.
+        if (consumer.NodeAddress is { Length: > 0 } && wanted.Capability != Capabilities.WebRoute)
+        {
+            var reachable = ForNode(variables, _addresses.InternalUrl(provider), _addresses.ContainerPrefix(provider), await _addresses.KnownPublicUrlAsync(provider, ct));
+            if (reachable is null)
+            {
+                await _platform.UnbindAsync(provider, wanted.Capability, consumer.Slug, ct);
+                log($"{consumer.Name} runs on another node, where {provider.Name} cannot be reached for {wanted.Capability}: {consumer.Name} keeps its own settings for it.");
+                return existing is not null && await DropAsync(consumer, existing, _ => { }, ct) ? BindOutcome.Changed : BindOutcome.Unchanged;
+            }
+
+            variables = reachable;
+        }
+
         if (existing is not null && !sameProvider && await _db.InstalledApps.FindAsync([existing.ProviderAppId], ct) is { } old)
         {
             await _platform.UnbindAsync(old, existing.Capability, consumer.Slug, ct);
@@ -482,6 +497,40 @@ public sealed class BindingBroker
         _manifests.Forget(consumer);
         log($"{consumer.Name} uses {provider.Name} for {wanted.Capability}{(wanted.Label is { Length: > 0 } label ? $" ({label})" : string.Empty)}.");
         return BindOutcome.Changed;
+    }
+
+    /// <summary>
+    /// The variables of a binding for a consumer on another node: the provider's internal address (on the shared network) is replaced by its public address;
+    /// <c>null</c> when that is not possible (no public address) or a value still names a container of the provider (<paramref name="providerContainers"/>, the
+    /// common start of their names), which the node cannot resolve.
+    /// </summary>
+    public static Dictionary<string, string>? ForNode(IReadOnlyDictionary<string, string> variables, string? providerInternalUrl, string providerContainers, string? providerPublicUrl)
+    {
+        var inside = providerInternalUrl?.TrimEnd('/');
+        var outside = providerPublicUrl?.TrimEnd('/');
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, value) in variables)
+        {
+            var text = value;
+            if (!string.IsNullOrEmpty(inside) && text.Contains(inside, StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrEmpty(outside))
+                {
+                    return null;
+                }
+
+                text = text.Replace(inside, outside, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (text.Contains(providerContainers, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            result[name] = text;
+        }
+
+        return result;
     }
 
     /// <summary>Removes a binding at its provider (when it is still there) and here. False when there was none.</summary>

@@ -3,6 +3,7 @@ using MatOS.Core.Catalog;
 using MatOS.Core.Configuration;
 using MatOS.Core.Data;
 using MatOS.Core.Docker;
+using MatOS.Core.Engines;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -17,19 +18,40 @@ public sealed partial class PortPlanner
     private readonly MatOSDbContext _db;
     private readonly DockerService _docker;
     private readonly MatOSOptions _options;
+    private readonly MatDockClient _matDock;
 
-    public PortPlanner(MatOSDbContext db, DockerService docker, IOptions<MatOSOptions> options)
+    public PortPlanner(MatOSDbContext db, DockerService docker, IOptions<MatOSOptions> options, MatDockClient matDock)
     {
         _db = db;
         _docker = docker;
         _options = options.Value;
+        _matDock = matDock;
+    }
+
+    /// <summary>
+    /// The host ports published now where an app on <paramref name="node"/> would publish its own: this machine (its proxy may serve a port route with the same
+    /// number), and the node itself as MatDock lists its containers (docs/ARCHITECTURE.md "Nodes").
+    /// </summary>
+    private async Task<List<PublishedPort>> PublishedAsync(long? node, CancellationToken ct)
+    {
+        var ports = await _docker.ListPublishedPortsAsync(ct);
+        if (node is not null)
+        {
+            foreach (var container in (await _matDock.ListContainersAsync(ct, null, node) ?? []).OfType<System.Text.Json.Nodes.JsonObject>())
+            {
+                var name = container["name"]?.GetValue<string>() ?? string.Empty;
+                ports.AddRange(DockerService.ParsePorts(name, container["ports"] is System.Text.Json.Nodes.JsonValue value && value.TryGetValue<string>(out var text) ? text : null));
+            }
+        }
+
+        return ports;
     }
 
     /// <summary>
     /// The preferred port of the catalog entry when it is free, otherwise the first free port of the pool.
     /// A port counts as taken when another installed app was given it or a running container publishes it.
     /// </summary>
-    public async Task<int?> PlanHostPortAsync(CatalogApp app, int selfPort, CancellationToken ct = default)
+    public async Task<int?> PlanHostPortAsync(CatalogApp app, int selfPort, CancellationToken ct = default, long? node = null)
     {
         if (app.Ui is null)
         {
@@ -40,7 +62,7 @@ public sealed partial class PortPlanner
         {
             selfPort,
         };
-        foreach (var published in await _docker.ListPublishedPortsAsync(ct))
+        foreach (var published in await PublishedAsync(node, ct))
         {
             taken.Add(published.HostPort);
         }
@@ -65,11 +87,11 @@ public sealed partial class PortPlanner
     /// The first host port from <paramref name="from"/> upward that no container publishes, no installed app was given and that is not one of
     /// <paramref name="alsoTaken"/>; null when none is free in the next 2000.
     /// </summary>
-    public async Task<int?> FreePortFromAsync(int from, IReadOnlySet<int> alsoTaken, CancellationToken ct = default)
+    public async Task<int?> FreePortFromAsync(int from, IReadOnlySet<int> alsoTaken, CancellationToken ct = default, long? node = null)
     {
         var taken = new HashSet<int>(await _db.InstalledApps.Where(a => a.HostPort != null).Select(a => a.HostPort!.Value).ToListAsync(ct));
         taken.UnionWith(alsoTaken);
-        foreach (var published in await _docker.ListPublishedPortsAsync(ct))
+        foreach (var published in await PublishedAsync(node, ct))
         {
             taken.Add(published.HostPort);
         }
@@ -100,15 +122,15 @@ public sealed partial class PortPlanner
     private static partial Regex HostVariableRegex();
 
     /// <summary>The container of another project that publishes this host port now, or null when the port is free (or this project's own).</summary>
-    public async Task<string?> HolderOfAsync(int hostPort, string ownProject, CancellationToken ct = default)
-        => (await _docker.ListPublishedPortsAsync(ct))
+    public async Task<string?> HolderOfAsync(int hostPort, string ownProject, CancellationToken ct = default, long? node = null)
+        => (await PublishedAsync(node, ct))
             .FirstOrDefault(p => p.HostPort == hostPort && !p.Container.StartsWith(ownProject, StringComparison.Ordinal))?.Container;
 
     /// <summary>The host ports the compose file publishes by itself (with the variables applied) that a running container already uses.</summary>
-    public async Task<List<PortConflict>> FindConflictsAsync(CatalogApp app, IReadOnlyDictionary<string, string> variables, string ownProject, CancellationToken ct = default)
+    public async Task<List<PortConflict>> FindConflictsAsync(CatalogApp app, IReadOnlyDictionary<string, string> variables, string ownProject, CancellationToken ct = default, long? node = null)
     {
         var conflicts = new List<PortConflict>();
-        var published = await _docker.ListPublishedPortsAsync(ct);
+        var published = node is null ? await _docker.ListPublishedPortsAsync(ct) : await NodeOnlyAsync(node.Value, ct);
         foreach (var fixedPort in app.FixedPorts)
         {
             var resolved = CatalogParser.ParsePort(EnvSubstitution.Apply(fixedPort.Raw, variables));
@@ -130,4 +152,8 @@ public sealed partial class PortPlanner
         // 443 over TCP and UDP is one problem for the reader: say it once per port and container.
         return conflicts.DistinctBy(c => (c.Port, c.Container)).ToList();
     }
+
+    /// <summary>The host ports published on one other node (a port an app publishes itself clashes there only).</summary>
+    private async Task<List<PublishedPort>> NodeOnlyAsync(long node, CancellationToken ct)
+        => (await PublishedAsync(node, ct)).Except(await _docker.ListPublishedPortsAsync(ct)).ToList();
 }

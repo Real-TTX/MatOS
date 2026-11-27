@@ -47,7 +47,7 @@ public sealed class ComposeFiles
             }
         }
 
-        return new(app.ProjectName, app.Slug, _renderer.Render(catalog, app, added, ports), AppVariables.BuildEnvFile(BuiltIns(app, publicHost), all));
+        return new(app.ProjectName, app.Slug, _renderer.Render(catalog, app, added, ports), AppVariables.BuildEnvFile(BuiltIns(app, publicHost), all), app.NodeId);
     }
 
     public async Task WriteAsync(StackSpec spec, CancellationToken ct = default)
@@ -94,5 +94,8 @@ public sealed class ComposeFiles
     };
 }
 
-/// <summary>An app as a stack: the name of the compose project, the app's slug, the compose text and the <c>.env</c> text.</summary>
-public sealed record StackSpec(string Name, string Slug, string Compose, string Env);
+/// <summary>
+/// An app as a stack: the name of the compose project, the app's slug, the compose text and the <c>.env</c> text, and the node it runs on (MatDock's
+/// environment; null = this machine).
+/// </summary>
+public sealed record StackSpec(string Name, string Slug, string Compose, string Env, long? Node = null);

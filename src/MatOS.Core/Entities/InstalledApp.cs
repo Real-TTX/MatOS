@@ -67,4 +67,12 @@ public class InstalledApp : AuditableEntity
 
     /// <summary>One of the engines (MatDock, Matcad, Matddns): part of MatOS, not removed from the app list.</summary>
     public bool IsCore { get; set; }
+
+    /// <summary>
+    /// The node the app runs on: the id of MatDock's environment; <c>null</c> = this machine (MatDock's local environment). docs/ARCHITECTURE.md "Nodes".
+    /// </summary>
+    public long? NodeId { get; set; }
+
+    /// <summary>The address of that node (its host in MatDock), kept with the app for its internal address; refreshed with every deploy. Null on this machine.</summary>
+    public string? NodeAddress { get; set; }
 }

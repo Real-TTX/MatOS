@@ -99,7 +99,7 @@ public sealed class ProxyPublisher
 
         var config = await _config.GetAsync(ct);
         var host = HostFor(app.Slug, config.BaseDomain!);
-        var upstream = $"http://{_files.UiHost(app)}:{app.UiPort}";
+        var upstream = AppAddresses.InternalUrlOf(app, _files.UiHost(app)) ?? $"http://{_files.UiHost(app)}:{app.UiPort}";
         try
         {
             await _matcad.UpsertRouteAsync(host, upstream, app.Name, ct);

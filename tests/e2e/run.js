@@ -8,7 +8,11 @@
 // After a first start the person signs in through MatIdentity (MatOS forgot the local password, docs/ARCHITECTURE.md "The first start"): MATOS_SSO=1 signs in there.
 // A test install reached at its free address through a local edge (CLAUDE.md, "Testing the engines"): MATOS_BROWSER_ARGS passes arguments to the browser
 // (--host-resolver-rules="MAP *.<name>.my.mattiverse.de:443 127.0.0.1:18443"), MATOS_INSECURE=1 accepts a certificate of a test CA.
+// Nodes (docs/ARCHITECTURE.md "Nodes"): without more a node at an address that does not answer is added, tested and removed again. MATOS_E2E_NODE="<host>:<port>:<user>"
+// adds a real one; MATOS_E2E_NODE_CONTAINER names the container of that test node, where the key is put (docker exec), and MATOS_E2E_NODE_APP the catalog id
+// of a small app that is installed there, moved to this machine and uninstalled again (the e2e of CLAUDE.md: a docker:dind container with sshd in the shared network).
 const { chromium } = require('playwright-core');
+const { execFileSync } = require('child_process');
 
 const FIRST_START = process.argv.includes('--first-start');
 const BASE = (process.argv.slice(2).find(a => !a.startsWith('--')) || process.env.BASE || 'http://localhost:8030').replace(/\/$/, '');
@@ -42,7 +46,7 @@ function expectEqual(actual, expected, what) {
 
 const pages = [
   '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Backups/Targets', '/Backups/TargetEdit', '/Jobs', '/Tasks',
-  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
+  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Nodes', '/Settings/NodeAdd', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
   '/Start',
 ];
 
@@ -686,6 +690,8 @@ const pages = [
     await page.waitForURL(/\/Backups\/Targets/);
     expectEqual(await page.locator('table.mat-table tbody tr', { hasText: 'E2E target' }).count(), 0, 'the target is gone');
   });
+  console.log('Nodes');
+  await nodes(page);
   await check('the wizard (to change the setup later) walks through four steps, the engines under Advanced', async () => {
     await page.goto(BASE + '/Wizard');
     expectEqual(await page.locator('.mv-step').count(), 4, 'steps');
@@ -894,6 +900,159 @@ const pages = [
 })();
 
 // The first start on a MatOS without any account (--first-start): Welcome, the account, the engines, the way to the apps, the one button.
+// The job of a job page until it ends (asked from /api/jobs/<id>/log): it has to succeed, else the end of its log is the error. Returns its log.
+async function jobEnds(page, minutes = 6) {
+  const id = new URL(page.url()).searchParams.get('id');
+  const deadline = Date.now() + minutes * 60000;
+  for (;;) {
+    const job = await page.evaluate(async i => (await fetch('/api/jobs/' + i + '/log', { headers: { Accept: 'application/json' } })).json(), id);
+    if (job.finished) {
+      if (job.status !== 'Succeeded') {
+        throw new Error(`the job ${job.status}: ${job.error || ''} ${job.text.split('\n').filter(Boolean).slice(-4).join(' | ')}`);
+      }
+
+      await page.reload();
+      return job.text;
+    }
+
+    if (Date.now() > deadline) {
+      throw new Error(`the job did not end in ${minutes} minutes: ${job.text.split('\n').filter(Boolean).slice(-3).join(' | ')}`);
+    }
+
+    await page.waitForTimeout(2000);
+  }
+}
+
+// The nodes: the list, adding one with its key, the test, (with a real node) an app installed there, seen in the Task Manager, moved here and removed, then the node removed.
+async function nodes(page) {
+  const real = (process.env.MATOS_E2E_NODE || '').split(':');
+  const host = real[0] || '192.0.2.10';
+  const name = 'e2e-node';
+  let nodeUrl = null;
+
+  await check('nodes: this machine first, adding one checks the form and shows the key with the line for the VM', async () => {
+    await page.goto(BASE + '/Settings/Nodes');
+    expectEqual(await page.locator('[data-nodes] .mat-item').first().innerText().then(t => t.includes('This machine')), true, 'this machine is the first node');
+    if (await page.locator('a[href="/Settings/NodeAdd"]').count() === 0) {
+      // MatDock missing or too old: the page says why and offers nothing it cannot do.
+      expectEqual(await page.locator('.mat-alert--warn').count(), 1, 'the page says why nodes cannot be used now');
+      return;
+    }
+
+    await page.goto(BASE + '/Settings/NodeAdd');
+    await page.fill('#Input_Port', '');
+    await page.click('form.mat-form button[type=submit]');
+    expectTrue(await page.locator('#Input_Name').evaluate(el => el.getAttribute('aria-invalid') === 'true'), 'the browser marks the empty name');
+    await page.fill('#Input_Name', 'local');
+    await page.fill('#Input_Host', 'http://' + host);
+    await page.fill('#Input_Port', real[1] || '22');
+    await page.fill('#Input_User', real[2] || 'docker');
+    await page.click('form.mat-form button[type=submit]');
+    await page.waitForLoadState('networkidle');
+    const summary = await page.locator('[data-validation-summary]').innerText();
+    expectTrue(/name of this machine/.test(summary) && /without http/.test(summary), 'the server says what is wrong: ' + summary);
+
+    await page.fill('#Input_Name', name);
+    await page.fill('#Input_Host', host);
+    await Promise.all([page.waitForURL(/\/Settings\/Node\?id=\d+/, { timeout: 90000 }), page.click('form.mat-form button[type=submit]')]);
+    nodeUrl = page.url();
+    const line = await page.locator('[data-node-line]').innerText();
+    expectTrue(line.includes('authorized_keys') && line.includes('ssh-rsa '), 'the line puts the key into the authorized keys: ' + line);
+    expectEqual(await page.locator('[data-copy]').count() >= 2, true, 'the line and the key can be copied');
+    expectTrue(!(await page.content()).includes('PRIVATE KEY'), 'no private key on the page');
+  });
+  if (!nodeUrl) {
+    return;
+  }
+
+  await check('nodes: the test of a node says whether MatDock reaches it', async () => {
+    if (process.env.MATOS_E2E_NODE_CONTAINER) {
+      const key = (await page.locator('[data-node-line]').innerText()).match(/'([^']+)'/)[1];
+      execFileSync('docker', ['exec', process.env.MATOS_E2E_NODE_CONTAINER, 'sh', '-c', `mkdir -p /root/.ssh && echo '${key}' >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys`]);
+    }
+
+    await Promise.all([page.waitForLoadState('networkidle'), page.click('form[action*="handler=Test"] button')]);
+    expectEqual(await page.locator('[data-node-test]').count(), 1, 'the test answers');
+    const ok = await page.locator('[data-node-test].mat-alert--success').count() === 1;
+    expectEqual(ok, real[0] !== '' && !!process.env.MATOS_E2E_NODE_CONTAINER, 'the test result: ' + await page.locator('[data-node-test]').innerText());
+    if (ok) {
+      expectEqual((await page.locator('[data-node-state]').innerText()).trim(), 'Online', 'the node is online');
+    }
+  });
+
+  const nodeId = new URL(nodeUrl).searchParams.get('id');
+  const appId = process.env.MATOS_E2E_NODE_APP;
+  if (real[0] && process.env.MATOS_E2E_NODE_CONTAINER && appId) {
+    let app = null;
+    await check('nodes: an app is installed on the node, runs there and the Task Manager shows it on the tab of the node', async () => {
+      await page.goto(BASE + '/Store/Install?id=' + appId);
+      await page.locator('details.mv-storepage__options summary').click();
+      expectTrue(await page.locator('#install-node option', { hasText: name }).count() === 1, 'the form offers the node');
+      await page.selectOption('#install-node', nodeId);
+      await Promise.all([page.waitForURL(/\/Jobs\/Details/), page.locator('button.mv-storepage__install:not([disabled])').first().click()]);
+      const log = await jobEnds(page);
+      app = await page.locator('a[href^="/Apps/Details?id="]').first().getAttribute('href');
+      expectTrue(/It runs on the node e2e-node/.test(log), 'the log names the node');
+      const running = execFileSync('docker', ['exec', process.env.MATOS_E2E_NODE_CONTAINER, 'docker', 'ps', '--format', '{{.Names}}']).toString();
+      expectTrue(running.includes('-' + appId + '-'), 'its container runs on the node: ' + running);
+
+      await page.goto(BASE + app);
+      expectTrue((await page.locator('[data-runs-on]').innerText()).includes(name), 'the app page says where it runs');
+
+      await page.goto(BASE + '/Tasks?node=' + nodeId);
+      expectEqual(await page.locator('.mat-tabs [aria-current="page"]').filter({ hasText: name }).count(), 1, 'the tab of the node is active');
+      expectTrue(await page.locator('main').innerText().then(t => t.includes(name)), 'the page names the node');
+      await page.waitForSelector('[data-group]', { timeout: 30000 });
+      const live = await page.evaluate(async n => (await fetch('/Tasks?handler=Live&node=' + n)).status, nodeId);
+      expectEqual(live, 200, 'the live answer of the node');
+    });
+
+    await check('nodes: the app moves to this machine with its data and the copy on the node goes', async () => {
+      expectTrue(!!app, 'the app was installed');
+      const id = new URL(BASE + app).searchParams.get('id');
+      // something of the app's own in a volume, to find again after the move (the first volume of its stack)
+      execFileSync('docker', ['exec', process.env.MATOS_E2E_NODE_CONTAINER, 'sh', '-c',
+        `v=$(docker volume ls -q | grep -- '-${appId}_' | head -1); [ -n "$v" ] && docker run --rm -v "$v":/d alpine sh -c 'echo moved > /d/e2e-move.txt' || true`]);
+      await page.goto(BASE + '/Apps/Move?id=' + id);
+      await page.selectOption('#move-to', '0');
+      await page.click('form.mat-form button[type=submit]');
+      await page.locator('dialog.mat-dialog[open] button[value=ok]').click();
+      await page.waitForURL(/\/Jobs\/Details/);
+      await jobEnds(page, 10);
+      const onNode = execFileSync('docker', ['exec', process.env.MATOS_E2E_NODE_CONTAINER, 'docker', 'ps', '-a', '--format', '{{.Names}}']).toString();
+      expectTrue(!onNode.includes('-' + appId + '-'), 'nothing of the app is left on the node: ' + onNode);
+      const here = execFileSync('docker', ['ps', '--format', '{{.Names}}']).toString();
+      expectTrue(here.split('\n').some(n => n.includes('-' + appId + '-')), 'it runs on this machine');
+      const moved = execFileSync('docker', ['run', '--rm', '-v', `${here.split('\n').find(n => n.includes('-' + appId + '-')).replace(/-[^-]+$/, '')}_data:/d`, 'alpine', 'sh', '-c', 'cat /d/e2e-move.txt 2>/dev/null || true']).toString().trim();
+      expectEqual(moved, 'moved', 'the data came along');
+      await page.goto(BASE + app);
+      expectTrue((await page.locator('[data-runs-on]').innerText()).includes('This machine'), 'the app page says it runs here now');
+    });
+
+    await check('nodes: the moved app is uninstalled again', async () => {
+      const id = new URL(BASE + app).searchParams.get('id');
+      await page.goto(BASE + '/Apps/Uninstall?id=' + id);
+      await page.check('#DeleteData');
+      if (await page.locator('#BackupFirst').count() === 1) { await page.uncheck('#BackupFirst'); }
+      await page.click('form.mat-form button[type=submit]');
+      await page.locator('dialog.mat-dialog[open] button[value=ok]').click();
+      await page.waitForURL(/\/Jobs\/Details/);
+      await jobEnds(page);
+      // its data goes too, also the volume MatDock restored when it moved
+      const volumes = execFileSync('docker', ['volume', 'ls', '-q']).toString();
+      expectTrue(!volumes.split('\n').some(v => v.includes('-' + appId + '_')), 'no volume of the app is left: ' + volumes.split('\n').filter(v => v.includes(appId)).join(', '));
+    });
+  }
+
+  await check('nodes: removing a node asks first, and it is gone', async () => {
+    await page.goto(nodeUrl);
+    await page.click('form[action*="handler=Remove"] button');
+    expectEqual(await page.locator('dialog.mat-dialog[open]').count(), 1, 'a dialog asks');
+    await Promise.all([page.waitForURL(/\/Settings\/Nodes$/), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
+    expectEqual(await page.locator(`[data-node="${name}"]`).count(), 0, 'the node is gone');
+  });
+}
+
 async function firstStart(browser, errors) {
   console.log('The first start');
   const looks = [

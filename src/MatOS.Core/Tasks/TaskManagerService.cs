@@ -16,7 +16,8 @@ public sealed record TaskSnapshot(
     IReadOnlyList<TaskPoint> Points,
     bool Measured,
     string? Error,
-    DateTime AtUtc)
+    DateTime AtUtc,
+    long? Node = null)
 {
     public int Total => Groups.Sum(g => g.Total);
 
@@ -36,40 +37,48 @@ public sealed class TaskManagerService
     private readonly AppService _apps;
     private readonly CatalogService _catalog;
     private readonly DockerService _docker;
-    private readonly TaskMonitor _monitor;
+    private readonly TaskMonitors _monitors;
     private readonly ILogger<TaskManagerService> _logger;
 
-    public TaskManagerService(RuntimeReader runtime, AppService apps, CatalogService catalog, DockerService docker, TaskMonitor monitor, ILogger<TaskManagerService> logger)
+    public TaskManagerService(RuntimeReader runtime, AppService apps, CatalogService catalog, DockerService docker, TaskMonitors monitors, ILogger<TaskManagerService> logger)
     {
         _runtime = runtime;
         _apps = apps;
         _catalog = catalog;
         _docker = docker;
-        _monitor = monitor;
+        _monitors = monitors;
         _logger = logger;
     }
 
-    public async Task<TaskSnapshot> ReadAsync(CancellationToken ct = default)
+    /// <summary>One look at this machine or at another node (<paramref name="node"/>, MatDock's environment: docs/ARCHITECTURE.md "Nodes").</summary>
+    public async Task<TaskSnapshot> ReadAsync(CancellationToken ct = default, long? node = null)
     {
         var now = DateTime.UtcNow;
+        var monitor = _monitors.For(node);
         List<ContainerTask> tasks;
         bool measured;
         try
         {
-            (tasks, measured) = await _runtime.ListTasksAsync(ct);
+            (tasks, measured) = await _runtime.ListTasksAsync(ct, node);
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or System.ComponentModel.Win32Exception or IOException && !ct.IsCancellationRequested)
         {
             _logger.LogInformation(ex, "Neither MatDock nor Docker answered the Task Manager.");
-            return new TaskSnapshot([], null, _monitor.Observe([], null, now).Points, false, "Neither MatDock nor Docker answers right now, so nothing can be shown.", now);
+            return new TaskSnapshot([], null, monitor.Observe([], null, now).Points, false, "Neither MatDock nor Docker answers right now, so nothing can be shown.", now, node);
         }
 
-        var host = measured ? await _runtime.GetHostAsync(ct) : null;
+        if (node is not null && !measured)
+        {
+            return new TaskSnapshot([], null, monitor.Observe([], null, now).Points, false,
+                "This node does not answer right now (it is offline, or MatDock cannot reach it). Test its connection under Settings, Nodes.", now, node);
+        }
+
+        var host = measured ? await _runtime.GetHostAsync(ct, node) : null;
         var self = await _docker.GetSelfContainerNameAsync(ct);
         var apps = (await _apps.ListAsync(ct))
             .GroupBy(a => a.Slug, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => { var a = g.First(); return new TaskApp(a.Id, a.Slug, a.Name, _catalog.IconOf(a.CatalogId), a.CatalogId); }, StringComparer.Ordinal);
-        var (rates, points) = _monitor.Observe(tasks, host, now);
-        return new TaskSnapshot(TaskBoard.Build(tasks, apps, self, rates, measured), host, points, measured, null, now);
+        var (rates, points) = monitor.Observe(tasks, host, now);
+        return new TaskSnapshot(TaskBoard.Build(tasks, apps, node is null ? self : null, rates, measured), host, points, measured, null, now, node);
     }
 }

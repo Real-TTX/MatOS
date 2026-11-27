@@ -284,6 +284,10 @@
                     {
                         <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Window</span>@if (!frame.Embeddable && frame.Reason is not null) {<span class="mat-item__text">@frame.Reason</span>}</span><span class="mat-item__end"><span>@(frame.Embeddable ? "Opens in the window" : "Opens in a new tab")</span></span></div></li>
                     }
+                    @if (Model.RunsOn is not null)
+                    {
+                        <li class="mat-item" data-runs-on><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Runs on</span></span><span class="mat-item__end">@if (isAdmin) {<a href="/Settings/Nodes">@Model.RunsOn</a>} else {<span>@Model.RunsOn</span>}</span></div></li>
+                    }
                     <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Installed</span></span><span class="mat-item__end"><span>@Format.DateTimeLocal(app.CreateDate)</span></span></div></li>
                     @if (app.LastUpdatedAt is { } updated)
                     {
@@ -381,6 +385,10 @@
             @if (isAdmin && app.Lifecycle is not (AppLifecycle.Removing or AppLifecycle.Failed) && !app.IsCore)
             {
                 <div class="mat-actions">
+                    @if (Model.CanMove)
+                    {
+                        <a href="/Apps/Move?id=@app.Id" class="mat-btn mat-btn--secondary @(Model.IsBusy ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy ? "true" : null)"><icon name="server" /><span>Move to another node</span></a>
+                    }
                     <a href="/Apps/Uninstall?id=@app.Id" class="mat-btn mat-btn--danger @(Model.IsBusy ? "is-disabled" : "")" aria-disabled="@(Model.IsBusy ? "true" : null)"><icon name="trash" /><span>Uninstall @app.Name</span></a>
                 </div>
             }

@@ -47,8 +47,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PortPlanner>();
         services.AddScoped<EngineLocator>();
         services.AddScoped<MatDockClient>();
+        services.AddScoped<MatOS.Core.Nodes.NodeService>();
         services.AddScoped<RuntimeReader>();
-        services.AddSingleton<MatOS.Core.Tasks.TaskMonitor>();
+        services.AddSingleton<MatOS.Core.Tasks.TaskMonitors>();
         services.AddScoped<MatOS.Core.Tasks.TaskManagerService>();
         services.AddScoped<LocalComposeEngine>();
         services.AddScoped<MatDockEngine>();

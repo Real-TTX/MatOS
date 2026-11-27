@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 namespace MatOS.Core.Apps;
 
 /// <summary>The answers of the install form.</summary>
-public sealed record InstallRequest(string CatalogId, string? Slug, string? Name, IReadOnlyDictionary<string, string?> Values);
+public sealed record InstallRequest(string CatalogId, string? Slug, string? Name, IReadOnlyDictionary<string, string?> Values, long? NodeId = null);
 
 /// <summary>Result of the synchronous first part of an install: the new app, or the problems with the input.</summary>
 public sealed record PrepareResult(InstalledApp? App, IReadOnlyList<string> Errors, IReadOnlyList<PortConflict> PortConflicts)
@@ -50,6 +50,8 @@ public sealed partial class AppService
     private readonly BindingBroker _broker;
     private readonly ImagePreflight _images;
     private readonly OwnerHandover _owner;
+    private readonly MatOS.Core.Nodes.NodeService _nodes;
+    private readonly MatDockClient _matDock;
     private readonly ILogger<AppService> _logger;
 
     public AppService(
@@ -72,6 +74,8 @@ public sealed partial class AppService
         BindingBroker broker,
         ImagePreflight images,
         OwnerHandover owner,
+        MatOS.Core.Nodes.NodeService nodes,
+        MatDockClient matDock,
         ILogger<AppService> logger)
     {
         _db = db;
@@ -93,6 +97,8 @@ public sealed partial class AppService
         _broker = broker;
         _images = images;
         _owner = owner;
+        _nodes = nodes;
+        _matDock = matDock;
         _logger = logger;
     }
 
@@ -158,6 +164,22 @@ public sealed partial class AppService
         }
 
         var errors = new List<string>();
+
+        // Another node (docs/ARCHITECTURE.md "Nodes"): one MatDock knows; never an engine, which runs on this machine.
+        MatOS.Core.Nodes.NodeInfo? node = null;
+        if (request.NodeId is { } nodeId)
+        {
+            node = await _nodes.FindAsync(nodeId, ct);
+            if (node is null || node.IsLocal)
+            {
+                errors.Add("MatDock does not know this node (any more). Choose another one.");
+            }
+            else if (catalog.Core)
+            {
+                errors.Add($"{catalog.Name} is a part of MatOS and runs on this machine only.");
+            }
+        }
+
         var slug = await UniqueSlugAsync(string.IsNullOrWhiteSpace(request.Slug) ? catalog.Id : request.Slug, ct);
         if (slug is null)
         {
@@ -184,7 +206,9 @@ public sealed partial class AppService
             ProjectName = _files.ProjectName(slug!),
             UiService = catalog.Ui?.Service,
             UiPort = catalog.Ui?.Port,
-            HostPort = await _ports.PlanHostPortAsync(catalog, ProxyPublisher.SelfPort(), ct),
+            NodeId = node?.AppNodeId,
+            NodeAddress = node?.AppNodeId is null ? null : node.Host,
+            HostPort = await _ports.PlanHostPortAsync(catalog, ProxyPublisher.SelfPort(), ct, node?.AppNodeId),
             UiPath = catalog.Ui?.Path,
             Lifecycle = AppLifecycle.Installing,
             VariablesJson = AppVariables.Serialize(catalog, variables, _protector),
@@ -195,7 +219,7 @@ public sealed partial class AppService
         _db.InstalledApps.Add(app);
         await _db.SaveChangesAsync(ct);
 
-        var conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct);
+        var conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct, app.NodeId);
         return new PrepareResult(app, [], conflicts);
     }
 
@@ -210,23 +234,27 @@ public sealed partial class AppService
             await _docker.EnsureNetworkAsync(ct);
 
             // Chosen now, not when the install was started: the engines are installed one after the other by the wizard.
-            var engine = await _engines.ChooseForNewAsync(catalog, ct);
+            var engine = await _engines.ChooseForNewAsync(catalog, app, ct);
             app.Engine = engine.Id;
             await _db.SaveChangesAsync(ct);
             log(engine.Id == "matdock" ? "MatDock runs this app." : "MatOS runs this app itself (docker compose).");
+            if (app.NodeId is not null)
+            {
+                log($"It runs on the node {await _nodes.NameOfAsync(app.NodeId, ct)} ({app.NodeAddress}).");
+            }
 
             var (spec, variables) = await BuildSpecAsync(app, catalog, log, ct);
-            var conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct);
+            var conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct, app.NodeId);
 
             // The host port of the web page was planned when the install was started; on "Try again" another container may have taken it since:
             // plan a free one instead of failing the same way again.
-            if (app.HostPort is { } planned && await _ports.HolderOfAsync(planned, app.ProjectName, ct) is { } taken)
+            if (app.HostPort is { } planned && await _ports.HolderOfAsync(planned, app.ProjectName, ct, app.NodeId) is { } taken)
             {
-                app.HostPort = await _ports.PlanHostPortAsync(catalog, ProxyPublisher.SelfPort(), ct);
+                app.HostPort = await _ports.PlanHostPortAsync(catalog, ProxyPublisher.SelfPort(), ct, app.NodeId);
                 await _db.SaveChangesAsync(ct);
                 log($"Host port {planned} is used by '{taken}' now: the app gets port {app.HostPort} instead.");
                 (spec, variables) = await BuildSpecAsync(app, catalog, log, ct);
-                conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct);
+                conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct, app.NodeId);
             }
 
             // A port the app publishes itself (MatSMTP's submission port) that another container holds: a variable names it, so the app gets a free one instead
@@ -234,7 +262,7 @@ public sealed partial class AppService
             if (await MovePortsAsync(app, catalog, variables, conflicts, log, ct))
             {
                 (spec, variables) = await BuildSpecAsync(app, catalog, log, ct);
-                conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct);
+                conflicts = await _ports.FindConflictsAsync(catalog, variables, app.ProjectName, ct, app.NodeId);
             }
 
             foreach (var conflict in conflicts)
@@ -243,12 +271,17 @@ public sealed partial class AppService
             }
 
             // The images first: one that cannot be pulled stops here, with the reason, before the engine has a stack of the app.
-            await _images.EnsureAsync(spec, log, ct);
-            await engine.DeployAsync(spec, pull: false, log, ct);
+            // On another node the images are pulled there: MatDock pulls them before it starts the stack.
+            if (app.NodeId is null)
+            {
+                await _images.EnsureAsync(spec, log, ct);
+            }
+
+            await engine.DeployAsync(spec, pull: app.NodeId is not null, log, ct);
             app.ComposeSha = await StoredHashAsync(engine, app, spec, ct);
             await _db.SaveChangesAsync(ct);
 
-            await WaitUntilRunningAsync(app.Slug, log, ct);
+            await WaitUntilRunningAsync(app, log, ct);
 
             app.Lifecycle = AppLifecycle.Installed;
             app.StatusMessage = null;
@@ -315,7 +348,7 @@ public sealed partial class AppService
             app.ComposeSha = await StoredHashAsync(engine, app, spec, ct);
         }
 
-        await WaitUntilRunningAsync(app.Slug, log, ct);
+        await WaitUntilRunningAsync(app, log, ct);
 
         app.LastUpdatedAt = DateTime.UtcNow;
         app.Lifecycle = AppLifecycle.Installed;
@@ -423,7 +456,7 @@ public sealed partial class AppService
                 continue;
             }
 
-            if (await _ports.FreePortFromAsync(conflict.Port + 1, given, ct) is not { } free)
+            if (await _ports.FreePortFromAsync(conflict.Port + 1, given, ct, app.NodeId) is not { } free)
             {
                 continue;
             }
@@ -449,7 +482,7 @@ public sealed partial class AppService
     /// </summary>
     private async Task FinalBackupAsync(InstalledApp app, bool failedBefore, bool stopContainers, Action<string> log, CancellationToken ct)
     {
-        if ((await _docker.ListContainersAsync(app.Slug, ct)).Count == 0)
+        if ((await _runtime.ListAppContainersAsync(app.Slug, app.NodeId, ct)).Count == 0)
         {
             log("No final backup: the app has no containers, so there is nothing to back up.");
             return;
@@ -480,8 +513,9 @@ public sealed partial class AppService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            if ((await _docker.ListContainersAsync(app.Slug, ct)).Count > 0)
+            if (app.NodeId is not null || (await _docker.ListContainersAsync(app.Slug, ct)).Count > 0)
             {
+                // On another node MatOS cannot look itself: what MatDock could not remove stays an error.
                 throw;
             }
 
@@ -542,6 +576,13 @@ public sealed partial class AppService
         // A newer catalog entry may make an app an engine (MatIdentity, MatSMTP) or give it another role.
         app.IsCore = catalog.Core;
         app.Role = catalog.Role;
+
+        // The address of its node, as MatDock has it now (it is the app's internal address: docs/ARCHITECTURE.md "Nodes").
+        if (app.NodeId is not null && await _nodes.FindAsync(app.NodeId, ct) is { Host: { Length: > 0 } nodeHost } && nodeHost != app.NodeAddress)
+        {
+            log($"The node of {app.Name} has the address {nodeHost} now.");
+            app.NodeAddress = nodeHost;
+        }
 
         // ... and what the broker gives it: its bindings and its addresses (MatDesign docs/PLATFORM.md "Bindings"), the same for every app.
         var injected = await _broker.VariablesAsync(app, ct);
@@ -701,7 +742,7 @@ public sealed partial class AppService
         {
             try
             {
-                await WaitUntilRunningAsync(provider.Slug, log, ct);
+                await WaitUntilRunningAsync(provider, log, ct);
             }
             catch (InvalidOperationException ex)
             {
@@ -828,20 +869,21 @@ public sealed partial class AppService
     /// Waits until every container runs (a container that finished with exit code 0 is a one-shot task and counts as done).
     /// A container that exits with an error or restarts in a loop fails the install with its last log lines.
     /// </summary>
-    private async Task WaitUntilRunningAsync(string slug, Action<string> log, CancellationToken ct)
+    private async Task WaitUntilRunningAsync(InstalledApp app, Action<string> log, CancellationToken ct)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(90);
+        // A node pulls the images when the stack starts: give it longer.
+        var deadline = DateTime.UtcNow.AddSeconds(app.NodeId is null ? 90 : 180);
         var stable = 0;
         while (DateTime.UtcNow < deadline)
         {
-            var containers = await _docker.ListContainersAsync(slug, ct);
+            var containers = await _runtime.ListAppContainersAsync(app.Slug, app.NodeId, ct);
             foreach (var container in containers)
             {
                 var failed = container.State.Equals("dead", StringComparison.OrdinalIgnoreCase) ||
                     (container.State.Equals("exited", StringComparison.OrdinalIgnoreCase) && !container.Status.Contains("(0)", StringComparison.Ordinal));
                 if (failed || container.State.Equals("restarting", StringComparison.OrdinalIgnoreCase))
                 {
-                    var logs = await _docker.GetLogsAsync(container.Name, 12, ct);
+                    var logs = await _runtime.GetAppLogsAsync(container.Name, app.NodeId, 12, ct);
                     throw new InvalidOperationException($"The container '{container.Service}' does not stay up ({container.Status}). Last log lines: {logs.ReplaceLineEndings(" | ")}");
                 }
             }
@@ -859,7 +901,7 @@ public sealed partial class AppService
             await Task.Delay(TimeSpan.FromSeconds(2), ct);
         }
 
-        log("Warning: the containers are still starting after 90 seconds. Check the logs of the app.");
+        log($"Warning: the containers are still starting after {(app.NodeId is null ? 90 : 180)} seconds. Check the logs of the app.");
     }
 
     private async Task<InstalledApp> RequireAsync(long appId, CancellationToken ct)

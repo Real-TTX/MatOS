@@ -24,12 +24,16 @@ public static class AppJobs
     public static Func<JobContext, Task> Lifecycle(long appId, string command)
         => ctx => ctx.Services.GetRequiredService<AppService>().RunLifecycleAsync(appId, command, ctx.Log, ctx.Cancellation);
 
-    /// <summary>Starts, stops or restarts one container of an app (the Task Manager): MatDock does it, MatOS only asks.</summary>
-    public static Func<JobContext, Task> ContainerAction(string container, string verb)
+    /// <summary>Moves an app to another node (<paramref name="target"/> null = this machine): docs/ARCHITECTURE.md "Nodes".</summary>
+    public static Func<JobContext, Task> Move(long appId, long? target)
+        => ctx => ctx.Services.GetRequiredService<AppService>().RunMoveAsync(appId, target, ctx.Log, ctx.Cancellation);
+
+    /// <summary>Starts, stops or restarts one container of an app (the Task Manager) on this machine or a node: MatDock does it, MatOS only asks.</summary>
+    public static Func<JobContext, Task> ContainerAction(string container, string verb, long? node = null)
         => async ctx =>
         {
             ctx.Log($"Asking MatDock to {verb} {container} ...");
-            await ctx.Services.GetRequiredService<MatOS.Core.Engines.MatDockClient>().ContainerActionAsync(container, verb, ctx.Cancellation);
+            await ctx.Services.GetRequiredService<MatOS.Core.Engines.MatDockClient>().ContainerActionAsync(container, verb, ctx.Cancellation, node);
             ctx.Log("Done.");
         };
 

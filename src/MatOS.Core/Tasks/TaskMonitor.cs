@@ -82,3 +82,15 @@ public sealed class TaskMonitor
     public static double? Rate(long? before, long? now, double seconds)
         => before is { } a && now is { } b && b >= a && seconds > 0 ? (b - a) / seconds : null;
 }
+
+/// <summary>
+/// A <see cref="TaskMonitor"/> per node (docs/ARCHITECTURE.md "Nodes"): the Task Manager switches between nodes, and each keeps its own readings and charts.
+/// A singleton, memory only.
+/// </summary>
+public sealed class TaskMonitors
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<long, TaskMonitor> _byNode = new();
+
+    /// <summary>The monitor of a node; <c>null</c> is this machine.</summary>
+    public TaskMonitor For(long? node) => _byNode.GetOrAdd(node ?? 0, _ => new TaskMonitor());
+}

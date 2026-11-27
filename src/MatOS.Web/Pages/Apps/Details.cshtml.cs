@@ -30,6 +30,7 @@ public class DetailsModel : PageModel
     private readonly AppUrls _urls;
     private readonly SystemConfigService _config;
     private readonly FrameProbe _frames;
+    private readonly MatOS.Core.Nodes.NodeService _nodes;
 
     public DetailsModel(
         AppService apps,
@@ -43,8 +44,10 @@ public class DetailsModel : PageModel
         ISecretProtector protector,
         AppUrls urls,
         SystemConfigService config,
-        FrameProbe frames)
+        FrameProbe frames,
+        MatOS.Core.Nodes.NodeService nodes)
     {
+        _nodes = nodes;
         _apps = apps;
         _catalog = catalog;
         _docker = docker;
@@ -64,6 +67,12 @@ public class DetailsModel : PageModel
 
     [BindProperty(SupportsGet = true)]
     public string? Tab { get; set; }
+
+    /// <summary>The node the app runs on, when there are nodes besides this machine (docs/ARCHITECTURE.md "Nodes"); null otherwise.</summary>
+    public string? RunsOn { get; private set; }
+
+    /// <summary>An administrator may move the app to another node.</summary>
+    public bool CanMove { get; private set; }
 
     /// <summary>The container whose log is shown on the Logs tab.</summary>
     [BindProperty(SupportsGet = true)]
@@ -138,12 +147,19 @@ public class DetailsModel : PageModel
             Credentials = AppCredentials.Deserialize(App.CredentialsJson, _protector);
         }
 
+        var nodes = await _nodes.ChoicesAsync(ct);
+        if (App.NodeId is not null || nodes.Any(n => !n.IsLocal))
+        {
+            RunsOn = await _nodes.NameOfAsync(App.NodeId, ct);
+            CanMove = User.IsAdmin() && nodes.Count > 1 && AppService.CannotMove(App) is null;
+        }
+
         switch (ActiveTab)
         {
             case "logs":
                 var container = Containers.FirstOrDefault(c => c.Name == Container) ?? Containers.FirstOrDefault();
                 Container = container?.Name;
-                LogText = container is null ? "The app has no containers." : await _runtime.GetLogsAsync(container.Name, 400, ct);
+                LogText = container is null ? "The app has no containers." : await _runtime.GetLogsAsync(container.Name, 400, ct, App.NodeId);
                 break;
             case "backups" when User.IsAdmin():
                 Backups = (await _hub.ListAsync(ct)).Where(b => b.AppSlug == App.Slug).Take(50).ToList();

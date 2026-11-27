@@ -30,8 +30,10 @@ public sealed class AppReconciler
         MatDockEngine engine,
         CatalogService catalog,
         ISecretProtector protector,
-        IOptions<MatOSOptions> options)
+        IOptions<MatOSOptions> options,
+        MatOS.Core.Nodes.NodeService nodes)
     {
+        _nodes = nodes;
         _db = db;
         _matdock = matdock;
         _engine = engine;
@@ -40,7 +42,9 @@ public sealed class AppReconciler
         _prefix = options.Value.ProjectPrefix + "-";
     }
 
-    /// <summary>Returns how many apps were taken over.</summary>
+    private readonly MatOS.Core.Nodes.NodeService _nodes;
+
+    /// <summary>Returns how many apps were taken over (of this machine and of every node that is online: docs/ARCHITECTURE.md "Nodes").</summary>
     public async Task<int> ReconcileAsync(Action<string> log, CancellationToken ct = default)
     {
         if (!await _engine.IsAvailableAsync(ct))
@@ -50,27 +54,36 @@ public sealed class AppReconciler
 
         var known = (await _db.InstalledApps.Select(a => a.Slug).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
         var adopted = 0;
-        foreach (var name in await _matdock.ListManagedStackNamesAsync(ct))
+        var places = new List<(long? Node, string? Address)> { (null, null) };
+        places.AddRange((await _nodes.ListAsync(ct)).Where(n => !n.IsLocal && n.IsOnline && n.Host is not null).Select(n => ((long?)n.Id, n.Host)));
+        foreach (var (node, address) in places)
         {
-            if (!name.StartsWith(_prefix, StringComparison.Ordinal) || known.Contains(name[_prefix.Length..]))
+            foreach (var name in await _matdock.ListManagedStackNamesAsync(ct, node))
             {
-                continue;
-            }
+                if (!name.StartsWith(_prefix, StringComparison.Ordinal) || known.Contains(name[_prefix.Length..]))
+                {
+                    continue;
+                }
 
-            var slug = name[_prefix.Length..];
-            var spec = await _matdock.GetStackAsync(name, slug, ct);
-            if (spec is null || !TryAdopt(spec, out var app, out var variables, out var catalog))
-            {
-                log($"The stack '{name}' in MatDock carries no MatOS app definition and is left alone.");
-                continue;
-            }
+                var slug = name[_prefix.Length..];
+                var spec = await _matdock.GetStackAsync(name, slug, ct, node);
+                if (spec is null || !TryAdopt(spec, out var app, out var variables, out var catalog))
+                {
+                    log($"The stack '{name}' in MatDock carries no MatOS app definition and is left alone.");
+                    continue;
+                }
 
-            app.VariablesJson = AppVariables.Serialize(catalog, variables, _protector);
-            app.CredentialsJson = AppCredentials.Serialize(AppCredentials.Build(catalog, variables), _protector);
-            app.SortOrder = known.Count + adopted;
-            _db.InstalledApps.Add(app);
-            adopted++;
-            log($"Took {app.Name} over from MatDock.");
+                app.NodeId = node;
+                app.NodeAddress = address;
+                known.Add(slug);
+
+                app.VariablesJson = AppVariables.Serialize(catalog, variables, _protector);
+                app.CredentialsJson = AppCredentials.Serialize(AppCredentials.Build(catalog, variables), _protector);
+                app.SortOrder = known.Count + adopted;
+                _db.InstalledApps.Add(app);
+                adopted++;
+                log($"Took {app.Name} over from MatDock{(node is null ? string.Empty : $" (on node {address})")}.");
+            }
         }
 
         if (adopted > 0)

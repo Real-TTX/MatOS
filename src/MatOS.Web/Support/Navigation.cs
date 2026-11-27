@@ -108,6 +108,7 @@ public static class Navigation
                     new("General", "/Settings", null),
                     new("Address", "/Settings/Address", null),
                     new("Engines", "/Settings/Engines", null),
+                    new("Nodes", "/Settings/Nodes", null),
                     new("Updates", "/Settings/Updates", null, updateAvailable ? new NavBadge(string.Empty, "accent", "new version of MatOS") : null),
                     new("System", "/Settings/System", null),
                     new("Setup wizard", "/Wizard", null),

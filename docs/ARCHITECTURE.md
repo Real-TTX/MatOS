@@ -392,6 +392,45 @@ All apps and engines share the Docker network `matos` with MatOS itself (it atta
   container on its own (`AppJobs.ContainerAction`, MatDock does it). Only what MatOS runs: never MatOS itself or MatDock, an engine only restarts, and nothing
   else on the host is touched (its log can be read). Without MatDock nothing can be done and only MatOS's own containers are listed.
 - The log of a container (`/Tasks/Log`) opens in a window of its own and follows by itself.
+- **A tab per node** ("Nodes" below): with other nodes the page shows one tab each (`?node=<id>`, kept through the tools and the live answer); the host, the
+  containers, the charts (`TaskMonitors`: one monitor per node) and the actions are of that node, asked from MatDock with `?environment=`. A node that is offline
+  is not asked: the page says so.
+
+## Nodes: more than one Docker host
+
+The owner runs several VMs (2026-11-27: "three VMs in the homelab"). A **node** is a Docker host that MatOS installs apps on. A node **is a MatDock
+environment** (the engine owns it, as it owns the stacks): MatOS keeps no list of its own, it asks MatDock (`GET /api/v1/environments`) and writes through it.
+The machine MatOS runs on is MatDock's local environment, *This machine*; every other node is an SSH environment.
+
+- **Adding a node** (*Settings, Nodes*, `Pages/Settings/Nodes`, `Core/Nodes/NodeService`): a name, the address of the VM and the SSH user (in the group
+  `docker`). MatDock makes a key pair (`PUT /api/v1/environments/ssh/{name}`, `managedBy: matos`), MatOS shows the public key with the one line to put it
+  into `~/.ssh/authorized_keys`, and *Test connection* (`POST /environments/{id}/test`) says whether Docker answers. The key never leaves MatDock; the
+  host key is pinned on the first connection (MatDock's rule). A node set up in MatDock itself is listed and used too, but only MatOS's own are removed,
+  and only while no app runs there (`DELETE /api/v1/environments/{id}`, MatDock refuses while it has stacks there).
+- **Installing on a node:** with more than one node the install form asks *Where should it run?* (default *This machine*). The app remembers it
+  (`InstalledApp.NodeId`, MatDock's environment id; `null` = this machine) and every call of MatDock for it carries `?environment=<id>`: deploy, update,
+  start and stop, logs, backups, removal. The engines always run on this machine, and so does everything while MatDock is not there.
+- **The network across nodes is the address of the node and a port** (the owner's choice; no Swarm, no overlay). The shared Docker network `matos` exists
+  on this machine only, so an app on another node is rendered without it (`ComposeRenderer`, `ComposeTarget.Remote`) and always publishes the port of its web
+  page there; its port is planned free on that node and on this machine (the proxy may serve a port route with the same number). Its internal address is
+  `http://<address of the node>:<port>` (`AppAddresses.InternalUrl`): the route of Matcad points there, and the platform API is asked there.
+- **Bindings of an app on another node** (`BindingBroker`): `web.route` works as everywhere (Matcad on this machine proxies to the node). For the others the
+  values the provider answers are made reachable from the node: the provider's internal address becomes its public address (MatIdentity under the domain or
+  the address of this machine). A binding whose values still name a container of the shared network (MatSMTP's relay is reachable only there) cannot work
+  from another node: it is removed again and the log says so; the app keeps its own settings for it (it sends its mail itself).
+- **Seeing the nodes:** the Task Manager has a node switcher (`/Tasks?node=<id>`): the host, the containers and the charts of that node, live from MatDock
+  (`/host` and `/containers` with `?environment=`). *Settings, Nodes* lists each node with its state, Docker version, load and its apps. The app page names
+  its node. A node that is offline is not asked by the pages (its apps show *Node offline*), so a VM that is down never slows the home screen.
+- **Backups and updates per node:** a backup of an app is made by MatDock on the app's node and kept where its target is; the list of backups asks every
+  node that has apps. An *All apps* schedule exists once per node (MatDock runs a schedule in one environment): MatOS writes `<name>` for this machine and
+  `<name>-node<id>` for each other node with apps, and treats them as one. Updates (by hand and the automatic ones) run per app, so on its node.
+- **Moving an app to another node** (*Move* on the app page, a job `AppJobs.Move`): a consistent backup on the old node (containers stopped), the
+  stack is rendered for the new node and saved there, MatDock restores the volumes of that backup into the new node (`POST /backups/{id}/restore` with
+  `environment` and `volumesOnly`, MatDock apiVersion 7), the app is deployed there and waits until it runs, the bindings and the route follow its new
+  address, and only then the stack on the old node is removed with its volumes (the backup stays). A failure before the app runs on the new node leaves it
+  on the old one and starts it again.
+- **What a node needs:** Docker with the compose plugin, SSH reachable from MatDock's container, a user in the group `docker`, and the ports of its apps
+  reachable from this machine (the proxy) and from the browsers (an app without a domain is opened at the node's address).
 
 ## How a long task runs
 
@@ -561,7 +600,7 @@ class for every capability and no code that knows an app (`Core/Integrations/Bin
 
 - **No `mssql-server` / `pgadmin` service.** The project template names them; with SQLite neither is needed. The release
   stack is the single service `matos`; the dev stack adds a SQLite web viewer.
-- No multi-host management (that is MatDock), no file explorer or terminal (the older matOS desktop / MatDock).
+- No management of the Docker hosts beyond what an app needs (the nodes are MatDock's environments: "Nodes" above), no file explorer or terminal (the older matOS desktop / MatDock).
 - No deep integration of alternatives (Nginx Proxy Manager, Portainer): they are installed as plain apps.
 
 ## MatIdentity, the single sign-on

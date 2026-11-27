@@ -43,12 +43,17 @@ public sealed class AppAddresses
 
         if (app.HostPort is { } port && !underDomain)
         {
-            var host = string.IsNullOrWhiteSpace(config.PublicHost) ? "localhost" : config.PublicHost.Trim();
-            result.Add($"http://{(host.Contains(':') && !host.StartsWith('[') ? $"[{host}]" : host)}:{port}");
+            // An app on another node is served on this machine by the proxy's port route when there is a proxy, else only at the node itself.
+            var host = app.NodeAddress is { Length: > 0 } node && (app.Role == AppRoles.Proxy || !await _proxy.IsActiveAsync(ct))
+                ? node
+                : string.IsNullOrWhiteSpace(config.PublicHost) ? "localhost" : config.PublicHost.Trim();
+            result.Add(HttpUrl(host, port));
         }
 
         return result;
     }
+
+    private static string HttpUrl(string host, int port) => $"http://{(host.Contains(':') && !host.StartsWith('[') ? $"[{host}]" : host)}:{port}";
 
     /// <summary>
     /// The public address only when it is a real one: a route under the domain, or this host by the address the settings name. Without either the
@@ -58,10 +63,23 @@ public sealed class AppAddresses
     {
         var config = await _config.GetAsync(ct);
         var hasRoute = !string.IsNullOrWhiteSpace(config.BaseDomain) && await _proxy.IsActiveAsync(ct);
-        return hasRoute || !string.IsNullOrWhiteSpace(config.PublicHost) ? await PublicUrlAsync(app, ct) : null;
+        return hasRoute || !string.IsNullOrWhiteSpace(config.PublicHost) || app.NodeAddress is { Length: > 0 } ? await PublicUrlAsync(app, ct) : null;
     }
 
-    /// <summary>Where the other apps reach the app on the shared network: <c>http://&lt;container&gt;:&lt;port&gt;</c>; null without a web service.</summary>
-    public string? InternalUrl(InstalledApp app)
-        => app.UiService is null || app.UiPort is null ? null : $"http://{_files.UiHost(app)}:{app.UiPort}";
+    /// <summary>
+    /// Where the other apps reach the app: on the shared network <c>http://&lt;container&gt;:&lt;port&gt;</c>; an app on another node at that node's address and
+    /// its published port (docs/ARCHITECTURE.md "Nodes"); null without a web service.
+    /// </summary>
+    public string? InternalUrl(InstalledApp app) => InternalUrlOf(app, _files.UiHost(app));
+
+    /// <summary>The common start of the names of the app's containers (<c>matos-matsmtp-</c>): a value that names one is an address on the shared network.</summary>
+    public string ContainerPrefix(InstalledApp app) => _files.ContainerName(app.Slug, string.Empty);
+
+    /// <summary><see cref="InternalUrl"/> with the container name of the app's web service given.</summary>
+    public static string? InternalUrlOf(InstalledApp app, string uiHost)
+        => app.UiService is null || app.UiPort is null
+            ? null
+            : app.NodeAddress is { Length: > 0 } node
+                ? app.HostPort is { } port ? HttpUrl(node, port) : null
+                : $"http://{uiHost}:{app.UiPort}";
 }

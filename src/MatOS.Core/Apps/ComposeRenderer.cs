@@ -51,12 +51,20 @@ public sealed partial class ComposeRenderer
         var root = (YamlMappingNode)stream.Documents[0].RootNode;
         var services = (YamlMappingNode)root.Children[new YamlScalarNode("services")];
 
+        // On another node the shared network does not exist (docs/ARCHITECTURE.md "Nodes"): the app is reached at the node's address and its own port,
+        // so it joins no shared network and always publishes the port of its web page.
+        var remote = app.NodeId is not null;
+        if (remote)
+        {
+            ports = ports is null ? null : ports with { OwnPort = true };
+        }
+
         foreach (var (keyNode, valueNode) in services.Children)
         {
             var service = (YamlMappingNode)valueNode;
             var name = ((YamlScalarNode)keyNode).Value!;
             var isUi = catalog.Ui?.Service == name;
-            var shared = isUi || catalog.Shared.Contains(name);
+            var shared = !remote && (isUi || catalog.Shared.Contains(name));
 
             SetScalar(service, "container_name", ContainerName(app.Slug, name), ScalarStyle.Plain);
             MergeLabels(service, new Dictionary<string, string>
@@ -91,7 +99,11 @@ public sealed partial class ComposeRenderer
             }
         }
 
-        AddSharedNetwork(root);
+        if (!remote)
+        {
+            AddSharedNetwork(root);
+        }
+
         RenameCatalogBlock(root);
         SetMapping(root, "x-matdock", new Dictionary<string, string>
         {

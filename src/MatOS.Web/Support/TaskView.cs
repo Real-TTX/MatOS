@@ -77,7 +77,8 @@ public sealed class TaskView
     public static string? OpenUrl(TaskGroup group)
         => group.App is not { } app ? null : app.IsEngine ? "/Engines?id=" + Uri.EscapeDataString(app.CatalogId) : "/Apps/Open?id=" + app.Id;
 
-    public static string LogUrl(TaskRow row) => "/Tasks/Log?name=" + Uri.EscapeDataString(row.Container.Name);
+    public static string LogUrl(TaskRow row, long? node = null)
+        => "/Tasks/Log?name=" + Uri.EscapeDataString(row.Container.Name) + (node is { } id ? "&node=" + id.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty);
 
     public static string MemorySub(double? percent) => percent is null ? string.Empty : TaskFormat.Percent(percent) + " of the host";
 
@@ -110,6 +111,8 @@ public sealed class TaskView
             Total = snapshot.Groups.Count,
             Matching = matching.Count,
             Noun = snapshot.Groups.Count == 1 ? "app or program" : "apps and programs",
+            // The node the list is of stays through a search, a filter, a sort and the pager (docs/ARCHITECTURE.md "Nodes").
+            Keep = snapshot.Node is { } node ? new Dictionary<string, string?> { ["node"] = node.ToString(System.Globalization.CultureInfo.InvariantCulture) } : new Dictionary<string, string?>(),
         };
         var (items, pager) = ListQuery.Slice(matching, request, PageSize, toolbar.UrlWithPage);
         return new TaskView

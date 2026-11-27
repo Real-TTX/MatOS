@@ -18,16 +18,21 @@ public sealed class RuntimeReader
     private readonly DockerService _docker;
     private readonly MatOSOptions _options;
     private readonly ILogger<RuntimeReader> _logger;
+    private readonly MatOS.Core.Nodes.NodeService _nodes;
 
-    public RuntimeReader(MatDockClient matDock, DockerService docker, IOptions<MatOSOptions> options, ILogger<RuntimeReader> logger)
+    public RuntimeReader(MatDockClient matDock, DockerService docker, IOptions<MatOSOptions> options, ILogger<RuntimeReader> logger, MatOS.Core.Nodes.NodeService nodes)
     {
         _matDock = matDock;
         _docker = docker;
         _options = options.Value;
         _logger = logger;
+        _nodes = nodes;
     }
 
-    /// <summary>The containers of the apps of this MatOS, optionally of one app (its slug).</summary>
+    /// <summary>
+    /// The containers of the apps of this MatOS, optionally of one app (its slug): this machine, and every other node that has apps and that MatDock finds
+    /// online (docs/ARCHITECTURE.md "Nodes"; a node that is down is not asked, so its apps show no containers).
+    /// </summary>
     public async Task<List<ContainerInfo>> ListContainersAsync(string? instance = null, CancellationToken ct = default)
     {
         var stacks = await AskAsync(() => _matDock.ListStacksAsync(ct), ct);
@@ -37,8 +42,42 @@ public sealed class RuntimeReader
         }
 
         var containers = FromStacks(stacks, _options.ProjectPrefix);
+        foreach (var node in await _nodes.NodesWithAppsAsync(ct))
+        {
+            if (await _nodes.IsReachableAsync(node, ct) && await AskAsync(() => _matDock.ListStacksAsync(ct, node), ct) is { } remote)
+            {
+                containers.AddRange(FromStacks(remote, _options.ProjectPrefix));
+            }
+        }
+
         return instance is null ? containers : containers.Where(c => c.Instance == instance).ToList();
     }
+
+    /// <summary>
+    /// The containers of one app where it runs, also inside a job (the install waits for them): on this machine Docker directly (as a job always read), on
+    /// another node from MatDock (there is no socket of that node here). Empty when MatDock does not answer.
+    /// </summary>
+    public async Task<List<ContainerInfo>> ListAppContainersAsync(string slug, long? node, CancellationToken ct = default)
+    {
+        if (node is null)
+        {
+            return await _docker.ListContainersAsync(slug, ct);
+        }
+
+        try
+        {
+            return FromStacks(await _matDock.ListStacksAsync(ct, node) ?? [], _options.ProjectPrefix).Where(c => c.Instance == slug).ToList();
+        }
+        catch (Exception ex) when ((ex is HttpRequestException or TaskCanceledException or InvalidOperationException) && !ct.IsCancellationRequested)
+        {
+            _logger.LogInformation(ex, "MatDock did not list the containers of node {Node}.", node);
+            return [];
+        }
+    }
+
+    /// <summary>The last lines of the log of a container of an app where it runs (inside a job too).</summary>
+    public async Task<string> GetAppLogsAsync(string container, long? node, int tail, CancellationToken ct = default)
+        => node is null ? await _docker.GetLogsAsync(container, tail, ct) : await _matDock.GetContainerLogsAsync(container, tail, ct, node) ?? string.Empty;
 
     /// <summary>The containers of the stacks whose name starts with the prefix of this MatOS; the rest of the name is the app (<c>matos-matdo</c>: <c>matdo</c>).</summary>
     public static List<ContainerInfo> FromStacks(JsonArray stacks, string prefix)
@@ -64,8 +103,15 @@ public sealed class RuntimeReader
     /// Every container of the host with what it uses (the Task Manager). Without MatDock only the containers of this MatOS are known, and no usage:
     /// <c>Measured</c> says which of the two it is.
     /// </summary>
-    public async Task<(List<ContainerTask> Tasks, bool Measured)> ListTasksAsync(CancellationToken ct = default)
+    public async Task<(List<ContainerTask> Tasks, bool Measured)> ListTasksAsync(CancellationToken ct = default, long? node = null)
     {
+        if (node is not null)
+        {
+            // Another node has no socket here: only MatDock can say what runs there, and nothing while it does not answer or the node is down.
+            var remote = await _nodes.IsReachableAsync(node, ct) ? await AskAsync(() => _matDock.ListContainersAsync(ct, 3, node), ct) : null;
+            return remote is null ? ([], false) : (FromContainers(remote, _options.ProjectPrefix), true);
+        }
+
         var containers = await AskAsync(() => _matDock.ListContainersAsync(ct, maxAgeSeconds: 3), ct);
         return containers is null
             ? ((await _docker.ListContainersAsync(ct: ct)).Select(c => new ContainerTask(c, true)).ToList(), false)
@@ -94,14 +140,17 @@ public sealed class RuntimeReader
     /// The host as the Task Manager shows it: live from MatDock (<c>/host</c>, apiVersion 5), else the last reading of its environment (percent only, up to
     /// five minutes old), else nothing.
     /// </summary>
-    public async Task<HostReading?> GetHostAsync(CancellationToken ct = default)
+    public async Task<HostReading?> GetHostAsync(CancellationToken ct = default, long? node = null)
     {
-        if (await AskAsync(() => _matDock.GetHostAsync(ct), ct) is { } live && FromHost(live) is { } reading)
+        if (await AskAsync(() => _matDock.GetHostAsync(ct, node), ct) is { } live && FromHost(live) is { } reading)
         {
             return reading;
         }
 
-        var engine = FromEnvironment(await AskAsync(() => _matDock.GetLocalEnvironmentAsync(ct), ct));
+        var environment = node is null
+            ? await AskAsync(() => _matDock.GetLocalEnvironmentAsync(ct), ct)
+            : (await AskAsync(() => _matDock.ListEnvironmentsAsync(ct), ct))?.OfType<JsonObject>().FirstOrDefault(e => e["id"] is JsonValue id && id.TryGetValue<long>(out var value) && value == node);
+        var engine = FromEnvironment(environment);
         return engine?.Load is { } load
             ? new HostReading(null, load.CpuPercent, null, null, load.MemoryPercent, null, null, load.DiskPercent, null, engine.ContainersRunning, engine.Version, false)
             : null;
@@ -123,8 +172,10 @@ public sealed class RuntimeReader
     }
 
     /// <summary>The last lines of the log of a container.</summary>
-    public async Task<string> GetLogsAsync(string container, int tail = 300, CancellationToken ct = default)
-        => await AskAsync(() => _matDock.GetContainerLogsAsync(container, tail, ct), ct) ?? await _docker.GetLogsAsync(container, tail, ct);
+    public async Task<string> GetLogsAsync(string container, int tail = 300, CancellationToken ct = default, long? node = null)
+        => node is not null
+            ? await AskAsync(() => _matDock.GetContainerLogsAsync(container, tail, ct, node), ct) ?? "The node does not answer."
+            : await AskAsync(() => _matDock.GetContainerLogsAsync(container, tail, ct), ct) ?? await _docker.GetLogsAsync(container, tail, ct);
 
     /// <summary>The Docker engine of this host and, from MatDock, how busy the host is.</summary>
     public async Task<DockerEngineInfo> GetEngineInfoAsync(CancellationToken ct = default)

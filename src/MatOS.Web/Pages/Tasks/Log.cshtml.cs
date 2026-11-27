@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace MatOS.Web.Pages.Tasks;
 
-/// <summary>The log of one container of the Task Manager (MatDock reads it).</summary>
+/// <summary>The log of one container of the Task Manager, on this machine or on a node (MatDock reads it).</summary>
 public partial class LogModel : PageModel
 {
     private readonly RuntimeReader _runtime;
@@ -19,7 +19,10 @@ public partial class LogModel : PageModel
 
     public string Text { get; private set; } = string.Empty;
 
-    public async Task<IActionResult> OnGetAsync(string? name)
+    /// <summary>The node of the container (null: this machine).</summary>
+    public long? Node { get; private set; }
+
+    public async Task<IActionResult> OnGetAsync(string? name, long? node)
     {
         // The name of a container as Docker allows it: nothing else is passed on.
         if (name is null || !ContainerName().IsMatch(name))
@@ -28,7 +31,8 @@ public partial class LogModel : PageModel
         }
 
         Name = name;
-        Text = await _runtime.GetLogsAsync(name, 300, HttpContext.RequestAborted);
+        Node = node;
+        Text = await _runtime.GetLogsAsync(name, 300, HttpContext.RequestAborted, node);
         return Page();
     }
 

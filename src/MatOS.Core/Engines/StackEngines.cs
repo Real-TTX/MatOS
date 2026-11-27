@@ -26,4 +26,19 @@ public sealed class StackEngines
     /// </summary>
     public async Task<IStackEngine> ChooseForNewAsync(CatalogApp catalog, CancellationToken ct = default)
         => catalog.Id == "matdock" || !await _matdock.IsAvailableAsync(ct) ? _local : _matdock;
+
+    /// <summary>The engine for a new install of <paramref name="app"/>: on another node only MatDock can run it (docs/ARCHITECTURE.md "Nodes").</summary>
+    public async Task<IStackEngine> ChooseForNewAsync(CatalogApp catalog, InstalledApp app, CancellationToken ct = default)
+    {
+        if (app.NodeId is null)
+        {
+            return await ChooseForNewAsync(catalog, ct);
+        }
+
+        return catalog.Core || catalog.Id == "matdock"
+            ? throw new InvalidOperationException($"{catalog.Name} is a part of MatOS and runs on this machine only.")
+            : await _matdock.IsAvailableAsync(ct)
+                ? _matdock
+                : throw new InvalidOperationException("MatDock does not answer, and only MatDock can run an app on another node. Try again once it runs.");
+    }
 }

@@ -1,7 +1,9 @@
 using MatOS.Core.Apps;
 using MatOS.Core.Entities;
 using MatOS.Core.Jobs;
+using MatOS.Core.Nodes;
 using MatOS.Core.Tasks;
+using MatOS.Web.Controls;
 using MatOS.Web.Support;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -21,26 +23,65 @@ public class IndexModel : PageModel
     private readonly TaskManagerService _tasks;
     private readonly AppService _apps;
     private readonly JobService _jobs;
+    private readonly NodeService _nodes;
 
-    public IndexModel(TaskManagerService tasks, AppService apps, JobService jobs)
+    public IndexModel(TaskManagerService tasks, AppService apps, JobService jobs, NodeService nodes)
     {
         _tasks = tasks;
         _apps = apps;
         _jobs = jobs;
+        _nodes = nodes;
     }
 
     public TaskView View { get; private set; } = default!;
+
+    /// <summary>The node the page shows (<c>?node=</c>, MatDock's environment); null is this machine (docs/ARCHITECTURE.md "Nodes").</summary>
+    [BindProperty(SupportsGet = true)]
+    public long? Node { get; set; }
+
+    /// <summary>A tab per node when there is more than this machine; null otherwise.</summary>
+    public TabBarModel? NodeTabs { get; private set; }
+
+    /// <summary>The name of the node the page shows.</summary>
+    public string NodeName { get; private set; } = NodeService.ThisMachine;
+
+    /// <summary>Only a node MatDock knows; another number is this machine.</summary>
+    private async Task<long?> NodeAsync(CancellationToken ct)
+    {
+        var nodes = await _nodes.ChoicesAsync(ct);
+        var node = Node is { } id ? nodes.FirstOrDefault(n => n.Id == id && !n.IsLocal) : null;
+        NodeName = node?.Name ?? NodeService.ThisMachine;
+        if (nodes.Count(n => !n.IsLocal) > 0)
+        {
+            NodeTabs = new TabBarModel
+            {
+                Tabs = nodes.Select(n => new TabItem
+                {
+                    Title = n.DisplayName,
+                    Href = n.IsLocal ? "/Tasks" : "/Tasks?node=" + n.Id,
+                    Active = n.IsLocal ? node is null : n.Id == node?.Id,
+                    Badge = n.IsLocal || n.IsOnline ? null : "offline",
+                }).ToList(),
+            };
+        }
+
+        return node?.Id;
+    }
 
     /// <summary>The query of the list, kept through an action (the forms send it back).</summary>
     public string Back => Request.QueryString.HasValue ? Request.QueryString.Value! : string.Empty;
 
     public async Task OnGetAsync()
-        => View = TaskView.From(Request, await _tasks.ReadAsync(HttpContext.RequestAborted));
+    {
+        var ct = HttpContext.RequestAborted;
+        View = TaskView.From(Request, await _tasks.ReadAsync(ct, await NodeAsync(ct)));
+    }
 
     /// <summary>The numbers of the page for js/tasks.js (the same query as the page).</summary>
     public async Task<IActionResult> OnGetLiveAsync()
     {
-        var view = TaskView.From(Request, await _tasks.ReadAsync(HttpContext.RequestAborted));
+        var ct = HttpContext.RequestAborted;
+        var view = TaskView.From(Request, await _tasks.ReadAsync(ct, await NodeAsync(ct)));
         Response.Headers.CacheControl = "no-store";
         return new JsonResult(view.ToJson());
     }
@@ -49,7 +90,7 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnPostGroupAsync(string key, string verb, string? back)
     {
         var ct = HttpContext.RequestAborted;
-        var snapshot = await _tasks.ReadAsync(ct);
+        var snapshot = await _tasks.ReadAsync(ct, await NodeAsync(ct));
         var group = snapshot.Groups.FirstOrDefault(g => g.Key == key);
         if (group?.App is not { } target || !Allowed(group.Actions, verb, group.Running > 0) || await _apps.GetAsync(target.Id, ct) is not { } app)
         {
@@ -66,7 +107,7 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnPostContainerAsync(string key, string verb, string? back)
     {
         var ct = HttpContext.RequestAborted;
-        var snapshot = await _tasks.ReadAsync(ct);
+        var snapshot = await _tasks.ReadAsync(ct, await NodeAsync(ct));
         var (group, row) = snapshot.Groups.SelectMany(g => g.Rows.Select(r => (g, r))).FirstOrDefault(p => p.r.Key == key);
         if (row is null || !Allowed(row.Actions, verb, row.IsRunning))
         {
@@ -76,7 +117,7 @@ public class IndexModel : PageModel
         var app = group.App is { } owner ? await _apps.GetAsync(owner.Id, ct) : null;
         var kind = Kind(verb);
         var name = row.Container.Name;
-        await _jobs.EnqueueAsync(kind, $"{kind} {name}", app, AppJobs.ContainerAction(name, verb), ct);
+        await _jobs.EnqueueAsync(kind, $"{kind} {name}", app, AppJobs.ContainerAction(name, verb, snapshot.Node), ct);
         TempData["StatusMessage"] = $"{Doing(verb)} {name}. Activity shows how it goes.";
         return Redirect(BackTo(back));
     }

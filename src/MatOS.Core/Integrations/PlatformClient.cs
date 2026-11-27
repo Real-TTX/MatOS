@@ -349,6 +349,12 @@ public sealed class PlatformClient
             return null;
         }
 
+        // An app on another node: at the node's address and its published port (docs/ARCHITECTURE.md "Nodes").
+        if (app.NodeAddress is { Length: > 0 })
+        {
+            return AppAddresses.InternalUrlOf(app, _files.UiHost(app));
+        }
+
         return await _docker.GetSelfContainerNameAsync(ct) is not null
             ? $"http://{_files.UiHost(app)}:{app.UiPort}"
             : app.HostPort is { } port ? $"http://localhost:{port}" : null;

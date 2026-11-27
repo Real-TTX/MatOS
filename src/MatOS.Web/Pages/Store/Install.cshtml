@@ -29,7 +29,7 @@
     var noteIcon = warn ? "alert" : app.State == AppStates.Preview ? "clock" : "info";
     // A first copy, or another one of an app (an engine is one part of MatOS and is installed once).
     var installable = canInstall && (Model.Installed.Count == 0 || Model.CanInstallAnother);
-    var optionNames = new[] { "Name on the home screen" }.Concat(Model.Optional.Select(v => string.IsNullOrEmpty(v.Label) ? v.Key : v.Label)).ToList();
+    var optionNames = (Model.Nodes.Count > 0 ? new[] { "Where it runs", "Name on the home screen" } : new[] { "Name on the home screen" }).Concat(Model.Optional.Select(v => string.IsNullOrEmpty(v.Label) ? v.Key : v.Label)).ToList();
 
     async Task InstallButton(bool another)
     {
@@ -261,6 +261,18 @@
                 <div class="mat-accordion__body">
                     <p class="mat-muted">The defaults are fine: change something only if you want to. You can change it later, too.</p>
                     <div class="mat-form__grid">
+                        @if (Model.Nodes.Count > 0)
+                        {
+                            @* docs/ARCHITECTURE.md "Nodes": the machine the app runs on; this machine unless another is chosen. *@
+                            <mat-field label="Where it runs" for-id="install-node" hint="This machine, or another node (Settings, Nodes). An app can move later on its page.">
+                                <select id="install-node" name="Node" class="mat-select">
+                                    @foreach (var node in Model.Nodes)
+                                    {
+                                        <option value="@(node.IsLocal ? string.Empty : node.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))" selected="@(node.IsLocal ? Model.Node is null : Model.Node == node.Id)">@node.DisplayName@(node.IsLocal || node.IsOnline ? string.Empty : " (offline)")</option>
+                                    }
+                                </select>
+                            </mat-field>
+                        }
                         <mat-field label="Name on the home screen" for-id="install-name" hint="Leave it empty to keep the app's own name.">
                             <input id="install-name" name="Name" value="@Model.Name" class="mat-input" placeholder="@app.Name" />
                         </mat-field>

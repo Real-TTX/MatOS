@@ -1,0 +1,109 @@
+@page
+@using MatOS.Core.Nodes
+@model MatOS.Web.Pages.Settings.NodeModel
+@{
+    var node = Model.Node;
+    ViewData["Title"] = node.DisplayName;
+    ViewData["PageSub"] = node.IsLocal ? "The machine MatOS and its engines run on." : $"A node at {node.Host}.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Nodes", "/Settings/Nodes"), (node.DisplayName, null));
+    ViewData["Width"] = "narrow";
+    var needsKey = !node.IsLocal && !node.IsOnline && node.PublicKey is not null;
+}
+
+<partial name="_SettingsTabs" model="@("nodes")" />
+
+@if (Model.TestMessage is not null)
+{
+    <div class="mat-alert @(Model.TestOk ? "mat-alert--success" : "mat-alert--danger")" role="status" data-node-test>
+        <icon name="@(Model.TestOk ? "check-circle" : "x-circle")" />
+        <div class="mat-alert__body">@Model.TestMessage</div>
+    </div>
+}
+
+<section class="mat-stack mat-stack--sm" aria-label="State">
+    <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-label="State">
+        <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">State</span></span><span class="mat-item__end"><span class="@NodesModel.PillOf(node)" data-node-state><span>@node.StatusText</span></span></span></div></li>
+        @if (!node.IsLocal)
+        {
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Address</span></span><span class="mat-item__end"><span class="mat-mono">@node.Host</span></span></div></li>
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">SSH</span></span><span class="mat-item__end"><span class="mat-mono">@($"{node.User}@{node.Host}:{node.Port ?? 22}")</span></span></div></li>
+        }
+        <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Docker</span></span><span class="mat-item__end"><span>@(node.DockerVersion ?? "–")</span></span></div></li>
+        @if (node.Load is { } load)
+        {
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Load</span></span><span class="mat-item__end"><span>Processor @Math.Round(load.CpuPercent) % · Memory @Math.Round(load.MemoryPercent) % · Disk @Math.Round(load.DiskPercent) %</span></span></div></li>
+        }
+        @if (!node.IsOnline && !string.IsNullOrWhiteSpace(node.Message))
+        {
+            <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Last answer</span><span class="mat-item__text">@node.Message</span></span></div></li>
+        }
+        @if (!node.IsLocal && !node.IsOwn)
+        {
+            <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Set up in MatDock</span><span class="mat-item__text">MatOS uses it, but changes and removes it only in MatDock.</span></span></div></li>
+        }
+    </ul>
+</section>
+
+@if (!node.IsLocal && node.PublicKey is { } key)
+{
+    <section class="mat-stack mat-stack--sm" aria-labelledby="node-key">
+        <h2 class="mat-itemlist__header" id="node-key">@(needsKey ? "Put this key on the VM" : "The key MatDock signs in with")</h2>
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack">
+                @if (needsKey)
+                {
+                    <p>Sign in to <span class="mat-mono">@node.Host</span> as <span class="mat-mono">@node.User</span> and run this line once. It adds the key to the keys that may sign in; then test the connection.</p>
+                }
+                <pre class="mat-code mv-log" tabindex="0" data-node-line>@NodeService.InstallLine(key)</pre>
+                <div class="mat-actions">
+                    <button type="button" class="mat-btn mat-btn--secondary" data-copy="@NodeService.InstallLine(key)"><icon name="copy" /><span>Copy the line</span></button>
+                    <button type="button" class="mat-btn mat-btn--ghost" data-copy="@key"><icon name="key" /><span>Copy only the key</span></button>
+                </div>
+                <p class="mat-hint">The user needs to be allowed to use Docker: <span class="mat-mono">sudo usermod -aG docker @node.User</span>, then sign in again.</p>
+            </div>
+        </div>
+    </section>
+}
+
+<section class="mat-stack mat-stack--sm" aria-labelledby="node-apps">
+    <h2 class="mat-itemlist__header" id="node-apps">Apps on @node.DisplayName</h2>
+    @if (Model.Apps.Count == 0)
+    {
+        <p class="mat-muted">No app runs here yet. Choose @node.DisplayName when you install an app, or move one here on its page.</p>
+    }
+    else
+    {
+        <ul class="mat-itemlist mat-itemlist--inset mat-itemlist--lines-inset" aria-labelledby="node-apps">
+            @foreach (var app in Model.Apps)
+            {
+                <li class="mat-item">
+                    <a class="mat-item__main" href="/Apps/Details?id=@app.Id">
+                        <span class="mat-item__body"><span class="mat-item__title">@app.Name</span></span>
+                        <span class="mat-item__end"><icon name="chevron-right" /></span>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<div class="mat-btn-row">
+    @if (!node.IsLocal)
+    {
+        <form method="post" asp-page-handler="Test" asp-route-id="@node.Id">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="plug" /><span>Test connection</span></button>
+        </form>
+    }
+    <a href="/Tasks@(node.IsLocal ? string.Empty : "?node=" + node.Id)" class="mat-btn mat-btn--secondary" data-window="/Tasks@(node.IsLocal ? string.Empty : "?node=" + node.Id)" data-title="Task Manager"><icon name="activity" /><span>Task Manager</span></a>
+    <a href="/Settings/Nodes" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    @if (!node.IsLocal && node.IsOwn)
+    {
+        <span class="mat-btn-row__spacer"></span>
+        <form method="post" asp-page-handler="Key" asp-route-id="@node.Id" data-confirm="Make a new key for @node.Name? MatDock signs in with the new one only: put it on the VM before the next test." data-confirm-ok="New key">
+            <button type="submit" class="mat-btn mat-btn--ghost"><icon name="key" /><span>New key</span></button>
+        </form>
+        <form method="post" asp-page-handler="Remove" asp-route-id="@node.Id" data-confirm="Remove the node @node.Name? MatOS and MatDock forget it; nothing on the VM is changed." data-confirm-ok="Remove" data-confirm-danger>
+            <button type="submit" class="mat-btn mat-btn--danger" disabled="@(Model.Apps.Count > 0)"><icon name="trash" /><span>Remove</span></button>
+        </form>
+    }
+</div>

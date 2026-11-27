@@ -59,7 +59,7 @@ public sealed class MatDockEngine : IStackEngine
         var composeChanged = false;
         if (spec is not null)
         {
-            var current = await _client.GetStackAsync(app.ProjectName, app.Slug, ct);
+            var current = await _client.GetStackAsync(app.ProjectName, app.Slug, ct, app.NodeId);
             composeChanged = current is null || ComposeHash.Of(current.Compose) != ComposeHash.Of(spec.Compose) || current.Env.Trim() != spec.Env.Trim();
             await _client.UpsertStackAsync(spec, deploy: false, pull: false, ct);
         }
@@ -69,17 +69,17 @@ public sealed class MatDockEngine : IStackEngine
             // A redeploy is only `up -d`: without a pull first it would start the new definition on the old images, and the update would bring no
             // newer version at all.
             log("The app's definition changed: MatDock pulls the images and redeploys the stack.");
-            await _client.WaitOperationAsync(await _client.StartActionAsync(app.ProjectName, "pull", ct), log, ct);
+            await _client.WaitOperationAsync(await _client.StartActionAsync(app.ProjectName, "pull", ct, app.NodeId), log, ct);
         }
 
-        var operation = await _client.StartActionAsync(app.ProjectName, composeChanged ? "redeploy" : "update", ct);
+        var operation = await _client.StartActionAsync(app.ProjectName, composeChanged ? "redeploy" : "update", ct, app.NodeId);
         var result = await _client.WaitOperationAsync(operation, log, ct);
         return composeChanged || (result?["changed"]?.GetValue<bool>() ?? true);
     }
 
     public async Task ControlAsync(InstalledApp app, StackAction action, Action<string> log, CancellationToken ct = default)
     {
-        var operation = await _client.StartActionAsync(app.ProjectName, action.ToString().ToLowerInvariant(), ct);
+        var operation = await _client.StartActionAsync(app.ProjectName, action.ToString().ToLowerInvariant(), ct, app.NodeId);
         await _client.WaitOperationAsync(operation, log, ct);
     }
 
@@ -88,7 +88,7 @@ public sealed class MatDockEngine : IStackEngine
         string operation;
         try
         {
-            operation = await _client.DeleteStackAsync(app.ProjectName, deleteVolumes, ct);
+            operation = await _client.DeleteStackAsync(app.ProjectName, deleteVolumes, ct, app.NodeId);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
         {
@@ -101,5 +101,5 @@ public sealed class MatDockEngine : IStackEngine
     }
 
     public Task<StackSpec?> ReadAsync(InstalledApp app, CancellationToken ct = default)
-        => _client.GetStackAsync(app.ProjectName, app.Slug, ct);
+        => _client.GetStackAsync(app.ProjectName, app.Slug, ct, app.NodeId);
 }

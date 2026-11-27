@@ -26,9 +26,12 @@ public class InstallModel : PageModel
     private readonly PortPlanner _ports;
     private readonly MatOSDbContext _db;
     private readonly SystemConfigService _config;
+    private readonly MatOS.Core.Nodes.NodeService _nodes;
 
-    public InstallModel(CatalogService catalog, AppService apps, JobService jobs, PortPlanner ports, MatOSDbContext db, SystemConfigService config)
+    public InstallModel(CatalogService catalog, AppService apps, JobService jobs, PortPlanner ports, MatOSDbContext db, SystemConfigService config,
+        MatOS.Core.Nodes.NodeService nodes)
     {
+        _nodes = nodes;
         _catalog = catalog;
         _apps = apps;
         _jobs = jobs;
@@ -43,6 +46,13 @@ public class InstallModel : PageModel
     /// <summary>The optional display name (the compose project name is derived from the app, not from this).</summary>
     [BindProperty]
     public string? Name { get; set; }
+
+    /// <summary>The node the app runs on (MatDock's environment); null is this machine (docs/ARCHITECTURE.md "Nodes").</summary>
+    [BindProperty]
+    public long? Node { get; set; }
+
+    /// <summary>Where it can run: more than one only when there are other nodes and the app is no engine.</summary>
+    public IReadOnlyList<MatOS.Core.Nodes.NodeInfo> Nodes { get; private set; } = [];
 
     /// <summary>The answers to the variable questions, keyed by variable.</summary>
     [BindProperty]
@@ -93,7 +103,7 @@ public class InstallModel : PageModel
             return NotFound();
         }
 
-        var result = await _apps.PrepareInstallAsync(new InstallRequest(App.Id, null, Name, Values), HttpContext.RequestAborted);
+        var result = await _apps.PrepareInstallAsync(new InstallRequest(App.Id, null, Name, Values, Node is > 0 ? Node : null), HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
             Errors = result.Errors.ToList();
@@ -117,6 +127,11 @@ public class InstallModel : PageModel
         Ask = app.Variables.Where(MustAsk).ToList();
         Optional = app.Variables.Where(v => !v.Hidden && !MustAsk(v)).OrderBy(v => v.Advanced).ToList();
         Installed = await _db.InstalledApps.Where(a => a.CatalogId == app.Id).OrderBy(a => a.Id).ToListAsync(ct);
+        Nodes = app.Core ? [] : await _nodes.ChoicesAsync(ct);
+        if (Nodes.Count(n => !n.IsLocal) == 0)
+        {
+            Nodes = [];
+        }
 
         // The defaults are enough to find the fixed ports (80/443, the mail ports ...).
         var defaults = app.Variables.Where(v => v.Default is not null).ToDictionary(v => v.Key, v => v.Default!);

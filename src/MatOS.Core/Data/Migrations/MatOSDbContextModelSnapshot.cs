@@ -249,6 +249,12 @@ namespace MatOS.Core.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("NodeAddress")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("NodeId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("Pinned")
                         .HasColumnType("INTEGER");
 

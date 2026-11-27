@@ -19,13 +19,16 @@ public sealed class MatDockBackupProvider : IBackupProvider
     private readonly MatOSDbContext _db;
     private readonly string _projectPrefix;
     private readonly BackupTargetService _targets;
+    private readonly MatOS.Core.Nodes.NodeService _nodes;
 
-    public MatDockBackupProvider(MatDockClient client, MatDockEngine engine, MatOSDbContext db, IOptions<MatOSOptions> options, BackupTargetService targets)
+    public MatDockBackupProvider(MatDockClient client, MatDockEngine engine, MatOSDbContext db, IOptions<MatOSOptions> options, BackupTargetService targets,
+        MatOS.Core.Nodes.NodeService nodes)
     {
         _client = client;
         _engine = engine;
         _db = db;
         _targets = targets;
+        _nodes = nodes;
         _projectPrefix = options.Value.ProjectPrefix + "-";
     }
 
@@ -36,12 +39,36 @@ public sealed class MatDockBackupProvider : IBackupProvider
     public async Task<List<BackupItem>> ListAsync(CancellationToken ct = default)
     {
         var apps = await _db.InstalledApps.AsNoTracking().ToDictionaryAsync(a => a.Slug, ct);
-        return (await _client.ListBackupsAsync(null, ct))
-            .OfType<JsonObject>()
+        return (await ListRawAsync(ct))
             .Select(b => ToItem(b, apps))
             .Where(i => i is not null)
             .Select(i => i!)
             .ToList();
+    }
+
+    /// <summary>
+    /// The bundles as MatDock lists them, of this machine and of every node with apps that is online (MatDock lists those of one environment at a time;
+    /// docs/ARCHITECTURE.md "Nodes").
+    /// </summary>
+    private async Task<List<JsonObject>> ListRawAsync(CancellationToken ct)
+    {
+        var all = (await _client.ListBackupsAsync(null, ct)).OfType<JsonObject>().ToList();
+        foreach (var node in await _nodes.NodesWithAppsAsync(ct))
+        {
+            if (await _nodes.IsReachableAsync(node, ct))
+            {
+                try
+                {
+                    all.AddRange((await _client.ListBackupsAsync(null, ct, node)).OfType<JsonObject>());
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    // A node that does not answer must not hide the backups of the others.
+                }
+            }
+        }
+
+        return all.DistinctBy(b => b["id"]?.ToString()).ToList();
     }
 
     public async Task<BackupItem?> GetAsync(string id, CancellationToken ct = default)
@@ -56,7 +83,7 @@ public sealed class MatDockBackupProvider : IBackupProvider
             log($"The backup is kept at the default target {fallback.Name}.");
         }
 
-        var operation = await _client.StartBackupAsync(app.ProjectName, stopContainers, note, targetId, ct);
+        var operation = await _client.StartBackupAsync(app.ProjectName, stopContainers, note, targetId, ct, app.NodeId);
         log("MatDock is making the backup ...");
         await _client.WaitOperationAsync(operation, log, ct);
 
@@ -70,6 +97,20 @@ public sealed class MatDockBackupProvider : IBackupProvider
 
     public async Task RestoreAsync(string id, bool backupCurrentFirst, Action<string> log, CancellationToken ct = default)
     {
+        // A backup of an app that moved since (docs/ARCHITECTURE.md "Nodes"): its volumes come back on the node the app runs on now, where its stack is.
+        var raw = (await ListRawAsync(ct)).FirstOrDefault(b => b["id"]?.ToString() == id);
+        var slug = raw?["stack"]?.GetValue<string>() is { } stack && stack.StartsWith(_projectPrefix, StringComparison.Ordinal) ? stack[_projectPrefix.Length..] : null;
+        var app = slug is null ? null : await _db.InstalledApps.AsNoTracking().FirstOrDefaultAsync(a => a.Slug == slug, ct);
+        var madeOn = raw?["environmentId"] is JsonValue env && env.TryGetValue<long>(out var envId) ? envId : (long?)null;
+        var runsOn = app is null ? null : app.NodeId ?? await _nodes.LocalIdAsync(ct);
+        if (app is not null && madeOn is not null && runsOn is not null && madeOn != runsOn)
+        {
+            log($"The backup was made on another node: its volumes are restored where {app.Name} runs now.");
+            await _client.WaitOperationAsync(await _client.StartRestoreAsync(id, backupCurrentFirst, ct, intoNode: runsOn, volumesOnly: true), log, ct);
+            await _client.WaitOperationAsync(await _client.StartActionAsync(app.ProjectName, "start", ct, app.NodeId), log, ct);
+            return;
+        }
+
         var operation = await _client.StartRestoreAsync(id, backupCurrentFirst, ct);
         log("MatDock is restoring the backup ...");
         await _client.WaitOperationAsync(operation, log, ct);
@@ -88,7 +129,49 @@ public sealed class MatDockBackupProvider : IBackupProvider
     // ------------------------------------------------------------------ schedules
 
     public async Task<List<ScheduleItem>> ListSchedulesAsync(CancellationToken ct = default)
-        => (await _client.ListSchedulesAsync(ct)).OfType<JsonObject>().Select(ToSchedule).ToList();
+        => (await _client.ListSchedulesAsync(ct)).OfType<JsonObject>().Where(s => NodeCopyOf(s) is null).Select(ToSchedule).ToList();
+
+    /// <summary>The name of a node's copy of a schedule for all apps: <c>&lt;name&gt;-node&lt;id&gt;</c> (MatDock runs a schedule in one environment).</summary>
+    public static string NodeCopyName(string name, long node) => $"{name}-node{node}";
+
+    /// <summary>The schedule (name) and node a node's copy of a schedule for all apps belongs to, or null for any other schedule.</summary>
+    public static (string Name, long Node)? NodeCopyOf(JsonObject schedule)
+    {
+        var name = schedule["name"]?.GetValue<string>() ?? string.Empty;
+        var match = System.Text.RegularExpressions.Regex.Match(name, @"^(?<name>.+)-node(?<node>\d+)$");
+        return match.Success && schedule["stack"] is null && Owner.IsOurs(schedule["managedBy"]?.GetValue<string>())
+            ? (match.Groups["name"].Value, long.Parse(match.Groups["node"].Value, System.Globalization.CultureInfo.InvariantCulture))
+            : null;
+    }
+
+    /// <summary>
+    /// Gives every node with apps a copy of each schedule for all apps (and takes it from a node without apps any more), so the apps there are backed up too.
+    /// Run after a schedule is saved and after an app came to another node.
+    /// </summary>
+    public async Task SyncNodeSchedulesAsync(Action<string> log, CancellationToken ct = default)
+    {
+        var schedules = (await _client.ListSchedulesAsync(ct)).OfType<JsonObject>().ToList();
+        var nodes = await _nodes.NodesWithAppsAsync(ct);
+        var bases = schedules.Where(s => s["stack"] is null && NodeCopyOf(s) is null && Owner.IsOurs(s["managedBy"]?.GetValue<string>())).ToList();
+        foreach (var schedule in bases)
+        {
+            var name = schedule["name"]!.GetValue<string>();
+            foreach (var node in nodes)
+            {
+                await _client.PutScheduleAsync(NodeCopyName(name, node), MatDockClient.ScheduleBodyOf(schedule), ct, node);
+            }
+        }
+
+        var names = bases.Select(s => s["name"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+        foreach (var copy in schedules.Select(NodeCopyOf).Where(c => c is not null).Select(c => c!.Value))
+        {
+            if (!names.Contains(copy.Name) || !nodes.Contains(copy.Node))
+            {
+                await _client.DeleteScheduleAsync(NodeCopyName(copy.Name, copy.Node), ct);
+                log($"The schedule {copy.Name} no longer runs on node {copy.Node}.");
+            }
+        }
+    }
 
     public async Task<ScheduleItem?> GetScheduleAsync(string id, CancellationToken ct = default)
         => (await ListSchedulesAsync(ct)).FirstOrDefault(s => s.Id == $"matdock:{id}");
@@ -107,16 +190,24 @@ public sealed class MatDockBackupProvider : IBackupProvider
             ["enabled"] = input.Enabled,
             ["targetId"] = input.TargetId,
         };
-        await _client.PutScheduleAsync(name, body, ct);
+        // A schedule for one app runs where the app runs; one for all apps on this machine, with a copy on every node with apps.
+        var node = input.AppSlug is null ? null : (await _db.InstalledApps.AsNoTracking().FirstOrDefaultAsync(a => a.Slug == input.AppSlug, ct))?.NodeId;
+        await _client.PutScheduleAsync(name, body, ct, node);
 
         // MatDock identifies a schedule by its name: a rename is a new schedule and the end of the old one.
         if (!string.IsNullOrEmpty(input.Id) && !string.Equals(input.Id, name, StringComparison.Ordinal))
         {
             await _client.DeleteScheduleAsync(input.Id, ct);
         }
+
+        await SyncNodeSchedulesAsync(_ => { }, ct);
     }
 
-    public Task DeleteScheduleAsync(string id, CancellationToken ct = default) => _client.DeleteScheduleAsync(id, ct);
+    public async Task DeleteScheduleAsync(string id, CancellationToken ct = default)
+    {
+        await _client.DeleteScheduleAsync(id, ct);
+        await SyncNodeSchedulesAsync(_ => { }, ct);
+    }
 
     // ------------------------------------------------------------------ mapping
 

@@ -43,7 +43,10 @@ public enum JobKind
     Restart = 5,
     Backup = 6,
     Restore = 7,
-    Provision = 8
+    Provision = 8,
+
+    /// <summary>An app moves to another node (docs/ARCHITECTURE.md "Nodes").</summary>
+    Move = 9
 }
 
 public enum JobStatus

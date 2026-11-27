@@ -1,0 +1,47 @@
+@page
+@model MatOS.Web.Pages.Settings.NodeAddModel
+@{
+    ViewData["Title"] = "Add a node";
+    ViewData["PageSub"] = "Another machine with Docker that your apps can run on.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Nodes", "/Settings/Nodes"), ("Add a node", null));
+    ViewData["Width"] = "narrow";
+}
+
+<partial name="_SettingsTabs" model="@("nodes")" />
+
+@if (Model.Unavailable is not null)
+{
+    <div class="mat-alert mat-alert--warn" role="status">
+        <icon name="alert" />
+        <div class="mat-alert__body">@Model.Unavailable</div>
+    </div>
+}
+
+<form method="post" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                <mat-field label="Name" asp-for="Input.Name" required="true" full="true" hint="How MatOS calls it, for example vm1 or docker-2.">
+                    <input asp-for="Input.Name" class="mat-input" required maxlength="40" autocomplete="off" placeholder="e.g. vm1" data-msg-required="Please enter a name." />
+                </mat-field>
+                <mat-field label="Address" asp-for="Input.Host" required="true" hint="The name or IP address of the VM in your network. The apps on it are reached there too.">
+                    <input asp-for="Input.Host" class="mat-input" required maxlength="255" autocomplete="off" spellcheck="false" placeholder="192.168.1.21" data-msg-required="Please enter the address of the VM." />
+                </mat-field>
+                <mat-field label="SSH port" asp-for="Input.Port">
+                    <input asp-for="Input.Port" class="mat-input" type="number" min="1" max="65535" required data-msg-range="The SSH port is between 1 and 65535." />
+                </mat-field>
+                <mat-field label="SSH user" asp-for="Input.User" required="true" full="true" hint="A user on the VM that may use Docker (in the group docker).">
+                    <input asp-for="Input.User" class="mat-input" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="e.g. docker" data-msg-required="Please enter the SSH user." />
+                </mat-field>
+            </div>
+            <p class="mat-hint">MatDock makes a key for this node and keeps it. The next page shows the public part with the one line to run on the VM.</p>
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary" disabled="@(Model.Unavailable is not null)"><icon name="plus" /><span>Add</span></button>
+        <a href="/Settings/Nodes" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    </div>
+</form>

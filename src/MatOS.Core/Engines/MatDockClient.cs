@@ -31,9 +31,38 @@ public sealed class MatDockClient : EngineClient
 
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(6);
 
-    /// <summary>Every stack of the host with its containers (no usage: that would cost a sampling interval).</summary>
-    public async Task<JsonArray?> ListStacksAsync(CancellationToken ct = default)
-        => await SendAsync(HttpMethod.Get, "stacks", null, ReadTimeout, ct) as JsonArray;
+    /// <summary>
+    /// <paramref name="path"/> on a node: <c>?environment=&lt;id&gt;</c> added (or <c>&amp;</c> after a query); unchanged for this machine (null: MatDock's local
+    /// environment). docs/ARCHITECTURE.md "Nodes".
+    /// </summary>
+    public static string At(string path, long? node)
+        => node is { } id ? $"{path}{(path.Contains('?', StringComparison.Ordinal) ? '&' : '?')}environment={id}" : path;
+
+    /// <summary>Every stack of the host (or of a node) with its containers (no usage: that would cost a sampling interval).</summary>
+    public async Task<JsonArray?> ListStacksAsync(CancellationToken ct = default, long? node = null)
+        => await SendAsync(HttpMethod.Get, At("stacks", node), null, ReadTimeout, ct) as JsonArray;
+
+    /// <summary>Every environment of MatDock (the nodes): type, host, status, Docker version, the mark, the public key, the last reading.</summary>
+    public async Task<JsonArray?> ListEnvironmentsAsync(CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Get, "environments", null, ReadTimeout, ct) as JsonArray;
+
+    /// <summary>
+    /// Creates or changes an SSH environment (a node) by name. Without a key MatDock generates one and answers its public key (<c>publicKey</c>), to be put into
+    /// <c>authorized_keys</c> on the host; it tests the connection at once (<c>connected</c>, <c>message</c>). <c>managedBy</c> is set on create only.
+    /// </summary>
+    public async Task<JsonObject> PutSshEnvironmentAsync(string name, string host, int port, string user, bool newKey, CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Put, $"environments/ssh/{Uri.EscapeDataString(name)}",
+            new JsonObject { ["host"] = host, ["port"] = port, ["username"] = user, ["generateKey"] = newKey, ["managedBy"] = Owner.Name },
+            TimeSpan.FromSeconds(60), ct) as JsonObject ?? throw new InvalidOperationException("MatDock did not answer.");
+
+    /// <summary>Connects to a node again: <c>{connected, status, dockerVersion, hostKey, message}</c>.</summary>
+    public async Task<JsonObject> TestEnvironmentAsync(long id, CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Post, $"environments/{id}/test", new JsonObject(), TimeSpan.FromSeconds(60), ct) as JsonObject
+            ?? throw new InvalidOperationException("MatDock did not answer.");
+
+    /// <summary>Removes a node MatOS added; MatDock refuses (HTTP 409, with the reason) one of another tool, the local one, or one with stacks or schedules.</summary>
+    public Task DeleteEnvironmentAsync(long id, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Delete, $"environments/{id}?managedBy={Owner.Name}", null, null, ct);
 
     /// <summary>The local environment: the version of Docker and the last reading of the host.</summary>
     public async Task<JsonObject?> GetLocalEnvironmentAsync(CancellationToken ct = default)
@@ -45,22 +74,22 @@ public sealed class MatDockClient : EngineClient
     /// Every container of the host with its CPU, memory, network and disk I/O (MatDock samples them, so the first answer takes a moment). <paramref name="maxAgeSeconds"/>
     /// is how old MatDock's shared sample may be (3-30; the Task Manager asks for a fresh one).
     /// </summary>
-    public async Task<JsonArray?> ListContainersAsync(CancellationToken ct = default, int? maxAgeSeconds = null)
-        => await SendAsync(HttpMethod.Get, maxAgeSeconds is { } age ? $"containers?maxAge={age}" : "containers", null, TimeSpan.FromSeconds(12), ct) as JsonArray;
+    public async Task<JsonArray?> ListContainersAsync(CancellationToken ct = default, int? maxAgeSeconds = null, long? node = null)
+        => await SendAsync(HttpMethod.Get, At(maxAgeSeconds is { } age ? $"containers?maxAge={age}" : "containers", node), null, TimeSpan.FromSeconds(12), ct) as JsonArray;
 
     /// <summary>A live reading of the host (CPU, memory and disk in bytes, uptime), at most a few seconds old; an older MatDock answers 404 (an exception).</summary>
-    public async Task<JsonObject?> GetHostAsync(CancellationToken ct = default)
-        => await SendAsync(HttpMethod.Get, "host", null, ReadTimeout, ct) as JsonObject;
+    public async Task<JsonObject?> GetHostAsync(CancellationToken ct = default, long? node = null)
+        => await SendAsync(HttpMethod.Get, At("host", node), null, ReadTimeout, ct) as JsonObject;
 
     /// <summary>Starts, stops or restarts one container (<c>start</c>, <c>stop</c>, <c>restart</c>); MatDock answers when Docker is done.</summary>
-    public Task ContainerActionAsync(string container, string action, CancellationToken ct = default)
-        => SendAsync(HttpMethod.Post, $"containers/{Uri.EscapeDataString(container)}/actions/{action}", null, TimeSpan.FromSeconds(60), ct);
+    public Task ContainerActionAsync(string container, string action, CancellationToken ct = default, long? node = null)
+        => SendAsync(HttpMethod.Post, At($"containers/{Uri.EscapeDataString(container)}/actions/{action}", node), null, TimeSpan.FromSeconds(60), ct);
 
     /// <summary>The last lines of the log of a container (plain text).</summary>
-    public async Task<string?> GetContainerLogsAsync(string container, int tail, CancellationToken ct = default)
+    public async Task<string?> GetContainerLogsAsync(string container, int tail, CancellationToken ct = default, long? node = null)
     {
         using var buffer = new MemoryStream();
-        await CopyToAsync($"containers/{Uri.EscapeDataString(container)}/logs?tail={tail}", buffer, ct);
+        await CopyToAsync(At($"containers/{Uri.EscapeDataString(container)}/logs?tail={tail}", node), buffer, ct);
         return System.Text.Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd();
     }
 
@@ -77,17 +106,17 @@ public sealed class MatDockClient : EngineClient
             ["deploy"] = deploy,
             ["pull"] = pull,
         };
-        var answer = await SendAsync(HttpMethod.Put, $"stacks/{Uri.EscapeDataString(spec.Name)}", body, null, ct);
+        var answer = await SendAsync(HttpMethod.Put, At($"stacks/{Uri.EscapeDataString(spec.Name)}", spec.Node), body, null, ct);
         return answer?["operationId"]?.GetValue<string>();
     }
 
-    /// <summary>The names of the stacks that carry the mark of MatOS (or of Mattiverse before it: <see cref="Owner"/>).</summary>
-    public async Task<List<string>> ListManagedStackNamesAsync(CancellationToken ct = default)
+    /// <summary>The names of the stacks that carry the mark of MatOS (or of Mattiverse before it: <see cref="Owner"/>), of this machine or of a node.</summary>
+    public async Task<List<string>> ListManagedStackNamesAsync(CancellationToken ct = default, long? node = null)
     {
         var names = new List<string>();
         foreach (var owner in Owner.All)
         {
-            names.AddRange(((await GetAsync($"stacks?managedBy={owner}", ct) as JsonArray) ?? [])
+            names.AddRange(((await GetAsync(At($"stacks?managedBy={owner}", node), ct) as JsonArray) ?? [])
                 .OfType<JsonObject>()
                 .Select(s => s["name"]?.GetValue<string>())
                 .Where(n => !string.IsNullOrEmpty(n))
@@ -97,14 +126,14 @@ public sealed class MatDockClient : EngineClient
         return names.Distinct(StringComparer.Ordinal).ToList();
     }
 
-    public async Task<StackSpec?> GetStackAsync(string name, string slug, CancellationToken ct = default)
+    public async Task<StackSpec?> GetStackAsync(string name, string slug, CancellationToken ct = default, long? node = null)
     {
         try
         {
-            var answer = await GetAsync($"stacks/{Uri.EscapeDataString(name)}", ct);
+            var answer = await GetAsync(At($"stacks/{Uri.EscapeDataString(name)}", node), ct);
             return answer is null
                 ? null
-                : new StackSpec(name, slug, answer["composeYaml"]?.GetValue<string>() ?? string.Empty, answer["envContent"]?.GetValue<string>() ?? string.Empty);
+                : new StackSpec(name, slug, answer["composeYaml"]?.GetValue<string>() ?? string.Empty, answer["envContent"]?.GetValue<string>() ?? string.Empty, node);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("HTTP 404", StringComparison.Ordinal))
         {
@@ -113,34 +142,50 @@ public sealed class MatDockClient : EngineClient
     }
 
     /// <summary>Starts an action (<c>start</c>, <c>stop</c>, <c>restart</c>, <c>pull</c>, <c>redeploy</c>, <c>update</c>) and returns the operation id.</summary>
-    public async Task<string> StartActionAsync(string name, string action, CancellationToken ct = default)
+    public async Task<string> StartActionAsync(string name, string action, CancellationToken ct = default, long? node = null)
     {
-        var answer = await SendAsync(HttpMethod.Post, $"stacks/{Uri.EscapeDataString(name)}/actions/{action}", new JsonObject { ["backupFirst"] = false }, null, ct);
+        var answer = await SendAsync(HttpMethod.Post, At($"stacks/{Uri.EscapeDataString(name)}/actions/{action}", node), new JsonObject { ["backupFirst"] = false }, null, ct);
         return answer?["operationId"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock did not start the operation.");
     }
 
-    public async Task<string> DeleteStackAsync(string name, bool volumes, CancellationToken ct = default)
+    public async Task<string> DeleteStackAsync(string name, bool volumes, CancellationToken ct = default, long? node = null)
     {
-        var answer = await SendAsync(HttpMethod.Delete, $"stacks/{Uri.EscapeDataString(name)}?volumes={(volumes ? "true" : "false")}", null, null, ct);
+        var answer = await SendAsync(HttpMethod.Delete, At($"stacks/{Uri.EscapeDataString(name)}?volumes={(volumes ? "true" : "false")}", node), null, null, ct);
         return answer?["operationId"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock did not start the operation.");
     }
 
     // ------------------------------------------------------------------ backups
 
     /// <summary>Starts a bundle backup of a stack; <paramref name="targetId"/> null = MatDock's own data volume.</summary>
-    public async Task<string> StartBackupAsync(string stack, bool stopContainers, string? note, long? targetId = null, CancellationToken ct = default)
+    public async Task<string> StartBackupAsync(string stack, bool stopContainers, string? note, long? targetId = null, CancellationToken ct = default, long? node = null)
     {
         var body = new JsonObject { ["stopContainers"] = stopContainers, ["note"] = note, ["targetId"] = targetId };
-        var answer = await SendAsync(HttpMethod.Post, $"stacks/{Uri.EscapeDataString(stack)}/backups", body, null, ct);
+        var answer = await SendAsync(HttpMethod.Post, At($"stacks/{Uri.EscapeDataString(stack)}/backups", node), body, null, ct);
         return answer?["operationId"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock did not start the backup.");
     }
 
-    public async Task<JsonArray> ListBackupsAsync(string? stack, CancellationToken ct = default)
-        => await GetAsync(stack is null ? "backups" : $"backups?stack={Uri.EscapeDataString(stack)}", ct) as JsonArray ?? [];
+    /// <summary>The bundles of a stack (or all) of this machine or of a node: MatDock lists those of one environment.</summary>
+    public async Task<JsonArray> ListBackupsAsync(string? stack, CancellationToken ct = default, long? node = null)
+        => await GetAsync(At(stack is null ? "backups" : $"backups?stack={Uri.EscapeDataString(stack)}", node), ct) as JsonArray ?? [];
 
-    public async Task<string> StartRestoreAsync(string backupId, bool backupCurrentFirst, CancellationToken ct = default)
+    /// <summary>
+    /// Restores a bundle; <paramref name="intoNode"/> restores it into another environment (the stack moves there; apiVersion 8), <paramref name="volumesOnly"/>
+    /// only its volumes (the stack is MatOS's to deploy).
+    /// </summary>
+    public async Task<string> StartRestoreAsync(string backupId, bool backupCurrentFirst, CancellationToken ct = default, long? intoNode = null, bool volumesOnly = false)
     {
-        var answer = await SendAsync(HttpMethod.Post, $"backups/{Uri.EscapeDataString(backupId)}/restore", new JsonObject { ["backupCurrentFirst"] = backupCurrentFirst }, null, ct);
+        var body = new JsonObject { ["backupCurrentFirst"] = backupCurrentFirst };
+        if (intoNode is { } node)
+        {
+            body["environment"] = node.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (volumesOnly)
+        {
+            body["volumesOnly"] = true;
+        }
+
+        var answer = await SendAsync(HttpMethod.Post, $"backups/{Uri.EscapeDataString(backupId)}/restore", body, null, ct);
         return answer?["operationId"]?.GetValue<string>() ?? throw new InvalidOperationException("MatDock did not start the restore.");
     }
 
@@ -153,10 +198,11 @@ public sealed class MatDockClient : EngineClient
     public async Task<JsonArray> ListSchedulesAsync(CancellationToken ct = default)
         => await GetAsync("backup-schedules", ct) as JsonArray ?? [];
 
-    public Task PutScheduleAsync(string name, JsonObject body, CancellationToken ct = default)
+    /// <summary>Saves a bundle schedule; MatDock runs it in one environment: this machine, or the node <paramref name="node"/>.</summary>
+    public Task PutScheduleAsync(string name, JsonObject body, CancellationToken ct = default, long? node = null)
     {
         body["managedBy"] = Owner.Name;
-        return SendAsync(HttpMethod.Put, $"backup-schedules/{Uri.EscapeDataString(name)}", body, null, ct);
+        return SendAsync(HttpMethod.Put, At($"backup-schedules/{Uri.EscapeDataString(name)}", node), body, null, ct);
     }
 
     public Task DeleteScheduleAsync(string name, CancellationToken ct = default)

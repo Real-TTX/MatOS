@@ -134,4 +134,13 @@ public sealed class BackupHub
 
     public Task DeleteScheduleAsync(string id, CancellationToken ct = default)
         => ForId(id).DeleteScheduleAsync(SplitId(id).Raw, ct);
+
+    /// <summary>The schedules for all apps on every node with apps (MatDock runs a schedule in one environment); nothing without MatDock.</summary>
+    public async Task SyncNodeSchedulesAsync(Action<string> log, CancellationToken ct = default)
+    {
+        if (_providers.OfType<MatDockBackupProvider>().FirstOrDefault() is { } matdock && await matdock.IsAvailableAsync(ct))
+        {
+            await matdock.SyncNodeSchedulesAsync(log, ct);
+        }
+    }
 }

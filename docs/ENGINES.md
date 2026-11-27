@@ -128,6 +128,10 @@ through the mounted socket) unless `?environment=<name or id>` says otherwise.
 |---|---|
 | `GET /api/v1/status` | common rules plus `environments: [{id, name, type, status}]` |
 | `PUT /api/v1/environments/local` | **ensure** an environment of type *Local* exists (name `local`); answers `{id, name}`. Also done at start when `MatDock__Environments__EnsureLocal=true`. `409` if no Docker socket is available. |
+| `GET /api/v1/environments` | the **nodes** (docs/ARCHITECTURE.md "Nodes"): `[{id, name, type: "local"\|"ssh"\|…, host, port, username, description, managedBy, publicKey, status, message, enabled, dockerVersion, lastCheckedAt, reading: {at, cpuPercent, memoryPercent, diskPercent, containersRunning}}]`. `port`, `username`, `managedBy`, `publicKey` (the public half of a key MatDock generated, never the private key) and `message` came with apiVersion 8 (MatDock branch `feature/nodes-api`) |
+| `PUT /api/v1/environments/ssh/{name}` | create or change an SSH environment `{host, port, username, generateKey, managedBy}` (apiVersion 3; `managedBy` on create only, apiVersion 8): without a key MatDock generates one and answers `{id, name, created, publicKey, connected, status, dockerVersion, message}`. MatOS never sends a private key |
+| `POST /api/v1/environments/{id}/test` | connect again: `{connected, status, dockerVersion, hostKey, message}`; the host key is pinned on the first success |
+| `DELETE /api/v1/environments/{id}?managedBy=matos` | apiVersion 8: `204`; `409` for the local environment, while MatDock has stacks or schedules there, or when the mark is another one |
 | `GET /api/v1/stacks?managedBy=` | every stack of the environment (managed and discovered): `{name, environmentId, managed, managedBy, state: "running"\|"stopped"\|"partial"\|"unhealthy"\|"missing", containers: [{id, name, service, image, state, status, ports}], updatedAt}` |
 | `GET /api/v1/stacks/{name}` | the same plus `composeYaml` and `envContent` |
 | `PUT /api/v1/stacks/{name}` | **upsert** a managed stack. Body `{composeYaml, envContent, managedBy, deploy: bool, pull: bool}`. Name rule as MatDock's own (`^[a-z0-9][a-z0-9_-]{0,62}$`). `deploy:false` = save only (`200 {stack}`); `deploy:true` = save and `docker compose up -d` (with `pull` first if asked), `202 {stack, operationId}`. |
@@ -145,7 +149,7 @@ Backups (a stack bundle: all volumes + compose + env + image references; MatDock
 |---|---|
 | `POST /api/v1/stacks/{name}/backups` | body `{stopContainers: bool, note: string?, targetId: number?}` (target = the local target by default). `202 {operationId}`, the `result` holds `{"backupId": ...}` |
 | `GET /api/v1/backups?stack=` | `[{id, stack, createdAt, sizeBytes, volumeCount, consistent, kind: "manual"\|"scheduled"\|"preUpdate", note, status: "succeeded"\|"failed"\|"running", targetId}]`, newest first |
-| `POST /api/v1/backups/{id}/restore` | body `{backupCurrentFirst: bool}`, recreates the stack if it no longer exists. `202 {operationId}` |
+| `POST /api/v1/backups/{id}/restore` | body `{backupCurrentFirst: bool, environment?: "<id or name>", volumesOnly?: bool}`, recreates the stack if it no longer exists. `environment` restores into another environment (the stack moves there), `volumesOnly` restores only the volumes and leaves the stack to MatOS (both apiVersion 8; MatOS moves an app this way). A volume that is not there yet comes back with the compose labels of its stack, so the removal of the stack with its volumes takes it too. `202 {operationId}` |
 | `DELETE /api/v1/backups/{id}` | `204` |
 | `GET /api/v1/backups/{id}/download` | the bundle as a `.tar` stream |
 | `GET /api/v1/backup-schedules`, `PUT /api/v1/backup-schedules/{name}`, `DELETE /api/v1/backup-schedules/{name}` | a **bundle** schedule: `{stack: string\|null, managedBy, frequency: "daily"\|"weekly", time: "03:00", weekday: "Sunday", retention: 7, stopContainers: true, enabled: true}`. `stack: null` = every stack whose `managedBy` equals the schedule's. Retention keeps the newest *scheduled* bundles per stack. Shows up in MatDock's Schedules page with the badge. |
@@ -174,7 +178,7 @@ What was built, and where it differs from the sketch above (branch `mattiverse-i
   failed attempts that a newer success replaced; `0` is unlimited.
 - `DELETE` works on stacks MatDock manages only (`404` otherwise); on a stack it does not manage only `start`, `stop` and `restart` are allowed (`409` for the rest).
   `pull: true` without `deploy: true` is a `400`. `state` can be `"unknown"` when Docker does not answer (the list endpoint answers `502`).
-- Stacks and `GET /backups` are limited to the chosen environment (`?environment=<id|name>`, default the local one); `GET /backup-schedules` lists all schedules.
+- Stacks and `GET /backups` are limited to the chosen environment (`?environment=<id|name>`, default the local one); `GET /backup-schedules` lists all schedules (with `environmentId`), and `PUT /backup-schedules/{name}?environment=` puts one into a node. MatOS calls every endpoint of an app on another node with `?environment=<id>` (`MatDockClient.At`), and keeps a copy `<name>-node<id>` of a schedule for all apps on every node with apps (MatDock runs a schedule in one environment).
 - A restore **re-creates a stack that was deleted** (compose, `.env`, volumes), which is how an uninstalled app comes back; MatOS then takes the stack
   back as an app (`AppReconciler`) and publishes its route and record again.
 - The download is a `.tar` holding the manifest and one tar per volume. Extra fields (`created`, `enabled`, `lastStatus`, `cron`, `nextRunAt`, `safetyBackupId`, ...) are returned and ignored;

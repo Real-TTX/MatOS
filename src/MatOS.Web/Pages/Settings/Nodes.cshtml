@@ -1,0 +1,71 @@
+@page
+@model MatOS.Web.Pages.Settings.NodesModel
+@{
+    ViewData["Title"] = "Nodes";
+    ViewData["PageSub"] = "The machines your apps run on: this one and the others you add.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Nodes", null));
+    ViewData["Width"] = "narrow";
+    var others = Model.Rows.Count(r => !r.Node.IsLocal);
+}
+
+<partial name="_SettingsTabs" model="@("nodes")" />
+
+@* docs/ARCHITECTURE.md "Nodes": a node is one of MatDock's environments. One grouped list, as the settings of a phone; a row opens the node. *@
+@if (Model.Unavailable is not null)
+{
+    <div class="mat-alert mat-alert--warn" role="status">
+        <icon name="alert" />
+        <div class="mat-alert__body">@Model.Unavailable</div>
+    </div>
+}
+
+@if (Model.Rows.Count > 0)
+{
+    <section class="mat-stack mat-stack--sm" aria-label="Nodes">
+        <ul class="mat-itemlist mat-itemlist--inset mat-itemlist--lines-inset mv-facts" aria-label="Nodes" data-nodes>
+            @foreach (var row in Model.Rows)
+            {
+                var node = row.Node;
+                <li class="mat-item" data-node="@node.Name">
+                    <a class="mat-item__main" href="/Settings/Node?id=@node.Id">
+                        <span class="mat-item__lead"><icon name="@(node.IsLocal ? "monitor" : "server")" /></span>
+                        <span class="mat-item__body">
+                            <span class="mat-item__title">@node.DisplayName</span>
+                            <span class="mat-item__text">@(node.IsLocal ? "Where MatOS and its engines run" : node.Host) · @(row.Apps.Count == 1 ? "1 app" : $"{row.Apps.Count} apps")</span>
+                        </span>
+                        <span class="mat-item__end">
+                            <span class="@NodesModel.PillOf(node)"><span>@node.StatusText</span></span>
+                            <icon name="chevron-right" />
+                        </span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@if (others == 0)
+{
+    <div class="mat-empty">
+        <span class="mat-empty__icon"><icon name="server" /></span>
+        <div class="mat-empty__title">Only this machine so far</div>
+        <p>Add the other machines of your home lab (VMs with Docker): then you choose where an app runs, see what each one runs in the Task Manager and move apps between them.</p>
+        @if (Model.Unavailable is null)
+        {
+            <a class="mat-btn mat-btn--primary" href="/Settings/NodeAdd"><icon name="plus" /><span>Add a node</span></a>
+        }
+    </div>
+}
+else if (Model.Unavailable is null)
+{
+    <div class="mat-actions">
+        <a class="mat-btn mat-btn--primary" href="/Settings/NodeAdd"><icon name="plus" /><span>Add a node</span></a>
+    </div>
+}
+
+<details class="mat-collapse mv-details">
+    <summary><span>How nodes work</span><span class="mat-accordion__chev" aria-hidden="true"><icon name="chevron-down" /></span></summary>
+    <div class="mat-accordion__body">
+        <p class="mat-muted">A node is a machine with Docker that MatDock reaches over SSH; MatDock keeps it as an environment and shows it there too. An app on another node is reached at that machine's address and its own port: the reverse proxy on this machine leads there, so its address under your domain stays the same. MatOS and its engines always run on this machine. Mail through MatOS works only for apps on this machine; an app elsewhere sends its mail itself.</p>
+    </div>
+</details>

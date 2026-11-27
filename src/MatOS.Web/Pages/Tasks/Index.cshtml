@@ -3,7 +3,7 @@
 @model MatOS.Web.Pages.Tasks.IndexModel
 @{
     ViewData["Title"] = "Task Manager";
-    ViewData["PageSub"] = "What runs on this machine and what it uses, live.";
+    ViewData["PageSub"] = Model.NodeName == MatOS.Core.Nodes.NodeService.ThisMachine ? "What runs on this machine and what it uses, live." : $"What runs on the node {Model.NodeName} and what it uses, live.";
     ViewData["Crumbs"] = Crumbs.Of(("Task Manager", null));
     ViewData["Tasks"] = true;
     var view = Model.View;
@@ -25,21 +25,21 @@
         if (actions.HasFlag(TaskActions.Restart) && running)
         {
             <form method="post" asp-page-handler="@handler" data-confirm="Restart @name? It is away for a moment." data-confirm-ok="Restart">
-                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="restart" /><input type="hidden" name="back" value="@Model.Back" />
+                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="restart" /><input type="hidden" name="back" value="@Model.Back" /><input type="hidden" name="node" value="@Model.View.Snapshot.Node" />
                 <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Restart @name" data-tip="Restart"><icon name="refresh" /></button>
             </form>
         }
         if (actions.HasFlag(TaskActions.StopStart) && running)
         {
             <form method="post" asp-page-handler="@handler" data-confirm="Stop @name? It does not work until it is started again." data-confirm-ok="Stop" data-confirm-danger>
-                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="stop" /><input type="hidden" name="back" value="@Model.Back" />
+                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="stop" /><input type="hidden" name="back" value="@Model.Back" /><input type="hidden" name="node" value="@Model.View.Snapshot.Node" />
                 <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Stop @name" data-tip="Stop"><icon name="stop" /></button>
             </form>
         }
         else if (actions.HasFlag(TaskActions.StopStart))
         {
             <form method="post" asp-page-handler="@handler" data-confirm="Start @name?" data-confirm-ok="Start">
-                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="start" /><input type="hidden" name="back" value="@Model.Back" />
+                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="start" /><input type="hidden" name="back" value="@Model.Back" /><input type="hidden" name="node" value="@Model.View.Snapshot.Node" />
                 <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Start @name" data-tip="Start"><icon name="play" /></button>
             </form>
         }
@@ -58,6 +58,10 @@
     containers (the toolkit's groups in a table, LIST-16). js/tasks.js asks ?handler=Live every three seconds and puts the numbers in place (data-f); when the
     rows themselves change (data-signature) it fetches the list of the page again.
 *@
+@if (Model.NodeTabs is not null)
+{
+    <tab-bar model="Model.NodeTabs" label="Nodes" />
+}
 <div class="mv-tm" data-tasks="/Tasks?handler=Live">
     <section class="mv-tm-cards" aria-label="The host">
         @foreach (var card in view.Cards)
@@ -157,7 +161,7 @@
                                                     var row = g.Rows[0];
                                                     <div class="mv-tm-lone">
                                                         <span class="mv-tm-dot" data-state="@TaskView.StateOf(g)" data-f="dot" aria-hidden="true"></span>
-                                                        <span class="mv-tm-name"><a href="@TaskView.LogUrl(row)" data-window="@TaskView.LogUrl(row)" data-title="@row.Container.Name">@g.Name</a><small><span>@TaskView.RowSub(row)</span> · <span data-f="status">@MatOS.Core.Docker.ContainerStatusText.Plain(row.Container.Status)</span></small></span>
+                                                        <span class="mv-tm-name"><a href="@TaskView.LogUrl(row, snap.Node)" data-window="@TaskView.LogUrl(row, snap.Node)" data-title="@row.Container.Name">@g.Name</a><small><span>@TaskView.RowSub(row)</span> · <span data-f="status">@MatOS.Core.Docker.ContainerStatusText.Plain(row.Container.Status)</span></small></span>
                                                     </div>
                                                 }
                                                 else
@@ -189,7 +193,7 @@
                                                 }
                                                 @if (g.IsSingle)
                                                 {
-                                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@TaskView.LogUrl(g.Rows[0])" data-window="@TaskView.LogUrl(g.Rows[0])" data-title="@g.Rows[0].Container.Name" aria-label="Show the log of @g.Name" data-tip="Show the log"><icon name="file-text" /></a>
+                                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@TaskView.LogUrl(g.Rows[0], snap.Node)" data-window="@TaskView.LogUrl(g.Rows[0], snap.Node)" data-title="@g.Rows[0].Container.Name" aria-label="Show the log of @g.Name" data-tip="Show the log"><icon name="file-text" /></a>
                                                 }
                                                 @{ await Actions("Group", g.Key, g.Name, g.Actions, g.Running > 0); }
                                             </div>
@@ -200,7 +204,7 @@
                                         @foreach (var row in g.Rows)
                                         {
                                             var c = row.Container;
-                                            var log = TaskView.LogUrl(row);
+                                            var log = TaskView.LogUrl(row, snap.Node);
                                             <tr class="mat-group__item mv-tm-row" data-key="@row.Key">
                                                 <td data-label="" class="mv-tm-col-name">
                                                     <div class="mat-table__name">
