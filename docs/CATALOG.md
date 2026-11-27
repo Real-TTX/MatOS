@@ -99,7 +99,7 @@ with the catalog: run the tests with `MATOS_WRITE_README=1` after a change). The
 | `beta` | uses the engines (the one sign-in, ...), not yet tested end to end through MatOS |
 | `alpha` | installs and runs, its integration is not released yet: the install page warns |
 | `preview` | announced only (its image is not published): the store does not install it |
-| `third-party` | not a Mat app: it runs as it is |
+| `third-party` | not a Mat app: it runs as its maker built it; where it can, the entry connects it to the one sign-in and the mail (see "Apps of other makers") |
 
 Every built-in entry names its state (a unit test checks); an entry in `/data/catalog` (or of Mattiverse) without one is `beta`. An unknown state is an error of the entry.
 `stateNote` is one sentence on one line: what is missing for the next state (for an integrated app, what it does).
@@ -115,6 +115,26 @@ Every built-in entry names its state (a unit test checks); an entry in `/data/ca
   catalog copy of an earlier MatOS (or of Mattiverse) keeps working. The variables an earlier MatOS filled for them are taken over as the app's bindings at its next deploy.
 - A service other than the web service that needs the variables (the one that sends the mail) names them in the compose file (`MATSMTP_HOST: ${MATSMTP_HOST:-}`): the values are in the
   `.env`. The web service gets them by itself.
+
+## Apps of other makers
+
+A well-known app (Nextcloud, Vaultwarden, Paperless-ngx, ...) is an entry like any other, with `state: third-party`, its official image (the major tag where the
+maker publishes one, else the line its own compose file follows), named volumes and its database as a service of the stack. It reads its settings under its own names,
+so the entry translates; no code of MatOS knows the app:
+
+- **The sign-in and the mail.** The entry `consumes` `identity.oidc` with the paths of the app (`callback`, `signedOut`; `backchannel: ""` when the app takes no
+  back-channel logout) and `mail.smtp` with its `sender`, and passes `MATIDENTITY_*` and `MATSMTP_*` to the service. Its **start** (`entrypoint: [/bin/sh, -c, ...]`
+  that ends with `exec` of the image's own entrypoint) sets the app's names only while a binding is there: an empty setting would stop most apps
+  (`if [ -n "$$MATIDENTITY_CLIENT_ID" ]; then export SSO_ENABLED=true ...; fi`). `$$` is a `$` for the shell; a single `$` is filled by compose from the `.env`.
+- **Its public address.** `MAT_PUBLIC_URL` (the route under the domain, or this host by the address of the settings) reaches an app outside the contract only when its
+  compose file names `${MAT_PUBLIC_URL:-}`: Vaultwarden's `DOMAIN`, Paperless's `PAPERLESS_URL`, Nextcloud's trusted domain. Empty while MatOS does not know a real address.
+- **Settings only a command sets** (Nextcloud's `occ`): a script as a top-level `configs:` entry with `content:` (compose writes it), mounted into the service and run by
+  the app's own hook at every start, so it follows the bindings.
+- **What a sign-in of another maker needs**: the apps ask MatIdentity at its public address, server to server (they know no internal address). That address has to be
+  reachable from the containers: a domain whose name resolves to this machine from inside, or the address of this machine in the settings (not `localhost`). MatIdentity asks
+  every app for PKCE; the entries switch it on where the app has a setting for it.
+
+An app whose sign-in can only be set in its own administration or in a file that locks every other setting (Immich) is not connected; its note says how to do it by hand.
 
 ## Bindings and contributions (contract 2)
 

@@ -34,7 +34,7 @@ public static class AppStates
     /// <summary>Announced, not installable yet (its image is not published).</summary>
     public const string Preview = "preview";
 
-    /// <summary>Not a Mat app: it runs as it is, without the one sign-in or anything else of MatOS.</summary>
+    /// <summary>Not a Mat app: it runs as its maker built it; where it can, MatOS connects it to the one sign-in and the mail (its note says).</summary>
     public const string ThirdParty = "third-party";
 
     /// <summary>From the most to the least part of MatOS: the order of the store's filter and of the README table.</summary>
@@ -63,7 +63,7 @@ public static class AppStates
         Beta => "Works with MatOS and its one sign-in, but is not yet tested from start to end through MatOS.",
         Alpha => "Installs and runs, but is not yet tied into MatOS: expect rough edges, and do not keep anything important only in it yet.",
         Preview => "Announced, not ready to install yet.",
-        ThirdParty => "Not a Mat app: it runs as it is, without the one sign-in or the other parts of MatOS.",
+        ThirdParty => "Not a Mat app: it runs as its maker built it. Where it can, MatOS connects it to the one sign-in and the mail; the note says what it has.",
         _ => string.Empty,
     };
 
