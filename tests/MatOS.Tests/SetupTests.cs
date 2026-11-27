@@ -140,15 +140,24 @@ public class SetupTests
 
     // ------------------------------------------------------------------ the steps "Set up MatOS" queues
 
+    /// <summary>Both phases as <c>SetupService.StartAsync</c> plans them: the first engines, then the rest without them.</summary>
+    private static IReadOnlyList<PlannedStep> BothPhases(SetupChoices choices, bool handOver = false)
+    {
+        var first = SetupPlan.FirstSteps(new HashSet<string>(), choices.Engines);
+        var already = first.Select(s => s.Key).ToHashSet();
+        return first.Concat(SetupPlan.Steps(choices, new HashSet<string>(), NameOf, handOver, already)).ToList();
+    }
+
     [Fact]
     public void The_engines_come_first_then_the_apps_then_the_free_address_then_the_check()
     {
-        var steps = SetupPlan.Steps(Choices(Reach.Free, "anna", apps: ["matfile", "matdo"]), new HashSet<string>(), NameOf);
+        var steps = BothPhases(Choices(Reach.Free, "anna", apps: ["matfile", "matdo"]));
         Assert.Equal(
-            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "app:matdo", "address", "reach"],
+            ["engine:matdock", "engine:matsmtp", "engine:matcad", "engine:matddns", "engine:matidentity", "app:matfile", "app:matdo", "connect", "address", "reach", "selfcheck"],
             steps.Select(s => s.Key));
         Assert.Equal(
-            ["App manager (MatDock)", "Web addresses and HTTPS (Matcad)", "Address updater (Matddns)", "One sign-in for all apps (MatIdentity)", "Mail (MatSMTP)", "MatFile", "MatDo", "Your free address", SetupPlan.ReachLabel],
+            ["App manager (MatDock)", "Mail (MatSMTP)", "Web addresses and HTTPS (Matcad)", "Address updater (Matddns)", "One sign-in for all apps (MatIdentity)", "MatFile", "MatDo",
+                "Connect the engines to each other", "Your free address", SetupPlan.ReachLabel, SetupPlan.SelfCheckLabel(Reach.Free)],
             steps.Select(s => s.Label));
     }
 
@@ -156,7 +165,8 @@ public class SetupTests
     public void What_is_there_already_is_not_installed_again_but_connected()
     {
         var steps = SetupPlan.Steps(Choices(Reach.Home, apps: ["matfile"]), new HashSet<string> { EngineIds.MatDock, "matfile" }, NameOf);
-        Assert.Equal(["engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "connect"], steps.Select(s => s.Key));
+        Assert.Equal(["engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "connect", "selfcheck"], steps.Select(s => s.Key));
+        Assert.Equal("Connect what was there already", steps.Single(s => s.Key == SetupPlan.ConnectKey).Label);
         Assert.DoesNotContain(steps, s => s.Kind == SetupPlan.AddressKind);
     }
 
@@ -165,7 +175,7 @@ public class SetupTests
     {
         var steps = SetupPlan.Steps(Choices(Reach.Free, "anna", apps: ["matfile"]), new HashSet<string>(), NameOf, handOver: true);
         Assert.Equal(
-            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "signin", "address", "reach"],
+            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "signin", "address", "reach", "selfcheck"],
             steps.Select(s => s.Key));
         Assert.Equal(SetupPlan.SignInKind, steps.Single(s => s.Key == SetupPlan.SignInKey).Kind);
         Assert.DoesNotContain(SetupPlan.Steps(Choices(Reach.Home), new HashSet<string>(), NameOf), s => s.Kind == SetupPlan.SignInKind);
@@ -196,16 +206,16 @@ public class SetupTests
     public void An_engine_left_out_under_Advanced_gets_no_line()
     {
         var steps = SetupPlan.Steps(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), new HashSet<string>(), NameOf);
-        Assert.Equal(["engine:matdock", "engine:matcad"], steps.Select(s => s.Key));
+        Assert.Equal(["engine:matdock", "engine:matcad", "selfcheck"], steps.Select(s => s.Key));
     }
 
     [Fact]
     public void The_summary_says_it_in_one_sentence()
     {
         // The address people open, not the bare name: MatOS is a host below the free address.
-        Assert.Equal("MatOS sets up its five engines, then MatFile, MatDo and MatDrive, and makes everything reachable from anywhere: you open MatOS at matos.anna.my.mattiverse.de.",
+        Assert.Equal("MatOS sets up its engines, then MatFile, MatDo and MatDrive, and makes everything reachable from anywhere: you open MatOS at matos.anna.my.mattiverse.de.",
             SetupPlan.Summary(Choices(Reach.Free, "Anna", apps: ["matfile", "matdo", "matdrive"]), NameOf));
-        Assert.Equal("MatOS sets up its five engines and puts your apps under example.com.", SetupPlan.Summary(Choices(Reach.Domain, domain: "Example.com"), NameOf));
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com.", SetupPlan.Summary(Choices(Reach.Domain, domain: "Example.com"), NameOf));
         Assert.Equal("MatOS sets up its app manager for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string>()), NameOf));
     }
 
@@ -298,6 +308,172 @@ public class SetupTests
         Assert.Equal("There is no free address.", SetupProgress.Plain("There is no free address. Choose one in Settings, Address.", SetupPlan.AddressKind));
         Assert.Equal("MatIdentity did not take your account yet.", SetupProgress.Plain("MatIdentity did not take your account yet. Until it works, ...", SetupPlan.SignInKind));
         Assert.Equal("MatOS was restarted before this was done. Try again.", SetupProgress.Plain("Interrupted: MatOS was restarted while this job was running.", SetupPlan.AddressKind));
+    }
+
+    [Fact]
+    public void The_summary_counts_no_fixed_number()
+    {
+        // All the engines there are, however many: no number in the sentence.
+        var all = SetupPlan.Summary(Choices(Reach.Home), NameOf);
+        Assert.Equal("MatOS sets up its engines for use here at home.", all);
+        Assert.DoesNotContain(EngineIds.All.Count.ToString(), all);
+        Assert.DoesNotContain("five", all);
+        Assert.Equal("MatOS sets up 2 of its engines for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), NameOf));
+    }
+
+    // ------------------------------------------------------------------ the two phases, the needs, "Try again"
+
+    [Fact]
+    public void Plain_gets_the_kind_of_the_line()
+    {
+        var run = new SetupRun { Steps = [new SetupRunStep { Key = SetupPlan.AddressKey, Kind = SetupPlan.AddressKind, Label = "Your free address", JobId = 1 }] };
+        var view = SetupProgress.Of(run, _ => new SetupJobState(JobStatus.Failed, null, "timed out"), DateTime.UtcNow);
+        Assert.Equal(SetupProgress.Plain("timed out", SetupPlan.AddressKind), view.Steps[0].Error);
+        Assert.StartsWith("The address service cannot be reached right now.", view.Steps[0].Error);
+        Assert.Equal(SetupPlan.AddressKind, view.Steps[0].Kind);
+    }
+
+    [Fact]
+    public void The_self_check_keeps_its_own_first_sentence()
+        => Assert.Equal("MatOS answers at matos.anna.my.mattiverse.de, but its certificate is not ready yet.",
+            SetupProgress.Plain("MatOS answers at matos.anna.my.mattiverse.de, but its certificate is not ready yet. Try again in a few minutes.", SetupPlan.SelfCheckKind));
+
+    [Fact]
+    public void Every_line_needs_what_it_runs_on()
+    {
+        Assert.Empty(SetupPlan.NeedsOf("engine:matdock", SetupPlan.EngineKind));
+        Assert.Equal(["engine:matdock"], SetupPlan.NeedsOf("engine:matcad", SetupPlan.EngineKind));
+        Assert.Equal(["engine:matdock"], SetupPlan.NeedsOf("app:x", SetupPlan.AppKind));
+        Assert.Equal(["engine:matidentity"], SetupPlan.NeedsOf(SetupPlan.SignInKey, SetupPlan.SignInKind));
+        Assert.Equal(["engine:matddns"], SetupPlan.NeedsOf(SetupPlan.DnsKey, SetupPlan.DnsKind));
+        Assert.Equal(["engine:matcad"], SetupPlan.NeedsOf(SetupPlan.ReachKey, SetupPlan.ReachKind));
+        Assert.Equal(["engine:matcad"], SetupPlan.NeedsOf(SetupPlan.AddressKey, SetupPlan.AddressKind));
+        Assert.Equal(["engine:matcad", "connect"], SetupPlan.NeedsOf(SetupPlan.SelfCheckKey, SetupPlan.SelfCheckKind));
+        Assert.Equal(EngineIds.All.Select(e => "engine:" + e), SetupPlan.NeedsOf(SetupPlan.ConnectKey, SetupPlan.ConnectKind));
+    }
+
+    /// <summary>A run of the first start whose lines carry their needs, as the service stores them (only the keys of the run).</summary>
+    private static List<SetupRunStep> Planned(IReadOnlyList<PlannedStep> planned)
+    {
+        var keys = planned.Select(p => p.Key).ToHashSet();
+        return planned.Select((p, i) => new SetupRunStep
+        {
+            Key = p.Key,
+            Kind = p.Kind,
+            Label = p.Label,
+            JobId = i + 1,
+            Needs = SetupPlan.NeedsOf(p.Key, p.Kind).Where(keys.Contains).ToList(),
+        }).ToList();
+    }
+
+    [Fact]
+    public void Dependents_are_transitive()
+    {
+        var steps = Planned(BothPhases(Choices(Reach.Free, "anna", apps: ["matfile"]), handOver: true));
+        var keys = SetupPlan.Dependents(steps, "engine:matdock").Select(s => s.Key).ToList();
+        Assert.Equal(
+            ["engine:matsmtp", "engine:matcad", "engine:matddns", "engine:matidentity", "app:matfile", "connect", "signin", "address", "reach", "selfcheck"],
+            keys);
+
+        // The order of the plan, the line itself left out, and only what follows from it.
+        Assert.Equal(["signin"], SetupPlan.Dependents(steps, "engine:matidentity").Where(s => s.Key == "signin").Select(s => s.Key));
+        Assert.Equal(["connect", "signin", "selfcheck"], SetupPlan.Dependents(steps, "engine:matidentity").Select(s => s.Key));
+        Assert.Equal(["selfcheck"], SetupPlan.Dependents(steps, "connect").Select(s => s.Key));
+        Assert.Empty(SetupPlan.Dependents(steps, "selfcheck"));
+    }
+
+    [Fact]
+    public void The_first_steps_are_MatDock_then_MatSMTP()
+    {
+        var none = new HashSet<string>();
+        Assert.Equal(["engine:matdock", "engine:matsmtp"], SetupPlan.FirstSteps(none).Select(s => s.Key));
+        Assert.Equal(["App manager (MatDock)", "Mail (MatSMTP)"], SetupPlan.FirstSteps(none).Select(s => s.Label));
+        Assert.Equal(["engine:matsmtp"], SetupPlan.FirstSteps(new HashSet<string> { EngineIds.MatDock }).Select(s => s.Key));
+        Assert.Equal(["engine:matdock"], SetupPlan.FirstSteps(none, new HashSet<string> { EngineIds.MatDock }).Select(s => s.Key));
+        // MatDock is always one of them, chosen or not.
+        Assert.Equal(["engine:matdock"], SetupPlan.FirstSteps(none, new HashSet<string>()).Select(s => s.Key));
+        Assert.Empty(SetupPlan.FirstSteps(new HashSet<string> { EngineIds.MatDock, EngineIds.MatSmtp }));
+    }
+
+    [Fact]
+    public void Steps_after_the_first_phase_skip_its_lines_and_connect_the_engines()
+    {
+        var installed = new HashSet<string> { EngineIds.MatDock, EngineIds.MatSmtp };
+        var already = new HashSet<string> { "engine:matdock", "engine:matsmtp" };
+        var steps = SetupPlan.Steps(Choices(Reach.Home), installed, NameOf, already: already);
+
+        Assert.DoesNotContain(steps, s => s.Key is "engine:matdock" or "engine:matsmtp");
+        Assert.Equal(["engine:matcad", "engine:matddns", "engine:matidentity", "connect", "selfcheck"], steps.Select(s => s.Key));
+        Assert.Equal("Connect the engines to each other", steps.Single(s => s.Key == SetupPlan.ConnectKey).Label);
+        Assert.Equal(SetupPlan.SelfCheckKey, steps[^1].Key);
+        Assert.Equal(SetupPlan.SelfCheckLabel(Reach.Home), steps[^1].Label);
+    }
+
+    [Fact]
+    public void A_waiting_line_says_what_it_waits_for()
+    {
+        var run = new SetupRun
+        {
+            Steps =
+            [
+                new SetupRunStep { Key = "engine:matdock", Kind = SetupPlan.EngineKind, Label = "App manager (MatDock)", JobId = 1 },
+                new SetupRunStep { Key = "engine:matcad", Kind = SetupPlan.EngineKind, Label = "Matcad", JobId = 2, Needs = ["engine:matdock"] },
+                new SetupRunStep { Key = "selfcheck", Kind = SetupPlan.SelfCheckKind, Label = "Self", JobId = 3, Needs = ["engine:matcad"] },
+            ],
+        };
+        var jobs = new Dictionary<long, SetupJobState>
+        {
+            [1] = new(JobStatus.Running, DateTime.UtcNow, null),
+            [2] = new(JobStatus.Queued, null, null),
+            [3] = new(JobStatus.Queued, null, null),
+        };
+
+        var view = SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow);
+        Assert.Null(view.Steps[0].WaitsFor);
+        Assert.Equal("App manager (MatDock)", view.Steps[1].WaitsFor);
+        Assert.Equal("Matcad", view.Steps[2].WaitsFor);
+
+        // A need that is over (done or failed) is nothing to wait for.
+        jobs[1] = new(JobStatus.Failed, null, "x");
+        Assert.Null(SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow).Steps[1].WaitsFor);
+    }
+
+    [Fact]
+    public void Only_follows_one_line()
+    {
+        var run = Run(("engine:matdock", SetupPlan.EngineKind, 1), ("signin", SetupPlan.SignInKind, 2));
+        var jobs = new Dictionary<long, SetupJobState> { [1] = new(JobStatus.Failed, null, "x"), [2] = new(JobStatus.Succeeded, null, null) };
+        var all = SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow);
+        Assert.True(all.AnyFailed);
+
+        var signin = SetupProgress.Only(all, "signin");
+        Assert.Equal(["signin"], signin.Steps.Select(s => s.Key));
+        Assert.True(signin.Finished);
+        Assert.False(signin.AnyFailed);
+        Assert.Equal(100, signin.Percent);
+
+        var matdock = SetupProgress.Only(all, "engine:matdock");
+        Assert.True(matdock.Finished);
+        Assert.True(matdock.AnyFailed);
+
+        jobs[2] = new(JobStatus.Queued, null, null);
+        var waiting = SetupProgress.Only(SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow), "signin");
+        Assert.False(waiting.Finished);
+        Assert.False(waiting.AnyFailed);
+
+        var none = SetupProgress.Only(all, "mail");
+        Assert.Empty(none.Steps);
+        Assert.False(none.Finished);
+        Assert.False(none.AnyFailed);
+    }
+
+    [Fact]
+    public void A_run_stored_before_the_phases_is_in_its_second_phase()
+    {
+        var run = System.Text.Json.JsonSerializer.Deserialize<SetupRun>("""{"Reach":"home","Steps":[{"Key":"engine:matdock","Kind":"engine","Label":"x","JobId":1}]}""")!;
+        Assert.Equal(2, run.Phase);
+        Assert.Equal(Reach.Home, run.Reach);
+        Assert.Empty(run.Steps[0].Needs);
     }
 
     // ------------------------------------------------------------------ the check of Docker in plain words

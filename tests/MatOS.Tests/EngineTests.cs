@@ -161,4 +161,56 @@ public class EngineTests
     [InlineData("7", "local", "7")]
     public void BackupHub_SplitId_TakesTheEngineBeforeTheFirstColon(string id, string engine, string raw)
         => Assert.Equal((engine, raw), BackupHub.SplitId(id));
+
+    // ------------------------------------------------------------------ MatDock right after its install
+
+    [Fact]
+    public async Task MatDock_is_asked_again_after_its_install()
+    {
+        var locator = new SwitchLocator();
+        using var handler = new StatusHandler();
+        using var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var engine = new MatDockEngine(new MatDockClient(locator, new HandlerFactory(handler)), cache);
+
+        // Before its install: "not there", kept a few seconds.
+        Assert.False(await engine.IsAvailableAsync());
+        locator.Installed = true;
+        Assert.False(await engine.IsAvailableAsync());
+
+        // Its provisioner forgets that once MatDock answers: the next install deploys through it at once.
+        engine.Forget();
+        Assert.True(await engine.IsAvailableAsync());
+        Assert.Equal(1, handler.Calls);
+    }
+
+    private sealed class SwitchLocator : EngineLocator
+    {
+        public SwitchLocator() : base(null!, null!, null!, null!, null!)
+        {
+        }
+
+        public bool Installed { get; set; }
+
+        public override Task<EngineEndpoint?> FindAsync(string catalogId, string keyVariable, CancellationToken ct = default)
+            => Task.FromResult(Installed ? new EngineEndpoint(null!, "http://matdock.test", "key") : null);
+    }
+
+    private sealed class StatusHandler : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"version":"1.0.0","apiVersion":1}""", System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    private sealed class HandlerFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
 }

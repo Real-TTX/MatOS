@@ -21,13 +21,18 @@ public sealed record SetupStart(SetupRun? Run, IReadOnlyList<SetupProblem> Probl
 }
 
 /// <summary>
-/// "Set up MatOS" of the first start and its progress (docs/ARCHITECTURE.md "The first start"): the way to the apps is set (the free address registered at the
-/// address service, the own domain with its DNS account, or none), then one job per engine that is missing (in the order of <see cref="EngineIds.All"/>), one
-/// per first app (after the engines: the worker runs the jobs one after the other) and the free address; the progress screen reads their state, and "Try again"
-/// queues a failed step once more the way the store does.
+/// "Set up MatOS" of the first start and its progress (docs/ARCHITECTURE.md "The first start"), in two phases. Leaving the screen of the engines queues the
+/// first ones (<see cref="BeginAsync"/>: MatDock, then MatSMTP); confirming the way to the apps sets it (the free address registered at the address service,
+/// the own domain with its DNS account, or none) and queues the rest (<see cref="ContinueAsync"/>): the engines that follow from the answers, the first apps,
+/// the connection, the sign-in, the records, the address, the checks. Every line names the lines it runs on (<see cref="SetupRunStep.Needs"/>); its job
+/// waits for theirs (<see cref="AppJobs.Gated"/>). The progress screen reads their state, and "Try again" queues a failed line once more, with the lines that
+/// follow from it behind it.
 /// </summary>
 public sealed class SetupService
 {
+    /// <summary>One start, continuation or "Try again" at a time: a double submit or two tabs cannot start two runs or queue a line twice.</summary>
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
     private readonly SystemConfigService _config;
     private readonly CatalogService _catalog;
     private readonly AppService _apps;
@@ -92,14 +97,91 @@ public sealed class SetupService
     /// <summary>The name of a catalog entry, for the lines of the progress screen.</summary>
     public string? NameOf(string catalogId) => _catalog.Get(catalogId)?.Name;
 
+    /// <summary>
+    /// Both phases at once (the screen of the choices that asks for the engines and the way together): the first engines the person chose
+    /// (<see cref="BeginAsync"/>), then the rest (<see cref="ContinueAsync"/>).
+    /// </summary>
     public async Task<SetupStart> StartAsync(SetupChoices choices, SetupDns dns, CancellationToken ct = default)
     {
+        var first = choices.Engines.Where(e => e is EngineIds.MatDock or EngineIds.MatSmtp).ToHashSet(StringComparer.Ordinal);
+        await BeginAsync(first, ct);
+        return await ContinueAsync(choices, dns, ct);
+    }
+
+    /// <summary>
+    /// The first phase, when the person leaves the screen of the engines: MatDock and MatSMTP (<see cref="SetupPlan.FirstSteps"/>; <paramref name="chosen"/>
+    /// may leave MatSMTP out) are queued while the person still answers how the apps are reached. Returns the stored run when there is one (a second click,
+    /// a second tab), and null on a MatOS set up before the runs existed (nothing to start). It does not finish the first start.
+    /// </summary>
+    public async Task<SetupRun?> BeginAsync(IReadOnlySet<string>? chosen, CancellationToken ct = default)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var config = await _config.GetAsync(ct);
+            if (config.Setup is { } existing)
+            {
+                return existing;
+            }
+
+            if (config.WizardCompleted)
+            {
+                return null;
+            }
+
+            var installedApps = await _apps.ListAsync(ct);
+            var installed = await InstalledAsync(installedApps, ct);
+            var run = new SetupRun { StartedAt = DateTime.UtcNow, Phase = 1 };
+            var ids = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (var step in SetupPlan.FirstSteps(installed, chosen))
+            {
+                var needs = SetupPlan.NeedsOf(step.Key, step.Kind).Where(ids.ContainsKey).ToList();
+                var (jobId, appId) = await QueueAsync(step.Kind, step.CatalogId, installedApps, needs.Select(k => ids[k]).ToList(), ct);
+                ids[step.Key] = jobId;
+                run.Steps.Add(new SetupRunStep { Key = step.Key, Kind = step.Kind, Label = step.Label, JobId = jobId, AppId = appId, Needs = needs });
+            }
+
+            await _config.UpdateAsync(c => c.Setup = run, CancellationToken.None);
+            return run;
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The second phase, when the person confirmed how the apps are reached: the problems keep them on the screen; else the way is set and the lines that are
+    /// not part of the run yet are queued, each behind the lines it needs. What was queued is stored even when a later line could not be (a resubmit queues
+    /// nothing twice), and the first start counts as done only when all of it was queued. A run that is in its second phase already is returned as it is.
+    /// </summary>
+    public async Task<SetupStart> ContinueAsync(SetupChoices choices, SetupDns dns, CancellationToken ct = default)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            return await ContinueCoreAsync(choices, dns, ct);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private async Task<SetupStart> ContinueCoreAsync(SetupChoices choices, SetupDns dns, CancellationToken ct)
+    {
         var config = await _config.GetAsync(ct);
+        if (config.Setup is { Phase: >= 2 } done)
+        {
+            return new SetupStart(done, []);
+        }
+
         var pickable = PickableApps().Select(a => a.Id).ToHashSet(StringComparer.Ordinal);
 
-        // What is there already (an engine taken over from MatDock): its box is ticked and fixed, and a fixed box is not sent. A failed install is not "there".
+        // What is there already (an engine taken over from MatDock, or one the first phase is installing): its box is ticked and fixed, and a fixed box is not
+        // sent. A failed install is not "there".
         var installedApps = await _apps.ListAsync(ct);
-        var installed = installedApps.Where(a => a.Lifecycle != AppLifecycle.Failed).Select(a => a.CatalogId).ToHashSet(StringComparer.Ordinal);
+        var installed = await InstalledAsync(installedApps, ct);
         var problems = SetupPlan.Problems(choices, pickable, config, installed);
         if (problems.Count > 0)
         {
@@ -149,23 +231,25 @@ public sealed class SetupService
 
         // 2. What the wizard keeps as well: the address of this machine and the engines.
         var engines = SetupPlan.EnginesOf(choices.Engines);
-        string? Wanted(string id) => engines.Contains(id) || installed.Contains(id) ? id : null;
+        var stored = config.Setup;
+        string? Wanted(string id)
+            => engines.Contains(id) || installed.Contains(id) || stored?.Steps.Any(s => s.Key == SetupPlan.EngineKey(id)) == true ? id : null;
+        var selection = new WizardSelection
+        {
+            DockerAppId = EngineIds.MatDock,
+            ProxyAppId = Wanted(EngineIds.Matcad),
+            DdnsAppId = Wanted(EngineIds.Matddns),
+            IdentityAppId = Wanted(EngineIds.MatIdentity),
+            MailAppId = Wanted(EngineIds.MatSmtp),
+        };
         await _config.UpdateAsync(c =>
         {
             c.PublicHost = string.IsNullOrWhiteSpace(choices.PublicHost) ? null : choices.PublicHost.Trim();
-            c.Selection = new WizardSelection
-            {
-                DockerAppId = EngineIds.MatDock,
-                ProxyAppId = Wanted(EngineIds.Matcad),
-                DdnsAppId = Wanted(EngineIds.Matddns),
-                IdentityAppId = Wanted(EngineIds.MatIdentity),
-                MailAppId = Wanted(EngineIds.MatSmtp),
-            };
-            c.WizardCompleted = true;
-            c.WizardCompletedAt = DateTime.UtcNow;
+            c.Selection = selection;
         }, ct);
 
-        // 3. One job per line. An engine whose install failed before is not "installed": its line tries it again.
+        // 3. One job per line that is not part of the run yet, each behind the lines it needs. An engine whose install failed before is not "installed": its
+        // line tries it again.
         var withIdentity = Wanted(EngineIds.MatIdentity) is not null;
         if (!withIdentity)
         {
@@ -174,15 +258,67 @@ public sealed class SetupService
 
         // The person waits for MatIdentity to know them (OwnerHandover): a line of its own makes sure it happened, or says that it did not.
         var handOver = withIdentity && (await _config.GetAsync(ct)).Owner is not null;
-        var run = new SetupRun { StartedAt = DateTime.UtcNow, Reach = choices.Reach, WithIdentity = withIdentity };
-        foreach (var step in SetupPlan.Steps(choices, installed, NameOf, handOver))
+        var run = stored ?? new SetupRun { StartedAt = DateTime.UtcNow, Phase = 1 };
+        var already = run.Steps.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
+        var ids = run.Steps.ToDictionary(s => s.Key, s => s.JobId, StringComparer.Ordinal);
+        var added = new List<SetupRunStep>();
+        var completed = false;
+        try
         {
-            var (jobId, appId) = await QueueAsync(step.Kind, step.CatalogId, installedApps, ct);
-            run.Steps.Add(new SetupRunStep { Key = step.Key, Kind = step.Kind, Label = step.Label, JobId = jobId, AppId = appId });
+            foreach (var step in SetupPlan.Steps(choices, installed, NameOf, handOver, already))
+            {
+                var needs = SetupPlan.NeedsOf(step.Key, step.Kind).Where(ids.ContainsKey).ToList();
+                var (jobId, appId) = await QueueAsync(step.Kind, step.CatalogId, installedApps, needs.Select(k => ids[k]).ToList(), ct);
+                ids[step.Key] = jobId;
+                added.Add(new SetupRunStep { Key = step.Key, Kind = step.Kind, Label = step.Label, JobId = jobId, AppId = appId, Needs = needs });
+            }
+
+            completed = true;
+        }
+        finally
+        {
+            // One write for all of it, also when a line could not be queued: what was queued is kept, so a resubmit does not queue it twice.
+            var now = DateTime.UtcNow;
+            await _config.UpdateAsync(c =>
+            {
+                c.Setup ??= run;
+                foreach (var step in added.Where(a => c.Setup.Steps.All(s => s.Key != a.Key)))
+                {
+                    c.Setup.Steps.Add(step);
+                }
+
+                c.Setup.Reach = choices.Reach;
+                c.Setup.WithIdentity = withIdentity;
+                if (completed)
+                {
+                    c.Setup.Phase = 2;
+                    c.Setup.ContinuedAt = now;
+                    c.WizardCompleted = true;
+                    c.WizardCompletedAt = now;
+                }
+            }, CancellationToken.None);
         }
 
-        await _config.UpdateAsync(c => c.Setup = run, ct);
-        return new SetupStart(run, []);
+        return new SetupStart((await _config.GetAsync(ct)).Setup, []);
+    }
+
+    /// <summary>
+    /// The catalog ids that count as there: installed, or being installed by a job that still waits or runs (the first phase). A failed install, or one whose
+    /// job is gone, is not: its line tries it again.
+    /// </summary>
+    private async Task<IReadOnlySet<string>> InstalledAsync(IEnumerable<InstalledApp> apps, CancellationToken ct)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var app in apps)
+        {
+            if (app.Lifecycle == AppLifecycle.Installed
+                || (app.Lifecycle == AppLifecycle.Installing && await _jobs.GetActiveAsync(app.Id, ct) is not null))
+            {
+                result.Add(app.CatalogId);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>The progress screen: the state of every line.</summary>
@@ -199,71 +335,42 @@ public sealed class SetupService
         return SetupProgress.Of(run, id => jobs.TryGetValue(id, out var job) ? new SetupJobState(job.Status, job.StartedAt, job.Error) : null, DateTime.UtcNow);
     }
 
-    /// <summary>"Try again" of a failed line: its work is queued once more (an install the way the store's "Try again" does it). False when the line is not failed.</summary>
+    /// <summary>
+    /// "Try again" of a failed line: the lines that follow from it and still wait are taken off the queue first, then its work is queued once more (an install
+    /// the way the store's "Try again" does it), then those lines and the failed ones that follow from it, behind it. False when the line is not failed.
+    /// </summary>
     public async Task<bool> RetryAsync(string key, CancellationToken ct = default)
     {
-        var run = (await _config.GetAsync(ct)).Setup;
-        var step = run?.Steps.FirstOrDefault(s => s.Key == key);
-        if (run is null || step is null)
+        await Gate.WaitAsync(ct);
+        try
         {
-            return false;
+            return await RetryCoreAsync(key, ct) > 0;
         }
-
-        var job = await _jobs.GetAsync(step.JobId, ct);
-        if (job is not null && job.Status != JobStatus.Failed)
+        finally
         {
-            return false;
+            Gate.Release();
         }
-
-        long jobId;
-        if (step.Kind is SetupPlan.EngineKind or SetupPlan.AppKind)
-        {
-            var app = step.AppId is { } appId ? await _db.InstalledApps.FirstOrDefaultAsync(a => a.Id == appId, ct) : null;
-            if (app is null)
-            {
-                // The app was removed meanwhile (to start over): it is prepared again.
-                var queued = await QueueAsync(step.Kind, step.Key[(step.Key.IndexOf(':') + 1)..], await _apps.ListAsync(ct), ct);
-                jobId = queued.JobId;
-                step.AppId = queued.AppId;
-            }
-            else
-            {
-                app.Lifecycle = AppLifecycle.Installing;
-                app.StatusMessage = null;
-                await _db.SaveChangesAsync(ct);
-                jobId = await _jobs.EnqueueAsync(JobKind.Install, $"Install {app.Name} (retry)", app, AppJobs.Install(app.Id), ct);
-            }
-        }
-        else
-        {
-            jobId = (await QueueAsync(step.Kind, null, [], ct)).JobId;
-        }
-
-        await _config.UpdateAsync(c =>
-        {
-            if (c.Setup?.Steps.FirstOrDefault(s => s.Key == key) is { } stored)
-            {
-                stored.JobId = jobId;
-                stored.AppId = step.AppId;
-            }
-        }, ct);
-        return true;
     }
 
     /// <summary>"Try all again": every failed line once more, in the order of the plan (the engines before the apps that need them). Returns how many.</summary>
     public async Task<int> RetryAllAsync(CancellationToken ct = default)
     {
-        var view = await ProgressAsync(ct);
-        var count = 0;
-        foreach (var step in view?.Steps.Where(s => s.State == SetupProgress.Failed) ?? [])
+        await Gate.WaitAsync(ct);
+        try
         {
-            if (await RetryAsync(step.Key, ct))
+            var view = await ProgressAsync(ct);
+            var count = 0;
+            foreach (var step in view?.Steps.Where(s => s.State == SetupProgress.Failed).ToList() ?? [])
             {
-                count++;
+                count += await RetryCoreAsync(step.Key, ct);
             }
-        }
 
-        return count;
+            return count;
+        }
+        finally
+        {
+            Gate.Release();
+        }
     }
 
     /// <summary>
@@ -272,33 +379,135 @@ public sealed class SetupService
     /// </summary>
     public async Task<int> ResumeAsync(IReadOnlySet<long> interrupted, CancellationToken ct = default)
     {
-        var run = (await _config.GetAsync(ct)).Setup;
-        var count = 0;
-        foreach (var step in run?.Steps.Where(s => interrupted.Contains(s.JobId)).ToList() ?? [])
+        await Gate.WaitAsync(ct);
+        try
         {
-            if (await RetryAsync(step.Key, ct))
+            var run = (await _config.GetAsync(ct)).Setup;
+            var count = 0;
+            foreach (var step in run?.Steps.Where(s => interrupted.Contains(s.JobId)).ToList() ?? [])
             {
-                count++;
+                count += await RetryCoreAsync(step.Key, ct);
+            }
+
+            return count;
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>The work of "Try again" (the caller holds <see cref="Gate"/>): how many lines were queued again, 0 when the line is not failed.</summary>
+    private async Task<int> RetryCoreAsync(string key, CancellationToken ct)
+    {
+        var run = (await _config.GetAsync(ct)).Setup;
+        var step = run?.Steps.FirstOrDefault(s => s.Key == key);
+        if (run is null || step is null)
+        {
+            return 0;
+        }
+
+        var job = await _jobs.GetAsync(step.JobId, ct);
+        if (job is not null && job.Status != JobStatus.Failed)
+        {
+            return 0;
+        }
+
+        // The lines that follow from it and still wait would run before its new job (the worker takes them in order): off the queue with them first.
+        var dependents = SetupPlan.Dependents(run.Steps, key);
+        var again = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var dependent in dependents)
+        {
+            var state = (await _jobs.GetAsync(dependent.JobId, ct))?.Status;
+            if (state == JobStatus.Queued && await _jobs.CancelQueuedAsync(dependent.JobId, $"Moved behind {step.Label}.", ct))
+            {
+                again.Add(dependent.Key);
+            }
+            else if (state is null or JobStatus.Failed)
+            {
+                again.Add(dependent.Key);
             }
         }
 
-        return count;
+        var ids = run.Steps.ToDictionary(s => s.Key, s => s.JobId, StringComparer.Ordinal);
+        var changed = new Dictionary<string, (long JobId, long? AppId)>(StringComparer.Ordinal);
+        async Task RequeueStepAsync(SetupRunStep line)
+        {
+            var queued = await RequeueAsync(line, line.Needs.Where(ids.ContainsKey).Select(k => ids[k]).ToList(), ct);
+            ids[line.Key] = queued.JobId;
+            changed[line.Key] = queued;
+        }
+
+        try
+        {
+            await RequeueStepAsync(step);
+            foreach (var dependent in dependents.Where(d => again.Contains(d.Key)))
+            {
+                await RequeueStepAsync(dependent);
+            }
+        }
+        finally
+        {
+            await _config.UpdateAsync(c =>
+            {
+                foreach (var (stepKey, queued) in changed)
+                {
+                    if (c.Setup?.Steps.FirstOrDefault(s => s.Key == stepKey) is { } stored)
+                    {
+                        stored.JobId = queued.JobId;
+                        stored.AppId = queued.AppId;
+                    }
+                }
+            }, CancellationToken.None);
+        }
+
+        return changed.Count;
     }
 
-    /// <summary>Queues the job of a line: an install (prepared like the store does), the connection of engines that were there, or the free address.</summary>
-    private async Task<(long JobId, long? AppId)> QueueAsync(string kind, string? catalogId, List<InstalledApp> installed, CancellationToken ct)
+    /// <summary>
+    /// Queues a line once more: an install reuses its app (an engine exists once; the store would refuse a second one), else the line is queued like the first
+    /// time.
+    /// </summary>
+    private async Task<(long JobId, long? AppId)> RequeueAsync(SetupRunStep step, IReadOnlyList<long> needIds, CancellationToken ct)
     {
+        if (step.Kind is not (SetupPlan.EngineKind or SetupPlan.AppKind))
+        {
+            return await QueueAsync(step.Kind, null, [], needIds, ct);
+        }
+
+        var app = step.AppId is { } appId ? await _db.InstalledApps.FirstOrDefaultAsync(a => a.Id == appId, ct) : null;
+        if (app is null)
+        {
+            // The app was removed meanwhile (to start over): it is prepared again.
+            return await QueueAsync(step.Kind, step.Key[(step.Key.IndexOf(':') + 1)..], await _apps.ListAsync(ct), needIds, ct);
+        }
+
+        app.Lifecycle = AppLifecycle.Installing;
+        app.StatusMessage = null;
+        await _db.SaveChangesAsync(ct);
+        return (await _jobs.EnqueueAsync(JobKind.Install, $"Install {app.Name} (retry)", app, AppJobs.Gated(needIds, app.Id, AppJobs.Install(app.Id)), ct), app.Id);
+    }
+
+    /// <summary>
+    /// Queues the job of a line behind the jobs <paramref name="needIds"/> (<see cref="AppJobs.Gated"/>): an install (prepared like the store does), the
+    /// connection of the engines, the sign-in, the records, the free address or one of the checks.
+    /// </summary>
+    private async Task<(long JobId, long? AppId)> QueueAsync(string kind, string? catalogId, List<InstalledApp> installed, IReadOnlyList<long> needIds, CancellationToken ct)
+    {
+        Task<long> Enqueue(JobKind jobKind, string title, InstalledApp? app, Func<JobContext, Task> work)
+            => _jobs.EnqueueAsync(jobKind, title, app, AppJobs.Gated(needIds, app?.Id, work), ct);
+
         switch (kind)
         {
             case SetupPlan.EngineKind or SetupPlan.AppKind:
-                // A failed install of the same app is tried again instead of a second copy (an engine exists once).
-                if (installed.FirstOrDefault(a => a.CatalogId == catalogId && a.Lifecycle == AppLifecycle.Failed) is { } failed)
+                // An install of the same app that failed, or whose job is gone, is tried again instead of a second copy (an engine exists once).
+                if (installed.FirstOrDefault(a => a.CatalogId == catalogId && a.Lifecycle is AppLifecycle.Failed or AppLifecycle.Installing) is { } earlier)
                 {
-                    var tracked = await _db.InstalledApps.FirstAsync(a => a.Id == failed.Id, ct);
+                    var tracked = await _db.InstalledApps.FirstAsync(a => a.Id == earlier.Id, ct);
                     tracked.Lifecycle = AppLifecycle.Installing;
                     tracked.StatusMessage = null;
                     await _db.SaveChangesAsync(ct);
-                    return (await _jobs.EnqueueAsync(JobKind.Install, $"Install {tracked.Name} (retry)", tracked, AppJobs.Install(tracked.Id), ct), tracked.Id);
+                    return (await Enqueue(JobKind.Install, $"Install {tracked.Name} (retry)", tracked, AppJobs.Install(tracked.Id)), tracked.Id);
                 }
 
                 var prepared = await _apps.PrepareInstallAsync(new InstallRequest(catalogId!, null, null, new Dictionary<string, string?>()), ct);
@@ -306,26 +515,29 @@ public sealed class SetupService
                 {
                     // Nothing to run: the line fails at once with the reason, and "Try again" prepares it once more.
                     var reason = string.Join(' ', prepared.Errors);
-                    return (await _jobs.EnqueueAsync(JobKind.Install, $"Install {NameOf(catalogId!) ?? catalogId}", null, _ => Task.FromException(new InvalidOperationException(reason)), ct), null);
+                    return (await Enqueue(JobKind.Install, $"Install {NameOf(catalogId!) ?? catalogId}", null, _ => Task.FromException(new InvalidOperationException(reason))), null);
                 }
 
                 var app = prepared.App!;
-                return (await _jobs.EnqueueAsync(JobKind.Install, $"Install {app.Name}", app, AppJobs.Install(app.Id), ct), app.Id);
+                return (await Enqueue(JobKind.Install, $"Install {app.Name}", app, AppJobs.Install(app.Id)), app.Id);
 
             case SetupPlan.ConnectKind:
-                return (await _jobs.EnqueueAsync(JobKind.Provision, "Connect the engines", null, AppJobs.ConnectEngines(), ct), null);
+                return (await Enqueue(JobKind.Provision, "Connect the engines", null, AppJobs.ConnectEngines()), null);
 
             case SetupPlan.SignInKind:
-                return (await _jobs.EnqueueAsync(JobKind.Provision, "Your sign-in for all apps", null, AppJobs.HandOverOwner(), ct), null);
+                return (await Enqueue(JobKind.Provision, "Your sign-in for all apps", null, AppJobs.HandOverOwner()), null);
 
             case SetupPlan.DnsKind:
-                return (await _jobs.EnqueueAsync(JobKind.Provision, "The DNS records of your domain", null, AppJobs.DomainRecords(), ct), null);
+                return (await Enqueue(JobKind.Provision, "The DNS records of your domain", null, AppJobs.DomainRecords()), null);
 
             case SetupPlan.ReachKind:
-                return (await _jobs.EnqueueAsync(JobKind.Provision, AppJobs.CheckReachTitle, null, AppJobs.CheckReach(), ct), null);
+                return (await Enqueue(JobKind.Provision, AppJobs.CheckReachTitle, null, AppJobs.CheckReach()), null);
+
+            case SetupPlan.SelfCheckKind:
+                return (await Enqueue(JobKind.Provision, AppJobs.CheckSelfTitle, null, AppJobs.CheckSelf()), null);
 
             default:
-                return (await _jobs.EnqueueAsync(JobKind.Provision, "Your free address", null, AppJobs.FreeAddress(), ct), null);
+                return (await Enqueue(JobKind.Provision, "Your free address", null, AppJobs.FreeAddress()), null);
         }
     }
 }

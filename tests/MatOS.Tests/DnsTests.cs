@@ -99,20 +99,22 @@ public class DnsTests
     [Fact]
     public void The_first_start_says_where_the_domain_points()
     {
-        Assert.Equal("MatOS sets up its five engines and puts your apps under example.com. Your domain follows your internet address.",
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Your domain follows your internet address.",
             SetupPlan.Summary(Domain(DnsIp.Default), _ => null));
-        Assert.Equal("MatOS sets up its five engines and puts your apps under example.com. Your domain points to 93.184.216.34.",
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Your domain points to 93.184.216.34.",
             SetupPlan.Summary(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34")), _ => null));
-        Assert.Equal("MatOS sets up its five engines and puts your apps under example.com.", SetupPlan.Summary(Domain(null), _ => null));
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com.", SetupPlan.Summary(Domain(null), _ => null));
     }
 
     [Fact]
     public void An_own_domain_has_a_line_for_its_records_and_the_check_comes_last()
     {
         var steps = SetupPlan.Steps(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34")), new HashSet<string>(), _ => null);
-        Assert.Equal([SetupPlan.DnsKey, SetupPlan.ReachKey], steps.Skip(steps.Count - 2).Select(s => s.Key));
+        // The records, the check of the reachability, then the self check last.
+        Assert.Equal([SetupPlan.DnsKey, SetupPlan.ReachKey, SetupPlan.SelfCheckKey], steps.Skip(steps.Count - 3).Select(s => s.Key));
         Assert.Equal("Your domain points to 93.184.216.34", steps.Single(s => s.Key == SetupPlan.DnsKey).Label);
-        Assert.Equal(SetupPlan.ReachLabel, steps[^1].Label);
+        Assert.Equal(SetupPlan.ReachLabel, steps[^2].Label);
+        Assert.Equal(SetupPlan.SelfCheckLabel(Reach.Domain), steps[^1].Label);
     }
 
     [Fact]

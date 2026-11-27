@@ -78,6 +78,87 @@ public static partial class SetupPlan
     /// <summary>The key of the step that makes sure MatIdentity knows the person who set up MatOS (<c>OwnerHandover</c>).</summary>
     public const string SignInKey = "signin";
 
+    /// <summary>The kind of the last line: MatOS answers where the person opens it (<c>AppJobs.CheckSelf</c>).</summary>
+    public const string SelfCheckKind = "selfcheck";
+
+    /// <summary>The key of <see cref="SelfCheckKind"/>.</summary>
+    public const string SelfCheckKey = "selfcheck";
+
+    /// <summary>The line of <see cref="SelfCheckKey"/>: at its address, or on the network at home.</summary>
+    public static string SelfCheckLabel(string? reach) => reach == Reach.Home
+        ? "Checking that MatOS answers on your home network"
+        : "Checking that MatOS answers at its address";
+
+    /// <summary>The key of the line that installs an engine.</summary>
+    public static string EngineKey(string catalogId) => $"{EngineKind}:{catalogId}";
+
+    /// <summary>
+    /// The lines a line runs on, by key: an engine other than MatDock and an app need MatDock; connecting needs every engine; the sign-in needs MatIdentity;
+    /// the records need Matddns; the free address, the check of the reachability and the self check need Matcad, and the self check also the connection.
+    /// The caller keeps only the keys that are part of the run.
+    /// </summary>
+    public static IReadOnlyList<string> NeedsOf(string key, string kind)
+    {
+        var matdock = EngineKey(EngineIds.MatDock);
+        var matcad = EngineKey(EngineIds.Matcad);
+        return kind switch
+        {
+            EngineKind => key == matdock ? [] : [matdock],
+            AppKind => [matdock],
+            ConnectKind => EngineIds.All.Select(EngineKey).ToList(),
+            SignInKind => [EngineKey(EngineIds.MatIdentity)],
+            DnsKind => [EngineKey(EngineIds.Matddns)],
+            AddressKind or ReachKind => [matcad],
+            SelfCheckKind => [matcad, ConnectKey],
+            _ => [],
+        };
+    }
+
+    /// <summary>
+    /// The first lines, queued when the person leaves the screen of the engines (before the way to the apps is chosen): MatDock, then MatSMTP (unless
+    /// <paramref name="chosen"/> leaves it out), each unless it is installed already.
+    /// </summary>
+    public static IReadOnlyList<PlannedStep> FirstSteps(IReadOnlySet<string> installed, IReadOnlySet<string>? chosen = null)
+    {
+        var steps = new List<PlannedStep>();
+        foreach (var engine in new[] { EngineIds.MatDock, EngineIds.MatSmtp })
+        {
+            if (installed.Contains(engine) || (engine != EngineIds.MatDock && chosen is not null && !chosen.Contains(engine)))
+            {
+                continue;
+            }
+
+            steps.Add(new PlannedStep(EngineKey(engine), EngineKind, EngineLabel(engine), engine));
+        }
+
+        return steps;
+    }
+
+    /// <summary>
+    /// The lines that follow from <paramref name="key"/>: every line that needs it, and every line that needs one of those (the closure over
+    /// <see cref="SetupRunStep.Needs"/>), in the order of the plan. "Try again" of the line puts them behind its new job.
+    /// </summary>
+    public static IReadOnlyList<SetupRunStep> Dependents(IReadOnlyList<SetupRunStep> steps, string key)
+    {
+        var reached = new HashSet<string>(StringComparer.Ordinal) { key };
+        bool grew;
+        do
+        {
+            grew = false;
+            foreach (var step in steps)
+            {
+                if (!reached.Contains(step.Key) && step.Needs.Any(reached.Contains))
+                {
+                    reached.Add(step.Key);
+                    grew = true;
+                }
+            }
+        }
+        while (grew);
+
+        return steps.Where(s => s.Key != key && reached.Contains(s.Key)).ToList();
+    }
+
     /// <summary>The engine in plain words, with its name after it: what the progress screen and the summary say.</summary>
     public static string EngineLabel(string catalogId) => catalogId switch
     {
@@ -205,48 +286,66 @@ public static partial class SetupPlan
     /// (<paramref name="handOver"/>: MatIdentity is part of it and does not know them yet; the line fails when it still does not, so it cannot go unnoticed), then
     /// the free address. <paramref name="installed"/> holds the catalog ids that are installed already (a failed install is not one: it is tried again).
     /// </summary>
-    public static IReadOnlyList<PlannedStep> Steps(SetupChoices choices, IReadOnlySet<string> installed, Func<string, string?> nameOf, bool handOver = false)
+    public static IReadOnlyList<PlannedStep> Steps(SetupChoices choices, IReadOnlySet<string> installed, Func<string, string?> nameOf, bool handOver = false,
+        IReadOnlySet<string>? already = null)
     {
+        already ??= new HashSet<string>(StringComparer.Ordinal);
         var steps = new List<PlannedStep>();
+        void Add(PlannedStep step)
+        {
+            if (!already.Contains(step.Key))
+            {
+                steps.Add(step);
+            }
+        }
+
         foreach (var engine in EnginesOf(choices.Engines).Where(e => !installed.Contains(e)))
         {
-            steps.Add(new PlannedStep($"{EngineKind}:{engine}", EngineKind, EngineLabel(engine), engine));
+            Add(new PlannedStep(EngineKey(engine), EngineKind, EngineLabel(engine), engine));
         }
 
         foreach (var app in choices.Apps.Distinct(StringComparer.Ordinal).Where(a => !installed.Contains(a)))
         {
-            steps.Add(new PlannedStep($"{AppKind}:{app}", AppKind, nameOf(app) ?? app, app));
+            Add(new PlannedStep($"{AppKind}:{app}", AppKind, nameOf(app) ?? app, app));
         }
 
-        // Engines that were there before (taken over from MatDock): they learn the address and the sign-in once the rest is done.
-        if (EngineIds.All.Any(installed.Contains))
+        // The engines of the run (the lines of the first phase and the new ones) learn the address and the sign-in once the rest is done; so do engines that
+        // were there before (taken over from MatDock).
+        var runEngines = already.Concat(steps.Select(s => s.Key))
+            .Where(k => k.StartsWith(EngineKind + ":", StringComparison.Ordinal))
+            .Select(k => k[(EngineKind.Length + 1)..])
+            .ToHashSet(StringComparer.Ordinal);
+        var adopted = installed.Where(EngineIds.IsEngine).Where(e => !runEngines.Contains(e)).ToList();
+        if (EngineIds.All.Any(installed.Contains) || already.Any(k => k.StartsWith(EngineKind + ":", StringComparison.Ordinal)))
         {
-            steps.Add(new PlannedStep(ConnectKey, ConnectKind, "Connect what was there already", null));
+            Add(new PlannedStep(ConnectKey, ConnectKind, adopted.Count > 0 ? "Connect what was there already" : "Connect the engines to each other", null));
         }
 
         if (handOver)
         {
-            steps.Add(new PlannedStep(SignInKey, SignInKind, "Your sign-in for all apps", null));
+            Add(new PlannedStep(SignInKey, SignInKind, "Your sign-in for all apps", null));
         }
 
         // An own domain with a DNS account: Matddns writes its records, pointing where the person said (DnsIp).
-        var engines = EnginesOf(choices.Engines).Concat(installed.Where(EngineIds.IsEngine)).ToHashSet();
+        var engines = EnginesOf(choices.Engines).Concat(installed.Where(EngineIds.IsEngine)).Concat(runEngines).ToHashSet();
         if (choices.Reach == Reach.Domain && choices.Ip is { } ip && engines.Contains(EngineIds.Matddns))
         {
-            steps.Add(new PlannedStep(DnsKey, DnsKind, ip.Sentence, null));
+            Add(new PlannedStep(DnsKey, DnsKind, ip.Sentence, null));
         }
 
         if (choices.Reach == Reach.Free)
         {
-            steps.Add(new PlannedStep(AddressKey, AddressKind, "Your free address", null));
+            Add(new PlannedStep(AddressKey, AddressKind, "Your free address", null));
         }
 
-        // Last: whether the apps can be reached from outside. Only once Matcad is there (before, nothing answers on 80 and 443), and never at home.
+        // Whether the apps can be reached from outside. Only once Matcad is there (before, nothing answers on 80 and 443), and never at home.
         if (choices.Reach is Reach.Free or Reach.Domain && engines.Contains(EngineIds.Matcad))
         {
-            steps.Add(new PlannedStep(ReachKey, ReachKind, ReachLabel, null));
+            Add(new PlannedStep(ReachKey, ReachKind, ReachLabel, null));
         }
 
+        // Last, for every way: MatOS answers where the person opens it.
+        Add(new PlannedStep(SelfCheckKey, SelfCheckKind, SelfCheckLabel(choices.Reach), null));
         return steps;
     }
 
@@ -266,7 +365,7 @@ public static partial class SetupPlan
     {
         var engines = EnginesOf(choices.Engines).Count;
         var apps = choices.Apps.Select(a => nameOf(a) ?? a).ToList();
-        var what = engines == EngineIds.All.Count ? "MatOS sets up its five engines" : engines == 1 ? "MatOS sets up its app manager" : $"MatOS sets up {engines} of its engines";
+        var what = engines == EngineIds.All.Count ? "MatOS sets up its engines" : engines == 1 ? "MatOS sets up its app manager" : $"MatOS sets up {engines} of its engines";
         if (apps.Count > 0)
         {
             what += ", then " + Join(apps);

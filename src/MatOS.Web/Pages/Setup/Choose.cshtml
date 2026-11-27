@@ -29,7 +29,7 @@
 }
 
 @* The first start, steps 3 to 5: the way to the apps, the first apps, "Set up MatOS". One form; js/onboarding.js shows one step at a time. *@
-<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="2" data-ob-start="@Model.StartAt" data-ob-zone="@Model.Zone" data-ob-self="@MatOS.Core.Integrations.ProxyPublisher.SelfSlug">
+<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="2" data-ob-start="@Model.StartAt" data-ob-zone="@Model.Zone" data-ob-self="@MatOS.Core.Integrations.ProxyPublisher.SelfSlug" data-ob-engines-total="@EngineIds.All.Count">
     <partial name="_Steps" model="2" />
 
     @* ------------------------------------------------------------ 3. how the apps are reached *@

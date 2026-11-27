@@ -46,6 +46,12 @@ public sealed class MatOSOptions
     /// (docs/SERVICES.md; <c>MatOS__ServicesUrl</c>).
     /// </summary>
     public string ServicesUrl { get; set; } = "https://services.mattiverse.de";
+
+    /// <summary>
+    /// The direct way for free addresses (the records of <c>&lt;name&gt;.my.mattiverse.de</c> on the IP of this computer): off until the delegation of
+    /// <c>my.mattiverse.de</c> is live, so the free address stays in the tunnel of MatOS Services (<c>MatOS__ServicesDirectAvailable</c>).
+    /// </summary>
+    public bool ServicesDirectAvailable { get; set; }
 }
 
 /// <summary>Credentials used to seed the first administrator on an empty database (headless setups).</summary>

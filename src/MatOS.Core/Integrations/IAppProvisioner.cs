@@ -19,10 +19,12 @@ public interface IAppProvisioner
 public sealed class MatDockProvisioner : IAppProvisioner
 {
     private readonly MatDockClient _matdock;
+    private readonly MatDockEngine _engine;
 
-    public MatDockProvisioner(MatDockClient matdock)
+    public MatDockProvisioner(MatDockClient matdock, MatDockEngine engine)
     {
         _matdock = matdock;
+        _engine = engine;
     }
 
     public string Key => "matdock";
@@ -35,7 +37,10 @@ public sealed class MatDockProvisioner : IAppProvisioner
             return;
         }
 
+        // A "not there" from before its install is kept a few seconds: the next install asks MatDock again at once.
+        _engine.Forget();
         await _matdock.EnsureLocalEnvironmentAsync(ct);
+        _engine.Forget();
         log("MatDock manages this host's Docker engine now; apps are deployed as MatDock stacks.");
     }
 }

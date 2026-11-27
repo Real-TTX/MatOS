@@ -58,6 +58,29 @@ public sealed class JobService
         return job.Id;
     }
 
+    /// <summary>
+    /// Takes a job off the queue before the worker reaches it: it ends as failed with <paramref name="reason"/>. False when it is not waiting any more (the
+    /// worker took it, or it never was queued here).
+    /// </summary>
+    public async Task<bool> CancelQueuedAsync(long id, string reason, CancellationToken ct = default)
+    {
+        if (!_queue.Work.TryRemove(id, out _))
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        await _db.Jobs.Where(j => j.Id == id).ExecuteUpdateAsync(
+            s => s
+                .SetProperty(j => j.Status, JobStatus.Failed)
+                .SetProperty(j => j.Error, reason)
+                .SetProperty(j => j.FinishedAt, now)
+                .SetProperty(j => j.UpdateDate, now),
+            ct);
+        _logs.Remove(id);
+        return true;
+    }
+
     public Task<Job?> GetAsync(long id, CancellationToken ct = default)
         => _db.Jobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
 

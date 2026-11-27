@@ -8,8 +8,17 @@ public sealed class SetupRun
 {
     public DateTime StartedAt { get; set; }
 
-    /// <summary>The way to the apps the person chose (<see cref="Setup.Reach"/>).</summary>
-    public string Reach { get; set; } = Setup.Reach.Home;
+    /// <summary>
+    /// 1: only the first engines are queued (MatDock, MatSMTP), the way to the apps is not chosen yet; 2: the rest is queued too. The default 2 keeps a run
+    /// stored before the phases existed valid.
+    /// </summary>
+    public int Phase { get; set; } = 2;
+
+    /// <summary>When the person confirmed the way to the apps (<c>SetupService.ContinueAsync</c>); null in phase 1.</summary>
+    public DateTime? ContinuedAt { get; set; }
+
+    /// <summary>The way to the apps the person chose (<see cref="Setup.Reach"/>); null in phase 1.</summary>
+    public string? Reach { get; set; }
 
     /// <summary>MatIdentity is part of this MatOS: the last screen says that one account signs in everywhere.</summary>
     public bool WithIdentity { get; set; }
@@ -32,6 +41,9 @@ public sealed class SetupRunStep
 
     /// <summary>The installed app of an install step.</summary>
     public long? AppId { get; set; }
+
+    /// <summary>The keys of the lines this one runs on (<see cref="SetupPlan.NeedsOf"/>, only those of the run): its job waits until theirs are over.</summary>
+    public List<string> Needs { get; set; } = new();
 }
 
 /// <summary>The person who set up MatOS, until MatIdentity has them (<see cref="Configuration.SystemConfig.Owner"/>, <c>OwnerHandover</c>).</summary>
@@ -51,8 +63,11 @@ public sealed class PendingOwner
 /// <summary>What the progress screen needs of a job.</summary>
 public sealed record SetupJobState(JobStatus Status, DateTime? StartedAt, string? Error);
 
-/// <summary>A line of the progress screen: <c>waiting</c>, <c>working</c>, <c>done</c> or <c>failed</c>, with the reason of a failure.</summary>
-public sealed record SetupStepView(string Key, string Label, string State, long JobId, string? Error);
+/// <summary>
+/// A line of the progress screen: <c>waiting</c>, <c>working</c>, <c>done</c> or <c>failed</c>, with the reason of a failure, its kind, and the label of the line
+/// a waiting one waits for (<paramref name="WaitsFor"/>: a line it needs that is not over yet).
+/// </summary>
+public sealed record SetupStepView(string Key, string Label, string State, long JobId, string? Error, string Kind = SetupPlan.AppKind, string? WaitsFor = null);
 
 /// <summary>The whole progress screen: the lines, how far it is (0 to 100), whether it is over, and the words above it.</summary>
 public sealed record SetupProgressView(IReadOnlyList<SetupStepView> Steps, int Percent, bool Finished, bool AnyFailed, string Headline, string Estimate);
@@ -79,18 +94,25 @@ public static partial class SetupProgress
         var views = new List<SetupStepView>(run.Steps.Count);
         var left = TimeSpan.Zero;
         double score = 0;
+        var states = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var step in run.Steps)
         {
             var job = jobOf(step.JobId);
-            var state = job?.Status switch
-            {
-                JobStatus.Queued => Waiting,
-                JobStatus.Running => Working,
-                JobStatus.Succeeded => Done,
-                _ => Failed,
-            };
-            var error = state == Failed ? (job is null ? "This step was lost. Try it again." : Plain(job.Error)) : null;
-            views.Add(new SetupStepView(step.Key, step.Label, state, step.JobId, error));
+            states[step.Key] = StateOf(job);
+        }
+
+        foreach (var step in run.Steps)
+        {
+            var job = jobOf(step.JobId);
+            var state = states[step.Key];
+            var error = state == Failed ? (job is null ? "This step was lost. Try it again." : Plain(job.Error, step.Kind)) : null;
+
+            // A waiting line says what it waits for: the first line it needs that is not over yet.
+            var waitsFor = state == Waiting
+                ? step.Needs.Select(need => run.Steps.FirstOrDefault(s => s.Key == need))
+                    .FirstOrDefault(s => s is not null && states.GetValueOrDefault(s.Key) is Waiting or Working)?.Label
+                : null;
+            views.Add(new SetupStepView(step.Key, step.Label, state, step.JobId, error, step.Kind, waitsFor));
 
             switch (state)
             {
@@ -114,6 +136,30 @@ public static partial class SetupProgress
         var percent = views.Count == 0 || finished ? 100 : (int)Math.Round(score * 100 / views.Count);
         var headline = !finished ? "Setting up your MatOS" : anyFailed ? "Almost there" : "Your MatOS is ready";
         return new SetupProgressView(views, Math.Clamp(percent, 0, 100), finished, anyFailed, headline, finished ? string.Empty : Estimate(left));
+    }
+
+    private static string StateOf(SetupJobState? job) => job?.Status switch
+    {
+        JobStatus.Queued => Waiting,
+        JobStatus.Running => Working,
+        JobStatus.Succeeded => Done,
+        _ => Failed,
+    };
+
+    /// <summary>
+    /// The view of one line only (a screen that waits for one of them, <c>?key=</c>): how far it is, whether it is over and whether it failed are its own. An
+    /// empty view when the run has no such line.
+    /// </summary>
+    public static SetupProgressView Only(SetupProgressView view, string key)
+    {
+        if (view.Steps.FirstOrDefault(s => s.Key == key) is not { } step)
+        {
+            return new SetupProgressView([], 0, false, false, view.Headline, string.Empty);
+        }
+
+        var finished = step.State is Done or Failed;
+        var percent = finished ? 100 : step.State == Working ? 50 : 0;
+        return new SetupProgressView([step], percent, finished, step.State == Failed, view.Headline, finished ? string.Empty : view.Estimate);
     }
 
     /// <summary>The time that is left in friendly words.</summary>
@@ -155,6 +201,13 @@ public static partial class SetupProgress
             return Has("address service", "timed out", "timeout", "did not answer", "no such host", "cannot be reached", "connection refused")
                 ? "The address service cannot be reached right now. MatOS keeps trying by itself; check the internet connection of this computer, then try again."
                 : FirstSentence(text, Has);
+        }
+
+        if (kind == SetupPlan.SelfCheckKind)
+        {
+            // Its own words say what happened and what to do (AppJobs.CheckSelf), with the address in them: the first sentence, whatever it holds.
+            var sentence = text.Split(". ", 2)[0].TrimEnd('.');
+            return sentence.Length is > 0 and <= 160 ? sentence + "." : Unknown;
         }
 
         if (kind is SetupPlan.SignInKind or SetupPlan.DnsKind or SetupPlan.ReachKind)

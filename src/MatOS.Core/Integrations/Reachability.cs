@@ -71,10 +71,11 @@ public static class Reachability
     /// <summary>
     /// The route the check asks for: <see cref="DomainRoute.Direct"/> when 80 and 443 are open with Caddy behind them, <see cref="DomainRoute.Tunnel"/> when the
     /// service answered and they are not, and <paramref name="current"/> when the service could not be asked (nothing is known: no switch, no error for the
-    /// person). The free address of the first start starts in the tunnel, an own domain direct.
+    /// person). The free address of the first start starts in the tunnel, an own domain direct. Without <paramref name="directAvailable"/> (the free address
+    /// while its direct way is not offered, <c>MatOSOptions.ServicesDirectAvailable</c>) an answer always asks for the tunnel.
     /// </summary>
-    public static string RouteFor(ServicesResult<PortCheck> result, string current)
-        => !result.Ok ? current : WebOpen(result.Value) ? DomainRoute.Direct : DomainRoute.Tunnel;
+    public static string RouteFor(ServicesResult<PortCheck> result, string current, bool directAvailable = true)
+        => !result.Ok ? current : WebOpen(result.Value) && directAvailable ? DomainRoute.Direct : DomainRoute.Tunnel;
 
     /// <summary>
     /// The route of an own domain: what the check asks for, within what is possible. The policy <see cref="DomainRoute.Direct"/> never takes the tunnel, and the

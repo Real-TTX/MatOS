@@ -1,3 +1,4 @@
+using MatOS.Core.Configuration;
 using MatOS.Core.Setup;
 using MatOS.Core.Users;
 using Microsoft.AspNetCore.Antiforgery;
@@ -15,22 +16,33 @@ public static class OnboardingEndpoints
 
     public static void MapOnboardingApi(this WebApplication app)
     {
-        // GET /api/setup/progress -> {percent, finished, anyFailed, headline, estimate, steps: [{key, label, state, jobId, error}]}; 404 before "Set up MatOS".
-        app.MapGet(ProgressPath, async (HttpContext http, SetupService setup, CancellationToken ct) =>
+        // GET /api/setup/progress[?key=<line>] -> {phase, percent, finished, anyFailed, headline, estimate, steps: [{key, label, kind, state, jobId, error, waitsFor}]};
+        // with a key only that line (a screen that waits for it); 404 before the first start began.
+        app.MapGet(ProgressPath, async (HttpContext http, SetupService setup, SystemConfigService config, string? key, CancellationToken ct) =>
         {
             http.Response.Headers.CacheControl = "no-store";
             var view = await setup.ProgressAsync(ct);
-            return view is null
-                ? Results.NotFound()
-                : Results.Json(new
-                {
-                    percent = view.Percent,
-                    finished = view.Finished,
-                    anyFailed = view.AnyFailed,
-                    headline = view.Headline,
-                    estimate = view.Estimate,
-                    steps = view.Steps.Select(s => new { key = s.Key, label = s.Label, state = s.State, jobId = s.JobId, error = s.Error }),
-                });
+            if (view is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (!string.IsNullOrEmpty(key))
+            {
+                view = SetupProgress.Only(view, key);
+            }
+
+            var phase = (await config.GetAsync(ct)).Setup?.Phase ?? 2;
+            return Results.Json(new
+            {
+                phase,
+                percent = view.Percent,
+                finished = view.Finished,
+                anyFailed = view.AnyFailed,
+                headline = view.Headline,
+                estimate = view.Estimate,
+                steps = view.Steps.Select(s => new { key = s.Key, label = s.Label, kind = s.Kind, state = s.State, jobId = s.JobId, error = s.Error, waitsFor = s.WaitsFor }),
+            });
         }).RequireAuthorization("AdminOnly");
 
         // POST /api/home/tour (the anti-forgery token of the page in the header RequestVerificationToken): the tour is not shown to this account again.

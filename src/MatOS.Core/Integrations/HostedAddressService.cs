@@ -1,5 +1,6 @@
 using MatOS.Core.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MatOS.Core.Integrations;
 
@@ -22,15 +23,27 @@ public sealed class HostedAddressService
     private readonly MatddnsClient _matddns;
     private readonly TunnelClient _tunnel;
     private readonly ILogger<HostedAddressService> _logger;
+    private readonly MatOSOptions _options;
 
-    public HostedAddressService(SystemConfigService config, ServicesClient services, MatddnsClient matddns, TunnelClient tunnel, ILogger<HostedAddressService> logger)
+    public HostedAddressService(SystemConfigService config, ServicesClient services, MatddnsClient matddns, TunnelClient tunnel, ILogger<HostedAddressService> logger,
+        IOptions<MatOSOptions> options)
     {
+        _options = options.Value;
         _config = config;
         _services = services;
         _matddns = matddns;
         _tunnel = tunnel;
         _logger = logger;
     }
+
+    /// <summary>What a switch to the direct way says while it is not offered (<see cref="DirectAvailable"/>).</summary>
+    public const string DirectNotAvailableMessage = "The direct way for free addresses is not available yet; your address keeps working through MatOS Services.";
+
+    /// <summary>
+    /// The direct way of the free address is offered (<see cref="MatOSOptions.ServicesDirectAvailable"/>): until the delegation of my.mattiverse.de is live
+    /// the free address stays in the tunnel.
+    /// </summary>
+    public bool DirectAvailable => _options.ServicesDirectAvailable;
 
     /// <summary>
     /// Why <paramref name="baseDomain"/> cannot be the domain of the apps with the DNS provider <paramref name="providerId"/>, or null when it can: a name
@@ -159,6 +172,11 @@ public sealed class HostedAddressService
         var key = await _config.GetHostedKeyAsync(ct) ?? throw new InvalidOperationException(KeyLostMessage);
         if (mode == HostedAddress.Direct)
         {
+            if (!DirectAvailable)
+            {
+                throw new InvalidOperationException(DirectNotAvailableMessage);
+            }
+
             await SwitchToDirectAsync(hosted, key, log, ct);
         }
         else if (mode == HostedAddress.Tunnel)

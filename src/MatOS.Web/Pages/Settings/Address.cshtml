@@ -216,6 +216,9 @@ else
         </section>
     }
 
+    @* The direct way only once it is offered (MatOS__ServicesDirectAvailable); a free address that is direct already keeps its way back to the tunnel. *@
+    @if (Model.DirectAvailable || hosted.IsDirect)
+    {
     <section class="mat-stack mat-stack--sm" aria-labelledby="group-direct-access">
         <h2 class="mat-itemlist__header" id="group-direct-access">Direct access</h2>
         <div class="mat-card">
@@ -274,6 +277,7 @@ else
             </div>
         </div>
     </section>
+    }
 
     </div>
     </details>

@@ -34,6 +34,9 @@ public sealed class MatDockEngine : IStackEngine
         return available;
     }
 
+    /// <summary>Forgets what <see cref="IsAvailableAsync"/> found, so the next question asks MatDock again (after its install: "not there" is kept 10 seconds).</summary>
+    public void Forget() => _cache.Remove("engine:matdock");
+
     public async Task DeployAsync(StackSpec spec, bool pull, Action<string> log, CancellationToken ct = default)
     {
         var operation = await _client.UpsertStackAsync(spec, deploy: true, pull: pull, ct)

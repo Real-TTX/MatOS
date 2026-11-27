@@ -179,6 +179,201 @@ public static class AppJobs
             await ConnectEngines()(ctx);
         };
 
+    /// <summary>
+    /// The work of a line of the first start that runs on other lines (<c>SetupRunStep.Needs</c>, resolved to their job ids when it was queued): it refuses to
+    /// run while one of them still waits or runs (a "Try again" queued that one behind it), and then marks the app of an install failed, so nothing stays
+    /// "installing". A need that is over runs it, done or failed alike (the work itself says what is missing); a job that is gone counts as over.
+    /// </summary>
+    public static Func<JobContext, Task> Gated(IReadOnlyList<long> needIds, long? appId, Func<JobContext, Task> work)
+        => async ctx =>
+        {
+            if (needIds.Count > 0)
+            {
+                var db = ctx.Services.GetRequiredService<MatOSDbContext>();
+                var busy = await db.Jobs.AsNoTracking()
+                    .Where(j => needIds.Contains(j.Id) && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running))
+                    .OrderBy(j => j.Id)
+                    .FirstOrDefaultAsync(ctx.Cancellation);
+                if (busy is not null)
+                {
+                    var message = $"Waits for {busy.Title}: Try again once it is done.";
+                    if (appId is { } id && await db.InstalledApps.FirstOrDefaultAsync(a => a.Id == id, ctx.Cancellation) is { } app)
+                    {
+                        app.Lifecycle = AppLifecycle.Failed;
+                        app.StatusMessage = message;
+                        await db.SaveChangesAsync(ctx.Cancellation);
+                    }
+
+                    throw new InvalidOperationException(message);
+                }
+            }
+
+            await work(ctx);
+        };
+
+    /// <summary>The title of the self check, the last line of the first start.</summary>
+    public const string CheckSelfTitle = "Check that MatOS answers where you open it";
+
+    /// <summary>The HTTP client of the self check: 20 seconds, certificates checked as a browser would.</summary>
+    public const string SelfCheckClient = "selfcheck";
+
+    /// <summary>
+    /// The last line of the first start (docs/ARCHITECTURE.md "The first start"): MatOS answers where the person opens it. A free address or an own domain:
+    /// <c>/healthz</c> at <c>matos.&lt;domain&gt;</c> over HTTPS, asked a few times (the certificate may still be on its way); an own domain that this computer
+    /// cannot reach through its own router (no hairpin) passes when MatOS Services sees Matcad on 443 from outside. At home MatOS is not routed through Matcad:
+    /// Matcad's proxy answers on the shared network, and MatOS at the address of this computer (or the line says where to open it).
+    /// </summary>
+    public static Func<JobContext, Task> CheckSelf(int attempts = 6, TimeSpan? pause = null)
+        => async ctx =>
+        {
+            var config = await ctx.Services.GetRequiredService<SystemConfigService>().GetAsync(ctx.Cancellation);
+            var reach = config.Setup?.Reach
+                ?? (config.UsesHostedAddress ? Setup.Reach.Free : string.IsNullOrWhiteSpace(config.BaseDomain) ? Setup.Reach.Home : Setup.Reach.Domain);
+            var http = ctx.Services.GetRequiredService<IHttpClientFactory>().CreateClient(SelfCheckClient);
+            var wait = pause ?? TimeSpan.FromSeconds(10);
+            if (reach == Setup.Reach.Home)
+            {
+                await CheckSelfAtHomeAsync(ctx, config, http, attempts, wait);
+                return;
+            }
+
+            var url = Setup.SetupPlan.SelfUrl(reach, config)
+                ?? throw new InvalidOperationException("MatOS has no address on the internet yet. Try the lines above this one first, then this one.");
+            var host = new Uri(url).Host;
+            var outcome = SelfAnswer.None;
+            for (var attempt = 1; attempt <= attempts; attempt++)
+            {
+                if (attempt > 1)
+                {
+                    ctx.Log("Asking again in a moment ...");
+                    await Task.Delay(wait, ctx.Cancellation);
+                }
+
+                outcome = await AskAsync(http, url + "/healthz", ctx);
+                if (outcome == SelfAnswer.Ok)
+                {
+                    ctx.Log($"MatOS answers at {url}.");
+                    return;
+                }
+            }
+
+            if (outcome == SelfAnswer.Certificate)
+            {
+                throw new InvalidOperationException($"MatOS answers at {host}, but its certificate is not ready yet. Try again in a few minutes.");
+            }
+
+            if (outcome == SelfAnswer.Unreachable && reach == Setup.Reach.Domain)
+            {
+                // Many routers do not take a connection from inside to their own public address (no hairpin): MatOS Services looks from outside instead.
+                ctx.Log("This computer cannot reach that address itself; MatOS Services looks from outside ...");
+                var services = ctx.Services.GetRequiredService<ServicesClient>();
+                var key = await ctx.Services.GetRequiredService<SystemConfigService>().GetHostedKeyAsync(ctx.Cancellation);
+                var check = await services.CheckPortsAsync(key, null, ctx.Cancellation);
+                if (check.Ok && check.Value!.Ports.FirstOrDefault(p => p.Port == 443) is { IsCaddy: true })
+                {
+                    ctx.Log("MatOS answers from outside. This computer cannot reach itself through your router (no hairpin), which is fine.");
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException(outcome == SelfAnswer.Unreachable
+                ? $"MatOS does not answer at {host} yet. Check the lines above this one, then try again in a few minutes."
+                : $"MatOS at {host} did not answer as it should. Try again in a few minutes.");
+        };
+
+    private enum SelfAnswer
+    {
+        None,
+        Ok,
+        Certificate,
+        Unreachable,
+        Wrong,
+    }
+
+    private static async Task<SelfAnswer> AskAsync(HttpClient http, string url, JobContext ctx)
+    {
+        try
+        {
+            using var response = await http.GetAsync(url, ctx.Cancellation);
+            if (response.IsSuccessStatusCode)
+            {
+                return SelfAnswer.Ok;
+            }
+
+            ctx.Log($"{url} answered {(int)response.StatusCode}.");
+            return SelfAnswer.Wrong;
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is System.Security.Authentication.AuthenticationException)
+        {
+            ctx.Log($"The certificate of {url} is not accepted yet: {ex.InnerException.Message}");
+            return SelfAnswer.Certificate;
+        }
+        catch (HttpRequestException ex)
+        {
+            ctx.Log($"{url} cannot be reached: {ex.Message}");
+            return SelfAnswer.Unreachable;
+        }
+        catch (TaskCanceledException) when (!ctx.Cancellation.IsCancellationRequested)
+        {
+            ctx.Log($"{url} did not answer in time.");
+            return SelfAnswer.Unreachable;
+        }
+    }
+
+    private static async Task CheckSelfAtHomeAsync(JobContext ctx, SystemConfig config, HttpClient http, int attempts, TimeSpan wait)
+    {
+        // Matcad's proxy on the shared network: any HTTP answer means it is up (it routes the apps on their ports).
+        var db = ctx.Services.GetRequiredService<MatOSDbContext>();
+        var matcad = await db.InstalledApps.AsNoTracking().FirstOrDefaultAsync(a => a.CatalogId == Engines.EngineIds.Matcad, ctx.Cancellation);
+        var service = matcad is null ? null : ctx.Services.GetRequiredService<Catalog.CatalogService>().Get(Engines.EngineIds.Matcad)?.Routes?.Service;
+        if (matcad is not null && service is not null)
+        {
+            var proxy = $"http://{ctx.Services.GetRequiredService<ComposeFiles>().ContainerName(matcad.Slug, service)}:80/";
+            var answered = false;
+            for (var attempt = 1; attempt <= attempts && !answered; attempt++)
+            {
+                if (attempt > 1)
+                {
+                    await Task.Delay(wait, ctx.Cancellation);
+                }
+
+                answered = await AskAsync(http, proxy, ctx) is SelfAnswer.Ok or SelfAnswer.Wrong;
+            }
+
+            if (!answered)
+            {
+                throw new InvalidOperationException("Matcad does not answer on this computer yet, so your apps cannot be opened. Try its line first, then this one.");
+            }
+
+            ctx.Log("Matcad answers on this computer: your apps open on their ports.");
+        }
+
+        var port = await ctx.Services.GetRequiredService<Docker.DockerService>().GetSelfHostPortAsync(ProxyPublisher.SelfPort(), ctx.Cancellation);
+        var publicHost = config.PublicHost?.Trim();
+        if (string.IsNullOrEmpty(publicHost) || port is null)
+        {
+            ctx.Log($"Open MatOS at http://<the address of this computer>:{port ?? ProxyPublisher.SelfPort()} on the devices at home.");
+            return;
+        }
+
+        var self = $"http://{(publicHost.Contains(':') && !publicHost.StartsWith('[') ? $"[{publicHost}]" : publicHost)}:{port}";
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            if (attempt > 1)
+            {
+                await Task.Delay(wait, ctx.Cancellation);
+            }
+
+            if (await AskAsync(http, self + "/healthz", ctx) == SelfAnswer.Ok)
+            {
+                ctx.Log($"MatOS answers at {self} on your home network.");
+                return;
+            }
+        }
+
+        throw new InvalidOperationException($"MatOS does not answer at {publicHost} port {port} from inside. Check the address of this computer in Settings, General, then try again.");
+    }
+
     public static Func<JobContext, Task> Restore(string backupId, bool backupCurrentFirst)
         => async ctx =>
         {

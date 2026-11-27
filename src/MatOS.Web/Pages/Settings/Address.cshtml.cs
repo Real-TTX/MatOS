@@ -56,6 +56,9 @@ public class AddressModel : PageModel
 
     public HostedAddress? Hosted => Config.Hosted;
 
+    /// <summary>The direct way of the free address is offered (<see cref="HostedAddressService.DirectAvailable"/>).</summary>
+    public bool DirectAvailable => _hosted.DirectAvailable;
+
     public TunnelState Tunnel { get; private set; } = new(false, null, null, null, 0, 0, null);
 
     /// <summary>The key of the free address can be read (it cannot after the keys of MatOS were lost).</summary>

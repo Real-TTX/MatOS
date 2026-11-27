@@ -1,6 +1,6 @@
 namespace MatOS.Core.Engines;
 
-/// <summary>The catalog ids of the five engines that are part of MatOS (see docs/ENGINES.md).</summary>
+/// <summary>The catalog ids of the engines that are part of MatOS (see docs/ENGINES.md).</summary>
 public static class EngineIds
 {
     public const string MatDock = "matdock";

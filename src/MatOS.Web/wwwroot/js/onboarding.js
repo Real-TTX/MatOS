@@ -146,7 +146,8 @@
         var card = b.closest('[data-ob-app]');
         return card ? card.getAttribute('data-ob-app') : b.value;
       });
-      var text = engines >= 5 ? 'MatOS sets up its five engines' : engines === 1 ? 'MatOS sets up its app manager' : 'MatOS sets up ' + engines + ' of its engines';
+      var total = parseInt(flow.getAttribute('data-ob-engines-total'), 10) || 1;
+      var text = engines >= total ? 'MatOS sets up its engines' : engines === 1 ? 'MatOS sets up its app manager' : 'MatOS sets up ' + engines + ' of its engines';
       if (apps.length) { text += ', then ' + (apps.length === 1 ? apps[0] : apps.slice(0, -1).join(', ') + ' and ' + apps[apps.length - 1]); }
       var value = reach ? reach.value : '';
       var close = apps.length ? ',' : ''; // "then MatDo, and makes ...": a comma closes the list of the apps
@@ -279,7 +280,9 @@
           if (log) { log.textContent = ''; }
         }
         var text = $('[data-ob-state-text]', li);
-        var said = s.state === 'failed' ? (s.error || 'This did not work.') : words[s.state] || s.state;
+        var said = s.state === 'failed' ? (s.error || 'This did not work.')
+          : s.state === 'waiting' && s.waitsFor ? 'Waits for ' + s.waitsFor
+          : words[s.state] || s.state;
         if (li.getAttribute('data-state') !== s.state) {
           li.setAttribute('data-state', s.state);
           if (s.state === 'done' || s.state === 'failed') {

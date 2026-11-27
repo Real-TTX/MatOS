@@ -3,7 +3,7 @@
 @model MatOS.Web.Pages.Settings.EnginesModel
 @{
     ViewData["Title"] = "Engines";
-    ViewData["PageSub"] = "The five programs MatOS is built on. Each keeps its own part of your setup.";
+    ViewData["PageSub"] = "The programs MatOS is built on. Each keeps its own part of your setup.";
     ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Engines", null));
     ViewData["Width"] = "narrow";
     var dns = DnsProviders.Find(Model.Config.Dns.Provider);

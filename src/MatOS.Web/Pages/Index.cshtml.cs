@@ -103,7 +103,7 @@ public class IndexModel : PageModel
     /// <summary>An engine on the home screen: its row, and its state from Docker (<c>null</c> when it is not installed). Its window is <see cref="EngineRow.Window"/>.</summary>
     public sealed record EngineTile(EngineRow Row, AppStatusView? Status);
 
-    /// <summary>The five engines: in the folder System and in their widget (an administrator's), instead of between the apps.</summary>
+    /// <summary>The engines: in the folder System and in their widget (an administrator's), instead of between the apps.</summary>
     public IReadOnlyList<EngineTile> Engines { get; private set; } = [];
 
     public IReadOnlyList<SystemApp> Dock { get; private set; } = [];

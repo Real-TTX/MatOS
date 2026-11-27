@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MatOS.Core.Integrations;
 
@@ -30,10 +31,12 @@ public sealed class RouteService
     private readonly MatddnsClient _matddns;
     private readonly TunnelClient _tunnel;
     private readonly ILogger<RouteService> _logger;
+    private readonly MatOSOptions _options;
 
     public RouteService(SystemConfigService config, ServicesClient services, HostedAddressService hosted, DnsPublisher dns, MatddnsClient matddns, TunnelClient tunnel,
-        ILogger<RouteService> logger)
+        ILogger<RouteService> logger, IOptions<MatOSOptions> options)
     {
+        _options = options.Value;
         _config = config;
         _services = services;
         _hosted = hosted;
@@ -75,7 +78,8 @@ public sealed class RouteService
         if (config.UsesHostedAddress)
         {
             var current = config.Hosted!.IsDirect ? DomainRoute.Direct : DomainRoute.Tunnel;
-            route = Reachability.RouteFor(result, current);
+            // The direct way of a free address only once it is offered: until then a direct one goes back to the tunnel.
+            route = Reachability.RouteFor(result, current, _options.ServicesDirectAvailable);
             if (route != current)
             {
                 try

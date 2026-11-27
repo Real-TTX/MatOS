@@ -644,6 +644,7 @@ async function firstStart(browser, errors) {
     await page.fill('#Input_ConfirmPassword', 'blue-river-42');
     await Promise.all([page.waitForURL(/\/Setup\/Choose/), page.click('button[type=submit]')]);
   });
+  let engineCount = 0; // the engines of EngineIds.All, read from the page (data-ob-engines-total)
   await check('the way to the apps: three choices, the name checked while typing, the engines under Advanced', async () => {
     expectEqual(await page.locator('.ob-choice input[name=Reach]').count(), 3, 'three choices');
     expectTrue(await page.locator('input[name=Reach][value=free]').isChecked(), 'the free address is the default');
@@ -652,7 +653,8 @@ async function firstStart(browser, errors) {
     await page.locator('label.ob-choice', { has: page.locator('input[value=home]') }).click();
     expectTrue(await page.locator('#Name').isDisabled(), 'the name is not sent for "at home"');
     await page.click('.ob-advanced summary');
-    expectEqual(await page.locator('.ob-engines input[type=checkbox]').count(), 5, 'the five engines');
+    engineCount = parseInt(await page.getAttribute('[data-ob-flow]', 'data-ob-engines-total'), 10);
+    expectEqual(await page.locator('.ob-engines input[type=checkbox]').count(), engineCount, 'a box per engine (EngineIds.All)');
     await page.click('.ob-step.is-active [data-ob-next]');
     expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Pick your first apps', 'on to the apps');
   });
@@ -661,13 +663,15 @@ async function firstStart(browser, errors) {
     expectTrue(names.length > 0 && !names.some(n => /^(MatDock|Matcad|Matddns|MatIdentity|MatSMTP|MatAI|Portainer)$/.test(n)), 'apps: ' + names.join(', '));
     expectEqual(await page.locator('.ob-more').count(), 1, 'Show more');
     await page.click('.ob-step.is-active [data-ob-skip]');
-    expectEqual(await page.locator('[data-ob-summary]').innerText(), 'MatOS sets up its five engines for use here at home.', 'the summary');
+    expectEqual(await page.locator('[data-ob-summary]').innerText(), 'MatOS sets up its engines for use here at home.', 'the summary');
   });
   if (process.env.MATOS_FIRST_START_INSTALL === '1') {
     await check('Set up MatOS: a line per engine in plain words, followed live until MatOS is ready', async () => {
       await Promise.all([page.waitForURL(/\/Setup\/Progress/), page.click('[data-ob-go]')]);
-      expectEqual(await page.locator('[data-ob-task]').count(), 5, 'five lines');
-      expectEqual(await page.locator('[data-ob-task] .ob-task__label').first().innerText(), 'App manager (MatDock)', 'MatDock first, in plain words');
+      expectTrue(await page.locator('[data-ob-task]').count() >= engineCount, 'a line per engine at least');
+      const labels = await page.locator('[data-ob-task] .ob-task__label').allInnerTexts();
+      expectEqual(labels[0], 'App manager (MatDock)', 'MatDock first, in plain words');
+      expectEqual(labels[1], 'Mail (MatSMTP)', 'MatSMTP second (the first phase)');
       await page.waitForFunction(() => document.querySelector('[data-ob-progress]').getAttribute('data-ob-phase') !== 'working', null, { timeout: 15 * 60 * 1000 });
       expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
     });

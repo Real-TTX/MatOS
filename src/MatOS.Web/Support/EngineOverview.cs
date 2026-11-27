@@ -21,7 +21,7 @@ public sealed record EngineRow(CatalogApp Catalog, InstalledApp? App, EngineStat
 }
 
 /// <summary>
-/// The five engines (MatDock, Matcad, Matddns, MatIdentity, MatSMTP) for the pages that show them: the settings, the window of one engine, the home screen.
+/// The engines (MatDock, Matcad, Matddns, MatIdentity, MatSMTP) for the pages that show them: the settings, the window of one engine, the home screen.
 /// The engines do not allow being framed, so MatOS shows them natively: their state, what they keep, and which apps they serve.
 /// </summary>
 public sealed class EngineOverview
