@@ -187,6 +187,11 @@ public sealed partial class AppService
         }
 
         var variables = AppVariables.Resolve(catalog, request.Values, existing: null, errors);
+        if (node is not null && AppVariables.Folders(catalog, variables).Count > 0)
+        {
+            errors.Add("On another node the data folders stay the app's own volumes (the volumes of MatOS are on this machine).");
+        }
+
         if (errors.Count > 0)
         {
             return new PrepareResult(null, errors, []);
@@ -365,6 +370,64 @@ public sealed partial class AppService
 
         // A new version may provide or consume something else.
         await ConnectBindingsAsync(app, log, ct);
+    }
+
+    // ------------------------------------------------------------------ the data folders (docs/CATALOG.md "Data folders")
+
+    /// <summary>
+    /// Saves where the data folders of an app are (<see cref="CatalogFolder.Key"/> → the name of a volume, empty for the app's own). Returns the reasons it was refused;
+    /// the app is deployed again by <see cref="RunRedeployAsync"/>. The files of the old place are not moved.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> SetFoldersAsync(long appId, IReadOnlyDictionary<string, string?> choices, CancellationToken ct = default)
+    {
+        var app = await RequireAsync(appId, ct);
+        var catalog = _catalog.Get(app.CatalogId);
+        if (catalog is null || catalog.Folders.Count == 0)
+        {
+            return ["This app has no data folders that can be put elsewhere."];
+        }
+
+        var errors = new List<string>();
+        if (app.NodeId is not null && catalog.Folders.Any(f => !string.IsNullOrEmpty(choices.GetValueOrDefault(f.Key))))
+        {
+            errors.Add("The app runs on another node: its data folders stay its own volumes there (the volumes of MatOS are on this machine).");
+        }
+
+        var existing = AppVariables.Deserialize(catalog, app.VariablesJson, _protector);
+        var input = catalog.Folders.ToDictionary(f => f.Key, f => (string?)(choices.GetValueOrDefault(f.Key) ?? string.Empty));
+        var variables = AppVariables.Resolve(catalog, input, existing, errors);
+        if (errors.Count > 0)
+        {
+            return errors;
+        }
+
+        app.VariablesJson = AppVariables.Serialize(catalog, variables, _protector);
+        await _db.SaveChangesAsync(ct);
+        return [];
+    }
+
+    /// <summary>Deploys the app again with what MatOS has for it now (its data folders, its bindings), keeping its images; waits until it runs.</summary>
+    public async Task RunRedeployAsync(long appId, Action<string> log, CancellationToken ct = default)
+    {
+        var app = await RequireAsync(appId, ct);
+        var catalog = _catalog.Get(app.CatalogId) ?? throw new InvalidOperationException($"The catalog entry '{app.CatalogId}' no longer exists.");
+        await _docker.EnsureNetworkAsync(ct);
+        var (spec, variables) = await BuildSpecAsync(app, catalog, log, ct);
+        foreach (var folder in catalog.Folders)
+        {
+            var chosen = variables.GetValueOrDefault(folder.Key);
+            log($"{folder.Name}: {(string.IsNullOrEmpty(chosen) ? "the app's own volume" : "the volume " + chosen)}{(folder.ReadOnly && !string.IsNullOrEmpty(chosen) ? " (read-only)" : string.Empty)}.");
+        }
+
+        var engine = _engines.For(app);
+        await engine.DeployAsync(spec, pull: false, log, ct);
+        app.ComposeSha = await StoredHashAsync(engine, app, spec, ct);
+        await _db.SaveChangesAsync(ct);
+        await WaitUntilRunningAsync(app, log, ct);
+        app.Lifecycle = AppLifecycle.Installed;
+        app.StatusMessage = null;
+        await _db.SaveChangesAsync(ct);
+        log($"{app.Name} runs with its new settings.");
     }
 
     // ------------------------------------------------------------------ uninstall

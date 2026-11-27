@@ -80,6 +80,9 @@ you can edit it there, and MatOS keeps your change when it updates the app.
   **Kept on another machine too**: an SFTP folder, a WebDAV folder (Nextcloud) or a network share (SMB), tested when it is saved, chosen per backup and per schedule
 - If you **change a stack in MatDock**, the next update keeps your version
 - The **Task Manager** (`/Tasks`) lists every container with its CPU and memory, as MatDock reports them
+- **Volumes** (`/Volumes`): the volumes of the apps and your own, with their size and who uses them; make one **on this machine or a network share** (SMB or NFS of
+  your NAS), tested before it is saved, its password never shown again. An app can keep a **data folder** there (MatPhoto's photo library), chosen at the install or
+  later on the app's page. A **file explorer** for every volume: folders, upload, download, rename, move, delete, a preview of pictures and texts
 - **Shared links** let someone without an account open one app
 
 **Users**
@@ -455,6 +458,7 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | Widgets with the data of the person who is looking | planned |
 | Microsoft Entra ID sign-in | planned (the login is already behind `AuthService` / `SessionService`) |
 | Backup targets: SFTP, WebDAV, SMB (create, test, choose per backup and schedule, restore from them) | ✅ with MatDock's `feature/backup-targets-api` (apiVersion 5) |
+| Volumes (on this machine, SMB, NFS), data folders of the apps on them, a file explorer | ✅ with MatDock's `feature/volumes-api` (apiVersion 9) |
 
 ## License
 

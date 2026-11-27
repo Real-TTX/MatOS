@@ -63,6 +63,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBackupProvider, MatDockBackupProvider>();
         services.AddScoped<BackupHub>();
         services.AddScoped<BackupTargetService>();
+        services.AddScoped<Volumes.VolumeService>();
 
         services.AddScoped<JobService>();
 

@@ -29,7 +29,7 @@
     var noteIcon = warn ? "alert" : app.State == AppStates.Preview ? "clock" : "info";
     // A first copy, or another one of an app (an engine is one part of MatOS and is installed once).
     var installable = canInstall && (Model.Installed.Count == 0 || Model.CanInstallAnother);
-    var optionNames = (Model.Nodes.Count > 0 ? new[] { "Where it runs", "Name on the home screen" } : new[] { "Name on the home screen" }).Concat(Model.Optional.Select(v => string.IsNullOrEmpty(v.Label) ? v.Key : v.Label)).ToList();
+    var optionNames = (Model.Nodes.Count > 0 ? new[] { "Where it runs", "Name on the home screen" } : new[] { "Name on the home screen" }).Concat(app.Folders.Select(f => f.Name)).Concat(Model.Optional.Select(v => string.IsNullOrEmpty(v.Label) ? v.Key : v.Label)).ToList();
 
     async Task InstallButton(bool another)
     {
@@ -276,6 +276,11 @@
                         <mat-field label="Name on the home screen" for-id="install-name" hint="Leave it empty to keep the app's own name.">
                             <input id="install-name" name="Name" value="@Model.Name" class="mat-input" placeholder="@app.Name" />
                         </mat-field>
+                        @if (app.Folders.Count > 0)
+                        {
+                            @* docs/CATALOG.md "Data folders": the app's own volume unless one of yours is chosen (a network share of a NAS, for example). *@
+                            <partial name="_DataFolders" model="new MatOS.Web.Support.DataFoldersView(app.Folders, Model.Values, Model.FolderChoices)" />
+                        }
                         @foreach (var variable in Model.Optional)
                         {
                             await Field(variable, needed: false);

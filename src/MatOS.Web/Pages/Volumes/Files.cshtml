@@ -1,0 +1,282 @@
+@page
+@model MatOS.Web.Pages.Volumes.FilesModel
+@using MatOS.Core.Volumes
+@{
+    var info = Model.Info;
+    var name = info?.Name ?? Model.Volume ?? "Volume";
+    ViewData["Title"] = name;
+    ViewData["PageSub"] = info is null ? "The files of a volume." : !string.IsNullOrEmpty(info.Description) ? info.Description : info.IsShare ? info.Address : info.Owner is { } o ? $"The data of {o.Name}." : "A volume on this machine.";
+    ViewData["Crumbs"] = Crumbs.Of(("Volumes", "/Volumes"), (name, null));
+    var trail = VolumePaths.Trail(name, Model.Folder);
+    string IconOf(VolumeEntry e) => e.IsFolder ? "folder" : e.Preview == FilePreview.Image ? "image" : e.Preview == FilePreview.Text ? "file-text" : "file";
+}
+
+<nav class="mat-crumbs mv-files__path" aria-label="Folder">
+    <ol>
+        @for (var i = 0; i < trail.Count; i++)
+        {
+            var (label, path) = trail[i];
+            if (i == trail.Count - 1)
+            {
+                <li aria-current="page">@if (i == 0) {<icon name="hard-drive" />}@label</li>
+            }
+            else
+            {
+                <li><a href="@Model.FolderUrl(path)">@if (i == 0) {<icon name="hard-drive" />}@label</a></li>
+            }
+        }
+    </ol>
+</nav>
+
+@if (Model.Problem is not null)
+{
+    <div class="mat-alert mat-alert--danger" role="alert">
+        <icon name="x-circle" />
+        <div class="mat-alert__body">The files could not be read: @Model.Problem</div>
+    </div>
+}
+
+@if (info is { Owner: { } owner, Ours: false })
+{
+    <div class="mat-alert mat-alert--info">
+        <icon name="info" />
+        <div class="mat-alert__body">@owner.Name keeps its data here. Change or delete something only when you know what it is for: the app may stop working.</div>
+    </div>
+}
+else if (info is { Ours: false, Owner: null })
+{
+    <div class="mat-alert mat-alert--info">
+        <icon name="info" />
+        <div class="mat-alert__body">This volume does not belong to MatOS@(info.Users.Count > 0 ? $" (used by {string.Join(", ", info.Users)})" : string.Empty). Change or delete something only when you know what it is for.</div>
+    </div>
+}
+else if (info is { ReadOnly: true })
+{
+    <div class="mat-alert mat-alert--info">
+        <icon name="lock" />
+        <div class="mat-alert__body">This share is read-only: its files can be looked at and downloaded, not changed.</div>
+    </div>
+}
+
+@if (Model.Preview is { } file)
+{
+    <section class="mat-card mv-files__preview" aria-labelledby="preview-title" data-file-preview="@file.Name">
+        <div class="mat-card__head">
+            <icon name="@IconOf(file)" />
+            <h2 class="mat-card__title mat-text-break" id="preview-title">@file.Name</h2>
+            <span class="mat-muted">@Format.Size(file.Size)</span>
+        </div>
+        <div class="mat-card__body">
+            @if (file.Preview == FilePreview.Image && file.Size <= MatOS.Web.Pages.Volumes.FilesModel.MaxImageBytes)
+            {
+                <img class="mv-files__image" src="@Model.FileUrl("Raw", file)" alt="@file.Name" />
+            }
+            else if (Model.PreviewText is { } text)
+            {
+                <pre class="mat-code mv-files__text" tabindex="0">@text</pre>
+                @if (Model.PreviewTruncated)
+                {
+                    <p class="mat-hint">Only the beginning is shown (512 KB). Download the file for all of it.</p>
+                }
+            }
+            else
+            {
+                <p class="mat-muted">@(file.Preview == FilePreview.Image ? "This picture is too big to show here." : "This file cannot be shown here.") Download it to open it.</p>
+            }
+        </div>
+        <div class="mat-card__foot">
+            <div class="mat-btn-row mat-btn-row--plain">
+                <a class="mat-btn mat-btn--primary" href="@Model.FileUrl("Download", file)" download><icon name="download" /><span>Download</span></a>
+                <a class="mat-btn mat-btn--secondary" href="@Model.FolderUrl(Model.Folder)"><icon name="x" /><span>Close</span></a>
+            </div>
+        </div>
+    </section>
+}
+
+@if (Model.Target is { } target && Model.Rename is not null)
+{
+    <form method="post" asp-page-handler="Rename" asp-route-volume="@Model.Volume" asp-route-path="@Model.Folder" class="mat-form mat-card mv-files__action" novalidate>
+        <div class="mat-card__head"><icon name="edit" /><h2 class="mat-card__title mat-text-break">Rename “@target.Name”</h2></div>
+        <div class="mat-card__body">
+            <input type="hidden" name="item" value="@target.Name" />
+            <mat-field label="New name" for-id="rename-name" required="true">
+                <input id="rename-name" name="name" value="@target.Name" class="mat-input" required maxlength="255" autocomplete="off" spellcheck="false" data-msg-required="Please enter a name." autofocus />
+            </mat-field>
+        </div>
+        <div class="mat-card__foot">
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Rename</span></button>
+                <a class="mat-btn mat-btn--secondary" href="@Model.FolderUrl(Model.Folder)">Cancel</a>
+            </div>
+        </div>
+    </form>
+}
+else if (Model.Target is { } moved && Model.Move is not null)
+{
+    <form method="post" asp-page-handler="Move" asp-route-volume="@Model.Volume" asp-route-path="@Model.Folder" class="mat-form mat-card mv-files__action" novalidate>
+        <div class="mat-card__head"><icon name="arrow-right" /><h2 class="mat-card__title mat-text-break">Move “@moved.Name”</h2></div>
+        <div class="mat-card__body">
+            <input type="hidden" name="item" value="@moved.Name" />
+            <mat-field label="Into the folder" for-id="move-to" hint="A path from the top of the volume (empty is the top). The folders here are suggested.">
+                <input id="move-to" name="to" class="mat-input mat-mono" list="move-targets" autocomplete="off" spellcheck="false" placeholder="photos/2026" />
+            </mat-field>
+            <datalist id="move-targets">
+                @foreach (var option in Model.MoveTargets)
+                {
+                    <option value="@option">@(option.Length == 0 ? "The top of the volume" : option)</option>
+                }
+            </datalist>
+        </div>
+        <div class="mat-card__foot">
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="arrow-right" /><span>Move</span></button>
+                <a class="mat-btn mat-btn--secondary" href="@Model.FolderUrl(Model.Folder)">Cancel</a>
+            </div>
+        </div>
+    </form>
+}
+
+@if (Model.List is { } list)
+{
+    <div class="mat-list">
+        <partial name="_Toolbar" model="list.Toolbar" />
+
+        @if (list.Items.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon"><icon name="folder-open" /></span>
+                @if (list.Filtered)
+                {
+                    <div class="mat-empty__title">Nothing matches</div>
+                    <p>Change the search.</p>
+                    <a class="mat-btn mat-btn--secondary" href="@Model.FolderUrl(Model.Folder)">Reset the search</a>
+                }
+                else
+                {
+                    <div class="mat-empty__title">This folder is empty</div>
+                    <p>Upload files or make a folder.</p>
+                    <button type="button" class="mat-btn mat-btn--primary" data-dialog-open="files-upload"><icon name="upload" /><span>Upload</span></button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">The files of @(Model.Folder.Length == 0 ? name : Model.Folder)</caption>
+                    <thead><tr><th scope="col">Name</th><th scope="col" class="mat-num mat-hide-sm">Size</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var entry in list.Items)
+                        {
+                            <tr data-entry="@entry.Name">
+                                <td data-label="Name">
+                                    <div class="mat-table__name">
+                                        <icon name="@IconOf(entry)" />
+                                        <span class="mat-text-break">
+                                            @if (entry.IsFolder)
+                                            {
+                                                <a href="@Model.FolderUrl(entry.Path)">@entry.Name</a>
+                                            }
+                                            else
+                                            {
+                                                <a href="@Model.EntryUrl("open", entry)">@entry.Name</a>
+                                            }
+                                        </span>
+                                    </div>
+                                </td>
+                                <td data-label="Size" class="mat-num mat-hide-sm">@(entry.IsFolder ? "Folder" : Format.Size(entry.Size))</td>
+                                <td class="mat-table__cell-actions">
+                                    <div class="mat-table__actions">
+                                        @if (!entry.IsFolder)
+                                        {
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@Model.FileUrl("Download", entry)" download aria-label="Download @entry.Name" data-tip="Download"><icon name="download" /></a>
+                                        }
+                                        @if (info is not { ReadOnly: true })
+                                        {
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@Model.EntryUrl("rename", entry)" aria-label="Rename @entry.Name" data-tip="Rename"><icon name="edit" /></a>
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@Model.EntryUrl("move", entry)" aria-label="Move @entry.Name" data-tip="Move"><icon name="arrow-right" /></a>
+                                            <form method="post" asp-page-handler="Delete" asp-route-volume="@Model.Volume" asp-route-path="@Model.Folder"
+                                                  data-confirm="@(entry.IsFolder ? $"Delete the folder “{entry.Name}” with everything in it? This cannot be undone." : $"Delete “{entry.Name}”? This cannot be undone.")" data-confirm-ok="Delete" data-confirm-danger>
+                                                <input type="hidden" name="item" value="@entry.Name" />
+                                                <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Delete @entry.Name" data-tip="Delete"><icon name="trash" /></button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <partial name="_Pager" model="list.Pager" />
+
+        <div class="mat-actions">
+            @if (info is not { ReadOnly: true })
+            {
+                <button type="button" class="mat-btn mat-btn--primary" data-dialog-open="files-upload"><icon name="upload" /><span>Upload</span></button>
+                <button type="button" class="mat-btn mat-btn--secondary" data-dialog-open="files-folder"><icon name="plus" /><span>New folder</span></button>
+            }
+            @if (Model.Folder.Length > 0)
+            {
+                <a class="mat-btn mat-btn--secondary" href="@Model.FolderUrl(VolumePaths.Parent(Model.Folder))"><icon name="arrow-up" /><span>Up one folder</span></a>
+            }
+            else
+            {
+                <a class="mat-btn mat-btn--secondary" href="/Volumes"><icon name="back" /><span>All volumes</span></a>
+            }
+        </div>
+    </div>
+}
+
+<dialog class="mat-dialog" id="files-upload" aria-labelledby="files-upload-title">
+    <form method="post" enctype="multipart/form-data" asp-page-handler="Upload" asp-route-volume="@Model.Volume" asp-route-path="@Model.Folder" class="mat-dialog__form mat-form" novalidate>
+        <div class="mat-dialog__head">
+            <icon name="upload" />
+            <h2 class="mat-dialog__title" id="files-upload-title">Upload into @(trail[^1].Name)</h2>
+            <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-dialog__close" data-dialog-close aria-label="Close"><icon name="x" /></button>
+        </div>
+        <div class="mat-dialog__body">
+            <div class="mat-field">
+                <label class="mat-label" for="upload-files">Files</label>
+                <div class="mat-upload" data-upload data-max-size="2GB">
+                    <input class="mat-upload__input" type="file" id="upload-files" name="files" multiple required data-msg-required="Please choose the files." aria-describedby="upload-files-hint" />
+                </div>
+                <span class="mat-hint" id="upload-files-hint">Up to 2 GB in one go.</span>
+                <span class="mat-error" aria-live="polite"></span>
+            </div>
+            <label class="mat-check">
+                <input type="checkbox" name="replace" value="true" />
+                <span class="mat-check__text">Replace a file of the same name</span>
+            </label>
+        </div>
+        <div class="mat-dialog__foot">
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="upload" /><span>Upload</span></button>
+                <button type="button" class="mat-btn mat-btn--secondary" data-dialog-close>Cancel</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="mat-dialog mat-dialog--sm" id="files-folder" aria-labelledby="files-folder-title">
+    <form method="post" asp-page-handler="Folder" asp-route-volume="@Model.Volume" asp-route-path="@Model.Folder" class="mat-dialog__form mat-form" novalidate>
+        <div class="mat-dialog__head">
+            <icon name="folder" />
+            <h2 class="mat-dialog__title" id="files-folder-title">New folder</h2>
+            <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-dialog__close" data-dialog-close aria-label="Close"><icon name="x" /></button>
+        </div>
+        <div class="mat-dialog__body">
+            <mat-field label="Name" for-id="folder-name" required="true">
+                <input id="folder-name" name="name" class="mat-input" required maxlength="255" autocomplete="off" spellcheck="false" data-msg-required="Please enter a name." />
+            </mat-field>
+        </div>
+        <div class="mat-dialog__foot">
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="plus" /><span>Make the folder</span></button>
+                <button type="button" class="mat-btn mat-btn--secondary" data-dialog-close>Cancel</button>
+            </div>
+        </div>
+    </form>
+</dialog>

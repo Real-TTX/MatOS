@@ -1,0 +1,132 @@
+@page
+@model MatOS.Web.Pages.Volumes.IndexModel
+@using MatOS.Core.Volumes
+@{
+    ViewData["Title"] = "Volumes";
+    ViewData["PageSub"] = "Where the apps keep their files: on this machine or on a network share. Open one to see its files.";
+    ViewData["Crumbs"] = Crumbs.Of(("Volumes", null));
+}
+
+@if (Model.Unavailable)
+{
+    <div class="mat-card">
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="hard-drive" /></span>
+            <div class="mat-empty__title">Volumes cannot be shown right now</div>
+            <p>The Docker engine of MatOS (MatDock) does not answer, or it is not up to date yet. Update the engines under Settings, Engines.</p>
+            <a class="mat-btn mat-btn--secondary" href="/Settings/Engines"><icon name="settings" /><span>Engines</span></a>
+        </div>
+    </div>
+}
+else if (Model.List is { } list)
+{
+    @if (Model.Problem is not null)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert">
+            <icon name="x-circle" />
+            <div class="mat-alert__body">The volumes could not be read: @Model.Problem</div>
+        </div>
+    }
+
+    <div class="mat-list">
+        <partial name="_Toolbar" model="list.Toolbar" />
+
+        @if (list.Items.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon"><icon name="hard-drive" /></span>
+                @if (list.Filtered)
+                {
+                    <div class="mat-empty__title">Nothing matches</div>
+                    <p>Change the search or the filter.</p>
+                    <a class="mat-btn mat-btn--secondary" href="/Volumes">Reset the tools</a>
+                }
+                else
+                {
+                    <div class="mat-empty__title">No volumes yet</div>
+                    <p>An app gets its volumes when it is installed. Make one of your own to keep files on a network share (a NAS) or to give several apps the same folder.</p>
+                    <a class="mat-btn mat-btn--primary" href="/Volumes/Edit"><icon name="plus" /><span>New volume</span></a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Volumes</caption>
+                    <thead><tr><th scope="col">Volume</th><th scope="col">Kind</th><th scope="col" class="mat-hide-sm">Used by</th><th scope="col" class="mat-hide-sm mat-num">Size</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var volume in list.Items)
+                        {
+                            <tr data-volume="@volume.Name">
+                                <td data-label="Volume">
+                                    <div class="mat-table__name">
+                                        <span>
+                                            <a asp-page="/Volumes/Files" asp-route-volume="@volume.Name">@volume.Name</a>
+                                            @if (volume.Ours)
+                                            {
+                                                <span class="mat-pill mat-pill--info">Your own</span>
+                                            }
+                                            else if (volume.Owner is { } owner)
+                                            {
+                                                <span class="mat-pill">@owner.Name</span>
+                                            }
+                                            @if (volume.ReadOnly)
+                                            {
+                                                <span class="mat-pill mat-pill--warn">Read-only</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(volume.Description))
+                                            {
+                                                <small>@volume.Description</small>
+                                            }
+                                            else if (volume.IsShare)
+                                            {
+                                                <small class="mat-mono mat-text-break">@volume.Address</small>
+                                            }
+                                        </span>
+                                    </div>
+                                </td>
+                                <td data-label="Kind">@volume.KindLabel</td>
+                                <td data-label="Used by" class="mat-hide-sm">
+                                    @if (volume.Users.Count == 0)
+                                    {
+                                        <span class="mat-muted">Nothing</span>
+                                    }
+                                    else
+                                    {
+                                        @string.Join(", ", volume.Users)
+                                    }
+                                </td>
+                                <td data-label="Size" class="mat-hide-sm mat-num">@(volume.SizeBytes is { } size ? Format.Size(size) : volume.IsShare ? "On the share" : "–")</td>
+                                <td class="mat-table__cell-actions">
+                                    <div class="mat-table__actions">
+                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" asp-page="/Volumes/Files" asp-route-volume="@volume.Name" aria-label="Open the files of @volume.Name" data-tip="Files"><icon name="folder-open" /></a>
+                                        @if (volume.IsShare)
+                                        {
+                                            <form method="post" asp-page-handler="Test" asp-route-name="@volume.Name">
+                                                <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Test the connection to @volume.Name" data-tip="Test the connection"><icon name="plug" /></button>
+                                            </form>
+                                        }
+                                        @if (volume.Ours)
+                                        {
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" asp-page="/Volumes/Edit" asp-route-name="@volume.Name" aria-label="Edit @volume.Name" data-tip="Edit"><icon name="edit" /></a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <partial name="_Pager" model="list.Pager" />
+
+        @if (list.Items.Count > 0 || list.Filtered)
+        {
+            <div class="mat-actions">
+                <a href="/Volumes/Edit" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New volume</span></a>
+            </div>
+        }
+    </div>
+}

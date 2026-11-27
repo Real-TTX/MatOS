@@ -16,6 +16,9 @@ namespace MatOS.Core.Apps;
 /// </summary>
 public sealed partial class ComposeRenderer
 {
+    /// <summary>The label that says where a data folder of a service is: <c>matos.folder.&lt;volume&gt;</c> = the chosen volume or <c>own</c>.</summary>
+    public const string FolderLabelPrefix = "matos.folder.";
+
     private readonly MatOSOptions _options;
 
     public ComposeRenderer(IOptions<MatOSOptions> options)
@@ -39,7 +42,12 @@ public sealed partial class ComposeRenderer
     /// Who publishes what (the broker decides): an app the reverse proxy routes publishes no port of its own; the proxy publishes the ports of its port routes
     /// on its route service. Null: the app publishes its own port, as without a proxy.
     /// </param>
-    public string Render(CatalogApp catalog, InstalledApp app, IEnumerable<string>? injected = null, ComposePorts? ports = null)
+    /// <param name="folders">
+    /// The data folders the person put on a volume of their own (docs/CATALOG.md "Data folders"): compose volume of the entry → the name of that volume. Each becomes
+    /// an external volume of that name; a folder the app only reads is mounted read-only.
+    /// </param>
+    public string Render(CatalogApp catalog, InstalledApp app, IEnumerable<string>? injected = null, ComposePorts? ports = null,
+        IReadOnlyDictionary<string, string>? folders = null)
     {
         var names = injected?.ToList() ?? [];
         var stream = new YamlStream();
@@ -67,13 +75,22 @@ public sealed partial class ComposeRenderer
             var shared = !remote && (isUi || catalog.Shared.Contains(name));
 
             SetScalar(service, "container_name", ContainerName(app.Slug, name), ScalarStyle.Plain);
-            MergeLabels(service, new Dictionary<string, string>
+            var labels = new Dictionary<string, string>
             {
                 [DockerService.ManagedLabel] = "true",
                 [DockerService.AppLabel] = catalog.Id,
                 [DockerService.InstanceLabel] = app.Slug,
                 [DockerService.ServiceLabel] = name,
-            });
+            };
+
+            // Where each data folder of the service is (the chosen volume, or "own"): compose re-creates a container only when its own definition changes, not when
+            // a top-level volume does, so the place is part of the service. It also says on the container where its folder is.
+            foreach (var folder in catalog.Folders.Where(f => f.Mounts.Any(m => m.StartsWith(name + ":", StringComparison.Ordinal))))
+            {
+                labels[FolderLabelPrefix + folder.Volume] = folders?.GetValueOrDefault(folder.Volume) ?? "own";
+            }
+
+            MergeLabels(service, labels);
 
             if (shared)
             {
@@ -102,6 +119,14 @@ public sealed partial class ComposeRenderer
         if (!remote)
         {
             AddSharedNetwork(root);
+        }
+
+        foreach (var (volume, external) in folders ?? new Dictionary<string, string>())
+        {
+            if (catalog.Folders.FirstOrDefault(f => f.Volume == volume) is { } folder)
+            {
+                UseVolume(root, services, folder, external);
+            }
         }
 
         RenameCatalogBlock(root);
@@ -242,6 +267,47 @@ public sealed partial class ComposeRenderer
         var sequence = service.Children.TryGetValue(node, out var existing) && existing is YamlSequenceNode s ? s : new YamlSequenceNode();
         sequence.Add(new YamlScalarNode(value) { Style = ScalarStyle.DoubleQuoted });
         service.Children[node] = sequence;
+    }
+
+    /// <summary>The compose volume <paramref name="folder"/> becomes the external volume <paramref name="external"/>; read-only mounts when the app only reads it.</summary>
+    private static void UseVolume(YamlMappingNode root, YamlMappingNode services, CatalogFolder folder, string external)
+    {
+        if (root.Children.TryGetValue(new YamlScalarNode("volumes"), out var volumesNode) && volumesNode is YamlMappingNode volumes)
+        {
+            volumes.Children[new YamlScalarNode(folder.Volume)] = new YamlMappingNode
+            {
+                { "name", new YamlScalarNode(external) { Style = ScalarStyle.DoubleQuoted } },
+                { "external", new YamlScalarNode("true") },
+            };
+        }
+
+        if (!folder.ReadOnly)
+        {
+            return;
+        }
+
+        foreach (var (_, serviceNode) in services.Children)
+        {
+            if (serviceNode is not YamlMappingNode service || !service.Children.TryGetValue(new YamlScalarNode("volumes"), out var mountsNode) || mountsNode is not YamlSequenceNode mounts)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < mounts.Children.Count; i++)
+            {
+                switch (mounts.Children[i])
+                {
+                    case YamlScalarNode { Value: { } text } when text.Split(':') is { Length: >= 2 } parts && parts[0] == folder.Volume:
+                        var options = parts.Length > 2 ? parts[2].Split(',').Where(o => o is not ("rw" or "ro")).ToList() : [];
+                        options.Insert(0, "ro");
+                        mounts.Children[i] = new YamlScalarNode($"{parts[0]}:{parts[1]}:{string.Join(',', options)}") { Style = ScalarStyle.DoubleQuoted };
+                        break;
+                    case YamlMappingNode map when map.Children.TryGetValue(new YamlScalarNode("source"), out var src) && src is YamlScalarNode { Value: { } name } && name == folder.Volume:
+                        map.Children[new YamlScalarNode("read_only")] = new YamlScalarNode("true");
+                        break;
+                }
+            }
+        }
     }
 
     private void AddSharedNetwork(YamlMappingNode root)

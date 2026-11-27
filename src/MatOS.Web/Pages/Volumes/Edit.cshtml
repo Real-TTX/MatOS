@@ -1,0 +1,187 @@
+@page
+@model MatOS.Web.Pages.Volumes.EditModel
+@using MatOS.Core.Volumes
+@{
+    ViewData["Title"] = Model.IsEdit ? "Edit volume" : "New volume";
+    ViewData["PageSub"] = Model.IsEdit ? "A volume of your own." : "A place for files: on this machine, or a share of a NAS or a server.";
+    ViewData["Crumbs"] = Crumbs.Of(("Volumes", "/Volumes"), (Model.IsEdit ? Model.Name! : "New volume", null));
+    ViewData["Width"] = "narrow";
+    var kind = Model.Input.Kind;
+    var stored = Model.Stored;
+    var share = !Model.IsEdit || stored is { IsShare: true };
+    var passwordHint = stored is { HasPassword: true } ? "A password is stored. Leave the field empty to keep it." : "Leave user and password empty for a share open to guests.";
+}
+
+@if (Model.TestMessage is not null)
+{
+    <div class="mat-alert @(Model.TestOk ? "mat-alert--success" : "mat-alert--danger")" role="status" data-volume-test>
+        <icon name="@(Model.TestOk ? "check-circle" : "x-circle")" />
+        <div class="mat-alert__body">@(Model.TestOk ? "The share works. " : "The share does not work: ")@Model.TestMessage</div>
+    </div>
+}
+
+<form method="post" asp-page="/Volumes/Edit" asp-route-name="@Model.Name" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                @if (Model.IsEdit)
+                {
+                    <div class="mat-field">
+                        <span class="mat-label">Name</span>
+                        <span class="mat-mono">@Model.Name</span>
+                        <span class="mat-hint">The apps name it: it stays.</span>
+                    </div>
+                    <div class="mat-field">
+                        <span class="mat-label">Kind</span>
+                        <span>@VolumeView.LabelOf(kind)</span>
+                    </div>
+                }
+                else
+                {
+                    <mat-field label="Name" asp-for="Input.Name" required="true" hint="Lowercase letters, digits and . _ - : the apps use this name.">
+                        <input asp-for="Input.Name" class="mat-input mat-mono" required maxlength="63" pattern="[a-z0-9][a-z0-9_.\-]*" autocomplete="off" spellcheck="false" placeholder="photos"
+                               data-msg-required="Please enter a name." data-msg-pattern="Lowercase letters, digits and . _ - (it starts with a letter or a digit)." />
+                    </mat-field>
+                    <mat-field label="Where the files are" asp-for="Input.Kind">
+                        <select asp-for="Input.Kind" class="mat-select">
+                            <option value="Local">On this machine</option>
+                            <option value="Smb">Network share (SMB: a NAS, Windows)</option>
+                            <option value="Nfs">Network share (NFS: a NAS, Linux)</option>
+                        </select>
+                    </mat-field>
+                }
+
+                @if (share)
+                {
+                    <mat-field label="Description" asp-for="Input.Description" hint="Optional: what it holds." full="true">
+                        <input asp-for="Input.Description" class="mat-input" maxlength="200" placeholder="e.g. The family photos on the NAS" />
+                    </mat-field>
+                }
+                else if (!string.IsNullOrEmpty(stored?.Description))
+                {
+                    <div class="mat-field mat-field--full">
+                        <span class="mat-label">Description</span>
+                        <span>@stored.Description</span>
+                    </div>
+                }
+            </div>
+
+            @* SMB *@
+            @if (!Model.IsEdit || kind == VolumeKind.Smb)
+            {
+            <div class="mat-form__grid" data-show-if="#Input_Kind" data-show-value="Smb" hidden="@(kind != VolumeKind.Smb)">
+                <mat-field label="Server" asp-for="Input.Host" required="true" for-id="Input_SmbHost">
+                    <input asp-for="Input.Host" id="Input_SmbHost" class="mat-input" autocomplete="off" spellcheck="false" placeholder="nas.local or 192.168.1.20" required data-msg-required="Please enter the server." />
+                </mat-field>
+                <mat-field label="Share" asp-for="Input.Share" required="true">
+                    <input asp-for="Input.Share" class="mat-input" autocomplete="off" spellcheck="false" placeholder="photos" required data-msg-required="Please enter the name of the share." />
+                </mat-field>
+                <mat-field label="Folder in the share" asp-for="Input.Path" hint="Optional: the volume starts there." full="true" for-id="Input_SmbPath">
+                    <input asp-for="Input.Path" id="Input_SmbPath" class="mat-input mat-mono" autocomplete="off" spellcheck="false" placeholder="family/2026" />
+                </mat-field>
+                <mat-field label="User" asp-for="Input.Username">
+                    <input asp-for="Input.Username" class="mat-input" autocomplete="off" spellcheck="false" />
+                </mat-field>
+                <mat-field label="Password" asp-for="Input.Password" hint="@passwordHint">
+                    <input asp-for="Input.Password" type="password" class="mat-input" autocomplete="new-password" placeholder="@(stored is { HasPassword: true } ? "Stored" : "")" />
+                </mat-field>
+                <mat-field label="Domain" asp-for="Input.Domain" hint="Optional, for a Windows domain.">
+                    <input asp-for="Input.Domain" class="mat-input" autocomplete="off" spellcheck="false" />
+                </mat-field>
+                <mat-field label="SMB version" asp-for="Input.Version" hint="3.0 when empty; 1.0 only for very old devices." for-id="Input_SmbVersion">
+                    <select asp-for="Input.Version" id="Input_SmbVersion" class="mat-select">
+                        <option value="">3.0 (recommended)</option>
+                        <option value="3.1.1">3.1.1</option>
+                        <option value="2.1">2.1</option>
+                        <option value="2.0">2.0</option>
+                        <option value="1.0">1.0</option>
+                    </select>
+                </mat-field>
+            </div>
+            }
+
+            @* NFS *@
+            @if (!Model.IsEdit || kind == VolumeKind.Nfs)
+            {
+            <div class="mat-form__grid" data-show-if="#Input_Kind" data-show-value="Nfs" hidden="@(kind != VolumeKind.Nfs)">
+                <mat-field label="Server" asp-for="Input.Host" required="true" for-id="Input_NfsHost">
+                    <input asp-for="Input.Host" id="Input_NfsHost" class="mat-input" autocomplete="off" spellcheck="false" placeholder="nas.local or 192.168.1.20" required data-msg-required="Please enter the server." />
+                </mat-field>
+                <mat-field label="Exported path" asp-for="Input.Path" required="true" for-id="Input_NfsPath">
+                    <input asp-for="Input.Path" id="Input_NfsPath" class="mat-input mat-mono" autocomplete="off" spellcheck="false" placeholder="/srv/photos" required data-msg-required="Please enter the exported path." />
+                </mat-field>
+                <mat-field label="NFS version" asp-for="Input.Version" for-id="Input_NfsVersion">
+                    <select asp-for="Input.Version" id="Input_NfsVersion" class="mat-select">
+                        <option value="">4 (recommended)</option>
+                        <option value="4.1">4.1</option>
+                        <option value="4.2">4.2</option>
+                        <option value="3">3</option>
+                    </select>
+                </mat-field>
+            </div>
+            }
+
+            @if (share)
+            {
+            <div class="mat-form__grid" data-show-if="#Input_Kind" data-show-value="Smb,Nfs" hidden="@(kind == VolumeKind.Local)">
+                <div class="mat-field mat-field--full">
+                    <label class="mat-check">
+                        <input asp-for="Input.ReadOnly" type="checkbox" />
+                        <span class="mat-check__text">Read-only: no app can change or delete the files on the share</span>
+                    </label>
+                </div>
+                <mat-field label="More mount options" asp-for="Input.Options" hint="Optional, separated by commas: uid=1000,gid=1000. Never a user or password here." full="true">
+                    <input asp-for="Input.Options" class="mat-input mat-mono" autocomplete="off" spellcheck="false" placeholder="uid=1000,gid=1000" />
+                </mat-field>
+                <p class="mat-hint mat-field--full">The password is kept by Docker on this machine and never shown again. Every container user may read and write the files unless the share is read-only.</p>
+            </div>
+            }
+
+            @if (stored is not null)
+            {
+                <dl class="mat-kv">
+                    <dt>Used by</dt>
+                    <dd>@(stored.Users.Count == 0 ? "Nothing right now" : string.Join(", ", stored.Users))</dd>
+                    @if (Model.Choosing.Count > 0)
+                    {
+                        <dt>Data folders</dt>
+                        <dd>@string.Join(", ", Model.Choosing.Select(a => a.Name))</dd>
+                    }
+                    <dt>Size</dt>
+                    <dd>@(stored.SizeBytes is { } size ? Format.Size(size) : stored.IsShare ? "Counted on the share" : "Not known")</dd>
+                    @if (stored.IsShare)
+                    {
+                        <dt>Address</dt>
+                        <dd class="mat-mono mat-text-break">@stored.Address</dd>
+                    }
+                </dl>
+                @if (stored.IsShare && stored.InUse)
+                {
+                    <p class="mat-hint">While an app uses the share it cannot change: stop @(stored.Users.Count == 1 ? "it" : "them") first.</p>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        @if (share)
+        {
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+            <button type="submit" asp-page-handler="Test" asp-route-name="@Model.Name" class="mat-btn mat-btn--secondary" data-show-if="#Input_Kind" data-show-value="Smb,Nfs" hidden="@(kind == VolumeKind.Local)"><icon name="plug" /><span>Test connection</span></button>
+        }
+        @if (Model.IsEdit)
+        {
+            <a asp-page="/Volumes/Files" asp-route-volume="@Model.Name" class="mat-btn mat-btn--secondary"><icon name="folder-open" /><span>Files</span></a>
+        }
+        <a href="/Volumes" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        @if (Model.IsEdit)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" asp-page-handler="Delete" asp-route-name="@Model.Name" formnovalidate class="mat-btn mat-btn--danger"
+                    data-confirm="@(stored is { IsShare: true } ? $"Remove the volume “{Model.Name}”? The files stay on the share; MatOS only forgets the connection." : $"Remove the volume “{Model.Name}” with all its files? This cannot be undone.")"
+                    data-confirm-ok="Remove" data-confirm-danger><icon name="trash" /><span>Remove</span></button>
+        }
+    </div>
+</form>

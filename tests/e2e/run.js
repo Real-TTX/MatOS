@@ -11,6 +11,9 @@
 // Nodes (docs/ARCHITECTURE.md "Nodes"): without more a node at an address that does not answer is added, tested and removed again. MATOS_E2E_NODE="<host>:<port>:<user>"
 // adds a real one; MATOS_E2E_NODE_CONTAINER names the container of that test node, where the key is put (docker exec), and MATOS_E2E_NODE_APP the catalog id
 // of a small app that is installed there, moved to this machine and uninstalled again (the e2e of CLAUDE.md: a docker:dind container with sshd in the shared network).
+// Volumes (docs/ARCHITECTURE.md "Volumes and the file explorer"): a volume on this machine and its files, always (it needs MatDock with apiVersion 9 and Docker here to
+// plant a link). MATOS_E2E_SMB="<host>:<share>:<user>:<password>" adds an SMB share (a dperson/samba container), MATOS_E2E_FOLDER_APP the catalog id of a small app
+// with a data folder (`folders`) that is installed with it on the share and uninstalled again. MATOS_E2E_ONLY=volumes runs only that section.
 const { chromium } = require('playwright-core');
 const { execFileSync } = require('child_process');
 
@@ -45,7 +48,7 @@ function expectEqual(actual, expected, what) {
 }
 
 const pages = [
-  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Backups/Targets', '/Backups/TargetEdit', '/Jobs', '/Tasks',
+  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Backups/Targets', '/Backups/TargetEdit', '/Volumes', '/Volumes/Edit', '/Jobs', '/Tasks',
   '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Nodes', '/Settings/NodeAdd', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
   '/Start',
 ];
@@ -108,6 +111,16 @@ const pages = [
   }
 
   const { ctx, page } = await signedIn({ viewport: { width: 1360, height: 900 } });
+  if (process.env.MATOS_E2E_ONLY === 'volumes') {
+    console.log('Volumes and the file explorer');
+    await volumes(page);
+    await check('no script errors on any page', async () => { expectEqual(errors, [], 'errors'); });
+    await browser.close();
+    const failedOnly = results.filter(r => !r.ok).length;
+    console.log(`
+${results.length - failedOnly} of ${results.length} checks passed`);
+    process.exit(failedOnly ? 1 : 0);
+  }
 
   console.log('The shell');
   await check('the theme button cycles through three themes and saves each choice', async () => {
@@ -734,6 +747,8 @@ const pages = [
   });
   console.log('Nodes');
   await nodes(page);
+  console.log('Volumes and the file explorer');
+  await volumes(page);
   await check('the wizard (to change the setup later) walks through four steps, the engines under Advanced', async () => {
     await page.goto(BASE + '/Wizard');
     expectEqual(await page.locator('.mv-step').count(), 4, 'steps');
@@ -1092,6 +1107,228 @@ async function nodes(page) {
     expectEqual(await page.locator('dialog.mat-dialog[open]').count(), 1, 'a dialog asks');
     await Promise.all([page.waitForURL(/\/Settings\/Nodes$/), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
     expectEqual(await page.locator(`[data-node="${name}"]`).count(), 0, 'the node is gone');
+  });
+}
+
+// Volumes and the file explorer (docs/ARCHITECTURE.md "Volumes and the file explorer"): a volume of MatOS on this machine, its files (a folder, an upload, the previews,
+// a download, rename, move, delete), paths that would leave the volume (also through a link), and with a test share (MATOS_E2E_SMB=host:share:user:password, e.g. a
+// dperson/samba container) an SMB volume: tested, saved, its password not rendered back, an app's data folder on it (MATOS_E2E_FOLDER_APP: a catalog entry with
+// `folders`) whose files show up in the explorer, removal refused while in use. Everything it makes is removed. Docker on this machine is used to plant a link.
+async function volumes(page) {
+  await page.goto(BASE + '/Volumes');
+  if (await page.locator('.mat-empty__title', { hasText: 'cannot be shown' }).count() > 0) {
+    await check('volumes: the page says MatDock is not up to date (apiVersion 9 needed), nothing else', async () => {
+      expectEqual(await page.locator('table.mat-table').count(), 0, 'no list');
+    });
+    return;
+  }
+
+  const local = 'e2e-local';
+  const filesOf = (volume, path = '') => `${BASE}/Volumes/Files?volume=${volume}${path ? '&path=' + encodeURIComponent(path) : ''}`;
+  const toast = async () => (await page.locator('.mat-toast, .mat-alert').allInnerTexts()).join(' | ');
+
+  await check('volumes: a volume on this machine is made and listed as your own', async () => {
+    await page.goto(BASE + '/Volumes/Edit');
+    await page.fill('#Input_Name', 'Not Valid!');
+    await page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])');
+    expectTrue(page.url().includes('/Volumes/Edit'), 'a wrong name stays on the form');
+    await page.fill('#Input_Name', local);
+    await page.selectOption('#Input_Kind', 'Local');
+    await Promise.all([page.waitForURL(u => u.pathname === '/Volumes'), page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])')]);
+    const row = page.locator(`tr[data-volume="${local}"]`);
+    expectEqual(await row.count(), 1, 'the volume is listed');
+    expectTrue((await row.innerText()).includes('Your own'), 'it is marked as your own');
+    expectTrue((await row.innerText()).includes('On this machine'), 'its kind');
+  });
+
+  await check('files: a folder, an upload, the previews of a text and a picture, a download', async () => {
+    await page.goto(filesOf(local));
+    expectTrue((await page.locator('.mat-empty__title').innerText()).includes('empty'), 'a new volume is empty');
+    await page.click('[data-dialog-open="files-folder"]');
+    await page.fill('#folder-name', 'docs');
+    await Promise.all([page.waitForNavigation(), page.locator('#files-folder button[type=submit]').click()]);
+    expectEqual(await page.locator('tr[data-entry="docs"]').count(), 1, 'the folder is listed: ' + await toast());
+    await page.locator('tr[data-entry="docs"] a').first().click();
+    await page.waitForURL(/path=docs/);
+    await page.click('[data-dialog-open="files-upload"]');
+    // A 1x1 PNG and a text, uploaded together.
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    await page.setInputFiles('#upload-files', [
+      { name: 'hello.txt', mimeType: 'text/plain', buffer: Buffer.from('Hello from the e2e test\nline two\n') },
+      { name: 'dot.png', mimeType: 'image/png', buffer: png },
+    ]);
+    await Promise.all([page.waitForNavigation(), page.locator('#files-upload button[type=submit]').click()]);
+    expectTrue((await toast()).includes('2 files were uploaded'), 'the upload says so: ' + await toast());
+    expectEqual(await page.locator('tr[data-entry]').count(), 2, 'both are listed');
+
+    await page.locator('tr[data-entry="hello.txt"] a').first().click();
+    expectTrue((await page.locator('.mv-files__text').innerText()).includes('Hello from the e2e test'), 'the text is shown');
+    const download = await page.evaluate(async url => { const r = await fetch(url); return { status: r.status, type: r.headers.get('content-type'), body: await r.text(), disposition: r.headers.get('content-disposition') }; },
+      await page.locator('[data-file-preview] a[download]').getAttribute('href'));
+    expectEqual(download.status, 200, 'the download');
+    expectTrue(download.body.startsWith('Hello from the e2e test'), 'the download is the file');
+    expectTrue((download.disposition || '').includes('attachment'), 'it is an attachment');
+
+    await page.goto(filesOf(local, 'docs') + '&open=dot.png');
+    const img = page.locator('img.mv-files__image');
+    await img.waitFor();
+    expectTrue(await img.evaluate(i => i.complete && i.naturalWidth === 1), 'the picture is shown');
+    const raw = await page.evaluate(async url => { const r = await fetch(url); return { csp: r.headers.get('content-security-policy'), nosniff: r.headers.get('x-content-type-options') }; }, await img.getAttribute('src'));
+    expectTrue((raw.csp || '').includes('sandbox') && raw.nosniff === 'nosniff', 'a picture is served sandboxed');
+  });
+
+  await check('files: rename, move to the top, delete with a question', async () => {
+    await page.goto(filesOf(local, 'docs') + '&rename=hello.txt');
+    await page.fill('#rename-name', 'greeting.txt');
+    await Promise.all([page.waitForNavigation(), page.locator('.mv-files__action button[type=submit]').click()]);
+    expectEqual(await page.locator('tr[data-entry="greeting.txt"]').count(), 1, 'renamed: ' + await toast());
+
+    await page.goto(filesOf(local, 'docs') + '&move=greeting.txt');
+    await page.fill('#move-to', '');
+    await Promise.all([page.waitForNavigation(), page.locator('.mv-files__action button[type=submit]').click()]);
+    expectEqual(await page.locator('tr[data-entry="greeting.txt"]').count(), 0, 'moved away: ' + await toast());
+    await page.goto(filesOf(local));
+    expectEqual(await page.locator('tr[data-entry="greeting.txt"]').count(), 1, 'it is at the top');
+
+    // A folder cannot go into itself; a name over another is refused.
+    await page.goto(filesOf(local) + '&move=docs');
+    await page.fill('#move-to', 'docs/inner');
+    await Promise.all([page.waitForNavigation(), page.locator('.mv-files__action button[type=submit]').click()]);
+    expectTrue((await toast()).includes('cannot move into itself'), 'a folder does not move into itself: ' + await toast());
+
+    await page.locator('tr[data-entry="greeting.txt"] button[aria-label^="Delete"]').click();
+    expectEqual(await page.locator('dialog.mat-dialog[open]').count(), 1, 'a dialog asks');
+    await Promise.all([page.waitForNavigation(), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
+    expectEqual(await page.locator('tr[data-entry="greeting.txt"]').count(), 0, 'deleted: ' + await toast());
+  });
+
+  await check('files: a path never leaves the volume, not even through a link', async () => {
+    for (const bad of ['..', '../..', 'docs/../../etc', 'C:/x']) {
+      const response = await page.goto(filesOf(local, bad));
+      expectEqual(response.status(), 404, `the path ${bad}`);
+    }
+
+    const passwd = await page.evaluate(async url => (await fetch(url)).status, `${BASE}/Volumes/Files?handler=Download&volume=${local}&path=${encodeURIComponent('../../etc/passwd')}`);
+    expectEqual(passwd, 404, 'a download outside the volume');
+
+    // A link inside the volume that points out of it (planted with Docker): neither listed nor read.
+    execFileSync('docker', ['run', '--rm', '-v', `${local}:/data`, 'busybox:latest', 'sh', '-c', 'ln -s /etc /data/escape && ln -s /etc/passwd /data/passwd-link && ln -s docs /data/docs-link']);
+    await page.goto(filesOf(local, 'escape'));
+    expectTrue(!(await page.content()).includes('hostname'), 'the folder behind the link is not listed');
+    expectTrue(/does not exist|could not be read|leads out/.test(await toast()), 'it says why: ' + await toast());
+    const linked = await page.evaluate(async url => { const r = await fetch(url); return { disposition: r.headers.get('content-disposition'), body: await r.text() }; }, `${BASE}/Volumes/Files?handler=Download&volume=${local}&path=passwd-link`);
+    expectTrue(linked.disposition === null && !linked.body.includes('root:x:0:0'), 'a file behind a link out of the volume is not downloaded');
+    await page.goto(filesOf(local, 'docs-link'));
+    expectEqual(await page.locator('tr[data-entry="dot.png"]').count(), 1, 'a link inside the volume is followed');
+  });
+
+  await check('volumes: the list and the explorer at 390 px and in dark mode', async () => {
+    for (const [width, theme] of [[390, 'light'], [1360, 'dark']]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const url of [BASE + '/Volumes', filesOf(local, 'docs'), filesOf(local, 'docs') + '&open=dot.png', `${BASE}/Volumes/Edit?name=${local}`]) {
+        await page.goto(url, { waitUntil: 'networkidle' });
+        await page.evaluate(t => document.documentElement.setAttribute('data-theme', t), theme);
+        expectEqual(await page.locator('h1').count(), 1, url + ' h1');
+        const wide = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expectTrue(wide <= 1, `${url} scrolls sideways by ${wide}px at ${width}`);
+        expectEqual(await page.locator('[style]').count(), 0, url + ' inline styles');
+      }
+    }
+
+    await page.setViewportSize({ width: 1360, height: 900 });
+  });
+
+  const smb = (process.env.MATOS_E2E_SMB || '').split(':');
+  if (smb.length === 4) {
+    const share = 'e2e-smb';
+    await check('volumes: an SMB share is tested before it is saved, its password never comes back', async () => {
+      await page.goto(BASE + '/Volumes/Edit');
+      await page.fill('#Input_Name', share);
+      await page.selectOption('#Input_Kind', 'Smb');
+      await page.fill('#Input_SmbHost', smb[0]);
+      await page.fill('#Input_Share', smb[1]);
+      await page.fill('#Input_Username', smb[2]);
+      await page.fill('#Input_Password', 'wrong-password');
+      await page.fill('#Input_Description', 'The e2e share');
+      await Promise.all([page.waitForNavigation(), page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])')]);
+      expectEqual(await page.locator('[data-volume-test].mat-alert--danger').count(), 1, 'a wrong password is refused before anything is saved');
+      expectEqual(await page.locator('#Input_Password').inputValue(), '', 'the typed password is not sent back');
+
+      await page.fill('#Input_Password', smb[3]);
+      await Promise.all([page.waitForNavigation(), page.click('button[formaction*="Test"]')]);
+      expectEqual(await page.locator('[data-volume-test].mat-alert--success').count(), 1, 'the test works: ' + await page.locator('[data-volume-test]').innerText());
+      expectTrue((await page.locator('[data-volume-test]').innerText()).includes('writable'), 'and says it is writable');
+
+      await page.fill('#Input_Password', smb[3]);
+      await Promise.all([page.waitForURL(u => u.pathname === '/Volumes'), page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])')]);
+      const row = page.locator(`tr[data-volume="${share}"]`);
+      expectTrue((await row.innerText()).includes('Network share (SMB)'), 'listed as a share');
+      await Promise.all([page.waitForNavigation(), row.locator('button[aria-label^="Test"]').click()]);
+      expectTrue((await toast()).includes('Mounted'), 'the test from the list: ' + await toast());
+
+      await page.goto(`${BASE}/Volumes/Edit?name=${share}`);
+      expectTrue(!(await page.content()).includes(smb[3]), 'the stored password is not in the page');
+      expectEqual(await page.locator('#Input_Password').getAttribute('placeholder'), 'Stored', 'the field says a password is stored');
+    });
+
+    const appId = process.env.MATOS_E2E_FOLDER_APP;
+    if (appId) {
+      await check(`volumes: ${appId} keeps its data folder on the share, its files show in the explorer`, async () => {
+        await page.goto(`${BASE}/Store/Install?id=${appId}`);
+        await page.locator('details.mv-storepage__options > summary').click();
+        const select = page.locator('select[data-folder]').first();
+        await select.selectOption(share);
+        await Promise.all([page.waitForURL(/\/Jobs\/Details/), page.locator('.mv-storepage__install').first().click()]);
+        await jobEnds(page, 6);
+        const slug = appId;
+        const mounts = execFileSync('docker', ['ps', '--filter', `label=matos.instance=${slug}`, '--format', '{{.Names}} {{.Mounts}}']).toString();
+        expectTrue(mounts.includes(share), 'the container mounts the share: ' + mounts);
+        await page.waitForTimeout(7000);
+        await page.goto(filesOf(share, 'out'));
+        expectEqual(await page.locator('tr[data-entry]').count(), 1, 'the file the app wrote is in the explorer');
+        await page.goto(BASE + '/Volumes');
+        expectTrue((await page.locator(`tr[data-volume="${share}"]`).innerText()).includes('Volume test'), 'the list names the app that uses it');
+
+        // In use: not removed, not changed.
+        await page.goto(`${BASE}/Volumes/Edit?name=${share}`);
+        await page.click('form.mat-form button.mat-btn--danger');
+        await Promise.all([page.waitForNavigation(), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
+        expectTrue((await toast()).includes('not removed'), 'a volume in use is not removed: ' + await toast());
+
+        // The app's page: back to its own volume (deployed again).
+        await page.goto(BASE + '/Apps');
+        const appLink = page.locator('a[href*="/Apps/Details?id="]', { hasText: 'Volume test' }).first();
+        const id = new URL(await appLink.getAttribute('href'), BASE).searchParams.get('id');
+        await page.goto(`${BASE}/Apps/Folders?id=${id}`);
+        expectEqual(await page.locator('select[data-folder]').inputValue(), share, 'the page shows the choice');
+        await page.locator('select[data-folder]').selectOption('');
+        await Promise.all([page.waitForURL(/\/Jobs\/Details/), page.click('form.mat-form button[type=submit]')]);
+        await jobEnds(page, 6);
+        const after = execFileSync('docker', ['ps', '--filter', `label=matos.instance=${slug}`, '--format', '{{.Mounts}}']).toString();
+        expectTrue(!after.includes(share), 'the app left the share: ' + after);
+
+        await page.goto(`${BASE}/Apps/Uninstall?id=${id}`);
+        await page.check('#DeleteData');
+        if (await page.locator('#BackupFirst').count() > 0) { await page.uncheck('#BackupFirst'); }
+        await page.click('form button.mat-btn--danger');
+        await Promise.all([page.waitForURL(/\/Jobs\/Details/), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
+        await jobEnds(page, 6);
+      });
+    }
+
+    await check('volumes: the share is removed, its files stay on the share', async () => {
+      await page.goto(`${BASE}/Volumes/Edit?name=${share}`);
+      await page.click('form.mat-form button.mat-btn--danger');
+      await Promise.all([page.waitForURL(u => u.pathname === '/Volumes'), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
+      expectEqual(await page.locator(`tr[data-volume="${share}"]`).count(), 0, 'gone from the list: ' + await toast());
+    });
+  }
+
+  await check('volumes: the volume of this machine is removed', async () => {
+    await page.goto(`${BASE}/Volumes/Edit?name=${local}`);
+    await page.click('form.mat-form button.mat-btn--danger');
+    await Promise.all([page.waitForURL(u => u.pathname === '/Volumes'), page.locator('dialog.mat-dialog[open] .mat-btn--danger').click()]);
+    expectEqual(await page.locator(`tr[data-volume="${local}"]`).count(), 0, 'gone: ' + await toast());
   });
 }
 

@@ -1,0 +1,44 @@
+@page
+@model MatOS.Web.Pages.Apps.FoldersModel
+@{
+    ViewData["Title"] = $"Data folders of {Model.App.Name}";
+    ViewData["PageSub"] = "Where the app keeps its files: its own volume, or a volume of yours (a network share of your NAS, for example).";
+    ViewData["Crumbs"] = Crumbs.Of(("Apps", "/Apps"), (Model.App.Name, $"/Apps/Details?id={Model.App.Id}"), ("Data folders", null));
+    ViewData["Width"] = "narrow";
+}
+
+@* docs/CATALOG.md "Data folders": the choice is saved and the app deployed again; the files are not moved. *@
+@if (!Model.Available)
+{
+    <div class="mat-alert mat-alert--warn" role="status">
+        <icon name="alert" />
+        <div class="mat-alert__body">The volumes cannot be read right now (MatDock does not answer or is not up to date): only the app's own volumes can be chosen.</div>
+    </div>
+}
+else if (Model.Choices.Count == 0)
+{
+    <div class="mat-alert mat-alert--info" role="status">
+        <icon name="info" />
+        <div class="mat-alert__body">You have no volumes of your own yet. <a href="/Volumes/Edit">Make one</a> (on this machine or a network share), then choose it here.</div>
+    </div>
+}
+
+<p>
+    A change starts @Model.App.Name again with the folder in its new place. The files that are in the old place stay there: copy them over in the file explorer
+    of <a href="/Volumes">Volumes</a> if the app should keep them.
+</p>
+
+<form method="post" asp-route-id="@Model.App.Id" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+    <div class="mat-card">
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                <partial name="_DataFolders" model="new MatOS.Web.Support.DataFoldersView(Model.Catalog.Folders, Model.Values, Model.Choices)" />
+            </div>
+        </div>
+    </div>
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save and restart the app</span></button>
+        <a href="/Apps/Details?id=@Model.App.Id" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    </div>
+</form>

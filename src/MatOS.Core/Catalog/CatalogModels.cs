@@ -153,6 +153,12 @@ public sealed class CatalogApp
 
     public List<CatalogCredential> Credentials { get; set; } = new();
 
+    /// <summary>
+    /// The data folders the person may put on a volume of their own (docs/CATALOG.md "Data folders"): a named volume of the compose file, what it holds, read-only or
+    /// not. Without a choice it stays the app's own volume; with one MatOS renders it as that external volume (a local one or a network share).
+    /// </summary>
+    public List<CatalogFolder> Folders { get; set; } = new();
+
     /// <summary>The app speaks the platform contract (MatDesign docs/PLATFORM.md): MatOS gives it a key (<c>MAT_API_KEY</c>) and shows its <c>/api</c> on the page of the app.</summary>
     public bool Platform { get; set; }
 
@@ -253,6 +259,40 @@ public sealed class CatalogVariable
 
     [YamlIgnore]
     public bool IsSecret => Type.Equals("secret", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>A data folder of an app that may lie on a volume the person chooses (the catalog's <c>folders</c>).</summary>
+public sealed class CatalogFolder
+{
+    /// <summary>The named volume of the compose file (a key of its top-level <c>volumes</c>) that holds the folder.</summary>
+    public string Volume { get; set; } = string.Empty;
+
+    /// <summary>What the person reads: <c>Photo library</c>.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>What it is for, in one sentence (the hint of the choice).</summary>
+    public string? Purpose { get; set; }
+
+    /// <summary>The app only reads it: a chosen volume is mounted read-only.</summary>
+    public bool ReadOnly { get; set; }
+
+    /// <summary>Where the services mount it (<c>web:/storage/photos</c>), read from the compose file.</summary>
+    [YamlIgnore]
+    public List<string> Mounts { get; set; } = new();
+
+    /// <summary>The variable that keeps the choice (the name of the chosen volume, empty for the app's own): <c>MATOS_FOLDER_&lt;VOLUME&gt;</c>.</summary>
+    [YamlIgnore]
+    public string Key => FolderKeys.Of(Volume);
+}
+
+/// <summary>The variables that keep the choices of the data folders.</summary>
+public static class FolderKeys
+{
+    public const string Prefix = "MATOS_FOLDER_";
+
+    /// <summary><c>matphoto-photos</c> becomes <c>MATOS_FOLDER_MATPHOTO_PHOTOS</c>.</summary>
+    public static string Of(string volume)
+        => Prefix + new string((volume ?? string.Empty).ToUpperInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray());
 }
 
 /// <summary>An entry of the "credentials" card of an app (initial logins). <c>${KEY}</c> is replaced by the variable's value.</summary>

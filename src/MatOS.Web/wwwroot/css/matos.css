@@ -258,3 +258,11 @@ html.mv-in-window { --mat-radius-sm: 6px; --mat-radius: 8px; --mat-radius-lg: 12
 .mv-stat--info .mv-stat__icon { background: var(--mat-info-bg); color: var(--mat-info-text); }
 .mv-stat--warn .mv-stat__icon { background: var(--mat-warning-bg); color: var(--mat-warning-text); }
 .mv-stat--error .mv-stat__icon { background: var(--mat-danger-bg); color: var(--mat-danger-text); }
+
+/* ---- The file explorer of a volume (Volumes/Files) ---- */
+.mv-files__path { flex: none; margin-bottom: var(--mat-space-3); }
+.mv-files__path ol { flex-wrap: wrap; }
+.mv-files__path .mat-icon { margin-right: var(--mat-space-1); }
+.mv-files__preview, .mv-files__action { margin-bottom: var(--mat-space-4); }
+.mv-files__image { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto; border-radius: var(--mat-radius-sm); background: var(--mat-surface-2); }
+.mv-files__text { max-height: 60vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
