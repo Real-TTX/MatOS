@@ -1,8 +1,5 @@
 using MatOS.Core.Configuration;
 using MatOS.Core.Docker;
-using MatOS.Core.Engines;
-using MatOS.Core.Entities;
-using MatOS.Core.Apps;
 using MatOS.Core.Integrations;
 using MatOS.Core.Setup;
 using MatOS.Web.Support;
@@ -12,25 +9,25 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace MatOS.Web.Pages.Setup;
 
 /// <summary>
-/// The first start, step 4 (docs/ARCHITECTURE.md "The first start"): how the person reaches their apps (a free address, an own domain, or only at home; the
-/// address of this machine under Advanced) and the one button "Set up MatOS" (<see cref="SetupService.ContinueAsync"/>). The engines follow from the answers
-/// (<see cref="SetupPlan.EnginesFor"/>). The page belongs to phase 1: MatDock and MatSMTP install meanwhile (queued when the person left the screen of the
-/// engines; a person who came here without it gets them queued now). A problem (a name that was taken meanwhile, an address service that cannot be reached)
-/// keeps the person here with the message, until the way to the apps is confirmed (<see cref="SetupPlan.Continued"/>); then the progress screen follows.
+/// The first start, step 4 (docs/ARCHITECTURE.md "The first start"): how the person reaches their apps, in three cards. (a) The tree: a free address, an own
+/// domain (where its DNS is managed, or records by hand with the records to create; for a provider whether the IP is fixed) or only at home. (b) The
+/// certificates that follow from it (for an own domain with a provider: one for all apps or one each). (c) The test (<c>POST /api/setup/test</c>,
+/// <see cref="SetupService.TestAsync"/>: the ports here, MatOS Services and the free name, which is reserved there, the domain and its records, the ports from
+/// outside) and "Set up the rest" (<see cref="SetupService.ContinueAsync"/>). The engines follow from the answers (<see cref="SetupPlan.EnginesFor"/>). The page
+/// belongs to phase 1: MatDock and MatSMTP install meanwhile. A problem keeps the person here with the message, until the way to the apps is confirmed
+/// (<see cref="SetupPlan.Continued"/>); then the progress screen follows.
 /// </summary>
 public class ChooseModel : PageModel
 {
     private readonly SystemConfigService _config;
     private readonly SetupService _setup;
-    private readonly AppService _apps;
     private readonly DockerService _docker;
     private readonly ILogger<ChooseModel> _log;
 
-    public ChooseModel(SystemConfigService config, SetupService setup, AppService apps, DockerService docker, ILogger<ChooseModel> log)
+    public ChooseModel(SystemConfigService config, SetupService setup, DockerService docker, ILogger<ChooseModel> log)
     {
         _config = config;
         _setup = setup;
-        _apps = apps;
         _docker = docker;
         _log = log;
     }
@@ -39,34 +36,40 @@ public class ChooseModel : PageModel
     [BindProperty] public string? Name { get; set; }
     [BindProperty] public string? BaseDomain { get; set; }
     [BindProperty] public string? PublicHost { get; set; }
+
+    /// <summary>A provider id of <see cref="DnsProviders"/>, <see cref="SetupPlan.ManualDns"/> (records by hand), or nothing yet.</summary>
     [BindProperty] public string? DnsProvider { get; set; }
     [BindProperty] public string? DnsZone { get; set; }
     [BindProperty] public Dictionary<string, string?> DnsCredentials { get; set; } = new();
     [BindProperty] public string? DnsIp { get; set; }
     [BindProperty] public string? DnsFixedIp { get; set; }
 
+    /// <summary>Records by hand: the host name the records point to instead of an IP (a CNAME; only the test reads it).</summary>
+    [BindProperty] public string? DnsCname { get; set; }
+
+    /// <summary>An own domain with a provider: one certificate for all apps or one each (<see cref="CertificateMode"/>). Hidden for the other ways: nullable.</summary>
+    [BindProperty] public string? Certificates { get; set; }
+
     /// <summary>An own domain under Advanced: MatOS chooses how it is reached from outside (the default), or only through the router.</summary>
-    // Nullable on purpose: the choice is shown (and posted) only for an own domain; a hidden field posts nothing, and a non-nullable string would be required.
+    // Nullable on purpose: the choice is shown (and posted) only for an own domain with a changing IP; a hidden field posts nothing, and a non-nullable string
+    // would be required.
     [BindProperty] public string? RoutePolicy { get; set; } = DomainRoute.Auto;
 
-    public DnsFormModel Dns { get; private set; } = new();
+    public DnsChoice Dns { get; private set; } = new(new DnsFormModel(), null);
 
     /// <summary>The zone of the free addresses (shown beside the name).</summary>
     public string Zone => HostedAddress.DefaultZone;
 
-    /// <summary>The engines that are there or being installed (Matcad: no warning about the ports it holds itself).</summary>
-    public IReadOnlySet<string> InstalledEngines { get; private set; } = new HashSet<string>();
+    /// <summary>The records to create by hand, with placeholders js/onboarding.js fills in: the <c>A</c> and optional <c>AAAA</c> ones, then the <c>CNAME</c> ones.</summary>
+    public IReadOnlyList<DnsRecordHint> Records { get; private set; } = [];
 
-    /// <summary>The sentence above the button, for a browser without the script (js/onboarding.js writes it while the person chooses).</summary>
+    /// <summary>The sentence above "Set up the rest" (<see cref="SetupPlan.Summary"/> of the answers as the page shows them).</summary>
     public string Summary { get; private set; } = string.Empty;
 
     /// <summary>
-    /// What MatOS installs for each way to the apps (<see cref="SetupPlan.EnginesSentence"/> of <see cref="SetupPlan.EnginesFor"/>), by the value of the
-    /// radio Reach: js/onboarding.js picks the one of the chosen way and adds where the apps are reached.
+    /// This MatOS uses its free address already (Settings, Address), so the name is its own and fixed. A name only reserved by the test of this first start
+    /// stays editable: another name gives that one back (<see cref="HostedAddressService.ReserveAsync"/>).
     /// </summary>
-    public IReadOnlyDictionary<string, string> EngineSentences { get; private set; } = new Dictionary<string, string>();
-
-    /// <summary>This MatOS has its free address already (Settings, Address): the name is shown as its own, not checked again.</summary>
     public string? OwnAddress { get; private set; }
 
     /// <summary>
@@ -74,12 +77,6 @@ public class ChooseModel : PageModel
     /// asked for where "Only here at home" is chosen.
     /// </summary>
     public bool LocalBrowser { get; private set; }
-
-    /// <summary>The ports Matcad needs that a container holds already (<see cref="SetupService.BusyWebPortsAsync"/>): a warning before it fails.</summary>
-    public IReadOnlyList<(int Port, string Holder)> BusyPorts { get; private set; } = [];
-
-    /// <summary>The ports Matcad publishes for the addresses of the apps (<see cref="SetupService.MatcadWebPorts"/>), named in that warning.</summary>
-    public IReadOnlyList<int> WebPorts { get; private set; } = SetupService.WebPorts;
 
     /// <summary>A name of this computer that only this computer knows (<c>localhost</c>, <c>127.0.0.1</c>, <c>::1</c>).</summary>
     public static bool IsLocalHost(string? host)
@@ -95,6 +92,13 @@ public class ChooseModel : PageModel
         }
 
         PublicHost = config.PublicHost ?? (IsLocalHost(Request.Host.Host) ? null : Request.Host.Host);
+        if (!string.IsNullOrWhiteSpace(config.BaseDomain) && !config.UsesHostedAddress)
+        {
+            BaseDomain = config.BaseDomain;
+        }
+
+        DnsProvider = DnsProviders.Find(config.Dns.Provider)?.Id;
+        Certificates = config.Certificates;
         await LoadAsync(config);
         return Page();
     }
@@ -123,6 +127,16 @@ public class ChooseModel : PageModel
         }
 
         var choices = Choices();
+        if (ModelState.IsValid)
+        {
+            // The server tests again what the card tested: a required row that failed keeps the person here (the card said it next to the button).
+            var test = await _setup.TestAsync(TestInput(), ct);
+            foreach (var row in test.Rows.Where(r => !r.Advisory && r.State == SetupTest.Failed))
+            {
+                ModelState.AddModelError(row.Key == SetupTest.Name ? nameof(Name) : row.Key == SetupTest.Domain ? nameof(BaseDomain) : string.Empty, $"{row.Label}: {row.Text}");
+            }
+        }
+
         if (ModelState.IsValid)
         {
             var started = await _setup.ContinueAsync(choices, new SetupDns(provider?.Id ?? "none", DnsZone, credentials), ct);
@@ -169,44 +183,43 @@ public class ChooseModel : PageModel
         return (config, next == SetupFlow.ChoosePage ? null : Redirect(next));
     }
 
-    /// <summary>The engines that follow from the answers of the form (<see cref="SetupPlan.EnginesFor"/>).</summary>
-    private IReadOnlyList<string> EnginesOf(string reach) => SetupPlan.EnginesFor(reach, DnsProviders.Find(DnsProvider)?.Id, DnsIp);
-
     private SetupChoices Choices()
     {
         // Where the records of an own domain point: only with a DNS account (without one, nothing writes records).
-        var ip = Reach == MatOS.Core.Setup.Reach.Domain && DnsProviders.Find(DnsProvider) is not null
-            ? MatOS.Core.Configuration.DnsIp.FromForm(DnsIp, DnsFixedIp).Ip ?? MatOS.Core.Configuration.DnsIp.Default
-            : null;
-        return new SetupChoices(Reach, Name, BaseDomain, PublicHost, EnginesOf(Reach).ToHashSet(StringComparer.Ordinal), [], ip, DomainRoute.NormalizePolicy(RoutePolicy));
+        var withProvider = Reach == MatOS.Core.Setup.Reach.Domain && DnsProviders.Find(DnsProvider) is not null;
+        var ip = withProvider ? MatOS.Core.Configuration.DnsIp.FromForm(DnsIp, DnsFixedIp).Ip ?? MatOS.Core.Configuration.DnsIp.Default : null;
+        return new SetupChoices(Reach, Name, BaseDomain, PublicHost, ip, DomainRoute.NormalizePolicy(RoutePolicy), DnsProvider,
+            withProvider ? DnsIp ?? MatOS.Core.Configuration.DnsIp.Unsure : MatOS.Core.Configuration.DnsIp.Unsure, CertificateMode.Normalize(Certificates));
     }
+
+    private SetupTestInput TestInput() => new(Reach, Name, BaseDomain, DnsProvider, DnsIp, DnsFixedIp, DnsCname);
 
     private async Task LoadAsync(SystemConfig config)
     {
         var ct = HttpContext.RequestAborted;
-        Dns = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct));
+        var form = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct));
         if (Request.HasFormContentType)
         {
             // After a problem: what the person answered stays.
-            Dns = Dns.WithIp(DnsIp, DnsFixedIp);
+            form = form.WithIp(DnsIp, DnsFixedIp);
         }
 
-        // A tunnel name MatOS registered for an own domain is not an address the person chose.
-        OwnAddress = config.Hosted is { ForDomain: false } own ? own.Address : null;
+        Dns = new DnsChoice(form, DnsProviders.Find(DnsProvider)?.Id ?? (SetupPlan.IsManual(DnsProvider) ? SetupPlan.ManualDns : null));
+
+        // A free address in use (Settings, Address) is this MatOS's own and fixed; one the test reserved in this first start is prefilled but can change. A tunnel
+        // name MatOS registered for an own domain is not an address the person chose.
         if (config.Hosted is { ForDomain: false } hosted)
         {
-            // The name is this MatOS's own: it stays (a check would answer "taken", it is taken by this MatOS).
-            Name = hosted.Name;
+            OwnAddress = config.UsesHostedAddress || config.WizardCompleted ? hosted.Address : null;
+            Name ??= hosted.Name;
         }
 
         LocalBrowser = IsLocalHost(Request.Host.Host);
-        InstalledEngines = (await _apps.ListAsync(ct))
-            .Where(a => EngineIds.IsEngine(a.CatalogId) && a.Lifecycle != AppLifecycle.Failed)
-            .Select(a => a.CatalogId)
-            .ToHashSet();
-        WebPorts = _setup.MatcadWebPorts();
-        BusyPorts = InstalledEngines.Contains(EngineIds.Matcad) ? [] : await _setup.BusyWebPortsAsync(ct);
-        EngineSentences = MatOS.Core.Setup.Reach.All.ToDictionary(r => r, r => SetupPlan.EnginesSentence(EnginesOf(r)));
-        Summary = SetupPlan.Summary(Choices(), _setup.NameOf);
+        var domain = string.IsNullOrWhiteSpace(BaseDomain) ? "example.com" : BaseDomain.Trim().Trim('.').ToLowerInvariant();
+        // Every kind of row once, with words where the addresses go; js/onboarding.js shows the rows that apply and writes the domain and the addresses.
+        Records = SetupPlan.RecordsFor(domain, "your public IPv4 address", "your public IPv6 address", null)
+            .Concat(SetupPlan.RecordsFor(domain, null, null, "your host name"))
+            .ToList();
+        Summary = SetupPlan.Summary(Choices());
     }
 }

@@ -4,6 +4,12 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace MatOS.Web.Support;
 
 /// <summary>
+/// The DNS part of the screen of the choices (<c>_DnsProviderChoice</c>): the account fields of <paramref name="Dns"/> and the provider the person chose
+/// (<paramref name="Chosen"/>: a provider id, <c>manual</c>, or none yet).
+/// </summary>
+public sealed record DnsChoice(DnsFormModel Dns, string? Chosen);
+
+/// <summary>
 /// The DNS account part of a form (wizard and settings): which provider hosts the domain, the zone and the credential fields, and whether the internet connection
 /// has a fixed IP address (<see cref="DnsIp"/>). Secrets are never sent back to the browser; a field that has a stored value says so and keeps it when left empty.
 /// </summary>

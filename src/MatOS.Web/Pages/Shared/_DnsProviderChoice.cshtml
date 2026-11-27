@@ -1,0 +1,86 @@
+@using MatOS.Core.Configuration
+@using MatOS.Core.Setup
+@using MatOS.Web.Support
+@model DnsChoice
+
+@* The DNS of an own domain on the screen of the choices (only there; the wizard and the settings keep _DnsFields): the provider as radios, or "I create the
+   records myself" (the records card of Choose follows it). The account, the zone and the question of the fixed IP show for a provider MatOS knows. The field
+   names are those of DnsFormModel, so the page model reads them the same way. *@
+@{
+    var dns = Model.Dns;
+    var providers = string.Join(",", DnsProviders.All.Select(p => p.Id));
+}
+<div class="mat-stack">
+    <fieldset class="mat-field mat-fieldset">
+        <legend class="mat-legend">Where is your domain managed?</legend>
+        <div class="mat-choices">
+            @foreach (var provider in DnsProviders.All)
+            {
+                <label class="mat-choice">
+                    <input type="radio" name="DnsProvider" value="@provider.Id" checked="@(Model.Chosen == provider.Id)" required
+                           data-msg-required="Please choose where your domain is managed, or that you create its records yourself." />
+                    <span class="mat-choice__text">
+                        <strong>@provider.Name</strong>
+                        <small>MatOS keeps the records and gets the certificates with its account.</small>
+                    </span>
+                </label>
+            }
+            <label class="mat-choice">
+                <input type="radio" name="DnsProvider" value="@SetupPlan.ManualDns" checked="@(Model.Chosen == SetupPlan.ManualDns)" required
+                       data-msg-required="Please choose where your domain is managed, or that you create its records yourself." />
+                <span class="mat-choice__text">
+                    <strong>Somewhere else: I create the records myself</strong>
+                    <small>MatOS shows you the records to create. They do not follow a changing internet address.</small>
+                </span>
+            </label>
+        </div>
+        <span class="mat-hint">MatOS hands the account to Matcad (certificates) and Matddns (records); nobody else sees it.</span>
+        <span class="mat-error" aria-live="polite"></span>
+    </fieldset>
+
+    @foreach (var provider in DnsProviders.All)
+    {
+        <div data-show-if="DnsProvider" data-show-value="@provider.Id" hidden="@(Model.Chosen != provider.Id)">
+            <div class="mat-form__grid">
+                @foreach (var field in provider.Fields)
+                {
+                    var name = DnsForm.FieldName(provider, field);
+                    var saved = dns.Stored.Contains(name);
+                    <mat-field label="@field.Label" for-id="dns-@name" hint="@(saved && field.Secret ? "Saved. Leave empty to keep it." : null)">
+                        <input id="dns-@name" type="@(field.Secret ? "password" : "text")" name="DnsCredentials[@name]" class="mat-input" autocomplete="off"
+                               value="@(field.Secret ? "" : dns.Values.GetValueOrDefault(name))" placeholder="@(saved && field.Secret ? "••••••••" : null)" />
+                    </mat-field>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="mat-stack" data-show-if="DnsProvider" data-show-value="@providers" hidden="@(DnsProviders.Find(Model.Chosen) is null)">
+        <mat-field label="Zone at the provider" for-id="DnsZone" hint="Only if it differs from your domain: the zone example.com for apps living on apps.example.com.">
+            <input id="DnsZone" name="DnsZone" class="mat-input" value="@dns.Zone" placeholder="example.com" />
+        </mat-field>
+
+        @* Where the records point (DnsIp): "I'm not sure" is the default and means the same as "No": Matddns keeps the address up to date. *@
+        <fieldset class="mat-field mat-fieldset">
+            <legend class="mat-legend">Does your internet connection have a fixed IP address?</legend>
+            <div class="mat-choices">
+                @foreach (var (value, label) in DnsIp.Answers)
+                {
+                    <label class="mat-choice">
+                        <input type="radio" name="@DnsFormModel.IpAnswerField" value="@value" checked="@(dns.IpAnswer == value)" />
+                        <span class="mat-choice__text"><strong>@label</strong></span>
+                    </label>
+                }
+            </div>
+            <span class="mat-hint">@DnsIp.Hint</span>
+        </fieldset>
+        <div class="mat-stack" data-show-if="@DnsFormModel.IpAnswerField" data-show-value="@DnsIp.Fixed" hidden="@(dns.IpAnswer != DnsIp.Fixed)">
+            <mat-field label="Your fixed IP address" for-id="@DnsFormModel.FixedIpField" required="true"
+                       hint="Filled in with the address MatOS Services sees. Check it against what your provider gave you.">
+                <input id="@DnsFormModel.FixedIpField" name="@DnsFormModel.FixedIpField" class="mat-input" value="@dns.FixedIp" autocomplete="off" autocapitalize="none" spellcheck="false"
+                       placeholder="203.0.113.7" data-ob-fixed-ip />
+            </mat-field>
+            <p class="ob-note">@Ui.Icon("info")<span>With a fixed address nothing updates your records: create them at your provider yourself (matos and * of your domain, pointing to this address), and your router must let 80 and 443 in. Behind a shared connection (CGNAT, DS-Lite) this cannot work: choose "I'm not sure", and MatOS takes the tunnel of MatOS Services.</span></p>
+        </div>
+    </div>
+</div>

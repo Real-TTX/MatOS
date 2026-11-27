@@ -82,9 +82,49 @@ public sealed class HostedAddressService
             return new ServicesResult<HostedAddress>(null, false, "exists", $"This installation has the free address {existing.Address} already.");
         }
 
+        var reserved = await ReserveAsync(name, ct);
+        if (reserved.Ok)
+        {
+            await UseAsync(ct);
+        }
+
+        return reserved;
+    }
+
+    /// <summary>
+    /// Registers <paramref name="name"/> at the address service and keeps it, without making it the address of the apps (the base domain and the DNS account
+    /// stay; the test of the first start reserves the name before the person confirms the way, <c>SetupService.ContinueAsync</c> uses it). The name this
+    /// installation has already is returned as it is. Another name of a first start that is not finished (the person changed the name) is given back first;
+    /// otherwise a second name is refused (<c>exists</c>).
+    /// </summary>
+    public async Task<ServicesResult<HostedAddress>> ReserveAsync(string? name, CancellationToken ct = default)
+    {
         if (ServicesClient.Normalize(name) is not { } normalized)
         {
             return new ServicesResult<HostedAddress>(null, false, "invalid", ServicesClient.MessageFor("invalid"));
+        }
+
+        var config = await _config.GetAsync(ct);
+        if (config.Hosted is { } existing)
+        {
+            if (string.Equals(existing.Name, normalized, StringComparison.Ordinal))
+            {
+                return ServicesResult<HostedAddress>.Of(existing);
+            }
+
+            if (config.WizardCompleted || config.UsesHostedAddress)
+            {
+                return new ServicesResult<HostedAddress>(null, false, "exists", $"This installation has the free address {existing.Address} already.");
+            }
+
+            try
+            {
+                await ReleaseAsync(message => _logger.LogInformation("{Message}", message), ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new ServicesResult<HostedAddress>(null, true, null, ex.Message);
+            }
         }
 
         var registration = await _services.RegisterAsync(normalized, AppVersion.Current, ct);
@@ -102,7 +142,6 @@ public sealed class HostedAddressService
             RegisteredAt = DateTime.UtcNow,
         };
         await _config.SetHostedAsync(hosted, value.Key, ct);
-        await UseAsync(ct);
         _logger.LogInformation("Registered the free address {Address}.", hosted.Address);
         return ServicesResult<HostedAddress>.Of(hosted);
     }

@@ -106,6 +106,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RouteService>();
         services.AddScoped<MatOS.Core.Integrations.OwnerHandover>();
         services.AddScoped<MatOS.Core.Setup.SetupService>();
+        // The test of the first start: whether an own domain exists and where its hosts point (three seconds per question).
+        services.AddSingleton<DnsCheck>();
         // The self check of the first start: MatOS answers where the person opens it (certificates checked as a browser would).
         services.AddHttpClient(AppJobs.SelfCheckClient, c => c.Timeout = TimeSpan.FromSeconds(20));
         services.AddScoped<TunnelTarget>();

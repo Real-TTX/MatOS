@@ -8,6 +8,7 @@ using MatOS.Core.Entities;
 using MatOS.Core.Integrations;
 using MatOS.Core.Jobs;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace MatOS.Core.Setup;
 
@@ -41,9 +42,18 @@ public sealed class SetupService
     private readonly OwnerHandover _owner;
     private readonly MatOSDbContext _db;
     private readonly DockerService _docker;
+    private readonly ServicesClient _services;
+    private readonly DnsCheck _dns;
+    private readonly IMemoryCache _cache;
+
+    /// <summary>The one check of the ports from outside (<see cref="ProbeAsync"/>) in the cache, shared by the test and <c>/api/setup/ip</c>.</summary>
+    private const string ProbeKey = "matos:setup:probe";
+
+    /// <summary>One check of the ports at a time (the test and the addresses for the records may ask at once).</summary>
+    private static readonly SemaphoreSlim ProbeGate = new(1, 1);
 
     public SetupService(SystemConfigService config, CatalogService catalog, AppService apps, JobService jobs, HostedAddressService hosted, OwnerHandover owner, MatOSDbContext db,
-        DockerService docker)
+        DockerService docker, ServicesClient services, DnsCheck dns, IMemoryCache cache)
     {
         _config = config;
         _catalog = catalog;
@@ -53,6 +63,9 @@ public sealed class SetupService
         _owner = owner;
         _db = db;
         _docker = docker;
+        _services = services;
+        _dns = dns;
+        _cache = cache;
     }
 
     /// <summary>The ports Matcad needs on this computer when its catalog entry names none: 80 and 443 (its compose file publishes them for the addresses of the apps).</summary>
@@ -91,6 +104,232 @@ public sealed class SetupService
         }
     }
 
+    /// <summary>
+    /// The one check of the web ports from outside (<see cref="ServicesClient.CheckPortsAsync"/>), at most once in five minutes (a service that could not be
+    /// asked once in 30 seconds): the test and the public addresses for the records (<c>GET /api/setup/ip</c>) share it, so typing does not ask MatOS Services
+    /// again and again.
+    /// </summary>
+    public async Task<ServicesResult<PortCheck>> ProbeAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(ProbeKey, out ServicesResult<PortCheck>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        await ProbeGate.WaitAsync(ct);
+        try
+        {
+            if (_cache.TryGetValue(ProbeKey, out cached) && cached is not null)
+            {
+                return cached;
+            }
+
+            var result = await _services.CheckPortsAsync(await _config.GetHostedKeyAsync(ct), null, ct);
+            _cache.Set(ProbeKey, result, result.Unreachable ? TimeSpan.FromSeconds(30) : TimeSpan.FromMinutes(5));
+            return result;
+        }
+        finally
+        {
+            ProbeGate.Release();
+        }
+    }
+
+    /// <summary>The check of the ports was refused because it was made too often from this connection (<c>429</c>).</summary>
+    public static bool CheckedTooOften(ServicesResult<PortCheck> probe)
+        => probe.Status == System.Net.HttpStatusCode.TooManyRequests || probe.Error is "too-many-checks" or "too-many-requests";
+
+    /// <summary>
+    /// The test on the screen of the choices (the card "Test", <c>POST /api/setup/test</c>), one at a time with the start and "Try again" (the same gate: a
+    /// double click cannot reserve a name twice). The rows follow from the way: the ports Matcad needs here (always), MatOS Services and the free name (it is
+    /// reserved here, <see cref="HostedAddressService.ReserveAsync"/>, and used only by <see cref="ContinueAsync"/>), the own domain and its records, and the
+    /// ports from outside (advisory, one cached check). The person can go on while no required row failed.
+    /// </summary>
+    public async Task<SetupTestResult> TestAsync(SetupTestInput input, CancellationToken ct = default)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            return await TestCoreAsync(input, ct);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private async Task<SetupTestResult> TestCoreAsync(SetupTestInput input, CancellationToken ct)
+    {
+        var rows = new List<SetupTestRow>();
+        var installed = await InstalledAsync(await _apps.ListAsync(ct), ct);
+        var withMatcad = installed.Contains(EngineIds.Matcad);
+        rows.Add(await PortsHereRowAsync(withMatcad, ct));
+
+        var outside = input.Reach is Reach.Free or Reach.Domain;
+        var probe = outside ? await ProbeAsync(ct) : null;
+        switch (input.Reach)
+        {
+            case Reach.Free:
+                rows.AddRange(await NameRowsAsync(input.Name, probe!, ct));
+                break;
+
+            case Reach.Domain:
+                var domain = input.Domain?.Trim().Trim('.').ToLowerInvariant() ?? string.Empty;
+                var config = await _config.GetAsync(ct);
+                var domainProblem = SetupPlan.Problems(new SetupChoices(Reach.Domain, null, domain, null, Provider: SetupPlan.ManualDns), config)
+                    .FirstOrDefault(p => p.Field == "BaseDomain");
+                rows.Add(domainProblem is not null
+                    ? SetupTest.Row(SetupTest.Domain, SetupTest.Failed, domainProblem.Message)
+                    : await DomainRowAsync(domain, ct));
+
+                var byHand = SetupPlan.IsManual(input.Provider) || DnsProviders.Find(input.Provider) is null;
+                var fixedIp = string.Equals(input.IpMode?.Trim(), DnsIp.Fixed, StringComparison.OrdinalIgnoreCase);
+                if (byHand || fixedIp)
+                {
+                    rows.Add(domainProblem is not null
+                        ? SetupTest.Row(SetupTest.Records, SetupTest.Skip, "Checked once your domain is right.")
+                        : await RecordsRowAsync(domain, fixedIp && !byHand ? input.FixedIp?.Trim() : probe is { Ok: true } p ? p.Value!.Ipv4 : null, byHand ? input.Cname : null, ct));
+                }
+
+                break;
+        }
+
+        if (outside)
+        {
+            rows.Add(PortsRow(probe!, withMatcad, input.Reach == Reach.Free));
+        }
+
+        var seen = probe is { Ok: true } ? probe.Value : null;
+        return new SetupTestResult(rows, SetupTest.CanContinue(rows), seen?.Ipv4, seen?.Ipv6);
+    }
+
+    /// <summary>The ports Matcad needs on this computer: free, or held by Matcad itself (it is there already), else who holds them and what to do.</summary>
+    private async Task<SetupTestRow> PortsHereRowAsync(bool withMatcad, CancellationToken ct)
+    {
+        var ports = MatcadWebPorts();
+        if (withMatcad)
+        {
+            return SetupTest.Row(SetupTest.Ports80, SetupTest.Done, $"{SetupPlan.EngineLabel(EngineIds.Matcad)} has them already.");
+        }
+
+        var busy = await BusyWebPortsAsync(ct);
+        if (busy.Count == 0)
+        {
+            return SetupTest.Row(SetupTest.Ports80, SetupTest.Done, $"Nothing else uses the ports {string.Join(" and ", ports)}.");
+        }
+
+        var which = busy.Count == 1 ? $"Port {busy[0].Port} is" : $"Ports {string.Join(" and ", busy.Select(b => b.Port))} are";
+        return SetupTest.Row(SetupTest.Ports80, SetupTest.Failed,
+            $"{which} used by {string.Join(" and ", busy.Select(b => b.Holder).Distinct())}. MatOS needs the ports {string.Join(" and ", ports)} for the addresses of your apps, also at home: stop that program, then run the test again.");
+    }
+
+    /// <summary>MatOS Services answers, and the free name is reserved for this MatOS (or why not).</summary>
+    private async Task<IReadOnlyList<SetupTestRow>> NameRowsAsync(string? name, ServicesResult<PortCheck> probe, CancellationToken ct)
+    {
+        var servicesUp = SetupTest.Row(SetupTest.Services, SetupTest.Done, "MatOS Services answers.");
+        var servicesFromProbe = probe.Unreachable ? SetupTest.Row(SetupTest.Services, SetupTest.Failed, ServicesClient.UnreachableMessage) : servicesUp;
+        var normalized = ServicesClient.Normalize(name);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return [servicesFromProbe, SetupTest.Row(SetupTest.Name, SetupTest.Failed, "Please choose a name for your address.")];
+        }
+
+        if (normalized is null || ServicesClient.Reserved.Contains(normalized))
+        {
+            return [servicesFromProbe, SetupTest.Row(SetupTest.Name, SetupTest.Failed, ServicesClient.MessageFor(normalized is null ? "invalid" : "reserved"))];
+        }
+
+        var reserved = await _hosted.ReserveAsync(normalized, ct);
+        if (reserved.Ok)
+        {
+            return [servicesUp, SetupTest.Row(SetupTest.Name, SetupTest.Done, $"{reserved.Value!.Address} is yours. It becomes the address of your apps when you set up the rest.")];
+        }
+
+        if (reserved.Unreachable)
+        {
+            return
+            [
+                SetupTest.Row(SetupTest.Services, SetupTest.Failed, reserved.Message ?? ServicesClient.UnreachableMessage),
+                SetupTest.Row(SetupTest.Name, SetupTest.Skip, "Reserved once MatOS Services answers."),
+            ];
+        }
+
+        return [servicesUp, SetupTest.Row(SetupTest.Name, SetupTest.Failed, reserved.Message ?? ServicesClient.MessageFor(reserved.Error))];
+    }
+
+    /// <summary>The own domain exists: its name servers answer. Only "does not exist" fails; a resolver that does not answer clearly is a warning.</summary>
+    private async Task<SetupTestRow> DomainRowAsync(string domain, CancellationToken ct)
+    {
+        var registered = DnsCheck.Registered(domain);
+        var answer = await _dns.NameServersAsync(domain, ct);
+        return answer.Kind switch
+        {
+            DnsAnswerKind.NxDomain => SetupTest.Row(SetupTest.Domain, SetupTest.Failed, $"{registered} does not exist. Check the spelling, or register the domain first."),
+            DnsAnswerKind.Found => SetupTest.Row(SetupTest.Domain, SetupTest.Done,
+                answer.Values.Count > 0 ? $"{registered} exists (name servers {string.Join(", ", answer.Values.Take(2))})." : $"{registered} exists."),
+            _ => SetupTest.Row(SetupTest.Domain, SetupTest.Warn, $"The name servers did not answer clearly for {registered}. You can go on; the last line checks your addresses again."),
+        };
+    }
+
+    /// <summary>
+    /// The records made by hand (or for a fixed IP): <c>matos.&lt;domain&gt;</c> points to <paramref name="expected"/> (the fixed IP, or the IP MatOS Services
+    /// saw), or to the same addresses as <paramref name="cname"/>. Advisory: new records take a while to be seen.
+    /// </summary>
+    private async Task<SetupTestRow> RecordsRowAsync(string domain, string? expected, string? cname, CancellationToken ct)
+    {
+        var host = ProxyPublisher.SelfHost(domain);
+        var answer = await _dns.AddressesAsync(host, ct);
+        if (answer.Kind == DnsAnswerKind.Unknown)
+        {
+            return SetupTest.Row(SetupTest.Records, SetupTest.Warn, $"{host} could not be looked up right now. The last line checks it again.");
+        }
+
+        if (answer.Values.Count == 0)
+        {
+            return SetupTest.Row(SetupTest.Records, SetupTest.Warn,
+                $"{host} has no record yet. Create the records shown above at your DNS provider; it can take a while until they are seen.");
+        }
+
+        var points = string.Join(", ", answer.Values);
+        IReadOnlyList<string> wanted = !string.IsNullOrWhiteSpace(cname)
+            ? (await _dns.AddressesAsync(cname.Trim().TrimEnd('.'), ct)).Values
+            : string.IsNullOrWhiteSpace(expected) ? [] : [expected];
+        if (wanted.Count == 0)
+        {
+            return SetupTest.Row(SetupTest.Records, SetupTest.Done, $"{host} points to {points}.");
+        }
+
+        return answer.Values.Intersect(wanted, StringComparer.OrdinalIgnoreCase).Any()
+            ? SetupTest.Row(SetupTest.Records, SetupTest.Done, $"{host} points to {points}.")
+            : SetupTest.Row(SetupTest.Records, SetupTest.Warn, $"{host} points to {points}, not to {string.Join(", ", wanted)}. Correct the record at your DNS provider.");
+    }
+
+    /// <summary>The ports from outside, from the one cached check: advisory (before Matcad nothing answers on them; the line "reach" gives the verdict).</summary>
+    private static SetupTestRow PortsRow(ServicesResult<PortCheck> probe, bool withMatcad, bool free)
+    {
+        if (CheckedTooOften(probe))
+        {
+            return SetupTest.Row(SetupTest.Ports, SetupTest.Skip, "Checked often just now; the last line checks again.");
+        }
+
+        if (!probe.Ok)
+        {
+            return SetupTest.Row(SetupTest.Ports, SetupTest.Skip, "MatOS Services cannot check them right now; the last line checks again.");
+        }
+
+        if (!withMatcad)
+        {
+            return SetupTest.Row(SetupTest.Ports, SetupTest.Skip, "Nothing answers on 80 and 443 yet: Matcad is installed in a moment, the last line checks again.");
+        }
+
+        if (Reachability.WebOpen(probe.Value))
+        {
+            return SetupTest.Row(SetupTest.Ports, SetupTest.Done, "Your router lets the connections in on 80 and 443.");
+        }
+
+        return free
+            ? SetupTest.Row(SetupTest.Ports, SetupTest.Done, "Not needed: your free address goes through MatOS Services.")
+            : SetupTest.Row(SetupTest.Ports, SetupTest.Warn, "80 and 443 do not answer from outside. Forward them in your router to this computer, or let MatOS take the tunnel of MatOS Services.");
+    }
 
     /// <summary>The name of a catalog entry, for the lines of the progress screen.</summary>
     public string? NameOf(string catalogId) => _catalog.Get(catalogId)?.Name;
@@ -179,44 +418,54 @@ public sealed class SetupService
         // What is there already (an engine taken over from MatDock, or one the first phase is installing). A failed install is not "there".
         var installedApps = await _apps.ListAsync(ct);
         var installed = await InstalledAsync(installedApps, ct);
-        var problems = SetupPlan.Problems(choices, config, installed);
+        var problems = SetupPlan.Problems(choices, config);
         if (problems.Count > 0)
         {
             return new SetupStart(null, problems);
         }
 
-        // 1. The way to the apps. A free address is registered now: a name that was taken meanwhile, or a service that cannot be reached, keeps the person here.
+        // Records by hand or a fixed IP: only through the router (nothing points the records at the tunnel).
+        choices = SetupPlan.Normalize(choices);
+
+        // 1. The way to the apps. A free address is used now: the test reserved it (HostedAddressService.ReserveAsync), else it is registered here; a name that
+        // was taken meanwhile, or a service that cannot be reached, keeps the person here.
         switch (choices.Reach)
         {
             case Reach.Free:
                 var name = ServicesClient.Normalize(choices.Name)!;
-                if (config.Hosted is { } hosted && hosted.Name == name)
+                if (config.Hosted is not { } hosted || hosted.Name != name)
                 {
-                    await _hosted.UseAsync(ct);
-                }
-                else if (config.Hosted is { } other)
-                {
-                    return new SetupStart(null, [new SetupProblem("Name", $"This MatOS has the free address {other.Address} already. Choose that name, or give it back in Settings, Address.")]);
-                }
-                else
-                {
-                    var registered = await _hosted.RegisterAsync(name, ct);
-                    if (!registered.Ok)
+                    var reserved = await _hosted.ReserveAsync(name, ct);
+                    if (!reserved.Ok)
                     {
-                        var field = registered.Error is "invalid" or "taken" or "reserved" ? "Name" : string.Empty;
-                        return new SetupStart(null, [new SetupProblem(field, registered.Message ?? ServicesClient.UnreachableMessage)]);
+                        var message = reserved.Error == "exists" && config.Hosted is { } other
+                            ? $"This MatOS has the free address {other.Address} already. Choose that name, or give it back in Settings, Address."
+                            : reserved.Message ?? ServicesClient.UnreachableMessage;
+                        var field = reserved.Error is "invalid" or "taken" or "reserved" or "exists" ? "Name" : string.Empty;
+                        return new SetupStart(null, [new SetupProblem(field, message)]);
                     }
                 }
 
+                await _hosted.UseAsync(ct);
                 break;
 
             case Reach.Domain:
-                await _config.SetDnsAsync(dns.Provider, dns.Zone, dns.Credentials, ct);
-                await _config.SetDnsIpAsync(choices.Ip ?? DnsIp.Default, ct);
+                if (DnsProviders.Find(dns.Provider) is null)
+                {
+                    // Records by hand: no DNS account, so nothing writes records and nothing says where they point (no line "dns").
+                    await _config.SetDnsAsync("none", null, new Dictionary<string, string?>(), ct);
+                }
+                else
+                {
+                    await _config.SetDnsAsync(dns.Provider, dns.Zone, dns.Credentials, ct);
+                    await _config.SetDnsIpAsync(choices.Ip ?? DnsIp.Default, ct);
+                }
+
                 await _config.UpdateAsync(c =>
                 {
                     c.BaseDomain = choices.BaseDomain!.Trim().Trim('.').ToLowerInvariant();
                     c.RoutePolicy = DomainRoute.NormalizePolicy(choices.RoutePolicy);
+                    c.Certificates = CertificateMode.Normalize(choices.Certificates);
                 }, ct);
                 break;
 
@@ -227,7 +476,7 @@ public sealed class SetupService
         }
 
         // 2. What the wizard keeps as well: the address of this machine and the engines.
-        var engines = SetupPlan.EnginesOf(choices.Engines);
+        var engines = choices.Engines;
         var stored = config.Setup;
         string? Wanted(string id)
             => engines.Contains(id) || installed.Contains(id) || stored?.Steps.Any(s => s.Key == SetupPlan.EngineKey(id)) == true ? id : null;
@@ -262,7 +511,7 @@ public sealed class SetupService
         var completed = false;
         try
         {
-            foreach (var step in SetupPlan.Steps(choices, installed, NameOf, handOver, already))
+            foreach (var step in SetupPlan.Steps(choices, installed, handOver, already))
             {
                 var needs = SetupPlan.NeedsOf(step.Key, step.Kind).Where(ids.ContainsKey).ToList();
                 var (jobId, appId) = await QueueAsync(step.Kind, step.CatalogId, installedApps, needs.Select(k => ids[k]).ToList(), ct);

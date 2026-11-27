@@ -55,6 +55,12 @@ public sealed class SystemConfig
     /// <summary>Whether MatOS chooses the route of an own domain (<c>auto</c>, the default) or keeps it direct (<c>direct</c>: the person forwards the ports).</summary>
     public string RoutePolicy { get; set; } = Integrations.DomainRoute.Auto;
 
+    /// <summary>
+    /// The certificates of an own domain with a DNS account (<see cref="global::MatOS.Core.Setup.CertificateMode"/>): one wildcard certificate for all apps
+    /// (the default) or one certificate per app. Without a DNS account every app gets its own anyway.
+    /// </summary>
+    public string Certificates { get; set; } = global::MatOS.Core.Setup.CertificateMode.Wildcard;
+
     /// <summary>The last check whether the apps can be reached from the internet; null before the first one.</summary>
     public Integrations.ReachCheck? Reach { get; set; }
 

@@ -1,20 +1,22 @@
 @page
-@using MatOS.Core.Engines
+@using MatOS.Core.Configuration
 @using MatOS.Core.Setup
 @model MatOS.Web.Pages.Setup.ChooseModel
 @{
     Layout = "_Onboarding";
-    ViewData["Title"] = "Set up MatOS";
+    ViewData["Title"] = "How you reach your apps";
+    var providers = string.Join(",", DnsProviders.All.Select(p => p.Id));
 }
 
-@* The first start, step 4: the way to the apps and "Set up MatOS". One form; js/onboarding.js shows one card at a time, both on the dot of this step
-   (data-ob-dot). Meanwhile MatDock and MatSMTP install (phase 1): one line says how far they are (data-ob-phase1). *@
-<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="3" data-ob-zone="@Model.Zone" data-ob-self="@MatOS.Core.Integrations.ProxyPublisher.SelfSlug">
+@* The first start, step 4: the way to the apps in three cards of one form (js/onboarding.js shows one at a time, all on the dot of this step, data-ob-dot):
+   the tree, the certificates that follow from it, and the test with "Set up the rest". Meanwhile MatDock and MatSMTP install (phase 1): one line says how
+   far they are (data-ob-phase1). *@
+<form method="post" class="mat-form ob-flow" novalidate data-ob-flow data-ob-offset="3">
     <partial name="_Steps" model="3" />
 
     <p class="ob-small ob-phase1" role="status" data-ob-phase1="@MatOS.Web.Infrastructure.OnboardingEndpoints.ProgressPath" hidden></p>
 
-    @* ------------------------------------------------------------ 4. how the apps are reached *@
+    @* ------------------------------------------------------------ (a) the tree: how the apps are reached *@
     <section class="ob-card ob-step" data-ob-step data-ob-dot="3" aria-labelledby="ob-reach">
         <div class="ob-head">
             <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("globe")</span>
@@ -39,7 +41,7 @@
                 <span class="ob-choice__icon" aria-hidden="true">@Ui.Icon("link")</span>
                 <span class="ob-choice__text">
                     <strong>My own domain</strong>
-                    <small>Every app gets an address below your domain, with HTTPS. You need the account of your domain's DNS provider.</small>
+                    <small>Every app gets an address below your domain, with HTTPS.</small>
                 </span>
             </label>
             <label class="ob-choice">
@@ -55,7 +57,7 @@
         <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Free" hidden="@(Model.Reach != Reach.Free)">
             @if (Model.OwnAddress is { } own)
             {
-                @* This MatOS has its free address already (Settings, Address): it is its own, so it is not checked again (the check would say "taken"). *@
+                @* This MatOS uses its free address already (Settings, Address): it is its own and stays. *@
                 <mat-field label="Your address" asp-for="Name" hint="@($"{own} is yours already. Give it back in Settings, Address to choose another name.")">
                     <div class="mat-input-group">
                         <input asp-for="Name" class="mat-input mat-input--lg" readonly aria-describedby="ob-name-zone" />
@@ -65,11 +67,11 @@
             }
             else
             {
-                <mat-field label="Your address" asp-for="Name" required="true" hint="Choose a name: 3 to 32 letters, digits and dashes. We check it while you type.">
+                @* The test (the third card) reserves the name; another name later gives that one back. *@
+                <mat-field label="Your address" asp-for="Name" required="true" hint="Choose a name: 3 to 32 letters, digits and dashes. The test reserves it for you.">
                     <div class="mat-input-group">
                         <input asp-for="Name" class="mat-input mat-input--lg" required minlength="3" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="anna"
-                               data-msg-required="Please choose a name for your address." data-msg-range="Use 3 to 32 letters, digits and dashes."
-                               data-name-check="@AddressEndpoints.NameCheckPath" data-name-free="{address} is yours." />
+                               data-msg-required="Please choose a name for your address." data-msg-range="Use 3 to 32 letters, digits and dashes." />
                         <span class="mat-input-addon">.@Model.Zone</span>
                     </div>
                 </mat-field>
@@ -82,7 +84,38 @@
                     <input asp-for="BaseDomain" class="mat-input mat-input--lg" required placeholder="example.com" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false"
                            data-msg-required="Please enter your domain, like example.com." />
                 </mat-field>
-                <partial name="_DnsFields" model="Model.Dns" />
+                <partial name="_DnsProviderChoice" model="Model.Dns" />
+
+                @* Records by hand: what to create at the DNS provider (SetupPlan.RecordsFor). js/onboarding.js writes the domain and the addresses MatOS Services
+                   saw (/api/setup/ip) and shows the rows that apply: A (and AAAA with an IPv6), or CNAME when a host name is given. *@
+                <div class="ob-records mat-stack" data-ob-records="@MatOS.Web.Infrastructure.SetupEndpoints.IpPath" data-show-if="DnsProvider" data-show-value="@SetupPlan.ManualDns"
+                     hidden="@(Model.Dns.Chosen != SetupPlan.ManualDns)">
+                    <p class="ob-small">Create these entries at your DNS provider. MatOS cannot write them for you.</p>
+                    <div class="mat-table-wrap">
+                        <table class="mat-table">
+                            <caption class="mat-sr-only">The records of your domain</caption>
+                            <thead>
+                                <tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Points to</th><th scope="col" class="mat-hide-sm">What to do</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var record in Model.Records)
+                                {
+                                    var self = record.Name.StartsWith("*.", StringComparison.Ordinal) ? "*" : MatOS.Core.Integrations.ProxyPublisher.SelfSlug;
+                                    <tr data-ob-record="@record.Type.ToLowerInvariant()" hidden="@(record.Type != "A")">
+                                        <td data-label="Name"><code data-ob-record-name="@self">@record.Name</code></td>
+                                        <td data-label="Type">@record.Type</td>
+                                        <td data-label="Points to"><code data-ob-record-value="@record.Type.ToLowerInvariant()">@record.Value</code></td>
+                                        <td data-label="What to do" class="mat-hide-sm">@record.Sentence</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <mat-field label="A host name instead of an IP address (optional)" asp-for="DnsCname" hint="Your router's own DynDNS name, like home.example.net: the entries then point to it (CNAME).">
+                        <input asp-for="DnsCname" class="mat-input" placeholder="home.example.net" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
+                    </mat-field>
+                    <p class="ob-note">@Ui.Icon("info")<span>Records by hand point to one address: your router must let 80 and 443 in. Behind a shared connection (CGNAT, DS-Lite) this cannot work: choose your DNS provider instead and "I'm not sure", and MatOS takes the tunnel of MatOS Services.</span></p>
+                </div>
             </div>
         </div>
 
@@ -103,18 +136,7 @@
             }
         </div>
 
-        @if (Model.BusyPorts.Count > 0)
-        {
-            <div class="mat-alert mat-alert--warning" role="status">
-                <icon name="alert" />
-                <div class="mat-alert__body">
-                    @(Model.BusyPorts.Count == 1 ? "Port" : "Ports") @string.Join(" and ", Model.BusyPorts.Select(p => p.Port)) of this computer @(Model.BusyPorts.Count == 1 ? "is" : "are") used by @string.Join(" and ", Model.BusyPorts.Select(p => p.Holder).Distinct()) already.
-                    @SetupPlan.EngineLabel(EngineIds.Matcad) needs the ports @string.Join(" and ", Model.WebPorts), also at home (it gives every app its address or port): stop that program first.
-                </div>
-            </div>
-        }
-
-        <details class="mat-collapse ob-advanced" open="@(Model.BusyPorts.Count > 0)">
+        <details class="mat-collapse ob-advanced">
             <summary><span>Advanced</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
             <div class="mat-accordion__body mat-stack">
                 @if (!Model.LocalBrowser)
@@ -123,26 +145,31 @@
                         <input asp-for="PublicHost" class="mat-input" placeholder="nas.local" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
                     </mat-field>
                 }
-                @* An own domain: MatOS picks the route itself (through your router when the ports answer, else through MatOS Services); the addresses are the same. *@
-                <fieldset class="mat-field mat-fieldset" data-show-if="Reach" data-show-value="@Reach.Domain" hidden="@(Model.Reach != Reach.Domain)">
-                    <legend class="mat-legend">Reaching your domain from outside</legend>
-                    <div class="mat-choices">
-                        <label class="mat-choice">
-                            <input type="radio" name="RoutePolicy" value="@MatOS.Core.Integrations.DomainRoute.Auto" checked="@(Model.RoutePolicy != MatOS.Core.Integrations.DomainRoute.Direct)" />
-                            <span class="mat-choice__text">
-                                <strong>MatOS takes care of it</strong>
-                                <small>Through your router when it lets the connections in, else through MatOS Services. Works without router settings.</small>
-                            </span>
-                        </label>
-                        <label class="mat-choice">
-                            <input type="radio" name="RoutePolicy" value="@MatOS.Core.Integrations.DomainRoute.Direct" checked="@(Model.RoutePolicy == MatOS.Core.Integrations.DomainRoute.Direct)" />
-                            <span class="mat-choice__text">
-                                <strong>Only through my router</strong>
-                                <small>You forward the ports 80 and 443 to this computer yourself.</small>
-                            </span>
-                        </label>
+                @* An own domain whose records Matddns keeps (a provider, a changing IP): MatOS picks the route itself (through your router when the ports answer,
+                   else through MatOS Services). Records by hand and a fixed IP are reached only through the router (SetupPlan.Normalize). *@
+                <div data-show-if="Reach" data-show-value="@Reach.Domain" hidden="@(Model.Reach != Reach.Domain)">
+                    <div data-show-if="DnsProvider" data-show-value="@providers" hidden="@(DnsProviders.Find(Model.Dns.Chosen) is null)">
+                        <fieldset class="mat-field mat-fieldset" data-show-if="DnsIp" data-show-value="@DnsIp.Dynamic,@DnsIp.Unsure" hidden="@(Model.Dns.Dns.IpAnswer == DnsIp.Fixed)">
+                            <legend class="mat-legend">Reaching your domain from outside</legend>
+                            <div class="mat-choices">
+                                <label class="mat-choice">
+                                    <input type="radio" name="RoutePolicy" value="@MatOS.Core.Integrations.DomainRoute.Auto" checked="@(Model.RoutePolicy != MatOS.Core.Integrations.DomainRoute.Direct)" />
+                                    <span class="mat-choice__text">
+                                        <strong>MatOS takes care of it</strong>
+                                        <small>Through your router when it lets the connections in, else through MatOS Services. Works without router settings.</small>
+                                    </span>
+                                </label>
+                                <label class="mat-choice">
+                                    <input type="radio" name="RoutePolicy" value="@MatOS.Core.Integrations.DomainRoute.Direct" checked="@(Model.RoutePolicy == MatOS.Core.Integrations.DomainRoute.Direct)" />
+                                    <span class="mat-choice__text">
+                                        <strong>Only through my router</strong>
+                                        <small>You forward the ports 80 and 443 to this computer yourself.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </fieldset>
                     </div>
-                </fieldset>
+                </div>
             </div>
         </details>
 
@@ -151,17 +178,92 @@
         </div>
     </section>
 
-    @* ------------------------------------------------------------ one button (still the dot of the way to the apps) *@
-    <section class="ob-card ob-step" data-ob-step data-ob-dot="3" aria-labelledby="ob-go">
-        <div class="ob-hero ob-hero--go">
-            <span class="ob-planet ob-planet--sm" aria-hidden="true"><img src="/img/logo.svg" alt="" width="128" height="128" /></span>
-            <h2 class="ob-title ob-title--step" id="ob-go">Ready when you are</h2>
-            <p class="ob-lead ob-summary" data-ob-summary data-ob-summary-free="@Model.EngineSentences[Reach.Free]" data-ob-summary-domain="@Model.EngineSentences[Reach.Domain]"
-               data-ob-summary-home="@Model.EngineSentences[Reach.Home]">@Model.Summary</p>
-            <p class="ob-small">This takes a few minutes. You can watch, or come back later: it goes on by itself.</p>
+    @* ------------------------------------------------------------ (b) the certificates that follow from the way *@
+    <section class="ob-card ob-step" data-ob-step data-ob-dot="3" aria-labelledby="ob-certs">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("lock")</span>
+            <h2 class="ob-title ob-title--step" id="ob-certs">Certificates</h2>
+            <p class="ob-lead">They make the padlock in the browser: your apps are reached with HTTPS.</p>
         </div>
-        <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
-            <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg ob-go" data-ob-go><icon name="rocket" /><span>Set up MatOS</span></button>
+
+        <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Domain" hidden="@(Model.Reach != Reach.Domain)">
+            <div data-show-if="DnsProvider" data-show-value="@providers" hidden="@(DnsProviders.Find(Model.Dns.Chosen) is null)">
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-legend">How many certificates?</legend>
+                    <div class="mat-choices">
+                        <label class="mat-choice">
+                            <input type="radio" name="Certificates" value="@CertificateMode.Wildcard" checked="@(Model.Certificates != CertificateMode.PerApp)" />
+                            <span class="mat-choice__text">
+                                <strong>One certificate for all your apps <span class="mat-pill mat-pill--accent">Recommended</span></strong>
+                                <small>A new app works at once. Technically a wildcard certificate for *.your-domain, through the account of your DNS provider.</small>
+                            </span>
+                        </label>
+                        <label class="mat-choice">
+                            <input type="radio" name="Certificates" value="@CertificateMode.PerApp" checked="@(Model.Certificates == CertificateMode.PerApp)" />
+                            <span class="mat-choice__text">
+                                <strong>A certificate for each app</strong>
+                                <small>Every address is listed in public certificate logs. Technically one Let's Encrypt certificate per host name.</small>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+            </div>
+            <div data-show-if="DnsProvider" data-show-value="@SetupPlan.ManualDns" hidden="@(Model.Dns.Chosen != SetupPlan.ManualDns)">
+                <p class="ob-note">@Ui.Icon("info")<span>Without the account of your DNS provider every app gets a certificate of its own, a moment after it is installed. Your router must let port 80 or 443 in for that.</span></p>
+            </div>
+        </div>
+
+        <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Free" hidden="@(Model.Reach != Reach.Free)">
+            <div class="mat-stack">
+                <p class="ob-note">@Ui.Icon("info")<span>Every app gets a certificate of its own, a moment after it is installed. Nothing to set up.</span></p>
+                <p class="ob-small">Let's Encrypt, who issues them, allows 50 certificates per registered domain and week, and 5 failed attempts per address and hour. The free addresses share my.mattiverse.de, so a new app may have to wait a little.</p>
+            </div>
+        </div>
+
+        <div class="ob-panel" data-show-if="Reach" data-show-value="@Reach.Home" hidden="@(Model.Reach != Reach.Home)">
+            <p class="ob-note">@Ui.Icon("info")<span>At home your apps use plain http: no certificates needed.</span></p>
+        </div>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            <button type="button" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-next><span>Next</span><icon name="arrow-right" /></button>
+            <button type="button" class="mat-btn mat-btn--ghost" data-ob-prev><icon name="chevron-left" /><span>Back</span></button>
+        </div>
+    </section>
+
+    @* ------------------------------------------------------------ (c) the test and "Set up the rest" *@
+    <section class="ob-card ob-step" data-ob-step data-ob-dot="3" aria-labelledby="ob-test">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("check-circle")</span>
+            <h2 class="ob-title ob-title--step" id="ob-test">A quick test</h2>
+            @* What "Set up the rest" will do, in one sentence (SetupPlan.Summary; the test writes it again from the answers as they are). *@
+            <p class="ob-lead ob-summary" data-ob-test-summary>@Model.Summary</p>
+        </div>
+
+        @* Filled by js/onboarding.js from POST /api/setup/test; a row that does not belong to the chosen way is hidden. *@
+        <ol class="ob-tasks" data-ob-test="@MatOS.Web.Infrastructure.SetupEndpoints.TestPath">
+            @foreach (var key in SetupTest.All)
+            {
+                <li class="ob-task" data-ob-test-row="@key" data-state="waiting">
+                    <span class="ob-task__mark" aria-hidden="true">
+                        <span class="ob-task__dot"></span>
+                        <span class="ob-task__spin"></span>
+                        <span class="ob-task__ok">@Ui.Icon("check")</span>
+                        <span class="ob-task__warn">@Ui.Icon("alert")</span>
+                        <span class="ob-task__bad">@Ui.Icon("x")</span>
+                    </span>
+                    <span class="ob-task__text">
+                        <span class="ob-task__label" data-ob-test-label>@SetupTest.Label(key)</span>
+                        <span class="ob-task__state" data-ob-test-text>@(SetupTest.IsAdvisory(key) ? "Checked when the test runs. It only advises." : "Checked when the test runs.")</span>
+                    </span>
+                </li>
+            }
+        </ol>
+
+        <p class="ob-small" role="status" aria-live="polite" data-ob-test-say>"Set up the rest" tests your answers again before it starts.</p>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg ob-go" data-ob-go><icon name="rocket" /><span>Set up the rest</span></button>
+            <button type="button" class="mat-btn mat-btn--secondary" data-ob-test-run><icon name="refresh" /><span>Run the test again</span></button>
             <button type="button" class="mat-btn mat-btn--ghost" data-ob-prev><icon name="chevron-left" /><span>Back</span></button>
         </div>
     </section>

@@ -8,9 +8,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace MatOS.Web.Pages.Setup;
 
 /// <summary>
-/// The first start, step 6 (docs/ARCHITECTURE.md "The first start"): a calm screen with one line per step in plain words, live (js/onboarding.js asks
+/// The first start, step 5 (docs/ARCHITECTURE.md "The first start"): a calm screen with one line per step in plain words, live (js/onboarding.js asks
 /// <c>GET /api/setup/progress</c>, nothing reloads), an overall bar and an estimate. A failed line offers "Try again" and "Show details" (the log of its job);
-/// when all is done: "Your MatOS is ready", the button to the home screen, and it goes there by itself after a few seconds.
+/// when all is done: "Your MatOS is ready". In every phase the button to the next screen (the sign-in, or the mail) is there: the lines go on by themselves.
 /// </summary>
 public class ProgressModel : PageModel
 {
@@ -48,6 +48,18 @@ public class ProgressModel : PageModel
     /// </summary>
     public bool PhaseOne { get; private set; }
 
+    /// <summary>The next screen of the first start: the sign-in in MatIdentity when the run has its line, else the mail.</summary>
+    public string NextUrl { get; private set; } = MailPage;
+
+    /// <summary>The words of the button to <see cref="NextUrl"/>.</summary>
+    public string NextLabel { get; private set; } = "Next: mail";
+
+    /// <summary>The screen of the sign-in in MatIdentity (it waits for the line "signin").</summary>
+    public const string AccountPage = "/Setup/Account";
+
+    /// <summary>The screen of the mail (it waits for MatSMTP).</summary>
+    public const string MailPage = "/Setup/Mail";
+
     public async Task<IActionResult> OnGetAsync()
     {
         var ct = HttpContext.RequestAborted;
@@ -64,12 +76,15 @@ public class ProgressModel : PageModel
         SelfUrl = config.Setup is { Reach: { } r } ? SetupPlan.SelfUrl(r, config) : null;
         Reach = config.Setup?.Steps.Any(s => s.Key == SetupPlan.ReachKey) == true ? await ReachView.BuildAsync(config, _db, ct) : null;
         LoopbackUrl = Request.LoopbackOf(SetupFlow.ProgressPage);
+        var signIn = config.Setup?.Steps.Any(s => s.Key == SetupPlan.SignInKey) == true;
+        NextUrl = signIn ? AccountPage : MailPage;
+        NextLabel = signIn ? "Next: your sign-in" : "Next: mail";
 
         return Page();
     }
 
     /// <summary>"Try all again": every failed line once more, in the order of the plan.</summary>
-    public async Task<IActionResult> OnPostRetryAllAsync()
+    public async Task<IActionResult> OnPostRetryAllAsync(string? returnUrl)
     {
         var count = await _setup.RetryAllAsync(HttpContext.RequestAborted);
         if (Request.Headers["X-Requested-With"] == "fetch")
@@ -77,11 +92,14 @@ public class ProgressModel : PageModel
             return StatusCode(count > 0 ? StatusCodes.Status204NoContent : StatusCodes.Status409Conflict);
         }
 
-        return RedirectToPage();
+        return Back(returnUrl);
     }
 
-    /// <summary>"Try again" of a failed line. From the script (fetch) the answer is empty; without it the page comes again.</summary>
-    public async Task<IActionResult> OnPostRetryAsync(string? key)
+    /// <summary>
+    /// "Try again" of a failed line. From the script (fetch) the answer is empty; without it the page comes again, or the local page in
+    /// <paramref name="returnUrl"/> (a screen that waits for the line, like the sign-in or the mail, comes back to itself).
+    /// </summary>
+    public async Task<IActionResult> OnPostRetryAsync(string? key, string? returnUrl)
     {
         var done = !string.IsNullOrEmpty(key) && await _setup.RetryAsync(key, HttpContext.RequestAborted);
         if (Request.Headers["X-Requested-With"] == "fetch")
@@ -89,6 +107,9 @@ public class ProgressModel : PageModel
             return StatusCode(done ? StatusCodes.Status204NoContent : StatusCodes.Status409Conflict);
         }
 
-        return RedirectToPage();
+        return Back(returnUrl);
     }
+
+    /// <summary>Back to a local page only (never to another site), else this page.</summary>
+    private IActionResult Back(string? returnUrl) => !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage();
 }

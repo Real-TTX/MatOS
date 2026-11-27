@@ -17,7 +17,7 @@
     };
 }
 
-@* The first start, step 6: one line per step, live (js/onboarding.js polls /api/setup/progress and changes only what changed). Without the script, Reload shows the state. *@
+@* The first start, step 5: one line per step, live (js/onboarding.js polls /api/setup/progress and changes only what changed). Without the script, Reload shows the state. *@
 <div class="ob-flow" data-ob-progress="/api/setup/progress" data-ob-phase="@phase">
     <partial name="_Steps" model="4" />
 
@@ -115,16 +115,19 @@
                     </div>
                 </div>
             }
-            <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
-                <form method="post" asp-page-handler="RetryAll" data-ob-when="partial" hidden="@(phase != "partial")" data-ob-retry-all>
+            <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center" data-ob-when="partial" hidden="@(phase != "partial")">
+                <form method="post" asp-page-handler="RetryAll" data-ob-retry-all>
                     <button type="submit" class="mat-btn mat-btn--secondary mat-btn--lg"><icon name="refresh" /><span>Try all again</span></button>
                 </form>
-                <a href="/" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-home><icon name="home" /><span>Go to my home screen</span></a>
             </div>
-            <p class="ob-small ob-countdown" data-ob-countdown hidden>
-                <span>Your home screen opens in <span data-ob-seconds>20</span> seconds.</span>
-                <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-ob-stay>Stay here</button>
-            </p>
+        </div>
+
+        @* The next screen, in every phase: nothing waits for the lines (they go on by themselves, the next screens wait for the one they need). *@
+        <div class="ob-done">
+            <p class="ob-small">You can go on, it keeps working.</p>
+            <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
+                <a class="mat-btn mat-btn--primary mat-btn--lg" href="@Model.NextUrl" data-ob-next-screen><span>@Model.NextLabel</span><icon name="arrow-right" /></a>
+            </div>
         </div>
         }
     </section>

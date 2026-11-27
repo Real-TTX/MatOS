@@ -57,6 +57,13 @@ public sealed class ProxyPublisher
     /// </summary>
     public static string SelfHost(string baseDomain) => HostFor(SelfSlug, baseDomain);
 
+    /// <summary>
+    /// The wildcard route (one certificate for <c>*.domain</c> through the DNS challenge) is wanted: there is a DNS provider in Matcad
+    /// (<paramref name="providerId"/>) and the person did not choose a certificate for each app (<see cref="SystemConfig.Certificates"/>).
+    /// </summary>
+    public static bool WantsWildcard(SystemConfig config, long? providerId)
+        => providerId is not null && config.Certificates != Setup.CertificateMode.PerApp;
+
     /// <summary>The host of Mattiverse below the base domain (the name before 2026-11).</summary>
     public static string FormerSelfHost(string baseDomain) => HostFor(Mattiverse.Name, baseDomain);
 
@@ -171,7 +178,9 @@ public sealed class ProxyPublisher
         var providerId = await EnsureProviderAsync(config, log, ct);
 
         var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (providerId is not null && await PublishWildcardAsync(baseDomain, providerId.Value, log, ct))
+        // One certificate for all apps unless the person chose one each (the first start, SystemConfig.Certificates): then an earlier wildcard route is not
+        // wanted any more, and the cleanup below removes it.
+        if (WantsWildcard(config, providerId) && await PublishWildcardAsync(baseDomain, providerId!.Value, log, ct))
         {
             wanted.Add("*." + baseDomain);
         }

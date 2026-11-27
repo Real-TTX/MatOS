@@ -690,30 +690,76 @@ async function firstStart(browser, errors) {
       const third = await (await page.request.get(origin + '/api/setup/progress')).json();
       expectEqual(third.steps.map(s => s.key + '#' + s.jobId), first, 'still the same lines and jobs');
     });
-    await check('the way to the apps: three choices, the name checked while typing, the first engines said in one line', async () => {
+    await check('the way to the apps: three choices, the first engines said in one line', async () => {
       expectEqual(await page.locator('.ob-choice input[name=Reach]').count(), 3, 'three choices');
       expectTrue(await page.locator('input[name=Reach][value=free]').isChecked(), 'the free address is the default');
       expectEqual(await page.locator('.ob-engines').count(), 0, 'no engines to tick');
+      expectEqual(await page.locator('[data-ob-step]').count(), 3, 'three cards: the tree, the certificates, the test');
       await page.waitForFunction(() => { const p = document.querySelector('[data-ob-phase1]'); return p && !p.hidden && p.textContent.indexOf('MatDock') >= 0; }, null, { timeout: 15000 });
-      await page.fill('#Name', 'e2e-' + Date.now().toString(36));
-      await page.waitForFunction(() => { const f = document.querySelector('#Name').closest('.mat-field'); return f.classList.contains('is-valid') || f.classList.contains('is-invalid'); }, null, { timeout: 15000 });
+    });
+    const chooseState = await ctx.storageState();
+    for (const [mode, options] of looks) {
+      const lookCtx = await browser.newContext({ ...options, storageState: chooseState });
+      const look = await lookCtx.newPage();
+      look.on('pageerror', e => errors.push(look.url() + ': ' + e.message));
+      await check(mode + ': the three cards of the way to the apps, nothing sideways', async () => {
+        await look.goto(origin + '/Setup/Choose');
+        expectEqual(new URL(look.url()).pathname, '/Setup/Choose', 'on the choices');
+        await look.locator('label.ob-choice', { has: look.locator('input[value=home]') }).click();
+        for (let card = 0; card < 3; card++) {
+          expectEqual(await look.locator('.ob-step.is-active').count(), 1, 'one card shown');
+          expectEqual(await look.locator('[style]').count(), 0, 'elements with an inline style');
+          const wide = await look.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          expectTrue(wide <= 1, 'card ' + (card + 1) + ' scrolls sideways by ' + wide + 'px');
+          if (card < 2) { await look.click('.ob-step.is-active [data-ob-next]'); }
+        }
+      });
+      await lookCtx.close();
+    }
+    await check('an own domain by hand: the records to create name matos and the wildcard of the domain', async () => {
+      const domain = 'e2e-' + Date.now().toString(36) + '.example.net';
+      await page.locator('label.ob-choice', { has: page.locator('input[value=domain]') }).click();
+      await page.fill('#BaseDomain', domain);
+      await page.locator('label.mat-choice', { has: page.locator('input[name=DnsProvider][value=manual]') }).click();
+      expectTrue(await page.locator('[data-ob-records]').isVisible(), 'the records card shows');
+      const names = await page.locator('[data-ob-records] tr[data-ob-record="a"] [data-ob-record-name]').allInnerTexts();
+      expectEqual(names, ['matos.' + domain, '*.' + domain], 'A records for matos and the wildcard');
+      expectEqual(await page.locator('[data-ob-records] td:not([data-label])').count(), 0, 'every cell has its data-label');
+      await page.fill('#DnsCname', 'home.example.org');
+      expectEqual(await page.locator('[data-ob-records] tr[data-ob-record="cname"]:not([hidden])').count(), 2, 'a host name gives CNAME records');
+      expectEqual(await page.locator('[data-ob-records] tr[data-ob-record="a"]:not([hidden])').count(), 0, 'and no A records');
+      await page.fill('#DnsCname', '');
+      await page.fill('#BaseDomain', '');
+    });
+    await check('at home: the certificates say plain http, the test has no failed required row', async () => {
       await page.locator('label.ob-choice', { has: page.locator('input[value=home]') }).click();
       expectTrue(await page.locator('#Name').isDisabled(), 'the name is not sent for "at home"');
       await page.click('.ob-step.is-active [data-ob-next]');
-      expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Ready when you are', 'on to the button');
+      expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'Certificates', 'on to the certificates');
+      expectTrue((await page.locator('.ob-step.is-active .ob-panel:not([hidden])').innerText()).includes('plain http'), 'at home: plain http');
+      await page.click('.ob-step.is-active [data-ob-next]');
+      expectEqual(await page.locator('.ob-step.is-active h2').innerText(), 'A quick test', 'on to the test');
       expectEqual(await page.locator('[data-ob-dots] li.is-active').count(), 1, 'one dot');
       expectEqual(await page.locator('[data-ob-dots] li').nth(3).getAttribute('aria-current'), 'step', 'still the dot of the way to the apps');
-      expectEqual(await page.locator('[data-ob-summary]').innerText(), 'MatOS sets up its engines for use here at home.', 'the summary');
+      await page.waitForFunction(() => { const r = document.querySelector('[data-ob-test-row="ports80"]'); return r && ['done', 'failed', 'warn', 'skip'].indexOf(r.getAttribute('data-state')) >= 0; }, null, { timeout: 30000 });
+      expectEqual(await page.locator('[data-ob-test-row]:not([hidden])').count(), 1, 'at home only the ports here');
+      expectEqual(await page.locator('[data-ob-test-row="ports80"]').getAttribute('data-state'), 'done', 'the ports 80 and 443 are free here');
+      expectEqual(await page.locator('[data-ob-test-summary]').innerText(), 'MatOS sets up its engines for use here at home.', 'the summary');
+      expectTrue(await page.locator('[data-ob-go]').isEnabled(), 'Set up the rest stays enabled');
     });
-    await check('Set up MatOS: a line per engine in plain words, followed live until MatOS is ready', async () => {
+    await check('Set up the rest: a line per engine in plain words, the self check last, the next screen at any time', async () => {
       await Promise.all([page.waitForURL(/\/Setup\/Progress/), page.click('[data-ob-go]')]);
       expectTrue(await page.locator('[data-ob-task]').count() >= 4, 'a line per engine at least');
       const labels = await page.locator('[data-ob-task] .ob-task__label').allInnerTexts();
       expectEqual(labels[0], 'App manager (MatDock)', 'MatDock first, in plain words');
       expectEqual(labels[1], 'Mail (MatSMTP)', 'MatSMTP second (the first phase)');
       expectTrue(!labels.includes('Address updater (Matddns)'), 'no address updater at home');
+      expectEqual(await page.locator('[data-ob-task]').last().getAttribute('data-ob-task'), 'selfcheck', 'the self check is the last line');
+      expectEqual(await page.locator('[data-ob-countdown]').count(), 0, 'no countdown');
+      expectTrue((await page.locator('[data-ob-next-screen]').innerText()).startsWith('Next:'), 'the next screen, while it works');
       await page.waitForFunction(() => document.querySelector('[data-ob-progress]').getAttribute('data-ob-phase') !== 'working', null, { timeout: 15 * 60 * 1000 });
       expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
+      expectTrue(await page.locator('[data-ob-next-screen]').isVisible(), 'the next screen when it is done');
     });
   }
   await ctx.close();

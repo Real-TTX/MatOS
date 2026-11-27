@@ -2,10 +2,12 @@
    Switched on by data-* attributes:
      <form data-ob-flow data-ob-offset="3" data-ob-start="0">   steps in one form (data-ob-step), one shown at a time; data-ob-next / data-ob-prev move,
                                                                 the dots (data-ob-dots) follow (dot offset+n, or the step's data-ob-dot); a step is
-                                                                checked before Next; Enter goes on; the summary (data-ob-summary) is written from the
-                                                                choices; data-ob-phase1 says how far the first engines are
+                                                                checked before Next; Enter goes on; data-ob-phase1 says how far the first engines are
+     <ol data-ob-test="/api/setup/test">                        the test of the choices: one request at a time, when its step is shown and after a change
+                                                                (data-ob-test-row per row, data-ob-test-run, data-ob-test-say)
+     <div data-ob-records="/api/setup/ip">                      the records of an own domain by hand: the domain and the addresses written in
      <div data-ob-progress="/api/setup/progress">              the progress screen: polled, only what changed is exchanged; "Try again" (data-ob-retry),
-                                                                "Show details" (data-ob-details), the way home when it is done (data-ob-countdown)
+                                                                "Show details" (data-ob-details)
      <div data-ob-tour="/api/home/tour">                        the tour of the home screen: one mark at a time (data-ob-tour-step, data-target)
    The toolkit's script does the rest (validation on submit, data-show-if, data-copy). */
 (function () {
@@ -63,8 +65,8 @@
         d.classList.toggle('is-active', n === current);
         if (n === current) { d.setAttribute('aria-current', 'step'); } else { d.removeAttribute('aria-current'); }
       });
-      var summary = $('[data-ob-summary]', steps[index]);
-      if (summary) { summary.textContent = summarize(); }
+      // the step says that it is shown (the card of the test starts its test then)
+      steps[index].dispatchEvent(new CustomEvent('ob-step-shown', { bubbles: true }));
       if (moved) {
         window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
         // the heading of the new step says where the person is (a screen reader reads it)
@@ -76,16 +78,9 @@
     // Before Next: the fields of this step that are shown must be right (the toolkit checks all of them again when the form is sent).
     function stepIsValid(step) {
       var bad = $$('input, select, textarea', step).filter(function (i) { return !i.disabled && i.type !== 'hidden' && !i.closest('[hidden]') && !i.checkValidity(); });
-      $$('input, select, textarea', step).forEach(function (i) { if (bad.indexOf(i) < 0 && i.closest('.mat-field.is-invalid') && !i.hasAttribute('data-name-check')) { showError(i, ''); } });
+      $$('input, select, textarea', step).forEach(function (i) { if (bad.indexOf(i) < 0 && i.closest('.mat-field.is-invalid')) { showError(i, ''); } });
       bad.forEach(function (i) { showError(i, messageFor(i)); });
-      // a name of a free address that was answered as taken or reserved: not on with it. When the address service could not be asked, the name is asked
-      // again now (js/matos.js) and the person may go on: the server asks once more at "Set up MatOS" and keeps them here with the reason.
-      var name = $('[data-name-check]', step);
-      var nameField = name && !name.disabled && !name.closest('[hidden]') ? name.closest('.mat-field') : null;
-      if (nameField && nameField.classList.contains('is-invalid') && bad.indexOf(name) < 0) {
-        if (name.getAttribute('data-name-state') === 'unreachable') { name.dispatchEvent(new CustomEvent('name-recheck')); }
-        else { bad.push(name); }
-      }
+      // (whether a free name is taken is the test's row, on its own card: the server reserves it there)
       if (bad.length) { bad[0].focus(); }
       return bad.length === 0;
     }
@@ -137,39 +132,6 @@
       });
     });
 
-    // The sentence above "Set up MatOS": what will happen, from the choices (SetupPlan.Summary says the same on the server). What MatOS installs follows from
-    // the way to the apps: the server wrote it for each way (data-ob-summary-<reach>), the chosen one is taken.
-    function summarize() {
-      var reach = $('input[name="Reach"]:checked', flow);
-      var value = reach ? reach.value : '';
-      var holder = $('[data-ob-summary]', flow);
-      var text = (holder && holder.getAttribute('data-ob-summary-' + value)) || 'MatOS sets up its engines';
-      var name = $('[name="Name"]', flow), domain = $('[name="BaseDomain"]', flow);
-      if (value === 'free' && name && name.value.trim()) {
-        // the address people open: MatOS is a host below the free address (ProxyPublisher.SelfHost)
-        text += ' and makes everything reachable from anywhere: you open MatOS at ' + (flow.getAttribute('data-ob-self') || 'matos') + '.' +
-          name.value.trim().toLowerCase() + '.' + (flow.getAttribute('data-ob-zone') || 'my.mattiverse.de');
-      }
-      else if (value === 'domain' && domain && domain.value.trim()) { text += ' and puts your apps under ' + domain.value.trim().toLowerCase(); }
-      else if (value === 'home') { text += ' for use here at home'; }
-      text += '.';
-      // an own domain with a DNS account: where its records point (DnsIp.Sentence says the same). A fixed address gets no address updater
-      // (SetupPlan.EnginesFor), and only it writes records: the person makes them by hand (SetupPlan.RecordsByHand).
-      var provider = $('#DnsProvider', flow);
-      if (value === 'domain' && domain && domain.value.trim() && provider && provider.value) {
-        var answer = $('input[name="DnsIp"]:checked', flow), fixed = $('[name="DnsFixedIp"]', flow);
-        if (answer && answer.value === 'fixed') {
-          text += fixed && fixed.value.trim()
-            ? ' Create the records of your domain at your DNS provider yourself, pointing to ' + fixed.value.trim() + '.'
-            : ' Create the records of your domain at your DNS provider yourself.';
-        } else {
-          text += ' Your domain follows your internet address.';
-        }
-      }
-      return text;
-    }
-
-
     // Sent (the toolkit found nothing to correct): the button waits, so a second click does not start it twice.
     flow.addEventListener('submit', function (e) {
       if (e.defaultPrevented) { return; }
@@ -212,6 +174,144 @@
     pollPhase1();
   }
 
+  // ------------------------------------------------------------------ the test of the choices
+
+  // The card of the test (SetupService.TestAsync): one request at a time (the button waits meanwhile), when its card is shown, after a change of an answer
+  // (800 ms after the last one, while the card is shown) and on "Run the test again". Each row gets its state and its words; the polite line says the result,
+  // and names the required rows that failed. "Set up the rest" stays enabled: the server tests again and keeps the person here with the reason.
+  var test = $('[data-ob-test]');
+  if (test) {
+    var testForm = test.closest('form') || document;
+    var testStep = test.closest('[data-ob-step]');
+    var testSay = $('[data-ob-test-say]', testForm);
+    var runButton = $('[data-ob-test-run]', testForm);
+    var testBusy = false, testAgain = false, testTimer = null;
+
+    var answer = function (name) {
+      var field = $('[name="' + name + '"]', testForm);
+      if (!field) { return ''; }
+      if (field.type === 'radio') { var on = $('input[name="' + name + '"]:checked', testForm); return on ? on.value : ''; }
+      return field.value.trim();
+    };
+    var testShown = function () { return !testStep || testStep.classList.contains('is-active'); };
+
+    var applyTest = function (d) {
+      var byKey = {};
+      d.rows.forEach(function (r) { byKey[r.key] = r; });
+      $$('[data-ob-test-row]', test).forEach(function (li) {
+        var row = byKey[li.getAttribute('data-ob-test-row')];
+        li.hidden = !row;
+        if (!row) { return; }
+        li.setAttribute('data-state', row.state);
+        $('[data-ob-test-label]', li).textContent = row.label;
+        $('[data-ob-test-text]', li).textContent = row.text;
+      });
+      var summary = $('[data-ob-test-summary]', testForm);
+      if (summary && d.summary) { summary.textContent = d.summary; }
+      var failed = d.rows.filter(function (r) { return !r.advisory && r.state === 'failed'; });
+      var warned = d.rows.filter(function (r) { return r.state === 'warn'; });
+      if (!testSay) { return; }
+      testSay.textContent = failed.length
+        ? 'Not ready yet: ' + failed.map(function (r) { return r.label; }).join('; ') + '. Correct it, then run the test again; "Set up the rest" tests again too.'
+        : warned.length
+          ? 'Ready. ' + (warned.length === 1 ? 'One row is' : warned.length + ' rows are') + ' worth a look, but nothing keeps you here.'
+          : 'Ready: everything that is needed is there.';
+    };
+
+    var runTest = function () {
+      clearTimeout(testTimer);
+      if (testBusy) { testAgain = true; return; }
+      testBusy = true;
+      testAgain = false;
+      if (runButton) { runButton.disabled = true; runButton.setAttribute('aria-busy', 'true'); }
+      $$('[data-ob-test-row]', test).forEach(function (li) { if (!li.hidden) { li.setAttribute('data-state', 'working'); } });
+      var body = {
+        reach: answer('Reach'), name: answer('Name'), domain: answer('BaseDomain'), provider: answer('DnsProvider'),
+        ipMode: answer('DnsIp'), fixedIp: answer('DnsFixedIp'), cname: answer('DnsCname'),
+      };
+      fetch(test.getAttribute('data-ob-test'), {
+        method: 'POST', credentials: 'same-origin', body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'RequestVerificationToken': token() },
+      })
+        .then(function (r) {
+          // past the choices (another tab confirmed the way): on to where the first start stands
+          if (r.status === 409) { return r.json().then(function (d) { window.location.assign(d.redirect || '/Setup/Progress'); return null; }); }
+          if (!r.ok || (r.headers.get('Content-Type') || '').indexOf('json') < 0) { throw new Error('HTTP ' + r.status); }
+          return r.json();
+        })
+        .then(function (d) { if (d) { applyTest(d); } })
+        .catch(function () {
+          $$('[data-ob-test-row][data-state="working"]', test).forEach(function (li) { li.setAttribute('data-state', 'waiting'); });
+          if (testSay) { testSay.textContent = 'The test could not run right now. Run it again in a moment; "Set up the rest" tests again too.'; }
+        })
+        .then(function () {
+          testBusy = false;
+          if (runButton) { runButton.disabled = false; runButton.removeAttribute('aria-busy'); }
+          if (testAgain) { runTest(); }
+        });
+    };
+
+    var later = function (e) {
+      if (!testShown() || (e.target.closest && e.target.closest('[data-ob-test]'))) { return; }
+      clearTimeout(testTimer);
+      testTimer = setTimeout(runTest, 800);
+    };
+    testForm.addEventListener('input', later);
+    testForm.addEventListener('change', later);
+    if (testStep) { testStep.addEventListener('ob-step-shown', runTest); }
+    if (runButton) { runButton.addEventListener('click', runTest); }
+    if (testStep && testStep.classList.contains('is-active')) { runTest(); }
+  }
+
+  // ------------------------------------------------------------------ the records of an own domain by hand
+
+  // The rows of the records card follow the answers: the domain in every name, A (and AAAA once an IPv6 is known) or CNAME when a host name is given, and the
+  // public addresses MatOS Services saw (asked once, when an own domain is chosen; they also fill an empty fixed IP).
+  var records = $('[data-ob-records]');
+  if (records) {
+    var recordsForm = records.closest('form') || document;
+    var seen = null, asked = false;
+    var domainChosen = function () { var r = $('input[name="Reach"]:checked', recordsForm); return !!r && r.value === 'domain'; };
+    var fillRecords = function () {
+      var field = $('[name="BaseDomain"]', recordsForm);
+      var domain = (field ? field.value.trim().toLowerCase().replace(/^\.+|\.+$/g, '') : '') || 'example.com';
+      var cname = $('[name="DnsCname"]', recordsForm);
+      var host = cname ? cname.value.trim().toLowerCase().replace(/\.+$/, '') : '';
+      $$('[data-ob-record-name]', records).forEach(function (c) { c.textContent = c.getAttribute('data-ob-record-name') + '.' + domain; });
+      $$('tr[data-ob-record]', records).forEach(function (tr) {
+        var type = tr.getAttribute('data-ob-record');
+        tr.hidden = host ? type !== 'cname' : type === 'cname' || (type === 'aaaa' && !(seen && seen.ipv6));
+      });
+      $$('[data-ob-record-value]', records).forEach(function (c) {
+        var type = c.getAttribute('data-ob-record-value');
+        if (type === 'cname' && host) { c.textContent = host; }
+        else if (type === 'a' && seen && seen.ipv4) { c.textContent = seen.ipv4; }
+        else if (type === 'aaaa' && seen && seen.ipv6) { c.textContent = seen.ipv6; }
+      });
+    };
+    var askAddresses = function () {
+      if (asked || !domainChosen()) { return; }
+      asked = true;
+      fetch(records.getAttribute('data-ob-records'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) {
+          if (r.status === 409) { return r.json().then(function (d) { window.location.assign(d.redirect || '/Setup/Progress'); return null; }); }
+          return r.ok ? r.json() : null;
+        })
+        .then(function (d) {
+          if (!d) { return; }
+          seen = d;
+          fillRecords();
+          var fixed = $('[data-ob-fixed-ip]', recordsForm);
+          if (fixed && !fixed.value.trim() && d.ipv4) { fixed.value = d.ipv4; }
+        })
+        .catch(function () { asked = false; });
+    };
+    recordsForm.addEventListener('input', fillRecords);
+    recordsForm.addEventListener('change', function () { fillRecords(); askAddresses(); });
+    fillRecords();
+    askAddresses();
+  }
+
   // ------------------------------------------------------------------ the progress screen
 
   var progress = $('[data-ob-progress]');
@@ -221,12 +321,10 @@
     var percent = $('[data-ob-percent]', progress);
     var estimate = $('[data-ob-estimate]', progress);
     var headline = $('[data-ob-headline]', progress);
-    var countdown = $('[data-ob-countdown]', progress);
     var announce = $('[data-ob-announce]', progress);
     var offline = $('[data-ob-offline]', progress);
     var signedOut = $('[data-ob-signedout]', progress);
     var phase = progress.getAttribute('data-ob-phase');
-    var stay = false;
     var timer = null;
     var misses = 0;
     var words = { waiting: 'Waiting', working: 'Working on it', done: 'Done' };
@@ -238,7 +336,6 @@
 
     function setPhase(next) {
       if (next === phase) { return; }
-      var before = phase;
       phase = next;
       progress.setAttribute('data-ob-phase', next);
       $$('[data-ob-when]', progress).forEach(function (el) { el.hidden = el.getAttribute('data-ob-when').split(' ').indexOf(next) < 0; });
@@ -248,27 +345,6 @@
         // the status of the reachability (data-reach, js/matos.js) was drawn before its check ran: ask for it now
         document.dispatchEvent(new CustomEvent('mv:reach-refresh'));
       }
-      if (next === 'ready' && before === 'working') { startCountdown(); }
-    }
-
-    // When all is done the home screen comes by itself after a while, long enough to read how to sign in from now on and to copy the address. It is said
-    // once, and the focus goes to "Stay here", so a keyboard or a screen reader can stop it.
-    function startCountdown() {
-      if (!countdown || stay) { return; }
-      var left = 20;
-      var seconds = $('[data-ob-seconds]', countdown);
-      countdown.hidden = false;
-      var stayButton = $('[data-ob-stay]', countdown);
-      if (stayButton) { stayButton.focus({ preventScroll: true }); }
-      setTimeout(function () { say('Your home screen opens in ' + left + ' seconds. Press Stay here to keep this page.'); }, 1200);
-      var tick = function () {
-        if (stay) { return; }
-        if (left <= 0) { window.location.assign('/'); return; }
-        if (seconds) { seconds.textContent = String(left); }
-        left -= 1;
-        setTimeout(tick, 1000);
-      };
-      tick();
     }
 
     // MatOS did not answer: after a few rounds in a row the card says so (it keeps working); an answer that is the sign-in page means the session ended.
@@ -352,11 +428,6 @@
         details.setAttribute('aria-expanded', log.hidden ? 'false' : 'true');
         $('span', details).textContent = log.hidden ? 'Show details' : 'Hide details';
         if (!log.hidden) { loadLog(li); }
-        return;
-      }
-      if (e.target.closest('[data-ob-stay]')) {
-        stay = true;
-        if (countdown) { countdown.hidden = true; }
       }
     });
 
@@ -374,7 +445,6 @@
       fetch(form.action, { method: 'POST', credentials: 'same-origin', body: new FormData(form), headers: { 'X-Requested-With': 'fetch' } })
         .then(function () {
           lines.forEach(function (li) { li.setAttribute('data-state', 'waiting'); $('[data-ob-state-text]', li).textContent = words.waiting; });
-          stay = false;
           poll();
         })
         .catch(function () { /* the state shows what happened */ })

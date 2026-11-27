@@ -93,57 +93,73 @@ public class DnsTests
 
     // ------------------------------------------------------------------ the first start
 
-    private static SetupChoices Domain(DnsIp? ip, params string[] engines)
-        => new(Reach.Domain, null, "example.com", null, engines.Length == 0 ? EngineIds.All.ToHashSet() : engines.ToHashSet(), [], ip);
+    private static SetupChoices Domain(DnsIp? ip, string provider = "netcup", string ipMode = DnsIp.Dynamic)
+        => new(Reach.Domain, null, "example.com", null, ip, Provider: provider, IpMode: ipMode);
 
     [Fact]
     public void The_first_start_says_where_the_domain_points()
     {
         Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Your domain follows your internet address.",
-            SetupPlan.Summary(Domain(DnsIp.Default), _ => null));
-        Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Your domain points to 93.184.216.34.",
-            SetupPlan.Summary(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34")), _ => null));
-        Assert.Equal("MatOS sets up its engines and puts your apps under example.com.", SetupPlan.Summary(Domain(null), _ => null));
+            SetupPlan.Summary(Domain(DnsIp.Default)));
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com.", SetupPlan.Summary(Domain(null)));
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Create the records of your domain at your DNS provider yourself.",
+            SetupPlan.Summary(Domain(null, SetupPlan.ManualDns)));
     }
 
     [Fact]
     public void A_fixed_address_without_Matddns_says_the_records_are_made_by_hand()
     {
         // A fixed address needs no address updater (EnginesFor), and only Matddns writes records: the summary must not promise them.
-        var engines = SetupPlan.EnginesFor(Reach.Domain, "cloudflare", DnsIp.Fixed).ToArray();
-        Assert.DoesNotContain(EngineIds.Matddns, engines);
+        var fixedIp = Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34"), "cloudflare", DnsIp.Fixed);
+        Assert.DoesNotContain(EngineIds.Matddns, fixedIp.Engines);
         Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Create the records of your domain at your DNS provider yourself, pointing to 93.184.216.34.",
-            SetupPlan.Summary(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34"), engines), _ => null));
-        Assert.DoesNotContain(SetupPlan.Steps(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34"), engines), new HashSet<string>(), _ => null), s => s.Key == SetupPlan.DnsKey);
+            SetupPlan.Summary(fixedIp));
+        Assert.DoesNotContain(SetupPlan.Steps(fixedIp, new HashSet<string>()), s => s.Key == SetupPlan.DnsKey);
     }
 
     [Fact]
     public void An_own_domain_has_a_line_for_its_records_and_the_check_comes_last()
     {
-        var steps = SetupPlan.Steps(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34")), new HashSet<string>(), _ => null);
+        var steps = SetupPlan.Steps(Domain(DnsIp.Default), new HashSet<string>());
         // The records, the check of the reachability, then the self check last.
         Assert.Equal([SetupPlan.DnsKey, SetupPlan.ReachKey, SetupPlan.SelfCheckKey], steps.Skip(steps.Count - 3).Select(s => s.Key));
-        Assert.Equal("Your domain points to 93.184.216.34", steps.Single(s => s.Key == SetupPlan.DnsKey).Label);
+        Assert.Equal("Your domain follows your internet address", steps.Single(s => s.Key == SetupPlan.DnsKey).Label);
         Assert.Equal(SetupPlan.ReachLabel, steps[^2].Label);
         Assert.Equal(SetupPlan.SelfCheckLabel(Reach.Domain), steps[^1].Label);
     }
 
     [Fact]
-    public void Without_a_DNS_account_or_Matddns_no_records_are_written_and_without_Matcad_nothing_is_checked()
+    public void Without_a_DNS_account_or_Matddns_no_records_are_written_but_the_reach_is_checked()
     {
-        Assert.DoesNotContain(SetupPlan.Steps(Domain(null), new HashSet<string>(), _ => null), s => s.Key == SetupPlan.DnsKey);
-        var withoutMatddns = SetupPlan.Steps(Domain(DnsIp.Default, EngineIds.MatDock, EngineIds.Matcad), new HashSet<string>(), _ => null);
-        Assert.DoesNotContain(withoutMatddns, s => s.Key == SetupPlan.DnsKey);
-        Assert.Contains(withoutMatddns, s => s.Key == SetupPlan.ReachKey);
-        Assert.DoesNotContain(SetupPlan.Steps(Domain(DnsIp.Default, EngineIds.MatDock), new HashSet<string>(), _ => null), s => s.Key == SetupPlan.ReachKey);
+        Assert.DoesNotContain(SetupPlan.Steps(Domain(null), new HashSet<string>()), s => s.Key == SetupPlan.DnsKey);
+        var byHand = SetupPlan.Steps(Domain(null, SetupPlan.ManualDns), new HashSet<string>());
+        Assert.DoesNotContain(byHand, s => s.Key == SetupPlan.DnsKey);
+        Assert.DoesNotContain(byHand, s => s.Key == SetupPlan.EngineKey(EngineIds.Matddns));
+        Assert.Contains(byHand, s => s.Key == SetupPlan.ReachKey);
+
+        // An address updater that was there before does not write the records of a fixed IP: the person makes them (the summary says so).
+        var installed = new HashSet<string> { EngineIds.Matddns };
+        Assert.DoesNotContain(SetupPlan.Steps(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34"), "netcup", DnsIp.Fixed), installed), s => s.Key == SetupPlan.DnsKey);
     }
 
     [Fact]
     public void At_home_nothing_is_checked()
     {
-        var home = new SetupChoices(Reach.Home, null, null, null, EngineIds.All.ToHashSet(), []);
-        Assert.DoesNotContain(SetupPlan.Steps(home, new HashSet<string>(), _ => null), s => s.Key is SetupPlan.ReachKey or SetupPlan.DnsKey);
+        var home = new SetupChoices(Reach.Home, null, null, null);
+        Assert.DoesNotContain(SetupPlan.Steps(home, new HashSet<string>()), s => s.Key is SetupPlan.ReachKey or SetupPlan.DnsKey);
     }
+
+    // ------------------------------------------------------------------ the test of the first start: the registered domain
+
+    [Theory]
+    [InlineData("example.com", "example.com")]
+    [InlineData("a.b.example.com", "example.com")]
+    [InlineData("Example.COM.", "example.com")]
+    [InlineData("example.co.uk", "example.co.uk")]
+    [InlineData("apps.example.co.uk", "example.co.uk")]
+    [InlineData("localhost", "localhost")]
+    public void Registered_is_the_domain_a_registrar_holds(string domain, string expected)
+        => Assert.Equal(expected, DnsCheck.Registered(domain));
 
     // ------------------------------------------------------------------ the records in Matddns
 

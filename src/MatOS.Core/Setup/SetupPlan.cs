@@ -20,24 +20,57 @@ public static class Reach
     public static readonly IReadOnlyList<string> All = [Free, Domain, Home];
 }
 
-/// <summary>What the person chose in the first start: the way to the apps, the engines that follow from it (<see cref="SetupPlan.EnginesFor"/>) and the first apps (none yet).</summary>
+/// <summary>The certificates of an own domain with a DNS account (<see cref="Configuration.SystemConfig.Certificates"/>, the certificate card of the first start).</summary>
+public static class CertificateMode
+{
+    /// <summary>One certificate for all apps (<c>*.domain</c>, through the DNS challenge with the account of the DNS provider): the default.</summary>
+    public const string Wildcard = "wildcard";
+
+    /// <summary>A certificate for each app (its own name in the certificate, every app asks Let's Encrypt itself).</summary>
+    public const string PerApp = "perapp";
+
+    /// <summary>The stored value of a form's answer: <see cref="PerApp"/> when it says so, else <see cref="Wildcard"/>.</summary>
+    public static string Normalize(string? mode) => string.Equals(mode?.Trim(), PerApp, StringComparison.OrdinalIgnoreCase) ? PerApp : Wildcard;
+}
+
+/// <summary>
+/// What the person chose in the first start: the way to the apps and, for an own domain, its DNS account, the internet address and the certificates. The
+/// engines follow from it (<see cref="Engines"/>, <see cref="SetupPlan.EnginesFor"/>).
+/// </summary>
 /// <param name="Reach">One of <see cref="Setup.Reach"/>.</param>
 /// <param name="Name">The name of the free address (<see cref="Reach.Free"/>).</param>
 /// <param name="BaseDomain">The own domain (<see cref="Reach.Domain"/>).</param>
 /// <param name="PublicHost">The address of this machine (Advanced); empty: the one of the browser.</param>
-/// <param name="Engines">The catalog ids of the engines to install; MatDock is always one of them.</param>
-/// <param name="Apps">The catalog ids of the first apps.</param>
 /// <param name="Ip">An own domain with a DNS account: where its records point (<see cref="DnsIp"/>); null without a DNS account (no records are written).</param>
 /// <param name="RoutePolicy">An own domain: how it is reached from outside (<see cref="DomainRoute"/>: MatOS chooses, or only through the router).</param>
+/// <param name="Provider">An own domain: the id of its DNS provider (<see cref="DnsProviders"/>), or <see cref="SetupPlan.ManualDns"/> for records made by hand.</param>
+/// <param name="IpMode">An own domain with a DNS provider: the answer to "fixed IP?" (<see cref="DnsIp.Dynamic"/>, <see cref="DnsIp.Unsure"/> or <see cref="DnsIp.Fixed"/>).</param>
+/// <param name="Certificates">An own domain with a DNS provider: one certificate for all apps or one each (<see cref="CertificateMode"/>).</param>
 public sealed record SetupChoices(
     string Reach,
     string? Name,
     string? BaseDomain,
     string? PublicHost,
-    IReadOnlySet<string> Engines,
-    IReadOnlyList<string> Apps,
     DnsIp? Ip = null,
-    string RoutePolicy = DomainRoute.Auto);
+    string RoutePolicy = DomainRoute.Auto,
+    string? Provider = null,
+    string IpMode = DnsIp.Unsure,
+    string Certificates = CertificateMode.Wildcard)
+{
+    /// <summary>The engines that follow from the answers, in the order they are installed (<see cref="SetupPlan.EnginesFor"/>).</summary>
+    public IReadOnlyList<string> Engines => SetupPlan.EnginesFor(Reach, Provider, IpMode);
+}
+
+/// <summary>A record the person creates at the DNS provider of an own domain (records by hand or a fixed IP: nothing writes them, <see cref="SetupPlan.RecordsFor"/>).</summary>
+/// <param name="Name">The host, like <c>matos.example.com</c> or <c>*.example.com</c>.</param>
+/// <param name="Type"><c>A</c>, <c>AAAA</c> or <c>CNAME</c>.</param>
+/// <param name="Value">Where it points (empty while it is not known).</param>
+/// <param name="Optional">Only when the server has a fixed IPv6 address (the <c>AAAA</c> records).</param>
+public sealed record DnsRecordHint(string Name, string Type, string Value, bool Optional)
+{
+    /// <summary>The one sentence of its row.</summary>
+    public string Sentence => Optional ? "Only when your server has a fixed IPv6 address." : "Create this entry at your DNS provider.";
+}
 
 /// <summary>A problem of the choices: the field it belongs to (empty: the whole form) and what to do, in plain words.</summary>
 public sealed record SetupProblem(string Field, string Message);
@@ -58,6 +91,9 @@ public static partial class SetupPlan
     public const string SignInKind = "signin";
     public const string DnsKind = "dns";
     public const string ReachKind = "reach";
+
+    /// <summary>The answer "I make the records myself" of the DNS provider of an own domain: no DNS account, the person creates the records (<see cref="RecordsFor"/>).</summary>
+    public const string ManualDns = "manual";
 
     /// <summary>The key of the step that writes the DNS records of an own domain.</summary>
     public const string DnsKey = "dns";
@@ -213,14 +249,13 @@ public static partial class SetupPlan
     }
 
     /// <summary>
-    /// What does not fit: a name of the free address that breaks the rules, an own domain that is missing or one of the free addresses, a way to the apps without
-    /// Matcad. The DNS account of an own domain is checked by the page (its fields are the web project's). An engine in <paramref name="installed"/> (the
-    /// catalog ids that are there already) counts as chosen.
+    /// What does not fit: a name of the free address that breaks the rules, an own domain that is missing or one of the free addresses, an own domain without
+    /// the answer where its DNS is managed. The credentials of the DNS account are checked by the page (its fields are the web project's). Matcad is always
+    /// one of the engines (<see cref="EnginesFor"/>), so every way has it.
     /// </summary>
-    public static IReadOnlyList<SetupProblem> Problems(SetupChoices choices, SystemConfig config, IReadOnlySet<string>? installed = null)
+    public static IReadOnlyList<SetupProblem> Problems(SetupChoices choices, SystemConfig config)
     {
         var problems = new List<SetupProblem>();
-        var engines = EnginesOf(choices.Engines.Concat(installed?.Where(EngineIds.IsEngine) ?? []));
         switch (choices.Reach)
         {
             case Reach.Free:
@@ -255,6 +290,11 @@ public static partial class SetupPlan
                     problems.Add(new SetupProblem("BaseDomain", hosted));
                 }
 
+                if (DnsProviders.Find(choices.Provider) is null && !IsManual(choices.Provider))
+                {
+                    problems.Add(new SetupProblem("DnsProvider", "Please choose where your domain is managed, or that you create its records yourself."));
+                }
+
                 break;
 
             case Reach.Home:
@@ -265,28 +305,71 @@ public static partial class SetupPlan
                 break;
         }
 
-        if (choices.Reach is Reach.Free or Reach.Domain && !engines.Contains(EngineIds.Matcad))
-        {
-            problems.Add(new SetupProblem(string.Empty, "An address for your apps needs \"Web addresses and HTTPS (Matcad)\". Choose \"Only here at home\", or set up Matcad first."));
-        }
-
         if (!string.IsNullOrWhiteSpace(choices.PublicHost) && !HostPattern().IsMatch(choices.PublicHost.Trim()))
         {
             problems.Add(new SetupProblem("PublicHost", "Enter a name or an IP address like nas.local or 192.168.1.20."));
         }
 
-
         return problems;
     }
 
+    /// <summary>The answer "I create the records myself" (<see cref="ManualDns"/>).</summary>
+    public static bool IsManual(string? provider) => string.Equals(provider?.Trim(), ManualDns, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
-    /// The steps "Set up MatOS" queues, one job each, in this order: the engines that are not there yet (MatDock first), the apps (after the engines: the single
-    /// worker runs the jobs one after the other, so an app waits for them), the connection of what was there, the sign-in of the person who set up MatOS
-    /// (<paramref name="handOver"/>: MatIdentity is part of it and does not know them yet; the line fails when it still does not, so it cannot go unnoticed), then
-    /// the free address. <paramref name="installed"/> holds the catalog ids that are installed already (a failed install is not one: it is tried again).
+    /// The choices as they are stored: an own domain whose records nothing writes (by hand, or a fixed IP without the address updater, <see cref="EnginesFor"/>)
+    /// is reached only through the router (<see cref="DomainRoute.Direct"/>): the tunnel needs Matddns to point the records at it. Records by hand have no DNS
+    /// account, so nothing says where they point (<see cref="SetupChoices.Ip"/> null). The certificate answer is one of <see cref="CertificateMode"/>.
     /// </summary>
-    public static IReadOnlyList<PlannedStep> Steps(SetupChoices choices, IReadOnlySet<string> installed, Func<string, string?> nameOf, bool handOver = false,
-        IReadOnlySet<string>? already = null)
+    public static SetupChoices Normalize(SetupChoices choices)
+    {
+        if (choices.Reach != Reach.Domain)
+        {
+            return choices;
+        }
+
+        var normalized = choices with { Certificates = CertificateMode.Normalize(choices.Certificates) };
+        if (DnsProviders.Find(choices.Provider) is null)
+        {
+            return normalized with { Ip = null, RoutePolicy = DomainRoute.Direct };
+        }
+
+        return string.Equals(choices.IpMode?.Trim(), DnsIp.Fixed, StringComparison.OrdinalIgnoreCase)
+            ? normalized with { RoutePolicy = DomainRoute.Direct }
+            : normalized;
+    }
+
+    /// <summary>
+    /// The records the person creates at the DNS provider of an own domain when nothing writes them: <c>matos.&lt;domain&gt;</c> and <c>*.&lt;domain&gt;</c>, as
+    /// <c>A</c> records to <paramref name="ipv4"/> (empty while it is not known) and, with an <paramref name="ipv6"/>, <c>AAAA</c> records marked optional; or
+    /// as <c>CNAME</c> records to <paramref name="cname"/> when the person gave a host name (a router's DynDNS name, say).
+    /// </summary>
+    public static IReadOnlyList<DnsRecordHint> RecordsFor(string domain, string? ipv4, string? ipv6, string? cname)
+    {
+        var name = domain.Trim().Trim('.').ToLowerInvariant();
+        string[] hosts = [ProxyPublisher.SelfHost(name), "*." + name];
+        if (!string.IsNullOrWhiteSpace(cname))
+        {
+            var target = cname.Trim().TrimEnd('.').ToLowerInvariant();
+            return hosts.Select(h => new DnsRecordHint(h, "CNAME", target, false)).ToList();
+        }
+
+        var records = hosts.Select(h => new DnsRecordHint(h, "A", ipv4?.Trim() ?? string.Empty, false)).ToList();
+        if (!string.IsNullOrWhiteSpace(ipv6))
+        {
+            records.AddRange(hosts.Select(h => new DnsRecordHint(h, "AAAA", ipv6.Trim(), true)));
+        }
+
+        return records;
+    }
+
+    /// <summary>
+    /// The steps "Set up the rest" queues, one job each, in this order: the engines that follow from the answers and are not there yet (MatDock first), the
+    /// connection of the engines, the sign-in of the person who set up MatOS (<paramref name="handOver"/>: MatIdentity is part of it and does not know them yet;
+    /// the line fails when it still does not, so it cannot go unnoticed), the records of an own domain, the free address, the check of the reachability and the
+    /// self check last. <paramref name="installed"/> holds the catalog ids that are installed already (a failed install is not one: it is tried again).
+    /// </summary>
+    public static IReadOnlyList<PlannedStep> Steps(SetupChoices choices, IReadOnlySet<string> installed, bool handOver = false, IReadOnlySet<string>? already = null)
     {
         already ??= new HashSet<string>(StringComparer.Ordinal);
         var steps = new List<PlannedStep>();
@@ -298,14 +381,9 @@ public static partial class SetupPlan
             }
         }
 
-        foreach (var engine in EnginesOf(choices.Engines).Where(e => !installed.Contains(e)))
+        foreach (var engine in choices.Engines.Where(e => !installed.Contains(e)))
         {
             Add(new PlannedStep(EngineKey(engine), EngineKind, EngineLabel(engine), engine));
-        }
-
-        foreach (var app in choices.Apps.Distinct(StringComparer.Ordinal).Where(a => !installed.Contains(a)))
-        {
-            Add(new PlannedStep($"{AppKind}:{app}", AppKind, nameOf(app) ?? app, app));
         }
 
         // The engines of the run (the lines of the first phase and the new ones) learn the address and the sign-in once the rest is done; so do engines that
@@ -325,9 +403,11 @@ public static partial class SetupPlan
             Add(new PlannedStep(SignInKey, SignInKind, "Your sign-in for all apps", null));
         }
 
-        // An own domain with a DNS account: Matddns writes its records, pointing where the person said (DnsIp).
-        var engines = EnginesOf(choices.Engines).Concat(installed.Where(EngineIds.IsEngine)).Concat(runEngines).ToHashSet();
-        if (choices.Reach == Reach.Domain && choices.Ip is { } ip && engines.Contains(EngineIds.Matddns))
+        // An own domain with a DNS account: Matddns writes its records, pointing where the person said (DnsIp). Only Matddns writes them
+        // (AppJobs.DomainRecords), and only for an answer that chose it (EnginesFor): one that was there before does not make a fixed IP or records by hand
+        // automatic.
+        var engines = choices.Engines.Concat(installed.Where(EngineIds.IsEngine)).Concat(runEngines).ToHashSet();
+        if (choices.Reach == Reach.Domain && choices.Ip is { } ip && choices.Engines.Contains(EngineIds.Matddns))
         {
             Add(new PlannedStep(DnsKey, DnsKind, ip.Sentence, null));
         }
@@ -359,16 +439,10 @@ public static partial class SetupPlan
         _ => null,
     };
 
-    /// <summary>The choices in one sentence, above the button "Set up MatOS" (onboarding.js says the same while the person chooses).</summary>
-    public static string Summary(SetupChoices choices, Func<string, string?> nameOf, string zone = HostedAddress.DefaultZone)
+    /// <summary>The choices in one sentence, on the card of the test above the button "Set up the rest".</summary>
+    public static string Summary(SetupChoices choices, string zone = HostedAddress.DefaultZone)
     {
-        var apps = choices.Apps.Select(a => nameOf(a) ?? a).ToList();
         var what = EnginesSentence(choices.Engines);
-        if (apps.Count > 0)
-        {
-            what += ", then " + Join(apps);
-        }
-
         var where = choices.Reach switch
         {
             // The address people open: MatOS is a host below the free address (ProxyPublisher.SelfHost), the bare name has no route.
@@ -377,40 +451,34 @@ public static partial class SetupPlan
             Reach.Home => " for use here at home",
             _ => string.Empty,
         };
-        // "then MatFile, MatDo and MatDrive, and makes ...": a comma closes the list of the apps before the second half of the sentence.
-        var sentence = what + (apps.Count > 0 && where.StartsWith(" and ", StringComparison.Ordinal) ? "," : string.Empty) + where + ".";
+        var sentence = what + where + ".";
 
-        // An own domain with a DNS account: where its records point, in a second sentence. Only Matddns writes them; without it (a fixed address needs no
-        // address updater, EnginesFor) the person makes them at the DNS provider.
-        if (choices.Reach != Reach.Domain || string.IsNullOrWhiteSpace(choices.BaseDomain) || choices.Ip is not { } ip)
+        // An own domain: where its records point, in a second sentence. Only Matddns writes them; without it (a fixed address needs no address updater,
+        // EnginesFor; records by hand have no DNS account) the person makes them at the DNS provider.
+        if (choices.Reach != Reach.Domain || string.IsNullOrWhiteSpace(choices.BaseDomain))
         {
             return sentence;
         }
 
-        return EnginesOf(choices.Engines).Contains(EngineIds.Matddns) ? $"{sentence} {ip.Sentence}." : $"{sentence} {RecordsByHand(ip.FixedIp)}";
+        if (choices.Ip is not { } ip)
+        {
+            return IsManual(choices.Provider) ? $"{sentence} {RecordsByHand(null)}" : sentence;
+        }
+
+        return choices.Engines.Contains(EngineIds.Matddns) ? $"{sentence} {ip.Sentence}." : $"{sentence} {RecordsByHand(ip.FixedIp)}";
     }
 
-    /// <summary>
-    /// The second sentence of <see cref="Summary"/> for an own domain without Matddns: nothing writes the records, the person creates them at the DNS provider
-    /// (js/onboarding.js says the same).
-    /// </summary>
+    /// <summary>The second sentence of <see cref="Summary"/> for an own domain without Matddns: nothing writes the records, the person creates them at the DNS provider.</summary>
     public static string RecordsByHand(string? ip) => string.IsNullOrWhiteSpace(ip)
         ? "Create the records of your domain at your DNS provider yourself."
         : $"Create the records of your domain at your DNS provider yourself, pointing to {ip}.";
 
     /// <summary>
     /// The first half of <see cref="Summary"/>: what MatOS installs, without a number (the person does not pick the engines; which ones follow from the
-    /// answers, <see cref="EnginesFor"/>). The screen of the choices writes it per way to the apps, and js/onboarding.js picks the one of the chosen way.
+    /// answers, <see cref="EnginesFor"/>).
     /// </summary>
     public static string EnginesSentence(IEnumerable<string> engines)
         => EnginesOf(engines).Count == 1 ? "MatOS sets up its app manager" : "MatOS sets up its engines";
-
-    private static string Join(IReadOnlyList<string> names) => names.Count switch
-    {
-        0 => string.Empty,
-        1 => names[0],
-        _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
-    };
 
     [GeneratedRegex("^[A-Za-z0-9]([A-Za-z0-9.\\-]*[A-Za-z0-9])?$")]
     private static partial Regex HostPattern();

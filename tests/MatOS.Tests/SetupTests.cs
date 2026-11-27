@@ -14,12 +14,9 @@ namespace MatOS.Tests;
 public class SetupTests
 {
 
-    private static readonly IReadOnlySet<string> AllEngines = EngineIds.All.ToHashSet();
-
-    private static SetupChoices Choices(string reach, string? name = null, string? domain = null, IReadOnlySet<string>? engines = null, params string[] apps)
-        => new(reach, name, domain, null, engines ?? AllEngines, apps);
-
-    private static string? NameOf(string id) => id switch { "matfile" => "MatFile", "matdo" => "MatDo", "matdrive" => "MatDrive", _ => null };
+    /// <summary>The answers of the tree; an own domain has its records made by hand unless a provider is given.</summary>
+    private static SetupChoices Choices(string reach, string? name = null, string? domain = null, string? provider = null, string ipMode = DnsIp.Unsure)
+        => new(reach, name, domain, null, Provider: provider ?? (reach == Reach.Domain ? SetupPlan.ManualDns : null), IpMode: ipMode);
 
     // ------------------------------------------------------------------ the engines in plain words
 
@@ -77,13 +74,66 @@ public class SetupTests
     }
 
     [Fact]
-    public void An_address_needs_Matcad_and_at_home_needs_nothing()
+    public void An_own_domain_needs_the_answer_where_its_DNS_is_managed_and_every_way_has_Matcad()
     {
-        var withoutMatcad = new HashSet<string> { EngineIds.MatDock, EngineIds.MatIdentity };
-        Assert.Contains(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig()), p => p.Message.Contains("Matcad"));
-        Assert.Contains(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", engines: withoutMatcad), new SystemConfig()), p => p.Message.Contains("Matcad"));
-        Assert.Empty(SetupPlan.Problems(Choices(Reach.Home, engines: withoutMatcad), new SystemConfig()));
+        var problem = Assert.Single(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", provider: ""), new SystemConfig()));
+        Assert.Equal("DnsProvider", problem.Field);
+        Assert.Empty(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", provider: "netcup"), new SystemConfig()));
+        Assert.Empty(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", provider: "Manual"), new SystemConfig()));
+        Assert.Empty(SetupPlan.Problems(Choices(Reach.Home), new SystemConfig()));
         Assert.Single(SetupPlan.Problems(Choices("somewhere"), new SystemConfig()), p => p.Field == "Reach");
+        Assert.All(Reach.All, r => Assert.Contains(EngineIds.Matcad, Choices(r).Engines));
+    }
+
+    [Fact]
+    public void A_domain_by_hand_or_with_a_fixed_IP_is_reached_only_through_the_router()
+    {
+        // Nothing points the records of such a domain at the tunnel (only Matddns would): only the router.
+        var byHand = SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com") with { Ip = DnsIp.Default });
+        Assert.Equal(DomainRoute.Direct, byHand.RoutePolicy);
+        Assert.Null(byHand.Ip);
+        Assert.Equal(DomainRoute.Direct, SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com", provider: "netcup", ipMode: DnsIp.Fixed)).RoutePolicy);
+
+        // A changing address keeps what the person chose (MatOS takes care of it by default).
+        Assert.Equal(DomainRoute.Auto, SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com", provider: "netcup", ipMode: DnsIp.Dynamic)).RoutePolicy);
+        Assert.Equal(DomainRoute.Auto, SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com", provider: "hetzner")).RoutePolicy);
+        Assert.Equal(DomainRoute.Direct, SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com", provider: "hetzner") with { RoutePolicy = DomainRoute.Direct }).RoutePolicy);
+
+        // The other ways stay as they are, and the certificate answer is one of the two.
+        Assert.Equal(DomainRoute.Auto, SetupPlan.Normalize(Choices(Reach.Free, "anna")).RoutePolicy);
+        Assert.Equal(CertificateMode.Wildcard, SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com", provider: "netcup") with { Certificates = "nonsense" }).Certificates);
+        Assert.Equal(CertificateMode.PerApp, SetupPlan.Normalize(Choices(Reach.Domain, domain: "example.com", provider: "netcup") with { Certificates = "PerApp" }).Certificates);
+    }
+
+    [Fact]
+    public void RecordsFor_names_matos_and_the_wildcard()
+    {
+        var a = SetupPlan.RecordsFor("Example.com.", "93.184.216.34", null, null);
+        Assert.Equal([("matos.example.com", "A", "93.184.216.34", false), ("*.example.com", "A", "93.184.216.34", false)],
+            a.Select(r => (r.Name, r.Type, r.Value, r.Optional)));
+        Assert.All(a, r => Assert.Equal("Create this entry at your DNS provider.", r.Sentence));
+
+        // An IPv6 adds AAAA records, marked optional.
+        var both = SetupPlan.RecordsFor("example.com", "93.184.216.34", "2a01:4f8::7", null);
+        Assert.Equal(["A", "A", "AAAA", "AAAA"], both.Select(r => r.Type));
+        Assert.All(both.Where(r => r.Type == "AAAA"), r => Assert.True(r.Optional));
+        Assert.All(both.Where(r => r.Type == "AAAA"), r => Assert.Equal("2a01:4f8::7", r.Value));
+        Assert.DoesNotContain(both, r => r.Type == "A" && r.Optional);
+
+        // A host name instead: CNAME records, no A or AAAA.
+        var cname = SetupPlan.RecordsFor("example.com", "93.184.216.34", "2a01:4f8::7", "Home.Example.NET.");
+        Assert.Equal([("matos.example.com", "CNAME", "home.example.net"), ("*.example.com", "CNAME", "home.example.net")], cname.Select(r => (r.Name, r.Type, r.Value)));
+    }
+
+    [Fact]
+    public void The_test_lets_the_person_go_on_while_no_required_row_failed()
+    {
+        Assert.True(SetupTest.CanContinue([SetupTest.Row(SetupTest.Ports80, SetupTest.Done, "x"), SetupTest.Row(SetupTest.Ports, SetupTest.Failed, "x")]));
+        Assert.True(SetupTest.CanContinue([SetupTest.Row(SetupTest.Domain, SetupTest.Warn, "x"), SetupTest.Row(SetupTest.Records, SetupTest.Warn, "x")]));
+        Assert.False(SetupTest.CanContinue([SetupTest.Row(SetupTest.Name, SetupTest.Failed, "x")]));
+        Assert.False(SetupTest.CanContinue([SetupTest.Row(SetupTest.Ports80, SetupTest.Failed, "x")]));
+        Assert.Equal([SetupTest.Records, SetupTest.Ports], SetupTest.All.Where(SetupTest.IsAdvisory));
+        Assert.Equal("Ports 80 and 443 are free on this computer", SetupTest.Label(SetupTest.Ports80));
     }
 
 
@@ -92,53 +142,53 @@ public class SetupTests
     /// <summary>Both phases as <c>SetupService.BeginAsync</c> and <c>ContinueAsync</c> plan them: the first engines, then the rest without them.</summary>
     private static IReadOnlyList<PlannedStep> BothPhases(SetupChoices choices, bool handOver = false)
     {
-        var first = SetupPlan.FirstSteps(new HashSet<string>(), choices.Engines);
+        var first = SetupPlan.FirstSteps(new HashSet<string>(), choices.Engines.ToHashSet());
         var already = first.Select(s => s.Key).ToHashSet();
-        return first.Concat(SetupPlan.Steps(choices, new HashSet<string>(), NameOf, handOver, already)).ToList();
+        return first.Concat(SetupPlan.Steps(choices, new HashSet<string>(), handOver, already)).ToList();
     }
 
     [Fact]
-    public void The_engines_come_first_then_the_apps_then_the_free_address_then_the_check()
+    public void The_engines_come_first_then_the_free_address_then_the_checks()
     {
-        var steps = BothPhases(Choices(Reach.Free, "anna", apps: ["matfile", "matdo"]));
+        var steps = BothPhases(Choices(Reach.Free, "anna"));
         Assert.Equal(
-            ["engine:matdock", "engine:matsmtp", "engine:matcad", "engine:matddns", "engine:matidentity", "app:matfile", "app:matdo", "connect", "address", "reach", "selfcheck"],
+            ["engine:matdock", "engine:matsmtp", "engine:matcad", "engine:matidentity", "connect", "address", "reach", "selfcheck"],
             steps.Select(s => s.Key));
         Assert.Equal(
-            ["App manager (MatDock)", "Mail (MatSMTP)", "Web addresses and HTTPS (Matcad)", "Address updater (Matddns)", "One sign-in for all apps (MatIdentity)", "MatFile", "MatDo",
+            ["App manager (MatDock)", "Mail (MatSMTP)", "Web addresses and HTTPS (Matcad)", "One sign-in for all apps (MatIdentity)",
                 "Connect the engines to each other", "Your free address", SetupPlan.ReachLabel, SetupPlan.SelfCheckLabel(Reach.Free)],
             steps.Select(s => s.Label));
     }
 
     [Fact]
+    public void Steps_for_home_end_with_connect_signin_selfcheck_and_free_with_address_reach_selfcheck()
+    {
+        var home = BothPhases(Choices(Reach.Home), handOver: true);
+        Assert.Equal(["connect", "signin", "selfcheck"], home.TakeLast(3).Select(s => s.Key));
+        Assert.DoesNotContain(home, s => s.Key is SetupPlan.ReachKey or SetupPlan.AddressKey or SetupPlan.DnsKey);
+
+        var free = BothPhases(Choices(Reach.Free, "anna"), handOver: true);
+        Assert.Equal(["address", "reach", "selfcheck"], free.TakeLast(3).Select(s => s.Key));
+    }
+
+    [Fact]
     public void What_is_there_already_is_not_installed_again_but_connected()
     {
-        var steps = SetupPlan.Steps(Choices(Reach.Home, apps: ["matfile"]), new HashSet<string> { EngineIds.MatDock, "matfile" }, NameOf);
-        Assert.Equal(["engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "connect", "selfcheck"], steps.Select(s => s.Key));
+        var steps = SetupPlan.Steps(Choices(Reach.Home), new HashSet<string> { EngineIds.MatDock, "matfile" });
+        Assert.Equal(["engine:matcad", "engine:matidentity", "engine:matsmtp", "connect", "selfcheck"], steps.Select(s => s.Key));
         Assert.Equal("Connect what was there already", steps.Single(s => s.Key == SetupPlan.ConnectKey).Label);
         Assert.DoesNotContain(steps, s => s.Kind == SetupPlan.AddressKind);
     }
 
     [Fact]
-    public void The_sign_in_of_the_person_has_a_line_after_the_engines_and_the_apps_before_the_address()
+    public void The_sign_in_of_the_person_has_a_line_after_the_engines_before_the_address()
     {
-        var steps = SetupPlan.Steps(Choices(Reach.Free, "anna", apps: ["matfile"]), new HashSet<string>(), NameOf, handOver: true);
+        var steps = SetupPlan.Steps(Choices(Reach.Free, "anna"), new HashSet<string>(), handOver: true);
         Assert.Equal(
-            ["engine:matdock", "engine:matcad", "engine:matddns", "engine:matidentity", "engine:matsmtp", "app:matfile", "signin", "address", "reach", "selfcheck"],
+            ["engine:matdock", "engine:matcad", "engine:matidentity", "engine:matsmtp", "signin", "address", "reach", "selfcheck"],
             steps.Select(s => s.Key));
         Assert.Equal(SetupPlan.SignInKind, steps.Single(s => s.Key == SetupPlan.SignInKey).Kind);
-        Assert.DoesNotContain(SetupPlan.Steps(Choices(Reach.Home), new HashSet<string>(), NameOf), s => s.Kind == SetupPlan.SignInKind);
-    }
-
-    [Fact]
-    public void An_engine_that_is_there_already_counts_as_chosen_although_the_choices_leave_it_out()
-    {
-        // The choices name the engines a run installs (an installed one need not be among them): what is installed counts as chosen for the problems.
-        var withoutMatcad = EngineIds.All.Where(e => e != EngineIds.Matcad).ToHashSet();
-        var installed = new HashSet<string> { EngineIds.MatDock, EngineIds.Matcad, "matfile" };
-        Assert.Empty(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig(), installed));
-        Assert.Empty(SetupPlan.Problems(Choices(Reach.Domain, domain: "example.com", engines: withoutMatcad), new SystemConfig(), installed));
-        Assert.Contains(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig(), new HashSet<string> { "matfile" }), p => p.Message.Contains("Matcad"));
+        Assert.DoesNotContain(SetupPlan.Steps(Choices(Reach.Home), new HashSet<string>()), s => s.Kind == SetupPlan.SignInKind);
     }
 
     [Fact]
@@ -152,20 +202,15 @@ public class SetupTests
     }
 
     [Fact]
-    public void An_engine_left_out_under_Advanced_gets_no_line()
-    {
-        var steps = SetupPlan.Steps(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), new HashSet<string>(), NameOf);
-        Assert.Equal(["engine:matdock", "engine:matcad", "selfcheck"], steps.Select(s => s.Key));
-    }
-
-    [Fact]
     public void The_summary_says_it_in_one_sentence()
     {
         // The address people open, not the bare name: MatOS is a host below the free address.
-        Assert.Equal("MatOS sets up its engines, then MatFile, MatDo and MatDrive, and makes everything reachable from anywhere: you open MatOS at matos.anna.my.mattiverse.de.",
-            SetupPlan.Summary(Choices(Reach.Free, "Anna", apps: ["matfile", "matdo", "matdrive"]), NameOf));
-        Assert.Equal("MatOS sets up its engines and puts your apps under example.com.", SetupPlan.Summary(Choices(Reach.Domain, domain: "Example.com"), NameOf));
-        Assert.Equal("MatOS sets up its app manager for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string>()), NameOf));
+        Assert.Equal("MatOS sets up its engines and makes everything reachable from anywhere: you open MatOS at matos.anna.my.mattiverse.de.",
+            SetupPlan.Summary(Choices(Reach.Free, "Anna")));
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Create the records of your domain at your DNS provider yourself.",
+            SetupPlan.Summary(Choices(Reach.Domain, domain: "Example.com")));
+        Assert.Equal("MatOS sets up its engines for use here at home.", SetupPlan.Summary(Choices(Reach.Home)));
+        Assert.Equal("MatOS sets up its app manager", SetupPlan.EnginesSentence([]));
     }
 
     // ------------------------------------------------------------------ the engines that follow from the answers
@@ -202,10 +247,11 @@ public class SetupTests
     }
 
     [Fact]
-    public void The_engines_that_follow_from_the_answers_fit_the_choices()
+    public void The_engines_of_the_choices_follow_from_the_answers()
     {
-        Assert.Empty(SetupPlan.Problems(new SetupChoices(Reach.Free, "anna", null, null, SetupPlan.EnginesFor(Reach.Free, null, null).ToHashSet(), []), new SystemConfig()));
-        Assert.Empty(SetupPlan.Problems(new SetupChoices(Reach.Domain, null, "example.com", null, SetupPlan.EnginesFor(Reach.Domain, null, null).ToHashSet(), []), new SystemConfig()));
+        Assert.Equal(SetupPlan.EnginesFor(Reach.Free, null, DnsIp.Unsure), new SetupChoices(Reach.Free, "anna", null, null).Engines);
+        Assert.Contains(EngineIds.Matddns, new SetupChoices(Reach.Domain, null, "example.com", null, Provider: "netcup", IpMode: DnsIp.Dynamic).Engines);
+        Assert.DoesNotContain(EngineIds.Matddns, new SetupChoices(Reach.Domain, null, "example.com", null, Provider: SetupPlan.ManualDns).Engines);
         Assert.Equal("MatOS sets up its engines", SetupPlan.EnginesSentence(SetupPlan.EnginesFor(Reach.Home, null, null)));
     }
 
@@ -304,12 +350,11 @@ public class SetupTests
     public void The_summary_counts_no_fixed_number()
     {
         // All the engines there are, however many: no number in the sentence.
-        var all = SetupPlan.Summary(Choices(Reach.Home), NameOf);
+        var all = SetupPlan.Summary(Choices(Reach.Home));
         Assert.Equal("MatOS sets up its engines for use here at home.", all);
         Assert.DoesNotContain(EngineIds.All.Count.ToString(), all);
         Assert.DoesNotContain("five", all);
-        Assert.Equal("MatOS sets up its engines for use here at home.", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), NameOf));
-        Assert.DoesNotContain("2", SetupPlan.Summary(Choices(Reach.Home, engines: new HashSet<string> { EngineIds.Matcad }), NameOf));
+        Assert.DoesNotContain("4", all);
     }
 
     // ------------------------------------------------------------------ the two phases, the needs, "Try again"
@@ -328,6 +373,17 @@ public class SetupTests
     public void The_self_check_keeps_its_own_first_sentence()
         => Assert.Equal("MatOS answers at matos.anna.my.mattiverse.de, but its certificate is not ready yet.",
             SetupProgress.Plain("MatOS answers at matos.anna.my.mattiverse.de, but its certificate is not ready yet. Try again in a few minutes.", SetupPlan.SelfCheckKind));
+
+    [Fact]
+    public void Plain_of_the_self_check_keeps_its_words()
+    {
+        // Its words name the address, also as a link (any other line would hide a sentence with "://" behind "Show details").
+        const string error = "MatOS does not answer at https://matos.example.com yet: the records of example.com do not point to this computer. Create them, then try again.";
+        Assert.Equal("MatOS does not answer at https://matos.example.com yet: the records of example.com do not point to this computer.",
+            SetupProgress.Plain(error, SetupPlan.SelfCheckKind));
+        Assert.Equal(SetupProgress.Unknown, SetupProgress.Plain(error, SetupPlan.ConnectKind));
+        Assert.Equal("Matcad's proxy does not answer on the network of MatOS.", SetupProgress.Plain("Matcad's proxy does not answer on the network of MatOS. Try again.", SetupPlan.SelfCheckKind));
+    }
 
     [Fact]
     public void Every_line_needs_what_it_runs_on()
@@ -350,7 +406,7 @@ public class SetupTests
         Assert.Equal(["engine:matcad", "connect", "address"], free.Single(s => s.Key == SetupPlan.SelfCheckKey).Needs);
         Assert.Contains(SetupPlan.Dependents(free, SetupPlan.AddressKey), s => s.Key == SetupPlan.SelfCheckKey);
 
-        var domain = Planned(BothPhases(Choices(Reach.Domain, domain: "example.com") with { Ip = DnsIp.Default }));
+        var domain = Planned(BothPhases(Choices(Reach.Domain, domain: "example.com", provider: "netcup", ipMode: DnsIp.Dynamic) with { Ip = DnsIp.Default }));
         Assert.Contains(SetupPlan.DnsKey, domain.Single(s => s.Key == SetupPlan.SelfCheckKey).Needs);
         Assert.Contains(SetupPlan.Dependents(domain, SetupPlan.DnsKey), s => s.Key == SetupPlan.SelfCheckKey);
     }
@@ -391,10 +447,10 @@ public class SetupTests
     [Fact]
     public void Dependents_are_transitive()
     {
-        var steps = Planned(BothPhases(Choices(Reach.Free, "anna", apps: ["matfile"]), handOver: true));
+        var steps = Planned(BothPhases(Choices(Reach.Free, "anna"), handOver: true));
         var keys = SetupPlan.Dependents(steps, "engine:matdock").Select(s => s.Key).ToList();
         Assert.Equal(
-            ["engine:matsmtp", "engine:matcad", "engine:matddns", "engine:matidentity", "app:matfile", "connect", "signin", "address", "reach", "selfcheck"],
+            ["engine:matsmtp", "engine:matcad", "engine:matidentity", "connect", "signin", "address", "reach", "selfcheck"],
             keys);
 
         // The order of the plan, the line itself left out, and only what follows from it.
@@ -422,10 +478,10 @@ public class SetupTests
     {
         var installed = new HashSet<string> { EngineIds.MatDock, EngineIds.MatSmtp };
         var already = new HashSet<string> { "engine:matdock", "engine:matsmtp" };
-        var steps = SetupPlan.Steps(Choices(Reach.Home), installed, NameOf, already: already);
+        var steps = SetupPlan.Steps(Choices(Reach.Home), installed, already: already);
 
         Assert.DoesNotContain(steps, s => s.Key is "engine:matdock" or "engine:matsmtp");
-        Assert.Equal(["engine:matcad", "engine:matddns", "engine:matidentity", "connect", "selfcheck"], steps.Select(s => s.Key));
+        Assert.Equal(["engine:matcad", "engine:matidentity", "connect", "selfcheck"], steps.Select(s => s.Key));
         Assert.Equal("Connect the engines to each other", steps.Single(s => s.Key == SetupPlan.ConnectKey).Label);
         Assert.Equal(SetupPlan.SelfCheckKey, steps[^1].Key);
         Assert.Equal(SetupPlan.SelfCheckLabel(Reach.Home), steps[^1].Label);

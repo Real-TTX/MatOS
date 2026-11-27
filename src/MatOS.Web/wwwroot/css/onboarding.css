@@ -113,6 +113,11 @@
 .ob-advanced { border-top: 1px solid var(--mat-border); padding-top: 6px; }
 .ob-phase1 { text-align: center; overflow-wrap: anywhere; }
 
+/* ---- The records of an own domain made by hand: a table of the toolkit, the rows that apply (js/onboarding.js) ---- */
+.ob-records { padding: 14px; border-radius: 18px; background: var(--mat-surface-2); border: 1px solid var(--mat-border); }
+.ob-records tr[hidden] { display: none; }
+.ob-records code { font-family: var(--mat-mono); font-size: var(--mat-fs-sm); overflow-wrap: anywhere; }
+
 /* ---- The engines: fixed rows, nothing to tick ---- */
 .ob-engines { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-radius: 18px; background: var(--mat-surface); border: 1px solid var(--mat-border); overflow: hidden; }
 .ob-engine { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 14px; align-items: center; padding: 14px 16px; }
@@ -154,6 +159,14 @@
 .ob-task__ok .mat-icon, .ob-task__bad .mat-icon { font-size: 15px; }
 .ob-task[data-state="waiting"] .ob-task__dot, .ob-task[data-state="working"] .ob-task__spin { display: block; }
 .ob-task[data-state="done"] .ob-task__ok, .ob-task[data-state="failed"] .ob-task__bad { display: grid; }
+/* the rows of the test also warn (worth a look, nothing keeps the person) and skip (not checked now) */
+.ob-task[hidden] { display: none; }
+.ob-task__warn { width: 26px; height: 26px; border-radius: 50%; place-items: center; background: var(--mat-warning); color: var(--mat-on-accent, var(--mat-surface)); animation: ob-pop .4s var(--os-ease) both; }
+.ob-task__warn .mat-icon { font-size: 15px; }
+.ob-task[data-state="warn"] .ob-task__warn { display: grid; }
+.ob-task[data-state="warn"] .ob-task__state { color: var(--mat-warning-text, var(--mat-text-muted)); }
+.ob-task[data-state="skip"] .ob-task__dot { display: block; background: var(--mat-border); }
+.ob-task[data-state="skip"] .ob-task__label { color: var(--mat-text-muted); }
 .ob-task__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .ob-task__label { font-weight: 600; color: var(--mat-text); }
 .ob-task[data-state="waiting"] .ob-task__label { color: var(--mat-text-muted); }
@@ -165,7 +178,6 @@
 .ob-task__log { grid-column: 1 / -1; max-height: 260px; margin: 8px 0 0; padding: 12px 14px; overflow: auto; border-radius: 12px; background: var(--mat-surface-3); color: var(--mat-text); font-family: var(--mat-mono); font-size: var(--mat-fs-xs); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .ob-done { display: flex; flex-direction: column; align-items: center; gap: 10px; animation: ob-rise .5s var(--os-ease) both; }
-.ob-countdown { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .ob-address { display: flex; flex-direction: column; gap: 6px; width: min(100%, 520px); text-align: center; }
 .ob-address .ob-fix code a { color: inherit; }
 
@@ -228,7 +240,7 @@
 @keyframes ob-pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .ob-step.is-active, .ob-progress, .ob-panel, .ob-done, .ob-tour__card, .ob-task__ok, .ob-task__bad { animation: none; }
+  .ob-step.is-active, .ob-progress, .ob-panel, .ob-done, .ob-tour__card, .ob-task__ok, .ob-task__bad, .ob-task__warn { animation: none; }
   .ob-planet, .ob-planet::after { animation: none; }
   .ob-task__spin { animation-duration: 3s; }
   .ob-choice, .ob-choice:hover { transition: none; transform: none; }
