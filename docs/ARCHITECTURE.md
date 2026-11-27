@@ -83,7 +83,8 @@ and a container cannot re-create itself: stopping it ends the process that would
   machine has no digest to compare: the page says so. A registry on this machine (`localhost:5000`) is asked at `host.docker.internal` too, from inside Docker.
 - **Update MatOS** is a job (`AutoUpdate.Self`, `SelfUpdateService.RunAsync`): it pulls the image of the tag (an image that is not newer ends it there,
   nothing restarts), tags the running image `<name>:previous`, copies the database (`VACUUM INTO /data/self-update/matos-before-update-<time>.db`, the
-  last three kept), notes the update in `system.json` (`Updates.Pending`) and starts **a helper**: a container of the *new* image with
+  last three kept) and backs up the data volume (`/data/self-update/matos-data-before-update-<time>.tar.gz`: the settings, the keys, the compose files of the
+  apps and the catalog, without the backups of the apps; the last three kept; the owner's choice of 2026-11-27), notes the update in `system.json` (`Updates.Pending`) and starts **a helper**: a container of the *new* image with
   `--volumes-from` MatOS (the data volume and the Docker socket), `--rm`, no restart, running `MatOS.Web.dll --self-update <container>`
   (`SelfUpdateHelper`). The job ends; the helper waits five seconds and talks to Docker's Engine API over the socket (`DockerEngineApi`): it stops MatOS,
   renames it `<name>-previous` (restart policy off), creates the container again from the new image with the same settings (`ContainerRecreate`: the name,
@@ -110,7 +111,8 @@ and a container cannot re-create itself: stopping it ends the process that would
   hours (`UpdateWindow`: once per window, a window over midnight works). A job *Automatic updates* updates every installed app as *Update* does, the engines
   first in the order of `EngineIds.All`, then the apps; one that fails does not stop the others (the job fails at the end and names them). *Backup first*
   backs an app up only when one of its containers has a newer image (or the registry did not say), so a quiet night backs up nothing. With *everything*
-  MatOS updates itself last (the helper above): it restarts **unattended**, only in that mode, and never into a version whose last try was put back
+  MatOS updates itself last (the helper above): it restarts **unattended**, only in that mode (the owner's choice of 2026-11-27, with *apps and engines* the
+  recommended answer of the first start), and never into a version whose last try was put back
   (`SelfUpdateService.SkipUnattended`: *Update MatOS* by hand still tries it). Otherwise the job only looks for a newer MatOS.
   The first start asks once, on the screen of the engines (*Keep my apps up to date at night*, recommended; *Everything at night, MatOS too*; *Only when I click
   Update*); Settings, *Updates* changes it. A MatOS set up before the question has none (`Mode` null): off until the person chooses.

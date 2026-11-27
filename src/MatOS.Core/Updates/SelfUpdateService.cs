@@ -149,6 +149,7 @@ public sealed class SelfUpdateService
             : $"Warning: the running image could not be tagged {previousTag}: {tagged.Message}");
 
         var copy = await CopyDatabaseAsync(log, ct);
+        await ArchiveDataAsync(log, ct);
 
         var helper = self + "-update";
         await _cli.RunAsync(["rm", "-f", helper], ct: ct);
@@ -206,6 +207,56 @@ public sealed class SelfUpdateService
     }
 
     /// <summary>A consistent copy of the database (<c>VACUUM INTO</c>) before the new version migrates it; the oldest beyond <see cref="DatabaseCopiesKept"/> go.</summary>
+    /// <summary>
+    /// Whether a file of the data volume (its path relative to the volume, with <c>/</c>) belongs into the backup before an update: everything MatOS keeps
+    /// (the settings, the keys, the compose files of the apps, the catalog, the logs) except the backups of the apps (they are backups already, and large),
+    /// the folder of the self-update itself and the live database (its consistent copy is taken beside it).
+    /// </summary>
+    public static bool BelongsInDataArchive(string relative)
+    {
+        var path = relative.Replace('\\', '/').TrimStart('/');
+        var top = path.Split('/')[0];
+        return top is not ("backups" or SelfUpdateHelper.FolderName) && !path.StartsWith("matos.db", StringComparison.Ordinal);
+    }
+
+    /// <summary>A backup of the data volume before the update (<c>/data/self-update/matos-data-before-update-&lt;time&gt;.tar.gz</c>, the last three kept).</summary>
+    private async Task ArchiveDataAsync(Action<string> log, CancellationToken ct)
+    {
+        Directory.CreateDirectory(Folder);
+        var target = Path.Combine(Folder, $"matos-data-before-update-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar.gz");
+        var root = Path.GetFullPath(_paths.DataPath);
+        await using (var file = File.Create(target))
+        await using (var gzip = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionLevel.Fastest))
+        await using (var tar = new System.Formats.Tar.TarWriter(gzip))
+        {
+            foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
+                if (!BelongsInDataArchive(relative))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await tar.WriteEntryAsync(path, relative, ct);
+                }
+                catch (IOException ex)
+                {
+                    // A file that is written right now (a log): the rest of the backup counts more than it.
+                    log($"Warning: {relative} is not in the backup: {ex.Message}");
+                }
+            }
+        }
+
+        foreach (var old in Directory.GetFiles(Folder, "matos-data-before-update-*.tar.gz").OrderByDescending(f => f, StringComparer.Ordinal).Skip(DatabaseCopiesKept))
+        {
+            File.Delete(old);
+        }
+
+        log($"The data of MatOS (without the backups of the apps) was backed up to {target}.");
+    }
+
     private async Task<string?> CopyDatabaseAsync(Action<string> log, CancellationToken ct)
     {
         if (!File.Exists(_paths.DatabasePath))

@@ -299,6 +299,18 @@ public class UpdateTests
         Assert.False(SelfUpdateService.SkipUnattended(null, "sha256:x"));
     }
 
+    [Theory]
+    [InlineData("config/system.json", true)]
+    [InlineData("dataprotection-keys/key-1.xml", true)]
+    [InlineData("apps/gitea/docker-compose.yml", true)]
+    [InlineData("catalog/mine.yml", true)]
+    [InlineData("backups/gitea/20261127/volume.tar", false)]
+    [InlineData("self-update/matos-before-update-1.db", false)]
+    [InlineData("matos.db", false)]
+    [InlineData("matos.db-wal", false)]
+    public void The_backup_of_the_volume_keeps_what_MatOS_keeps_without_the_backups(string path, bool kept)
+        => Assert.Equal(kept, SelfUpdateService.BelongsInDataArchive(path));
+
     [Fact]
     public void The_helper_reads_its_arguments()
     {
