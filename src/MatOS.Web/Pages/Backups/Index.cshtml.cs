@@ -46,12 +46,16 @@ public class IndexModel : PageModel
     [TempData] public string? StatusMessage { get; set; }
     [TempData] public bool IsError { get; set; }
 
-    public TabBarModel Tabs => new()
+    public TabBarModel Tabs => TabsFor(SchedulesTab ? "schedules" : "history");
+
+    /// <summary>The tabs of the backups: History, Schedules and Targets (its own page, /Backups/Targets).</summary>
+    public static TabBarModel TabsFor(string active) => new()
     {
         Tabs =
         [
-            new TabItem { Title = "History", Href = "/Backups", Icon = "clock", Active = !SchedulesTab },
-            new TabItem { Title = "Schedules", Href = "/Backups?tab=schedules", Icon = "calendar", Active = SchedulesTab },
+            new TabItem { Title = "History", Href = "/Backups", Icon = "clock", Active = active == "history" },
+            new TabItem { Title = "Schedules", Href = "/Backups?tab=schedules", Icon = "calendar", Active = active == "schedules" },
+            new TabItem { Title = "Targets", Href = "/Backups/Targets", Icon = "hard-drive", Active = active == "targets" },
         ],
     };
 

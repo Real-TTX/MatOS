@@ -41,7 +41,7 @@ function expectEqual(actual, expected, what) {
 }
 
 const pages = [
-  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
+  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Backups/Targets', '/Backups/TargetEdit', '/Jobs', '/Tasks',
   '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
   '/Start',
 ];
@@ -538,6 +538,67 @@ const pages = [
     await page.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
     await page.waitForURL(/tab=schedules/);
     expectEqual(await page.locator('table.mat-table tbody tr', { hasText: 'E2E schedule' }).count(), 0, 'the schedule is gone');
+  });
+  await check('backup targets: a third tab, a form per kind, a test, a password never shown again, deleting asks first', async () => {
+    await page.goto(BASE + '/Backups/Targets');
+    expectEqual(await page.locator('.mat-tabs [aria-current="page"]').filter({ hasText: 'Targets' }).count(), 1, 'the tab Targets is active');
+    expectEqual(/MatDock/.test(await page.locator('main').innerText()), false, 'the page does not name the engine');
+    if (await page.locator('a[href="/Backups/TargetEdit"]').count() === 0) {
+      // An engine without the targets API: the page says so and offers nothing it cannot do.
+      expectEqual(await page.locator('.mat-empty').count(), 1, 'the empty state says targets cannot be used now');
+      return;
+    }
+
+    await page.goto(BASE + '/Backups/TargetEdit');
+    const visible = name => page.locator(`[data-show-value="${name}"]`).isVisible();
+    expectTrue(await visible('Sftp') && !(await visible('WebDav')) && !(await visible('Smb')), 'SFTP is the first kind, the others are hidden');
+    await page.selectOption('#Input_Kind', 'WebDav');
+    expectTrue(await visible('WebDav') && !(await visible('Sftp')), 'choosing WebDAV shows its fields');
+    expectTrue(await page.locator('[data-show-value="Sftp"] input').first().isDisabled(), 'the hidden fields post nothing');
+    await page.fill('#Input_Name', 'E2E target');
+    await page.fill('#Input_Url', 'ftp://not-webdav');
+    await page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])');
+    await page.waitForLoadState('networkidle');
+    expectTrue(/WebDAV folder/.test(await page.locator('[data-validation-summary]').innerText()), 'the server says what is wrong');
+
+    // An SFTP target on a server that is not there: saved, the test says why it fails, the password is not rendered back.
+    const sftp = (process.env.MATOS_E2E_SFTP || '127.0.0.1:9:keeper:e2e-secret-Pass1:upload/e2e').split(':');
+    await page.goto(BASE + '/Backups/TargetEdit');
+    await page.fill('#Input_Name', 'E2E target');
+    await page.fill('#Input_Host', sftp[0]);
+    await page.fill('#Input_Port', sftp[1]);
+    await page.fill('#Input_Username', sftp[2]);
+    await page.fill('#Input_Password', sftp[3]);
+    await page.fill('#Input_Folder', sftp[4]);
+    await Promise.all([page.waitForURL(/handler=Test/), page.click('button[formaction*="Test"]')]);
+    expectEqual(await page.locator('[data-target-test]').count(), 1, 'the test answers');
+    if (process.env.MATOS_E2E_SFTP) { expectEqual(await page.locator('[data-target-test].mat-alert--success').count(), 1, 'the connection works: ' + await page.locator('[data-target-test]').innerText()); }
+    expectEqual(await page.locator('#Input_Password').inputValue(), '', 'the typed password is not sent back by the test');
+    await page.fill('#Input_Password', sftp[3]);
+    await Promise.all([page.waitForURL(u => u.pathname === '/Backups/Targets' || /id=\d+/.test(u.search)), page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])')]);
+    if (!/TargetEdit\?id=/.test(page.url())) {
+      const row = page.locator('table.mat-table tbody tr', { hasText: 'E2E target' });
+      expectEqual(await row.count(), 1, 'the target is listed');
+      await row.locator('a[href*="TargetEdit"]').first().click();
+    }
+    expectTrue(!(await page.content()).includes(sftp[3]), 'the stored password is not in the page');
+    expectEqual(await page.locator('#Input_Password').getAttribute('placeholder'), 'Stored', 'the field says a password is stored');
+    expectEqual(await page.locator('#Input_Kind').getAttribute('type'), 'hidden', 'the kind stays');
+
+    await page.goto(BASE + '/Backups/ScheduleEdit');
+    expectTrue(await page.locator('#Input_Target option', { hasText: 'E2E target' }).count() === 1, 'a schedule can keep its backups at the target');
+    await page.goto(BASE + '/Backups/Create');
+    if (await page.locator('#Destination').count() === 1) {
+      expectTrue(await page.locator('#Destination option', { hasText: 'E2E target' }).count() === 1, 'a backup by hand can go to the target');
+    }
+
+    await page.goto(BASE + '/Backups/Targets');
+    await page.locator('table.mat-table tbody tr', { hasText: 'E2E target' }).locator('a[href*="TargetEdit"]').first().click();
+    await page.click('form.mat-form button.mat-btn--danger');
+    expectEqual(await page.locator('dialog.mat-dialog[open]').count(), 1, 'a dialog asks');
+    await page.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
+    await page.waitForURL(/\/Backups\/Targets/);
+    expectEqual(await page.locator('table.mat-table tbody tr', { hasText: 'E2E target' }).count(), 0, 'the target is gone');
   });
   await check('the wizard (to change the setup later) walks through four steps, the engines under Advanced', async () => {
     await page.goto(BASE + '/Wizard');

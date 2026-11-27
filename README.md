@@ -72,7 +72,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - **Update** pulls newer images, re-creates only what changed, and backs up first if you want; **automatic updates** do it at night (off, apps and engines, or MatOS too)
 - **MatOS updates itself**: it shows a new version, and one click (or the night) restarts it on it, with the old version put back if the new one does not start
 - **Backups** are MatDock's: compose + `.env` + all volumes, optionally with the app stopped (consistent databases),
-  **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too
+  **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too.
+  **Kept on another machine too**: an SFTP folder, a WebDAV folder (Nextcloud) or a network share (SMB), tested when it is saved, chosen per backup and per schedule
 - If you **change a stack in MatDock**, the next update keeps your version
 - **Shared links** let someone without an account open one app
 
@@ -415,7 +416,7 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | Apps that connect themselves (bindings) and bring their own icons, widgets and menu entries (contract 2, MatPlatform 2.0) | ✅ MatOffice and MatDrive; the engines move onto the bindings next |
 | Widgets you arrange yourself, widgets with the data of the person who is looking, a search across the apps | planned |
 | Microsoft Entra ID sign-in | planned (the login is already behind `AuthService` / `SessionService`) |
-| Remote backup targets (SMB, off-site) | MatDock's backup targets |
+| Backup targets: SFTP, WebDAV, SMB (create, test, choose per backup and schedule, restore from them) | ✅ with MatDock's `feature/backup-targets-api` (apiVersion 5) |
 
 ## License
 

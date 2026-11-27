@@ -71,8 +71,9 @@ public sealed class BackupHub
     public Task<BackupItem?> GetAsync(string id, CancellationToken ct = default)
         => ForId(id).GetAsync(SplitId(id).Raw, ct);
 
-    public Task RunAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, Action<string> log, CancellationToken ct = default)
-        => For(app).BackupAsync(app, kind, stopContainers, note, log, ct);
+    /// <summary>Backs up an app where its engine keeps backups; <paramref name="destination"/> null = the default target (else this machine).</summary>
+    public Task RunAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, Action<string> log, CancellationToken ct = default, BackupDestination? destination = null)
+        => For(app).BackupAsync(app, kind, stopContainers, note, destination ?? BackupDestination.Default, log, ct);
 
     public Task RestoreAsync(string id, bool backupCurrentFirst, Action<string> log, CancellationToken ct = default)
         => ForId(id).RestoreAsync(SplitId(id).Raw, backupCurrentFirst, log, ct);

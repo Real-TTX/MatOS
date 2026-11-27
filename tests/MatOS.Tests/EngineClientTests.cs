@@ -213,4 +213,25 @@ public class EngineClientTests
         Assert.Contains("did not answer", ex.Message);
         Assert.Contains("with JSON", ex.Message);
     }
+
+    // ------------------------------------------------------------------ MatDock: backup targets
+
+    [Fact]
+    public async Task A_target_is_created_with_the_mark_of_MatOS_and_a_backup_names_its_target()
+    {
+        var handler = new StubHandler()
+            .Answer("POST", "backup-targets", """{"id":9,"name":"Box","type":"sftp"}""")
+            .Answer("POST", "stacks/matos-matsplit/backups", """{"operationId":"op1"}""");
+        var client = new MatDockClient(new StubLocator(), new StubFactory(handler));
+
+        var created = await client.CreateTargetAsync(new JsonObject { ["name"] = "Box", ["type"] = "sftp" });
+        Assert.Equal(9, created["id"]!.GetValue<long>());
+        Assert.Equal("matos", handler.Requests[0].Body!["managedBy"]!.GetValue<string>());
+
+        Assert.Equal("op1", await client.StartBackupAsync("matos-matsplit", stopContainers: true, note: null, targetId: 9));
+        Assert.Equal(9, handler.Requests[1].Body!["targetId"]!.GetValue<long>());
+
+        await client.StartBackupAsync("matos-matsplit", stopContainers: true, note: null);
+        Assert.Null(handler.Requests[2].Body!["targetId"]);
+    }
 }
