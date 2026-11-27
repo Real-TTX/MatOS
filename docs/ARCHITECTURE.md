@@ -117,6 +117,27 @@ and a container cannot re-create itself: stopping it ends the process that would
   The first start asks once, on the screen of the engines (*Keep my apps up to date at night*, recommended; *Everything at night, MatOS too*; *Only when I click
   Update*); Settings, *Updates* changes it. A MatOS set up before the question has none (`Mode` null): off until the person chooses.
 
+## The updates of this computer
+
+The operating system of the machine Docker runs on is updated **through MatDock** (it can: a throwaway helper container asks the host's apt and hands an
+upgrade to the host's systemd, MatDock's docs/UPDATE-MANAGEMENT.md sections 13 and 18). MatOS shows it in its own look and keeps the engine out of sight
+(the owner, 2026-11-27: "MatDock kann das alles. Müssen das nur gut verstecken"). docs/ENGINES.md "MatDock" has the calls (`apiVersion` 7).
+
+- **Settings, Updates, *This computer*** (`Core/Updates/HostUpdates.cs`: `HostUpdateService`, `HostUpdateState`): the system, the updates waiting (how
+  many, how many for security, Docker's new version), the last check, a restart that is needed. *Check now* and *Install updates* are jobs (the log live);
+  *Restart the computer* asks first in plain words and then waits for the computer on the page (`data-await-restart`). MatDock checks every six hours by
+  itself; MatOS reads its answer every hour (`AutoUpdateService`) and on every visit of the page, and keeps it in `SystemConfig.Updates.Host`.
+- **The mark**: an administrator sees the mark on Settings in the dock and a dot on Updates in the menu when security updates wait or the computer waits
+  for a restart (`UpdateSettings.Notice`; a newer MatOS comes first). Only for a host MatOS can update: apt, MatDock answered, the check worked.
+- **Installing** upgrades every package (`apt-get upgrade --with-new-pkgs`: a new kernel comes along, nothing is removed, configuration files are kept). When
+  Docker is among them, Docker restarts and with it every container, MatDock and MatOS too: the upgrade runs on as a systemd unit of the host. MatOS keeps the
+  unit's name, so the job (MatDock's operation is gone) and, after MatOS restarted, the page read its end from the host (`/host/updates/runs/{unit}`).
+- **At night** (the automatic updates, any mode but off): *Install its updates too* adds the computer after the apps and engines, before MatOS itself;
+  *Restart it when an update needs it* restarts it at the very end, but not in a night in which MatOS restarts on a new version (the helper would be cut off).
+  Both are **off** until the owner chooses them: whether they become defaults (or a question of the first start) is the owner's decision, not made yet.
+- **What MatOS cannot update**: a host without apt (Docker Desktop, Alpine, ...) is named with a sentence, no buttons; a host without systemd lets the start
+  of an upgrade fail with the host's message. An older MatDock (an API before 7) shows a hint to update the engines.
+
 ## The first start
 
 MatOS is for people who cannot use Docker: the release compose file has only MatOS, and everything else comes from **one continuous assistant**

@@ -59,6 +59,22 @@ public sealed class UpdateSettings
     /// <summary>How the last self-update ended (the helper's report, taken over at the next start).</summary>
     public SelfUpdateResult? Last { get; set; }
 
+    /// <summary>
+    /// The automatic updates install the updates of this computer's operating system too (through MatDock). Off unless the owner turns it on: the owner
+    /// decides whether that becomes a default (docs/ARCHITECTURE.md "The updates of this computer").
+    /// </summary>
+    public bool HostUpdates { get; set; }
+
+    /// <summary>With <see cref="HostUpdates"/>: the computer restarts in the window when an update needs it. Off unless the owner turns it on.</summary>
+    public bool HostRestart { get; set; }
+
+    /// <summary>The updates of this computer as MatOS last saw them.</summary>
+    public HostUpdateState Host { get; set; } = new();
+
+    /// <summary>What the mark on Settings says for an administrator (a newer MatOS, security updates of this computer, a restart it waits for), or null.</summary>
+    [JsonIgnore]
+    public string? Notice => Check is { Available: true } && Pending is null ? "new version of MatOS" : Host.Notice;
+
     [JsonIgnore]
     public string EffectiveMode => UpdateMode.Normalize(Mode) ?? UpdateMode.Off;
 

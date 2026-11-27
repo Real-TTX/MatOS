@@ -139,6 +139,17 @@ through the mounted socket) unless `?environment=<name or id>` says otherwise.
 | `POST /api/v1/containers/{name}/actions/{action}`, `GET /api/v1/containers/{name}/logs?tail=` | start, stop, restart one container; its log as text |
 | `GET /api/v1/operations/{id}?offset=` | the operation, see the common rules |
 
+The operating system of this computer (`apiVersion` 7, MatDock branch `feature/host-updates-api`; MatOS's side: docs/ARCHITECTURE.md "The updates of this computer",
+`MatDockClient`, `Core/Updates/HostUpdates.cs`). An older MatDock answers `404`: MatOS then asks for an update of the engines.
+
+| Method and path | |
+|---|---|
+| `GET /api/v1/host/updates` | what MatDock's last check of the host found, asks the host nothing: `{environmentId, environment, supported, checkedAt, os, apt, listsUpdatedAt, listsStale, rebootRequired, pending, security, dockerVersion, dockerTarget, summary, error, packages[], lastRun{unit, scope, startedAt, finished, exitCode, finishedAt}, rebootRequestedAt}`; `checkedAt: null` before the first check (MatDock looks every six hours, three minutes after its start) |
+| `POST /api/v1/host/updates/check` | refresh the package lists and look again. `202 {operationId}`, the result is the same view |
+| `POST /api/v1/host/updates/apply` | body `{scope: "all"\|"docker"}`: `apt-get upgrade --with-new-pkgs` of every package (nothing removed, configuration kept), started at once on the host's systemd. `202 {operationId, unit}`, result `{unit, exitCode, rebootRequired, summary}`; `409` before a check, without apt, or while one runs |
+| `GET /api/v1/host/updates/runs/{unit}` | `{unit, finished, exitCode, log}` read from the host: the end of an upgrade after Docker, MatDock and MatOS restarted |
+| `POST /api/v1/host/reboot` | body `{confirm: "reboot"}` (else `400`): the host restarts in 15 seconds. `202 {environment, restartsAt}`; `409` while an upgrade runs |
+
 Backups (a stack bundle: all volumes + compose + env + image references; MatDock's existing bundle backup):
 
 | Method and path | |

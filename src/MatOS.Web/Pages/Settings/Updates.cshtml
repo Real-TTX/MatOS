@@ -103,6 +103,163 @@
     </div>
 </section>
 
+@{
+    var host = Model.Host;
+    var hostBusy = Model.HostJob is not null || Model.HostInstalling || Model.HostRestarting;
+}
+@* The updates of the operating system of this computer, through MatDock (docs/ARCHITECTURE.md "The updates of this computer"). While something runs the section reads itself again (data-live). *@
+<section class="mat-stack mat-stack--sm" aria-labelledby="upd-host" id="upd-host-section" data-live="@(hostBusy ? "5000" : null)" data-host-updates>
+    <h2 class="mat-itemlist__header" id="upd-host">This computer</h2>
+    @if (Model.HostRestarting)
+    {
+        <div class="mat-alert mat-alert--info" role="status" data-await-restart>
+            <icon name="refresh" />
+            <div class="mat-alert__body">
+                <strong>This computer restarts.</strong>
+                <p class="mat-small">MatOS and your apps are away for a few minutes; this page comes back by itself.</p>
+            </div>
+        </div>
+    }
+    else if (Model.HostInstalling)
+    {
+        <div class="mat-alert mat-alert--info" role="status">
+            <icon name="download" />
+            <div class="mat-alert__body">
+                <strong>Updates are being installed on this computer.</strong>
+                <p class="mat-small">If Docker is among them, every app restarts for a moment, MatOS too. The updates go on regardless.</p>
+                @if (Model.HostJob is { } installJob)
+                {
+                    <p class="mat-small"><a href="/Jobs/Details?id=@installJob.Id">Show the log</a></p>
+                }
+            </div>
+        </div>
+    }
+    else if (Model.HostJob is { } checkJob)
+    {
+        <div class="mat-alert mat-alert--info" role="status">
+            <icon name="refresh" />
+            <div class="mat-alert__body">
+                <strong>Looking for updates of this computer ...</strong>
+                <p class="mat-small">This can take a minute. <a href="/Jobs/Details?id=@checkJob.Id">Show the log</a></p>
+            </div>
+        </div>
+    }
+
+    @if (host.Reach == HostReach.Outdated)
+    {
+        <p class="mat-small mat-muted" data-host-state="outdated">The updates of this computer show here once the engines are up to date: update them in Settings, Engines (or let the automatic updates do it tonight).</p>
+    }
+    else if (host.Reach != HostReach.Ok)
+    {
+        <p class="mat-small mat-muted" data-host-state="unavailable">MatOS cannot reach this computer's updates right now; the engines may be starting@(host.CheckedAt is null ? "." : ". The last answer is shown.")</p>
+    }
+    else if (!host.Supported)
+    {
+        <p class="mat-small mat-muted" data-host-state="unsupported">This computer's system is looked after by another MatDock.</p>
+    }
+    else if (host.CheckedAt is null)
+    {
+        <p class="mat-small mat-muted" data-host-state="unchecked">Not checked yet. Check now looks for updates; it may take a minute.</p>
+    }
+    else if (!host.Apt)
+    {
+        <p class="mat-small mat-muted" data-host-state="noapt">@(host.Os ?? "This system") is not updated by MatOS: MatOS installs updates of Debian and Ubuntu. Update it the way its maker says.</p>
+    }
+
+    @if (host.CheckedAt is not null && host.Supported)
+    {
+        <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-labelledby="upd-host">
+            <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">System</span></span><span class="mat-item__end"><span>@(host.Os ?? "Unknown")</span></span></div></li>
+            @if (host.Apt)
+            {
+                <li class="mat-item mat-item--wrap" data-host-row="updates">
+                    <div class="mat-item__main">
+                        <span class="mat-item__body">
+                            <span class="mat-item__title">Updates</span>
+                            <span class="mat-item__text">@host.Summary@(host.DockerTarget is { } docker ? $"; Docker {(host.DockerVersion is { } now ? $"{now} → " : "")}{docker}" : "").</span>
+                        </span>
+                        <span class="mat-item__end">
+                            @if (host.Error is not null)
+                            {
+                                <span class="mat-pill mat-pill--warn">Could not check</span>
+                            }
+                            else if (host.Security > 0)
+                            {
+                                <span class="mat-pill mat-pill--warn">@host.Security for security</span>
+                            }
+                            else if (host.Pending > 0)
+                            {
+                                <span class="mat-pill mat-pill--accent">@host.Pending available</span>
+                            }
+                            else
+                            {
+                                <span class="mat-pill mat-pill--ok">Up to date</span>
+                            }
+                        </span>
+                    </div>
+                </li>
+                <li class="mat-item mat-item--wrap">
+                    <div class="mat-item__main">
+                        <span class="mat-item__body">
+                            <span class="mat-item__title">Last check</span>
+                            <span class="mat-item__text">@Format.Ago(host.CheckedAt.Value)@(host.ListsStale ? "; the list of updates is old, check now to be sure" : "").</span>
+                        </span>
+                    </div>
+                </li>
+                @if (host.RebootRequired)
+                {
+                    <li class="mat-item mat-item--wrap" data-host-row="restart">
+                        <div class="mat-item__main">
+                            <span class="mat-item__body">
+                                <span class="mat-item__title">Restart</span>
+                                <span class="mat-item__text">An update is finished only after a restart of this computer.</span>
+                            </span>
+                            <span class="mat-item__end"><span class="mat-pill mat-pill--warn">Needed</span></span>
+                        </div>
+                    </li>
+                }
+                @if (host.RunUnit is not null && host.RunFinished && host.RunExitCode is not 0)
+                {
+                    <li class="mat-item mat-item--wrap">
+                        <div class="mat-item__main">
+                            <span class="mat-item__body">
+                                <span class="mat-item__title">Last install</span>
+                                <span class="mat-item__text">@(host.RunStartedAt is { } started ? Format.Ago(started) + ": " : "")it failed@(host.RunExitCode is { } code ? $" (code {code})" : "").@if (Model.LastHostInstall is { } lastJob) { <text> </text><a href="/Jobs/Details?id=@lastJob.Id">Show the log</a> }</span>
+                            </span>
+                            <span class="mat-item__end"><span class="mat-pill mat-pill--error">Failed</span></span>
+                        </div>
+                    </li>
+                }
+            }
+        </ul>
+        @if (host.Error is { } hostError)
+        {
+            <p class="mat-small mat-muted">@hostError</p>
+        }
+    }
+
+    @if (host.Reach == HostReach.Ok && host.Supported)
+    {
+        <div class="mat-actions">
+            @if (host.Manageable && host.Pending > 0)
+            {
+                <form method="post" asp-page-handler="HostInstall">
+                    <button type="submit" class="mat-btn mat-btn--primary" disabled="@hostBusy" data-confirm="Install @(host.Pending == 1 ? "1 update" : $"{host.Pending} updates") on this computer now? If Docker is among them, every app restarts for a moment, MatOS too." data-confirm-ok="Install"><icon name="download" /><span>Install updates</span></button>
+                </form>
+            }
+            <form method="post" asp-page-handler="HostCheck">
+                <button type="submit" class="mat-btn mat-btn--ghost" disabled="@hostBusy"><icon name="refresh" /><span>Check now</span></button>
+            </form>
+            @if (host.Manageable && host.RebootRequired)
+            {
+                <form method="post" asp-page-handler="HostRestart">
+                    <button type="submit" class="mat-btn mat-btn--danger" disabled="@hostBusy" data-confirm-title="Restart this computer?" data-confirm="The computer restarts in a few seconds. MatOS and every app stop and are away for a few minutes; they start again by themselves. Somebody using an app now loses what they have not saved." data-confirm-ok="Restart" data-confirm-danger><icon name="refresh" /><span>Restart the computer</span></button>
+                </form>
+            }
+        </div>
+    }
+</section>
+
 <form method="post" class="mat-form" novalidate>
     <partial name="_ValidationSummary" />
 
@@ -152,6 +309,18 @@
                             <span class="mat-check__text">Back it up (only when it has a new version)</span>
                         </label>
                         <span class="mat-error"></span>
+                    </div>
+                    <div class="mat-field">
+                        <span class="mat-label">This computer</span>
+                        <label class="mat-check">
+                            <input asp-for="Input.HostUpdates" type="checkbox" />
+                            <span class="mat-check__text">Install its updates too (Debian and Ubuntu)</span>
+                        </label>
+                        <label class="mat-check" data-show-if="#Input_HostUpdates" data-show-value="true" hidden="@(!Model.Input.HostUpdates)">
+                            <input asp-for="Input.HostRestart" type="checkbox" />
+                            <span class="mat-check__text">Restart it when an update needs it</span>
+                        </label>
+                        <span class="mat-hint">Off unless you choose it. A restart stops every app for a few minutes.</span>
                     </div>
                 </div>
                 @if (Model.Settings.EffectiveMode != UpdateMode.Off)

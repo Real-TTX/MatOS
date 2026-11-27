@@ -68,6 +68,7 @@ public static class ServiceCollectionExtensions
         // Updates: whether a newer image is there (the registry), MatOS's own update.
         services.AddScoped<Updates.RegistryClient>();
         services.AddScoped<Updates.SelfUpdateService>();
+        services.AddScoped<Updates.HostUpdateService>();
 
         // Matcad (routes, certificates) and Matddns (DNS records).
         services.AddScoped<MatcadClient>();
