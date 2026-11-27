@@ -95,6 +95,14 @@
 .os-desktop[data-wallpaper="jungle"] { --os-wall: url("../img/wallpapers/jungle.jpg"); }
 .os-desktop[data-wallpaper="lagoon"] { --os-wall: url("../img/wallpapers/lagoon.jpg"); }
 .os-desktop[data-wallpaper="mountains"] { --os-wall: url("../img/wallpapers/mountains.jpg"); }
+.os-desktop[data-wallpaper="dawn"] { --os-wall: url("../img/wallpapers/dawn.jpg"); }
+.os-desktop[data-wallpaper="coast"] { --os-wall: url("../img/wallpapers/coast.jpg"); }
+.os-desktop[data-wallpaper="dunes"] { --os-wall: url("../img/wallpapers/dunes.jpg"); }
+.os-desktop[data-wallpaper="city"] { --os-wall: url("../img/wallpapers/city.jpg"); }
+.os-desktop[data-wallpaper="forest"] { --os-wall: url("../img/wallpapers/forest.jpg"); }
+.os-desktop[data-wallpaper="aurora"] { --os-wall: url("../img/wallpapers/aurora.jpg"); }
+.os-desktop[data-wallpaper="nebula"] { --os-wall: url("../img/wallpapers/nebula.jpg"); }
+.os-desktop[data-wallpaper="marble"] { --os-wall: url("../img/wallpapers/marble.jpg"); }
 
 /* ---- The status bar: the system's line at the top, like the menu bar of a Mac ---- */
 .os-status {
