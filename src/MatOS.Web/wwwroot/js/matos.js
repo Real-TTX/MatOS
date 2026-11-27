@@ -142,13 +142,22 @@
       return select && select.value ? select.options[select.selectedIndex].text : 'none (you manage DNS yourself)';
     }
 
+    // where the records point (DnsIp.Sentence on the server)
+    function dnsIp() {
+      var select = $('#DnsProvider', wiz);
+      if (!select || !select.value) { return 'nothing is written (no DNS account)'; }
+      var answer = $('input[name="DnsIp"]:checked', wiz), fixed = $('[name="DnsFixedIp"]', wiz);
+      return answer && answer.value === 'fixed' && fixed && fixed.value.trim() ? 'Your domain points to ' + fixed.value.trim() : 'Your domain follows your internet address';
+    }
+
     function buildSummary(el) {
       var host = $('[name="PublicHost"]', wiz), domain = $('[name="BaseDomain"]', wiz);
       var rows = [
         ['Address of this host', host && host.value ? host.value : 'from the browser'],
         ['Domain for your apps', domain && domain.value ? '*.' + domain.value : 'none (every app on a port of this host, through Matcad)'],
         ['Engines', engines()],
-        ['DNS provider', dnsProvider()]
+        ['DNS provider', dnsProvider()],
+        ['DNS records', dnsIp()]
       ];
       el.innerHTML = '';
       rows.forEach(function (r) {
@@ -167,6 +176,63 @@
       if (e.key === 'Enter' && index < panels.length - 1 && e.target.matches('input:not([type=checkbox]):not([type=radio]), select')) { e.preventDefault(); show(index + 1, true); }
     });
     show(0, false);
+  });
+
+  // ------------------------------------------------------------------ reached from anywhere (_Reach): the status, and "Check again" without a reload
+
+  $$('[data-reach]').forEach(function (box) {
+    var alertEl = $('[data-reach-alert]', box), sentence = $('[data-reach-sentence]', box), forward = $('[data-reach-forward]', box);
+    var lan = $('[data-reach-lan]', box), dns = $('[data-reach-dns]', box), again = $('[data-reach-again]', box), label = $('[data-reach-label]', box);
+    var last = null, waiting = 0, timer = null;
+
+    function tokenOf() {
+      var t = $('input[name="__RequestVerificationToken"]');
+      return t ? t.value : '';
+    }
+
+    function busy(on) {
+      if (again) { again.disabled = on; }
+      if (label) { label.textContent = on ? 'Checking ...' : 'Check again'; }
+    }
+
+    function render(d) {
+      if (alertEl) {
+        ['success', 'warning', 'info'].forEach(function (t) { alertEl.classList.toggle('mat-alert--' + t, t === d.tone); });
+      }
+      if (sentence && sentence.textContent !== d.sentence) { sentence.textContent = d.sentence; }
+      if (forward) { forward.hidden = !d.forwarding; }
+      if (lan && d.lan) { lan.textContent = d.lan; }
+      if (dns) { dns.hidden = !d.dnsAccount; }
+    }
+
+    // Asks for the status; while a check waits or runs (or until it is newer than the one before "Check again"), again in a few seconds.
+    function load() {
+      clearTimeout(timer);
+      fetch(box.getAttribute('data-reach'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (d) {
+          var pending = d.checking || (waiting > 0 && d.checkedAt === last);
+          if (pending && waiting++ < 90) { busy(true); timer = setTimeout(load, 3000); return; }
+          busy(false);
+          render(d);
+          waiting = 0;
+          last = d.checkedAt;
+        })
+        .catch(function () { busy(false); waiting = 0; });
+    }
+
+    if (again) {
+      again.addEventListener('click', function () {
+        busy(true);
+        if (sentence) { sentence.textContent = 'Checking whether your apps can be reached from the internet ...'; }
+        fetch(box.getAttribute('data-reach-check'), { method: 'POST', credentials: 'same-origin', headers: { 'RequestVerificationToken': tokenOf(), 'Accept': 'application/json' } })
+          .then(function (r) { if (!r.ok) { return Promise.reject(r.status); } waiting = 1; timer = setTimeout(load, 2000); })
+          .catch(function () { busy(false); load(); });
+      });
+    }
+
+    document.addEventListener('mv:reach-refresh', load);
+    load();
   });
 
   // ------------------------------------------------------------------ app view: reload the frame

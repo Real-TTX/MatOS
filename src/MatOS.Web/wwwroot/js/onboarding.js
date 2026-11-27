@@ -158,7 +158,16 @@
       }
       else if (value === 'domain' && domain && domain.value.trim()) { text += close + ' and puts your apps under ' + domain.value.trim().toLowerCase(); }
       else if (value === 'home') { text += ' for use here at home'; }
-      return text + '.';
+      text += '.';
+      // an own domain with a DNS account: where its records point (DnsIp.Sentence says the same)
+      var provider = $('#DnsProvider', flow);
+      if (value === 'domain' && domain && domain.value.trim() && provider && provider.value) {
+        var answer = $('input[name="DnsIp"]:checked', flow), fixed = $('[name="DnsFixedIp"]', flow);
+        text += answer && answer.value === 'fixed' && fixed && fixed.value.trim()
+          ? ' Your domain points to ' + fixed.value.trim() + '.'
+          : ' Your domain follows your internet address.';
+      }
+      return text;
     }
 
     // A label of the Next button of the apps: how many are picked.
@@ -215,6 +224,8 @@
       if (next !== 'working') {
         var lead = $('[data-ob-when="' + next + '"].ob-lead', progress);
         say((headline ? headline.textContent + '. ' : '') + (lead ? lead.textContent.trim() : ''));
+        // the status of the reachability (data-reach, js/matos.js) was drawn before its check ran: ask for it now
+        document.dispatchEvent(new CustomEvent('mv:reach-refresh'));
       }
       if (next === 'ready' && before === 'working') { startCountdown(); }
     }

@@ -40,6 +40,18 @@
         </div>
     </section>
 
+    @if (Model.Reach is { } reach)
+    {
+        <section class="mat-stack mat-stack--sm" aria-labelledby="group-reach">
+            <h2 class="mat-itemlist__header" id="group-reach">From the internet</h2>
+            <div class="mat-card">
+                <div class="mat-card__body">
+                    <partial name="_Reach" model="reach" />
+                </div>
+            </div>
+        </section>
+    }
+
     <section class="mat-stack mat-stack--sm" aria-labelledby="group-backup-defaults">
         <h2 class="mat-itemlist__header" id="group-backup-defaults">Backup defaults</h2>
         <div class="mat-card">

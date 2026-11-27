@@ -184,6 +184,8 @@ app.MapJobsApi();
 app.MapAddressApi();
 // The progress screen of the first start and the tour of the home screen.
 app.MapOnboardingApi();
+// Whether the apps can be reached from the internet, and "Check again".
+app.MapReachApi();
 // MatIdentity ends the sessions of a person who signed out there (server to server).
 app.MapBackchannelLogout();
 

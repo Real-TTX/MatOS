@@ -99,6 +99,11 @@ What was built, and where it differs from the sketch above (branch `mattiverse-i
   `recordName` and `domain`. Credentials of a provider live in its settings object (`cloudflare`, `hetzner`, `netcup`, camelCase fields), `allowDynamic: true` lets
   Matddns create a record that does not exist yet.
 - Deleting a source or one of its entries drops it from the failover lists of the rules, as in the UI. The UI's dynamic (pattern) rules are not part of the API.
+- What MatOS writes for an own domain (docs/ARCHITECTURE.md "Domain and DNS"): one source at a time, `MatOS public IP` (`PublicIp`), `MatOS fixed IP`
+  (`Static`, `static: {ip, ipv6}`, both sent so the other family is cleared) or `MatOS tunnel` (`Dns`, `dns: {hostname}` = the tunnel name); the group `MatOS`;
+  one rule per record with that source; the CNAME `*.domain` of the tunnel route has `cnameTargets: [tunnel name]` (Matddns writes a CNAME only through a rule
+  with a source that has an address; a CNAME is refused on a DynDNS group). A source of another kind is deleted only once no rule uses it. Matddns never deletes
+  a record at the provider.
 
 ## MatDock (`ghcr.io/real-ttx/matdock`)
 

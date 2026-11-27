@@ -46,6 +46,27 @@ public sealed class SystemConfig
     [System.Text.Json.Serialization.JsonIgnore]
     public bool UsesHostedAddress => Hosted is { } hosted && string.Equals(BaseDomain?.Trim().Trim('.'), hosted.Address, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// How the apps of an own domain are reached from outside right now (<see cref="Integrations.DomainRoute"/>: <c>direct</c>, the default, or <c>tunnel</c>
+    /// through MatOS Services). The addresses are the same both ways; MatOS chooses (<c>RouteService</c>).
+    /// </summary>
+    public string DomainRoute { get; set; } = Integrations.DomainRoute.Direct;
+
+    /// <summary>Whether MatOS chooses the route of an own domain (<c>auto</c>, the default) or keeps it direct (<c>direct</c>: the person forwards the ports).</summary>
+    public string RoutePolicy { get; set; } = Integrations.DomainRoute.Auto;
+
+    /// <summary>The last check whether the apps can be reached from the internet; null before the first one.</summary>
+    public Integrations.ReachCheck? Reach { get; set; }
+
+    /// <summary>An own domain goes through the tunnel of MatOS Services: it has a tunnel name and the route says so.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool UsesDomainTunnel => Hosted is not null && !UsesHostedAddress && !string.IsNullOrWhiteSpace(BaseDomain)
+        && string.Equals(DomainRoute, Integrations.DomainRoute.Tunnel, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The tunnel to MatOS Services should be up: the free address in tunnel mode, or an own domain through the tunnel.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool TunnelWanted => (Hosted is { IsDirect: false } && UsesHostedAddress) || UsesDomainTunnel;
+
     /// <summary>MatOS's own sign-in through MatIdentity (set when MatIdentity is installed and MatOS registered itself there); null without it.</summary>
     public IdentitySignIn? Identity { get; set; }
 
@@ -119,6 +140,15 @@ public sealed class HostedAddress
 
     public DateTime RegisteredAt { get; set; }
 
+    /// <summary>
+    /// The name was registered by MatOS itself, only to carry an own domain through the tunnel (the person never chose it; Settings, Address calls it the
+    /// tunnel name).
+    /// </summary>
+    public bool ForDomain { get; set; }
+
+    /// <summary>The own domain registered at the service for the tunnel (<c>POST /api/v1/instance/domains</c>); null when none is.</summary>
+    public string? Domain { get; set; }
+
     [System.Text.Json.Serialization.JsonIgnore]
     public string Address => $"{Name}.{Zone}";
 
@@ -163,8 +193,21 @@ public sealed class DnsSettings
     /// <summary>The DNS zone at the provider when it is not the base domain itself (the zone <c>example.com</c> for the domain <c>apps.example.com</c>).</summary>
     public string? Zone { get; set; }
 
+    /// <summary>
+    /// Where the records point (<see cref="DnsIp"/>): <c>dynamic</c> (they follow the internet address of this machine, the answers "No" and "I'm not sure")
+    /// or <c>fixed</c> (<see cref="FixedIp"/>). A config written before the question has none: dynamic, as before.
+    /// </summary>
+    public string IpMode { get; set; } = DnsIp.Dynamic;
+
+    /// <summary>The fixed public IP address of the internet connection when <see cref="IpMode"/> is <c>fixed</c>.</summary>
+    public string? FixedIp { get; set; }
+
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsConfigured => DnsProviders.Find(Provider) is not null;
+
+    /// <summary>Where the records point, read from <see cref="IpMode"/> and <see cref="FixedIp"/>.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DnsIp Ip => DnsIp.Of(this);
 }
 
 /// <summary>

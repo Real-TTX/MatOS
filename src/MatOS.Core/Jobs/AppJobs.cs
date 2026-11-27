@@ -40,6 +40,9 @@ public static class AppJobs
         => async ctx =>
         {
             await ctx.Services.GetRequiredService<ProxyPublisher>().PublishAllAsync(ctx.Log, ctx.Cancellation);
+
+            // An own domain through the tunnel: its registration at MatOS Services follows the domain, before the records point anywhere.
+            await ctx.Services.GetRequiredService<RouteService>().SyncAsync(ctx.Log, ctx.Cancellation);
             await ctx.Services.GetRequiredService<DnsPublisher>().PublishAllAsync(ctx.Log, null, ctx.Cancellation);
             try
             {
@@ -134,6 +137,39 @@ public static class AppJobs
     /// <summary>The last step of the first start with a free address: the tunnel to the address service is up (<see cref="HostedAddressService.WaitUntilReachableAsync"/>).</summary>
     public static Func<JobContext, Task> FreeAddress()
         => ctx => ctx.Services.GetRequiredService<HostedAddressService>().WaitUntilReachableAsync(ctx.Log, ctx.Cancellation);
+
+    /// <summary>
+    /// The line of an own domain in the first start ("Your domain follows your internet address" or "Your domain points to ..."): Matddns writes the records.
+    /// Fails with the reason in plain words, so "Try again" asks once more.
+    /// </summary>
+    public static Func<JobContext, Task> DomainRecords()
+        => async ctx =>
+        {
+            var dns = ctx.Services.GetRequiredService<DnsPublisher>();
+            if (!await dns.IsActiveAsync(ctx.Cancellation))
+            {
+                throw new InvalidOperationException("The address updater (Matddns) is not ready yet. Try its line first, then this one.");
+            }
+
+            if (!await dns.PublishAllAsync(ctx.Log, null, ctx.Cancellation))
+            {
+                throw new InvalidOperationException("The DNS records could not be written. Check the account of your DNS provider in Settings, General, then try again.");
+            }
+        };
+
+    /// <summary>The title of the check of the reachability (the watcher queues it once at a time).</summary>
+    public const string CheckReachTitle = "Check whether your apps can be reached from the internet";
+
+    /// <summary>
+    /// Whether the apps can be reached from the internet, and the route that follows from it (<see cref="RouteService.CheckAsync"/>). A service that cannot be
+    /// asked is no failure: the status says so and MatOS asks again later.
+    /// </summary>
+    public static Func<JobContext, Task> CheckReach()
+        => ctx => ctx.Services.GetRequiredService<RouteService>().CheckAsync(ctx.Log, ctx.Cancellation);
+
+    /// <summary>The policy of the route of an own domain (MatOS chooses, or only through the router), then a check.</summary>
+    public static Func<JobContext, Task> SetRoutePolicy(string policy)
+        => ctx => ctx.Services.GetRequiredService<RouteService>().SetPolicyAsync(policy, ctx.Log, ctx.Cancellation);
 
     /// <summary>Gives the free address back; the apps lose their routes under it and get a port of this machine again.</summary>
     public static Func<JobContext, Task> ReleaseAddress()

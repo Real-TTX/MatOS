@@ -26,6 +26,7 @@ public class IndexModel : PageModel
     private readonly DockerService _docker;
     private readonly PortPlanner _ports;
     private readonly JobService _jobs;
+    private readonly DnsPublisher _dns;
 
     public IndexModel(
         SystemConfigService config,
@@ -33,8 +34,10 @@ public class IndexModel : PageModel
         AppService apps,
         DockerService docker,
         PortPlanner ports,
-        JobService jobs)
+        JobService jobs,
+        DnsPublisher dns)
     {
+        _dns = dns;
         _config = config;
         _catalog = catalog;
         _apps = apps;
@@ -64,6 +67,8 @@ public class IndexModel : PageModel
     [BindProperty] public string? DnsProvider { get; set; }
     [BindProperty] public string? DnsZone { get; set; }
     [BindProperty] public Dictionary<string, string?> DnsCredentials { get; set; } = new();
+    [BindProperty] public string? DnsIp { get; set; }
+    [BindProperty] public string? DnsFixedIp { get; set; }
 
     public DockerEngineInfo Engine { get; private set; } = new(false, null, string.Empty, string.Empty, 0, 0, 0, 0, 0);
     public List<EngineCard> Engines { get; private set; } = new();
@@ -83,7 +88,7 @@ public class IndexModel : PageModel
         InstallMatddns = Wanted(installed, EngineIds.Matddns, config.Selection.DdnsAppId, config);
         InstallMatIdentity = Wanted(installed, EngineIds.MatIdentity, config.Selection.IdentityAppId, config);
         InstallMatSmtp = Wanted(installed, EngineIds.MatSmtp, config.Selection.MailAppId, config);
-        await LoadAsync(config, installed, DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct)));
+        await LoadAsync(config, installed, await DnsFormAsync(config));
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -112,6 +117,8 @@ public class IndexModel : PageModel
             }
         }
 
+        var ip = DnsFormModel.ReadIp(provider?.Id, DnsIp, DnsFixedIp, ModelState);
+
         // A free address of the address service is a domain without a DNS account, and only this install's own (Settings, Address gets it).
         if (HostedAddressService.CheckDomain(config, baseDomain, provider?.Id) is { } hostedProblem)
         {
@@ -120,16 +127,18 @@ public class IndexModel : PageModel
 
         if (!ModelState.IsValid)
         {
-            await LoadAsync(config, installed, DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct)));
+            await LoadAsync(config, installed, await DnsFormAsync(config));
             return Page();
         }
 
         var domainChanged = !string.Equals(config.BaseDomain, baseDomain, StringComparison.OrdinalIgnoreCase);
         var dnsChanged = !string.Equals(config.Dns.Provider, provider?.Id ?? "none", StringComparison.OrdinalIgnoreCase)
             || !string.Equals(config.Dns.Zone, string.IsNullOrWhiteSpace(DnsZone) ? null : DnsZone.Trim(), StringComparison.OrdinalIgnoreCase)
-            || credentials.Values.Any(v => !string.IsNullOrWhiteSpace(v));
+            || credentials.Values.Any(v => !string.IsNullOrWhiteSpace(v))
+            || config.Dns.Ip != ip;
 
         await _config.SetDnsAsync(provider?.Id ?? "none", DnsZone, credentials, ct);
+        await _config.SetDnsIpAsync(ip, ct);
         await _config.UpdateAsync(c =>
         {
             c.PublicHost = string.IsNullOrWhiteSpace(PublicHost) ? null : PublicHost.Trim();
@@ -156,7 +165,7 @@ public class IndexModel : PageModel
             {
                 ModelState.AddModelError(string.Empty, $"{catalogId}: {string.Join(' ', result.Errors)}");
                 var fresh = await _config.GetAsync(ct);
-                await LoadAsync(fresh, installed, DnsFormModel.From(fresh, await _config.GetDnsCredentialsAsync(ct)));
+                await LoadAsync(fresh, installed, await DnsFormAsync(fresh));
                 return Page();
             }
 
@@ -205,6 +214,14 @@ public class IndexModel : PageModel
             var conflicts = existing is null ? await _ports.FindConflictsAsync(app, defaults, "\0", ct) : [];
             Engines.Add(new EngineCard(app, existing, id == EngineIds.MatDock, conflicts, owns[id]));
         }
+    }
+
+    /// <summary>The DNS part of the form: the stored values, the fixed address prefilled with the IP Matddns sees, and after a problem what was entered.</summary>
+    private async Task<DnsFormModel> DnsFormAsync(SystemConfig config)
+    {
+        var ct = HttpContext.RequestAborted;
+        var form = DnsFormModel.From(config, await _config.GetDnsCredentialsAsync(ct), config.Dns.Ip.IsFixed ? null : await _dns.DetectPublicIpAsync(ct));
+        return Request.HasFormContentType ? form.WithIp(DnsIp, DnsFixedIp) : form;
     }
 
     /// <summary>Whether the user chose this engine (MatDock always).</summary>

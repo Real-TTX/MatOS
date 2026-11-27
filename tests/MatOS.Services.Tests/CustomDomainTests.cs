@@ -47,6 +47,11 @@ public class CustomDomainTests
         var list = (await owner.GetFromJsonAsync<List<DomainView>>("/api/v1/instance/domains"))!;
         Assert.Equal("apps.example.com", Assert.Single(list).Domain);
 
+        // One domain on its own: what MatOS polls while it waits for the verification (ServicesClient.DomainStatusAsync).
+        var one = (await owner.GetFromJsonAsync<DomainView>("/api/v1/instance/domains/Apps.Example.com"))!;
+        Assert.Equal(("apps.example.com", "verified"), (one.Domain, one.Status));
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/api/v1/instance/domains/other.example.com")).StatusCode);
+
         // Another installation cannot take a verified domain.
         var otherKey = await service.RegisterAsync("bert");
         using var other = service.Client(otherKey);

@@ -78,10 +78,10 @@ in the browser (the owner's choice of 2026-11-26). It replaced the old path (`/S
 |---|---|---|
 | 1. Welcome | `/Setup` | The check of Docker in plain words (`Core/Setup/DockerAdvice.cs`): "This computer is ready", or what is wrong and the one line that fixes it (the socket line of the compose file when the socket is missing, the socket of rootless Docker or Podman when the path is an empty folder, `label=disable` for SELinux, starting Docker). |
 | 2. Your account | `/Setup` | Name, e-mail (the user name), password twice, "Show the password". The password follows MatIdentity's rules (`AccountRules`: 8 to 128 characters, not one of the passwords tried first, not the e-mail), so MatIdentity takes it later. Creates the administrator and signs them in. |
-| 3. How do you reach your apps? | `/Setup/Choose` | Three big choices (radio buttons): a **free address** (recommended; the name is checked while typing through `/api/address/name`), **my own domain** (the domain and `_DnsFields`), **only here at home**. *Advanced*: the engines (MatDock and the ones that are there already fixed) and the address of this machine (prefilled from the browser; opened as `localhost` it is asked for in *Only here at home* instead). A free address this MatOS has already is shown as its own, not checked again; an address service that cannot be asked does not block *Next* (the server asks again). A container that holds the ports 80 or 443 is warned about here (Matcad needs them). |
+| 3. How do you reach your apps? | `/Setup/Choose` | Three big choices (radio buttons): a **free address** (recommended; the name is checked while typing through `/api/address/name`), **my own domain** (the domain, `_DnsFields` and the question whether the connection has a fixed IP address, "Domain and DNS"), **only here at home**. *Advanced*: for an own domain how it is reached from outside (*MatOS takes care of it* or *Only through my router*, "Reached from anywhere"), the engines (MatDock and the ones that are there already fixed) and the address of this machine (prefilled from the browser; opened as `localhost` it is asked for in *Only here at home* instead). A free address this MatOS has already is shown as its own, not checked again; an address service that cannot be asked does not block *Next* (the server asks again). A container that holds the ports 80 or 443 is warned about here (Matcad needs them). |
 | 4. Pick your first apps | `/Setup/Choose` | The catalog without engines, previews, third-party tools and apps that ask something before they install (`SetupPlan.Pickable`); integrated and beta at once, alpha behind *Show more*. Skip is fine. |
-| 5. Set up MatOS | `/Setup/Choose` | One sentence of what will happen (`SetupPlan.Summary`, js/onboarding.js says the same while the person chooses) and one button. |
-| 6. Progress | `/Setup/Progress` | One line per step in plain words, live, an overall bar and an estimate; a failed line has *Try again* and *Show details* (its job log), and *Try all again* retries every failed line in the order of the plan; at the end "Your MatOS is ready", the address MatOS is opened at from anywhere (`SetupPlan.SelfUrl`, with a copy button), the button home and, after 20 seconds (said, the focus on *Stay here*), the home screen. A screen reader hears every line that ends (a polite live region); when MatOS does not answer a few rounds in a row, or the session ended, the card says so (and offers `127.0.0.1` when the browser came as `localhost`). |
+| 5. Set up MatOS | `/Setup/Choose` | One sentence of what will happen, for an own domain with a second one: "Your domain follows your internet address" or "Your domain points to <ip>" (`SetupPlan.Summary`, js/onboarding.js says the same while the person chooses) and one button. |
+| 6. Progress | `/Setup/Progress` | One line per step in plain words, live, an overall bar and an estimate; a failed line has *Try again* and *Show details* (its job log), and *Try all again* retries every failed line in the order of the plan; at the end "Your MatOS is ready", whether the apps can be reached from the internet (the last line checks it, "Reached from anywhere"; `_Reach` with *Check again*), the address MatOS is opened at from anywhere (`SetupPlan.SelfUrl`, with a copy button), the button home and, after 20 seconds (said, the focus on *Stay here*), the home screen. A screen reader hears every line that ends (a polite live region); when MatOS does not answer a few rounds in a row, or the session ended, the card says so (and offers `127.0.0.1` when the browser came as `localhost`). |
 | 7. The tour | `/` | Four coach marks on the first visit of the home screen: the dock, the store, windows, the settings (a user: the dock, windows, the account). |
 
 - **Set up MatOS** (`Core/Setup/SetupService.StartAsync`) first settles the way to the apps: a free address is **registered now** at the address service
@@ -89,8 +89,8 @@ in the browser (the owner's choice of 2026-11-26). It replaced the old path (`/S
   the person on step 3 with the message. Then it keeps what the wizard keeps (the address of this machine, the engines, `WizardCompleted`) and queues
   **one job per line** (`SetupPlan.Steps`): the engines that are missing in the order of `EngineIds.All`, the first apps (prepared like the store does:
   `AppService.PrepareInstallAsync` and `JobKind.Install`; the single worker runs them after the engines), engines that were there already are connected
-  (`ConnectEngines`), the sign-in of the person when MatIdentity is part of it (`AppJobs.HandOverOwner`, below), and the free address last
-  (`AppJobs.FreeAddress`: the tunnel is up). The lines and their jobs are `SystemConfig.Setup` (`SetupRun`). An engine that is there already counts as chosen
+  (`ConnectEngines`), the sign-in of the person when MatIdentity is part of it (`AppJobs.HandOverOwner`, below), the records of an own domain with a DNS account (`AppJobs.DomainRecords`, its line names where they point), the free address
+  (`AppJobs.FreeAddress`: the tunnel is up), and last, with an address on the internet and Matcad, the check of the reachability (`AppJobs.CheckReach`). The lines and their jobs are `SystemConfig.Setup` (`SetupRun`). An engine that is there already counts as chosen
   (its box is fixed, and a fixed box is not sent).
 - **The progress screen** asks `GET /api/setup/progress` (administrators) every two seconds and exchanges only what changed (`SetupProgress.Of`: waiting,
   working, done, failed; the percent and the estimate come from what a step usually takes). A failure is said in plain words with what to do
@@ -129,8 +129,31 @@ Matddns support). The credentials are stored protected (Data Protection) and han
   domain, the provider, the wildcard route and MatOS's own route `matos.domain`). Every app gets a route `app.domain` served from that certificate: a binding
   of `web.route` the broker makes for every app with a web page (Matcad is the provider; the app gets `MAT_PUBLIC_URL`, MatOS keeps it as the app's public address).
   An older Matcad without the bindings gets the routes the old way. Without a DNS account only the single routes exist (HTTP challenge).
-- **Matddns** gets a source *public IP*, a domain group with a record for every app that has a route and a rule per record, so the record follows the home IP
-  (`DnsPublisher`, after the bindings). The records are not a capability: the account, the zone and the list belong to MatOS's domain, and a record gives an app nothing.
+- **Matddns** gets one source, a domain group `MatOS` with a record for every app that has a route (and `matos.domain`) and a rule per record that ties it to
+  that source (`DnsPublisher`, after the bindings). Every record carries `recordName` and `domain` (the zone): Matddns guesses the zone from the last two labels
+  otherwise. Netcup is Matddns's kind `Netcup` (the CCP API) with `netcup: {customerNumber, apiKey, apiPassword, allowDynamic}`, the same three fields Matcad
+  gets as `customer_number`, `api_key`, `api_password`. The records are not a capability: the account, the zone and the list belong to MatOS's domain, and a
+  record gives an app nothing.
+
+**Where the records point** (the owner, 2026-11-27: "the DynDNS client, always, unless I say the IP is fixed"). After the DNS fields the first start, the
+wizard and Settings, General ask in plain words *"Does your internet connection have a fixed IP address?"*: *No, it changes* / *I'm not sure* (the default)
+/ *Yes, it is fixed*, with the hint that most home connections change and MatOS keeps it up to date when in doubt. *Yes* asks for the address (prefilled with
+the public IP Matddns's source saw last, `DnsPublisher.DetectPublicIpAsync`; empty in the first start, nothing is asked of a third party) and accepts only a
+public IPv4 or IPv6 address (`DnsIp.IsPublic`: no private, CGNAT, loopback, link-local, ULA, documentation or reserved range). Stored as
+`SystemConfig.Dns.IpMode` (`dynamic` | `fixed`; "not sure" is `dynamic`) and `Dns.FixedIp`; a config without them (an install before the question) is
+`dynamic`, today's behaviour. The forms preselect *I'm not sure* for `dynamic` (it means the same as *No*). `DnsTarget` turns it into the source:
+
+| Setting | Source in Matddns | Records |
+|---|---|---|
+| dynamic | `MatOS public IP` (kind `PublicIp`): Matddns is the DynDNS client and follows every change | A |
+| fixed | `MatOS fixed IP` (kind `Static`, `static: {ip, ipv6}`) | A, or AAAA for a fixed IPv6 address |
+| through the tunnel (below) | `MatOS tunnel` (kind `Dns`: the address of the tunnel name) | A, plus `*.domain` as a CNAME to the tunnel name |
+
+A switch (`DnsPublisher.ApplyAsync`) writes the new source first, then the group with the complete list (the rules of the records that leave go first:
+Matddns refuses to drop a record a rule uses; a record whose type changes is a new one), then one rule per record with the one new source, and only then
+removes the sources of the other kinds, and only when no rule uses them any more (a rule made by hand keeps its source). So there is always one group, one
+source and one rule per record, and no name has two records in the list. Matddns never deletes a record at the provider: a record that leaves the group
+stays there as it was (the wildcard CNAME after the tunnel; it is harmless, every app has its own record).
 
 **Every app is reached through Matcad** (the owner's decision, 2026-11-09), with or without a domain. Under a domain the binding of `web.route` is a host route
 `app.domain`; without one it is a **port route**: Matcad's Caddy listens on the app's host port (picked by MatOS, `PortPlanner`; nobody chooses it) and
@@ -162,6 +185,41 @@ below the zone. `SystemConfig.UsesHostedAddress` says whether the apps use it (i
   Matddns in line with the mode (`HostedAddressService.SyncAsync`).
 
 *Settings → Address* shows it all; the switch and *Give the name back* run as jobs.
+
+### Reached from anywhere
+
+The owner's rule (2026-11-27): **"The routing is different then, but the result must always be the same."** Direct or through the tunnel is MatOS's own
+business: the addresses never change when it switches, the person sees one status ("Your apps can be reached from anywhere" / "Right now your apps can only
+be reached at home", `Reachability.Sentence`), and the words tunnel, direct, CNAME and ports appear only under *Details* of Settings, Address (and in the
+forwarding help of an own domain that is reached only at home).
+
+- **The check** (`RouteService.CheckAsync`): `POST <ServicesUrl>/api/v1/ports/check` (anonymous, with the key when there is one; `ServicesClient.CheckPortsAsync`,
+  never an exception) says per port whether 80 and 443 answer on IPv4/IPv6 and whether Caddy answers. It runs only after Matcad is there (before, nothing
+  listens): the last line of the first start ("Checking whether your apps can be reached from the internet", `SetupPlan.ReachKey`, after the free address and
+  the records), *Check again* (`POST /api/reach/check` queues the job, `_Reach` and js/matos.js `data-reach` ask `GET /api/reach` until the status changed,
+  in a live region), and `ReachWatcher` every day (an hour after a check that could not be made), always as the job `AppJobs.CheckReach`, one at a time. At
+  home (no address on the internet) there is nothing to check. The result is `SystemConfig.Reach`.
+- **The decision** (`Reachability`, pure, tested): 80 and 443 open with Caddy behind them is **direct**; anything else (closed, filtered, another web server)
+  is **the tunnel**; a service that cannot be asked (or says `too-many-checks`) changes nothing and is no error for the person (the free address of the first
+  start stays in the tunnel, an own domain stays direct). The status is "from anywhere" when the route is the tunnel or the ports are open, "only at home" when
+  the ports are closed and no tunnel carries the apps.
+- **The free address**: the decision switches the mode through `HostedAddressService.SetModeAsync` (direct after the service reached Caddy, Matddns's DynDNS
+  group; the tunnel otherwise).
+- **An own domain** (`SystemConfig.DomainRoute`, `direct` by default): when the ports are closed MatOS falls back to **the tunnel of MatOS Services** instead of
+  leaving the apps at home, when it may (`SystemConfig.RoutePolicy`: `auto`, the default, or `direct` = *Only through my router*, under *Advanced* of the
+  first start and in *Details* of Settings, Address) and can (a DNS account and Matddns: the records must be pointed). `RouteService.UseTunnelAsync`: a tunnel
+  name registered quietly when there is none (`Reachability.TunnelName`: the first label of the domain, a short suffix when taken; `Hosted.ForDomain`: the
+  person never chose it, Settings, Address calls it the tunnel name and offers no free address on top), `POST /api/v1/instance/domains {domain}` (`Hosted.Domain`),
+  the tunnel up (`SystemConfig.TunnelWanted`), the records pointed to the tunnel name (the table above: the same names, the source `MatOS tunnel`, plus
+  `*.domain` CNAME the tunnel name, which is how the service verifies the domain), then the wait for `verified` (`GET .../domains/{domain}`, three minutes;
+  longer is said plainly, the service keeps checking). A failure before the records were written goes back to direct. Back to direct (`UseDirectAsync`, the
+  ports opened, or the policy `direct`): the records follow the IP again, the tunnel closes, `DELETE .../domains/{domain}`; the tunnel name stays for the next
+  time. Matcad keeps its wildcard certificate through the DNS account either way. `ConnectEngines` keeps the registration in line with the domain
+  (`RouteService.SyncAsync`: a new domain is registered, the old one taken off; without an own domain the route is direct again).
+- **The pages**: the last screen of the first start (`_Reach` in `Setup/Progress`, asked again when the screen turns "ready"), Settings, General (*From the
+  internet*) and Settings, Address (the same, plus *Details*). An own domain reached only at home shows the ports to forward to the address of this computer, a
+  short FRITZ!Box how-to (English with the German menu names: Internet > Freigaben > Portfreigaben), and that with a DNS account the certificates work even
+  without forwarding.
 
 ## Where are the backups?
 

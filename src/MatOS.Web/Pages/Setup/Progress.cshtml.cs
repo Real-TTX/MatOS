@@ -1,5 +1,7 @@
 using MatOS.Core.Configuration;
+using MatOS.Core.Data;
 using MatOS.Core.Setup;
+using MatOS.Web.Support;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -14,12 +16,17 @@ public class ProgressModel : PageModel
 {
     private readonly SetupService _setup;
     private readonly SystemConfigService _config;
+    private readonly MatOSDbContext _db;
 
-    public ProgressModel(SetupService setup, SystemConfigService config)
+    public ProgressModel(SetupService setup, SystemConfigService config, MatOSDbContext db)
     {
         _setup = setup;
         _config = config;
+        _db = db;
     }
+
+    /// <summary>Whether the apps can be reached from the internet (the last line of a free address or an own domain); null at home.</summary>
+    public ReachView? Reach { get; private set; }
 
     public SetupProgressView View { get; private set; } = new([], 0, false, false, string.Empty, string.Empty);
 
@@ -48,6 +55,7 @@ public class ProgressModel : PageModel
         var config = await _config.GetAsync(ct);
         WithIdentity = config.Setup?.WithIdentity == true;
         SelfUrl = config.Setup is { } run ? SetupPlan.SelfUrl(run.Reach, config) : null;
+        Reach = config.Setup?.Steps.Any(s => s.Key == SetupPlan.ReachKey) == true ? await ReachView.BuildAsync(config, _db, ct) : null;
         LoopbackUrl = string.Equals(Request.Host.Host, "localhost", StringComparison.OrdinalIgnoreCase)
             ? $"{Request.Scheme}://127.0.0.1{(Request.Host.Port is { } port ? $":{port}" : string.Empty)}/Setup/Progress"
             : null;

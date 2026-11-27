@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using MatOS.Core.Configuration;
+using MatOS.Core.Data;
 using MatOS.Core.Entities;
 using MatOS.Core.Integrations;
 using MatOS.Core.Jobs;
+using MatOS.Web.Support;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -19,13 +21,29 @@ public class AddressModel : PageModel
     private readonly HostedAddressService _hosted;
     private readonly TunnelClient _tunnel;
     private readonly JobService _jobs;
+    private readonly MatOSDbContext _db;
 
-    public AddressModel(SystemConfigService config, HostedAddressService hosted, TunnelClient tunnel, JobService jobs)
+    public AddressModel(SystemConfigService config, HostedAddressService hosted, TunnelClient tunnel, JobService jobs, MatOSDbContext db)
     {
         _config = config;
         _hosted = hosted;
         _tunnel = tunnel;
         _jobs = jobs;
+        _db = db;
+    }
+
+    /// <summary>Whether the apps can be reached from the internet (one status; the route is under Details); null without an address on the internet.</summary>
+    public ReachView? Reach { get; private set; }
+
+    /// <summary>The tunnel name only carries the own domain (MatOS registered it; it is no address the person uses).</summary>
+    public bool TunnelNameOnly => Hosted is { ForDomain: true } && !Config.UsesHostedAddress;
+
+    /// <summary>An own domain: MatOS chooses the route (auto), or only through the router (direct). Then a check.</summary>
+    public async Task<IActionResult> OnPostPolicyAsync(string? policy)
+    {
+        var jobId = await _jobs.EnqueueAsync(JobKind.Provision, "How your domain is reached from outside", null,
+            AppJobs.SetRoutePolicy(DomainRoute.NormalizePolicy(policy)), HttpContext.RequestAborted);
+        return RedirectToPage("/Jobs/Details", new { id = jobId });
     }
 
     [BindProperty]
@@ -163,6 +181,7 @@ public class AddressModel : PageModel
         Config = await _config.GetAsync(ct);
         Tunnel = _tunnel.State;
         KeyReadable = Config.Hosted is not null && await _config.GetHostedKeyAsync(ct) is not null;
+        Reach = string.IsNullOrWhiteSpace(Config.BaseDomain) ? null : await ReachView.BuildAsync(Config, _db, ct);
         if (remote && Config.Hosted is not null)
         {
             Remote = await _hosted.GetRemoteAsync(ct);

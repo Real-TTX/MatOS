@@ -15,6 +15,7 @@ public static class DomainsApi
     public static void MapDomainsApi(this WebApplication app)
     {
         app.MapGet("/api/v1/instance/domains", ListAsync).RequireRateLimiting(InstanceApi.ApiPolicy);
+        app.MapGet("/api/v1/instance/domains/{domain}", GetAsync).RequireRateLimiting(InstanceApi.ApiPolicy);
         app.MapPost("/api/v1/instance/domains", AddAsync).RequireRateLimiting(InstanceApi.ApiPolicy);
         app.MapDelete("/api/v1/instance/domains/{domain}", RemoveAsync).RequireRateLimiting(InstanceApi.ApiPolicy);
     }
@@ -32,6 +33,20 @@ public static class DomainsApi
         var domains = await db.Domains.AsNoTracking().Where(d => d.InstanceId == instance.Id).OrderBy(d => d.Domain)
             .ToListAsync(context.RequestAborted);
         return Results.Ok(domains.Select(View));
+    }
+
+    /// <summary>One own domain of the installation with its status (what MatOS polls while it waits for the verification).</summary>
+    private static async Task<IResult> GetAsync(string domain, HttpContext context, ServicesDbContext db)
+    {
+        var instance = await InstanceAuth.AuthenticateAsync(context, db, tracking: false);
+        if (instance is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var host = domain.Trim().TrimEnd('.').ToLowerInvariant();
+        var row = await db.Domains.AsNoTracking().FirstOrDefaultAsync(d => d.InstanceId == instance.Id && d.Domain == host, context.RequestAborted);
+        return row is null ? Results.NotFound(new ApiError("unknown-domain")) : Results.Ok(View(row));
     }
 
     private static async Task<IResult> AddAsync(DomainRequest? request, HttpContext context, ServicesDbContext db, CustomDomains domains)

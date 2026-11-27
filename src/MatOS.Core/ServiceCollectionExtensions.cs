@@ -98,6 +98,8 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient(ServicesClient.HttpClientName);
         services.AddScoped<ServicesClient>();
         services.AddScoped<HostedAddressService>();
+        // Reached from anywhere: the check of the web ports and the route (direct or through the tunnel), the same addresses either way.
+        services.AddScoped<RouteService>();
         services.AddScoped<MatOS.Core.Integrations.OwnerHandover>();
         services.AddScoped<MatOS.Core.Setup.SetupService>();
         services.AddScoped<TunnelTarget>();
@@ -113,6 +115,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<BackupSchedulerService>();
         // The tunnel of the free address: up while it is used in tunnel mode.
         services.AddHostedService(sp => sp.GetRequiredService<TunnelClient>());
+        // The check of the reachability every day (and an hour after one that could not be made).
+        services.AddHostedService<ReachWatcher>();
         return services;
     }
 }
