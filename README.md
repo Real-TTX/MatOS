@@ -74,10 +74,15 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - **Backups** are MatDock's: compose + `.env` + all volumes, optionally with the app stopped (consistent databases),
   **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too
 - If you **change a stack in MatDock**, the next update keeps your version
+- The **Task Manager** (`/Tasks`) lists every container with its CPU and memory, as MatDock reports them
 - **Shared links** let someone without an account open one app
 
 **Users**
 - Local sign-in or **one sign-in through MatIdentity**, roles **Admin / User / Anonymous (shared link)**, sessions that **survive a restart**
+- **People**: the people, groups and what each may use, kept in MatIdentity and managed in MatOS
+- **A second step for the sign-in**: your account has a tab *Security* that opens the page for the authenticator app, the recovery codes and the
+  passkeys, in the look of MatOS and in a new tab (passkeys do not work inside a window). The tab *Password* says which password it changes:
+  the one of the single sign-on, or MatOS's own, which is only the way in when the single sign-on does not answer
 
 ## Screenshots
 
@@ -294,7 +299,8 @@ browser keeps the places of the windows per address, so at `matos.<domain>` they
 - An app is a **compose project** named `matos-<app>`. MatOS renders the catalog entry into one compose file (container
   names, labels, the shared network, the host port of the UI, an `x-matdock` block) plus a `.env` with your answers and creates it as a
   **stack in MatDock** through MatDock's REST API. The stack is yours to edit there; an update keeps your version.
-- Status, containers and logs are read straight from Docker, so the home screen stays correct when an engine is down.
+- Status, containers and logs are asked from MatDock; while MatDock is not there yet or does not answer, MatOS reads them straight from
+  Docker, so the home screen stays correct when an engine is down.
 - Containers of an app are only attached to the **shared network** `matos` when they must be reachable by
   the proxy (the UI service); databases stay private to their stack.
 - With a domain, every install creates the route `<app>.<domain>` in **Matcad** and the record in **Matddns**; uninstalling removes both.
@@ -312,6 +318,18 @@ browser keeps the places of the windows per address, so at `matos.<domain>` they
   widgets and menu entries of the app on the home screen.
 - The design decisions (what the engines own, where the compose files are, the home screen, how this relates to the older matOS desktop) are in
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the contract with the engines is [docs/ENGINES.md](docs/ENGINES.md).
+
+## MatOS Services
+
+The free address `<name>.my.mattiverse.de` and the tunnel come from **MatOS Services** (`services.mattiverse.de`, its own project in
+`src/MatOS.Services` and its own image `ghcr.io/real-ttx/matos-services`; the contract is [docs/SERVICES.md](docs/SERVICES.md)). It hands out
+the names, answers the DNS of the zone `my.mattiverse.de`, passes visitors through to a MatOS behind a router (TLS is never decrypted on the
+way), checks from outside whether a MatOS can be reached directly, and offers DynDNS for everybody at `my.mattiverse.de`.
+
+Its operator has an **admin area** at `/admin`, in the same look as every Mat app: the installations with their tunnels and own domains,
+block, disconnect or give back a name (each written to a history), the accounts, and **statistics** of the traffic, the visitors, the tunnels,
+the DNS and the API per hour, day and month. A visitor's address or the pages they open are never stored: visitors are counted as a number
+per hour. Setup on a server: [deploy/services/README.md](deploy/services/README.md).
 
 ## Apps and their state
 
@@ -413,7 +431,12 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | Apps that describe themselves (platform contract): the tab Manage with their tiles, settings and buttons | ✅ |
 | The engines inside a window (`MAT_FRAME_ANCESTORS`, MatPlatform 1.5.0) | ✅ in MatOS; the engines on their `feature/frame-ancestors` branches, in their images with the next release |
 | Apps that connect themselves (bindings) and bring their own icons, widgets and menu entries (contract 2, MatPlatform 2.0) | ✅ MatOffice and MatDrive; the engines move onto the bindings next |
-| Widgets you arrange yourself, widgets with the data of the person who is looking, a search across the apps | planned |
+| MatOS updates itself; automatic updates of the apps, the engines and MatOS at night | ✅ |
+| The free address and the tunnel of MatOS Services, reached from anywhere (direct or tunnel, chosen by itself) | ✅ |
+| MatOS Services: admin area and statistics | ✅ |
+| People, groups and access through MatIdentity; a second step for the sign-in (authenticator, passkeys) | ✅ |
+| A home screen you arrange yourself (pages, dragging, sizes of widgets, kept with your account) | ✅ |
+| Widgets with the data of the person who is looking | planned |
 | Microsoft Entra ID sign-in | planned (the login is already behind `AuthService` / `SessionService`) |
 | Remote backup targets (SMB, off-site) | MatDock's backup targets |
 
