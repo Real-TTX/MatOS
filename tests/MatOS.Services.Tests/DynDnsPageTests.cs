@@ -126,7 +126,7 @@ public partial class DynDnsPageTests
             response.Content.Headers.TryGetValues("Content-Security-Policy", out var more) ? more : []));
         Assert.Contains("script-src 'self'", csp);
         Assert.Contains("frame-ancestors 'none'", csp);
-        Assert.Contains("crypto.subtle", await client.GetStringAsync("/dyndns/app.js"));
+        Assert.Contains("crypto.subtle", await client.GetStringAsync("/js/dyndns.js"));
     }
 
     [Fact]
@@ -285,7 +285,7 @@ public partial class DynDnsPageTests
     [GeneratedRegex("data-bits=\"(\\d+)\"")]
     private static partial Regex BitsRegex();
 
-    [GeneratedRegex("<pre id=\"key\" class=\"key\">(mos_[A-Za-z0-9_-]+)</pre>")]
+    [GeneratedRegex("<pre id=\"key\"[^>]*>(mos_[A-Za-z0-9_-]+)</pre>")]
     private static partial Regex KeyRegex();
 }
 

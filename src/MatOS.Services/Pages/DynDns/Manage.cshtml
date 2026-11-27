@@ -1,0 +1,149 @@
+@page "/dyndns/manage/{handler:regex(^(update|ports|release)$)?}"
+@model MatOS.Services.Pages.DynDns.ManageModel
+@{
+    // Three states: the sign-in, the page of a signed-in name, and the answer after giving it back. Nothing is kept between requests.
+    var zone = Model.Options.Zone;
+    ViewData["DynDns"] = true;
+    if (Model.Released is { } released)
+    {
+        ViewData["Title"] = "Given back";
+        ViewData["Heading"] = $"{released} is free again";
+        ViewData["PageSub"] = "The name no longer points anywhere, and anybody may register it now. Remove the settings from your router.";
+    }
+    else if (Model.Instance is not null)
+    {
+        ViewData["Title"] = Model.Address;
+        ViewData["PageSub"] = "Signed in. Nothing is remembered after you leave this page.";
+    }
+    else if (!Model.Refused)
+    {
+        ViewData["Title"] = "Manage your name";
+        ViewData["PageSub"] = "Sign in with the name and the key you got when you registered it. Nothing is remembered after you leave this page.";
+    }
+}
+
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    if (Model.MessageIsError)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@Model.Message</div></div>
+    }
+    else
+    {
+        <div class="mat-alert mat-alert--success" role="status"><icon name="check-circle" /><div class="mat-alert__body">@Model.Message</div></div>
+    }
+}
+
+@if (Model.Refused)
+{
+    <partial name="_NotAllowed" />
+}
+else if (Model.Released is not null)
+{
+    <div class="mat-btn-row mat-btn-row--plain">
+        <a class="mat-btn mat-btn--secondary" href="@PublicSite.DynDnsBase"><icon name="back" /><span>Back to the start</span></a>
+    </div>
+}
+else if (Model.Instance is { } instance)
+{
+    <section class="mat-card" aria-labelledby="address-title">
+        <div class="mat-card__head"><icon name="globe" /><h2 class="mat-card__title" id="address-title">Its address</h2></div>
+        <div class="mat-card__body mat-stack">
+            <dl class="mat-kv">
+                <dt>IPv4 address</dt><dd class="mat-mono">@(instance.PublicIpv4 ?? "none yet")</dd>
+                <dt>IPv6 address</dt><dd class="mat-mono">@(instance.PublicIpv6 ?? "none yet")</dd>
+                <dt>Last update</dt><dd>@DynDnsForms.Date(instance.LastSeen)</dd>
+                <dt>Address changed</dt><dd>@DynDnsForms.Date(instance.UpdateDate)</dd>
+                <dt>Registered</dt><dd>@DynDnsForms.Date(instance.CreateDate)</dd>
+            </dl>
+            <form method="post" action="@PublicSite.DynDnsBase/manage/update" asp-antiforgery="false" class="mat-stack">
+                <input type="hidden" name="name" value="@instance.Name" />
+                <input type="hidden" name="key" value="@Model.Key" />
+                <p>This browser comes from <code>@Model.ClientIp</code>.</p>
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="refresh" /><span>Update now from this browser</span></button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    @if (Model.IsOwnAddress)
+    {
+        <partial name="_DynDnsPorts" model="Model.PortsCard" />
+    }
+    else
+    {
+        <section class="mat-card" id="ports" aria-labelledby="ports-title">
+            <div class="mat-card__head"><icon name="network" /><h2 class="mat-card__title" id="ports-title">Check my ports</h2></div>
+            <div class="mat-card__body">
+                <p>The ports of @(instance.PublicIpv4 ?? instance.PublicIpv6 ?? "the name's address") can be checked from that connection only
+                    (this browser comes from @Model.ClientIp). Open this page at home.</p>
+            </div>
+        </section>
+    }
+
+    <div class="mat-accordion">
+        <details class="mat-accordion__item">
+            <summary><icon name="settings" />Settings for your router or program<icon name="chevron-down" class="mat-accordion__chev" /></summary>
+            <div class="mat-accordion__body mat-stack">
+                <partial name="_DynDnsSetup" model="Model.Settings" />
+            </div>
+        </details>
+    </div>
+
+    <section class="mat-card" aria-labelledby="release-title">
+        <div class="mat-card__head"><icon name="trash" /><h2 class="mat-card__title" id="release-title">Give the name back</h2></div>
+        <div class="mat-card__body">
+            <form class="mat-form" novalidate method="post" action="@PublicSite.DynDnsBase/manage/release" asp-antiforgery="false">
+                <input type="hidden" name="name" value="@instance.Name" />
+                <input type="hidden" name="key" value="@Model.Key" />
+                <p>The name stops pointing anywhere at once, and anybody may register it.</p>
+                <div class="mat-field">
+                    <label class="mat-check">
+                        <input type="checkbox" name="confirm" value="yes" required data-msg-required="Tick the box to confirm that you want to give the name back." />
+                        <span class="mat-check__text">Yes, give @Model.Address back</span>
+                    </label>
+                    <span class="mat-error" aria-live="polite"></span>
+                </div>
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" class="mat-btn mat-btn--danger"><icon name="trash" /><span>Give it back</span></button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <div class="mat-btn-row mat-btn-row--plain">
+        <a class="mat-btn mat-btn--secondary" href="@PublicSite.DynDnsBase"><icon name="back" /><span>Back to the start</span></a>
+    </div>
+}
+else
+{
+    <section class="mat-card" aria-labelledby="signin-title">
+        <div class="mat-card__head"><icon name="key" /><h2 class="mat-card__title" id="signin-title">Your name and its key</h2></div>
+        <div class="mat-card__body">
+            <form class="mat-form" novalidate method="post" action="@PublicSite.DynDnsBase/manage" asp-antiforgery="false" autocomplete="off">
+                <mat-field label="Name" for-id="name" required="true">
+                    <div class="mat-input-group">
+                        <input type="text" class="mat-input" id="name" name="name" value="@Model.Name" required spellcheck="false" autocapitalize="none"
+                               data-msg-required="Please type your name." />
+                        <span class="mat-input-addon">.@(zone)</span>
+                    </div>
+                </mat-field>
+                <mat-field label="Key" for-id="key" required="true">
+                    <input type="password" class="mat-input" id="key" name="key" required placeholder="mos_..." data-msg-required="Please paste your key." />
+                </mat-field>
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="login" /><span>Sign in</span></button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <div class="mat-btn-row mat-btn-row--plain">
+        <a class="mat-btn mat-btn--secondary" href="@PublicSite.DynDnsBase"><icon name="back" /><span>Back</span></a>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/dyndns.js" asp-append-version="true"></script>
+}

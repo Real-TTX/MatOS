@@ -13,7 +13,7 @@ installations share one cookie site and one Let's Encrypt quota with each other 
 
 | From the internet | To the container | What |
 |---|---|---|
-| `https://services.mattiverse.de` (through the existing proxy, TLS ends there) | `8080` | the API, the tunnel (WebSockets) and the status page |
+| `https://services.mattiverse.de` (through the existing proxy, TLS ends there) | `8080` | the API, the tunnel (WebSockets), the public pages (the start page, DynDNS) and the admin area `/admin` |
 | `*.my.mattiverse.de` on **443**, **passed through unencrypted** (no TLS termination) | `8443` | the edge for TLS: it reads the SNI and passes the bytes into the tunnel |
 | `*.my.mattiverse.de` on **80** | `8081` | the edge for HTTP (ACME HTTP-01, the redirect to https) |
 | `https://my.mattiverse.de` (the zone itself: the public DynDNS page; through the existing proxy, TLS ends there) | `8080` | the same HTTP port: the service shows the DynDNS page for this host |

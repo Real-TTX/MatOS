@@ -1,0 +1,56 @@
+@model MatOS.Services.Pages.DynDns.PortsCard
+@*
+    "Check my ports": the service connects to the caller's own address on 80, 443 and one more port (never an address from the form). On the
+    start page anybody may; on the manage page only from the address the name points to (the form carries the name and the key again).
+*@
+<section class="mat-card" id="ports" aria-labelledby="ports-title">
+    <div class="mat-card__head"><icon name="network" /><h2 class="mat-card__title" id="ports-title">Check my ports</h2></div>
+    <div class="mat-card__body mat-stack">
+        <p>Is your device at home reachable from the internet? The service tries to connect to your address <code>@Model.ClientIp</code>
+            on port 80 and 443, and on one more port if you like. Only your own address is ever checked.</p>
+
+        @if (Model.Result is { Error: { } error })
+        {
+            <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@error</div></div>
+        }
+        else if (Model.Result is { } result)
+        {
+            <dl class="mat-kv" aria-label="The ports">
+                @foreach (var port in result.Rows)
+                {
+                    <dt>Port @port.Port</dt>
+                    <dd><span class="mat-pill @(port.Open ? "mat-pill--ok" : "mat-pill--error")">@port.Words</span></dd>
+                }
+            </dl>
+        }
+
+        <form class="mat-form" novalidate method="post" action="@Model.Action" asp-antiforgery="false">
+            @if (Model.Name is not null)
+            {
+                <input type="hidden" name="name" value="@Model.Name" />
+                <input type="hidden" name="key" value="@Model.Key" />
+            }
+            <mat-field label="One more port (optional)" for-id="port">
+                <div class="mat-input-group">
+                    <input type="number" class="mat-input" id="port" name="port" min="1" max="65535" inputmode="numeric" placeholder="for example 8443"
+                           data-msg-range="A port is a number from 1 to 65535." data-msg-type="A port is a number from 1 to 65535." />
+                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="search" /><span>Check my ports</span></button>
+                </div>
+            </mat-field>
+        </form>
+
+        <details class="mat-collapse">
+            <summary>How to forward a port on a FritzBox<icon name="chevron-down" class="mat-accordion__chev" /></summary>
+            <div class="mat-accordion__body mat-prose">
+                <ol>
+                    <li>Open <code>http://fritz.box</code> and go to <em>Internet &gt; Permit Access &gt; Port Sharing</em>.</li>
+                    <li><em>Add Device for Sharing</em>, pick the device that should be reachable (it needs a fixed address in your network).</li>
+                    <li><em>New Sharing &gt; Port Sharing</em>: choose <em>HTTP server</em> (80), <em>HTTPS server</em> (443), or <em>Other application</em>
+                        with your port and TCP, then save and switch it on.</li>
+                    <li>Check again here. If it still says closed, your connection may have no public IPv4 address of its own (DS-Lite, CGNAT): ask
+                        your provider, or use MatOS's tunnel instead.</li>
+                </ol>
+            </div>
+        </details>
+    </div>
+</section>

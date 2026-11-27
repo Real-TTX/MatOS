@@ -1,0 +1,131 @@
+@page "/dyndns/{handler:regex(^(register|ports)$)?}"
+@model MatOS.Services.Pages.DynDns.IndexModel
+@{
+    // The start page of DynDNS for everybody, and the answer of a registration (the key, shown once, and the settings).
+    var zone = Model.Options.Zone;
+    var bits = Model.Options.ProofOfWorkBits;
+    var days = Model.Options.ExpireUnusedAfterDays;
+    ViewData["DynDns"] = true;
+    if (Model.Registered is { } done)
+    {
+        ViewData["Title"] = $"{done.Address} is yours";
+        ViewData["PageSub"] = "Two more steps: keep the key, then put the settings into your router.";
+    }
+    else if (!Model.Refused)
+    {
+        ViewData["Title"] = "Free DynDNS names below " + zone;
+        ViewData["Heading"] = "Your own name on the internet, free";
+        ViewData["PageSub"] = "It follows the IP address of your home connection, so your devices stay reachable when your provider changes the address.";
+    }
+}
+
+@if (Model.Refused)
+{
+    <partial name="_NotAllowed" />
+}
+else if (Model.Registered is { } registered)
+{
+    <section class="mat-card" aria-labelledby="key-title">
+        <div class="mat-card__head"><icon name="key" /><h2 class="mat-card__title" id="key-title">Your key</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p><strong>It is shown only this once.</strong> Copy it into your password manager now; without it nobody, not even the
+                service, can change or give back the name.</p>
+            <pre id="key" class="mat-code msv-wrap">@Model.RegisteredKey</pre>
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="button" class="mat-btn mat-btn--secondary" data-copy="#key" hidden><icon name="copy" /><span>Copy the key</span></button>
+            </div>
+        </div>
+    </section>
+
+    <section class="mat-card" aria-labelledby="setup-title">
+        <div class="mat-card__head"><icon name="settings" /><h2 class="mat-card__title" id="setup-title">Settings</h2></div>
+        <div class="mat-card__body mat-stack">
+            <partial name="_DynDnsSetup" model="registered" />
+        </div>
+    </section>
+
+    <section class="mat-card" aria-labelledby="now-title">
+        <div class="mat-card__head"><icon name="info" /><h2 class="mat-card__title" id="now-title">What now</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p>As soon as your router (or your program) sends its first update, <code>@registered.Address</code> points to your home.
+                @if (days > 0)
+                {
+                    <text>A name that receives no address within @days days is given back automatically.</text>
+                }
+            </p>
+            <div class="mat-btn-row mat-btn-row--plain">
+                <a class="mat-btn mat-btn--secondary" href="@PublicSite.DynDnsBase/manage"><icon name="settings" /><span>Manage your name</span></a>
+                <a class="mat-btn mat-btn--ghost" href="@PublicSite.DynDnsBase/rules"><icon name="book" /><span>The rules</span></a>
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    <p class="mat-lead">Pick a name and get <code>yourname.@(zone)</code>. It works with a FritzBox, ddclient, Matddns or a small script; you do
+        not need MatOS for it.</p>
+
+    @if (!string.IsNullOrEmpty(Model.Message))
+    {
+        <div class="mat-alert mat-alert--danger" role="alert"><icon name="x-circle" /><div class="mat-alert__body">@Model.Message</div></div>
+    }
+
+    <section class="mat-card" aria-labelledby="pick-title">
+        <div class="mat-card__head"><icon name="globe" /><h2 class="mat-card__title" id="pick-title">Pick a name</h2></div>
+        <div class="mat-card__body">
+            <form id="register" class="mat-form" novalidate method="post" action="@PublicSite.DynDnsBase/register" asp-antiforgery="false" data-bits="@bits" autocomplete="off">
+                <mat-field label="Name" for-id="name" required="true">
+                    <div class="mat-input-group">
+                        <input type="text" class="mat-input" id="name" name="name" value="@Model.Name" required minlength="3" maxlength="32" pattern="[A-Za-z0-9\-]+"
+                               spellcheck="false" autocapitalize="none" aria-describedby="name-status"
+                               data-msg-required="Please type the name you want." data-msg-pattern="Letters, digits and hyphens only." data-msg-range="3 to 32 characters." />
+                        <span class="mat-input-addon">.@(zone)</span>
+                    </div>
+                    <span class="mat-hint" id="name-status" aria-live="polite">3 to 32 characters: letters, digits and hyphens.</span>
+                </mat-field>
+                <div class="msv-honeypot" aria-hidden="true">
+                    <label for="website">Leave this empty</label>
+                    <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+                </div>
+                <input type="hidden" name="token" value="@Model.Token" />
+                <input type="hidden" name="nonce" value="" />
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="check" /><span>Get my name</span></button>
+                </div>
+                @if (bits > 0)
+                {
+                    <noscript><p class="mat-text-danger">Getting a name needs JavaScript for a short check against bots (about a second).</p></noscript>
+                }
+            </form>
+        </div>
+    </section>
+
+    <section class="mat-card" aria-labelledby="how-title">
+        <div class="mat-card__head"><icon name="help-circle" /><h2 class="mat-card__title" id="how-title">How it works</h2></div>
+        <div class="mat-card__body mat-prose">
+            <ol>
+                <li>Pick a free name above. You get a <strong>key</strong>: it is shown once, so keep it like a password.</li>
+                <li>Put the name and the key into your router or your update program (the settings are shown right after).</li>
+                <li>Your router tells the service whenever your address changes; <code>yourname.@(zone)</code> and every name below it
+                    (<code>nas.yourname.@(zone)</code>) then point to your home.</li>
+            </ol>
+            <p>For visitors to reach a device at home, your router must forward the port to it. The check below tells you whether it does.</p>
+        </div>
+    </section>
+
+    <partial name="_DynDnsPorts" model="Model.PortsCard" />
+
+    <section class="mat-card" aria-labelledby="have-title">
+        <div class="mat-card__head"><icon name="user" /><h2 class="mat-card__title" id="have-title">You already have a name?</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p>See its address, update it from this browser, or give it back.</p>
+            <div class="mat-btn-row mat-btn-row--plain">
+                <a class="mat-btn mat-btn--secondary" href="@PublicSite.DynDnsBase/manage"><icon name="login" /><span>Manage your name</span></a>
+            </div>
+        </div>
+    </section>
+}
+
+@section Scripts {
+    <script src="~/js/dyndns.js" asp-append-version="true"></script>
+}

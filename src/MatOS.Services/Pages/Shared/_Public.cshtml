@@ -1,0 +1,58 @@
+@inject Toolkit Toolkit
+@{
+    // The public pages (/, DynDNS for everybody): a bar with the name and the theme, the page in a narrow column, the links at the foot. No menu,
+    // no account, no cookie. A page sets Title (the tab), Heading (the h1, else the title), PageSub, and DynDns for the pages of DynDNS.
+    ViewData["Public"] = true;
+    var dynDns = ViewData["DynDns"] is true;
+    var brand = dynDns ? "MatOS DynDNS" : "MatOS Services";
+    var title = ViewData["Title"] as string ?? brand;
+    var heading = ViewData["Heading"] as string ?? title;
+    var sub = ViewData["PageSub"] as string;
+    var home = dynDns ? PublicSite.DynDnsBase : "/";
+}
+<!DOCTYPE html>
+<html lang="en" data-app="@Ui.App.Id">
+<partial name="_Head" model="@(title == brand ? brand : $"{title} · {brand}")" />
+<body class="msv-public">
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+
+    <header class="mat-topbar">
+        <a class="msv-brand" href="@home">@Ui.Logo("sm")<span>@brand</span></a>
+        <div class="mat-topbar__actions">
+            @* The theme of this browser only (MatUi keeps it in localStorage): a public page has no account to save it in. *@
+            <button type="button" class="mat-theme" data-theme-toggle data-theme-state="system" aria-label="Theme: System. Click for Light." title="Theme: System. Click for Light.">
+                <svg class="mat-icon" data-theme-icon="system" aria-hidden="true" focusable="false"><use href="#mat-i-monitor"></use></svg>
+                <svg class="mat-icon" data-theme-icon="light" aria-hidden="true" focusable="false"><use href="#mat-i-sun"></use></svg>
+                <svg class="mat-icon" data-theme-icon="dark" aria-hidden="true" focusable="false"><use href="#mat-i-moon"></use></svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="mat-page mat-page--narrow" id="main">
+        <div class="mat-page__head">
+            <div class="mat-page__title">
+                <h1>@heading</h1>
+                @if (!string.IsNullOrEmpty(sub))
+                {
+                    <p class="mat-page__sub">@sub</p>
+                }
+            </div>
+        </div>
+
+        @RenderBody()
+    </main>
+
+    <footer class="mat-footer">
+        <ul class="mat-footer__links">
+            <li><a href="@PublicSite.DynDnsBase">DynDNS</a></li>
+            <li><a href="@PublicSite.DynDnsBase/manage">Manage your name</a></li>
+            <li><a href="@PublicSite.DynDnsBase/rules">Rules</a></li>
+        </ul>
+        <p class="mat-footer__text">Part of <a href="@PublicSite.RepositoryUrl">MatOS</a></p>
+    </footer>
+
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -31,6 +31,7 @@ apps' launchers, quick actions and widgets on the home screen). **No code that k
   `docker ps` parsing, a stale EF migration lock (`MigrationLockTests`), the rules of the first start (the phases, the needs of a line, its dependents for Try again, the records to create, the list Getting started), and `WebUiTests`: the pages name only icons of the toolkit sprite, have no inline style or script, and the stylesheet has tokens only).
 - **Browser checks:** `cd tests/e2e && npm install && node run.js [http://localhost:8030]` (Playwright, installed Edge) against the running dev stack: every page light, dark and on a phone,
   the theme button, the list tools, validation, the flash message, the wizard, the drawer. It removes what it creates.
+  MatOS Services: `node services.js` starts a local `dotnet run` of the service itself (no Docker) and checks its admin area and public pages the same way.
 - **Run / test the app: always rebuild the container and redeploy the stack** (project rule): `./scripts/redeploy.ps1`
   (`-Fresh` wipes the volume, `-Port` changes the host port). Dev stack: `docker-compose.dev.yml` (app + `sqlite-web` on 8021).
   In `Development` the account `admin@example.com` / `Start12345` exists (the test account of every Mat app).
@@ -98,14 +99,17 @@ src/MatOS.Web         Razor Pages, controls, JS/CSS, Program.cs
   Support/                   Toolkit (the icon sprite), Ui (Icon, Logo), Navigation (the menus: NavSet, NavItem, NavBadge), Launcher (the parts of MatOS as apps on the home screen and in its dock), EngineOverview (the five engines for the settings, the home screen and /Engines), HomeContributions (the launchers, quick actions and widgets of the apps for the home screen), Crumbs, AppUrls, FrameProbe, AppStatus, Format, SetupRequests (the request side of Core/Setup/SetupFlow: localhost to 127.0.0.1)
   wwwroot/matui/             the toolkit, a copy of MatDesign's; wwwroot/css/matos.css the few classes only this app has (mv-*, mv-in-window); css/os.css the home screen (os-*); css/onboarding.css the first start and the tour (ob-*, tokens only); js/matos.js its behaviour, js/os.js the home screen, js/onboarding.js the first start and the tour, js/window-mode.js a page in the window
 src/MatOS.Services         MatOS Services: names and keys (Instances/), the tunnel (Tunnel/), the edge that passes TLS by SNI and HTTP by Host without decrypting (Edge/),
-                             the DNS of the zone (Dns/), DynDNS2 for Matddns, the public pages (Pages/*.cs);
+                             the DNS of the zone (Dns/), DynDNS2 for Matddns; every page is Razor Pages in MatUi (docs/SERVICES.md "The pages"): the public pages (Pages/Index, Pages/DynDns,
+                             the layout _Public, PublicPageModel: the strict headers, no cookie, the forms guarded by FormGuard; PublicSite: /ip, /healthz, the zone's / is /dyndns; js/dyndns.js);
                              the admin area /admin (Admin/: AdminArea the gate (API host only, 404 without an account, the headers), AdminAccounts + AdminAuth (User, UserSession, the cookie), AdminGuard (the lockout),
-                             InstanceAdmin (block, give back, AdminAction); Pages/Admin: Razor Pages with MatOS.Web's toolkit, controls and partials linked in the csproj, never copied);
+                             InstanceAdmin (block, give back, AdminAction); Pages/Admin: Razor Pages with MatOS.Web's toolkit, controls and partials linked in the csproj, never copied;
+                             the few msv-* classes in wwwroot/css/services.css, tokens only);
                              the statistics (Usage/: UsageRecorder counts in memory with Interlocked and writes UsageHour, TunnelSession, DnsHour and ApiDay every minute and on stop,
                              UsageConnection the meter of one edge connection, UsageRetention the daily roll-up into UsageDay/DnsDay and the removal; never a visitor's address or path)
 tests/MatOS.Tests       unit tests + WebUiTests (they read the source of the pages)
-tests/MatOS.Services.Tests its unit tests and in-process end-to-end tests (free ports; the DNS binds TCP first, then UDP on the same number)
-tests/e2e                    run.js: the pages in a real browser against the running dev stack; run.js --first-start: the first start on a MatOS without an account
+tests/MatOS.Services.Tests its unit tests and in-process end-to-end tests (free ports; the DNS binds TCP first, then UDP on the same number), ServicesUiTests (the source of its pages, as WebUiTests)
+tests/e2e                    run.js: the pages in a real browser against the running dev stack; run.js --first-start: the first start on a MatOS without an account;
+                             services.js: every page of MatOS Services (a dotnet run of its own in Development, or a given address)
 ```
 
 ## Conventions

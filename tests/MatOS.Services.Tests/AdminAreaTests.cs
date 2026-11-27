@@ -122,6 +122,44 @@ public partial class AdminAreaTests
     }
 
     [Fact]
+    public async Task Every_admin_page_sends_a_stranger_to_the_sign_in_and_opens_signed_in()
+    {
+        await using var service = await StartAsync();
+        await service.RegisterAsync("carla");
+        string[] pages =
+        [
+            .. Pages, "/admin/Installations/Details?name=carla", "/admin/Installations?q=carla&sort=name", "/admin/Statistics?period=7d",
+            "/admin/Statistics?period=12m", "/admin?period=30d", "/admin/Users/Edit?id=1",
+        ];
+
+        var stranger = new Browser(service);
+        foreach (var page in pages)
+        {
+            var answer = await stranger.GetAsync(page);
+            Assert.True(answer.StatusCode == HttpStatusCode.Redirect, $"{page}: {answer.StatusCode}");
+            Assert.StartsWith("/admin/SignIn", answer.Headers.Location!.OriginalString.Replace(service.BaseUri.ToString(), "/"));
+        }
+
+        // The JSON of the live tunnels has no sign-in page: 401.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await stranger.GetAsync("/admin/api/tunnels")).StatusCode);
+
+        var admin = new Browser(service);
+        Assert.True(await admin.SignInAsync(Email, Password));
+        foreach (var page in pages)
+        {
+            var answer = await admin.GetAsync(page);
+            Assert.True(answer.StatusCode == HttpStatusCode.OK, $"{page}: {answer.StatusCode}");
+            var html = await answer.Content.ReadAsStringAsync();
+            Assert.DoesNotContain(" style=", html);
+            Assert.DoesNotMatch(@"<script(?![^>]*\ssrc=)[^>]*>", html);
+            Assert.Contains("<meta name=\"robots\" content=\"noindex, nofollow\" />", html);
+            Assert.Contains("<meta name=\"referrer\" content=\"no-referrer\" />", html);
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/admin/api/tunnels")).StatusCode);
+    }
+
+    [Fact]
     public async Task Wrong_passwords_lock_the_sign_in()
     {
         await using var service = await StartAsync();

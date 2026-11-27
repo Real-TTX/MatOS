@@ -101,6 +101,7 @@ public static class ServicesHost
         app.UseForwardedHeaders();
         var area = app.Services.GetRequiredService<AdminArea>();
         app.Use(area.GateAsync);
+        app.Use(PublicSite.ZoneStartAsync);
         app.UseStaticFiles();
         app.UseRouting();
         app.UseRateLimiter();
@@ -109,10 +110,9 @@ public static class ServicesHost
         // The pings of the control connection are MatOS's; these keep proxies in between from dropping a quiet stream.
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
-        app.MapStatusPages();
+        app.MapPublicEndpoints();
         app.MapInstanceApi();
         app.MapDynDns();
-        app.MapDynDnsPages();
         app.MapPortsApi();
         app.MapDomainsApi();
         app.MapTunnel();
@@ -145,10 +145,12 @@ public static class ServicesHost
         {
             o.Conventions.AuthorizeFolder("/Admin", AdminAuth.Policy);
             o.Conventions.AllowAnonymousToPage("/Admin/SignIn");
-            // The sign-in has its own, tighter limit (its page model).
-            o.Conventions.AddFolderApplicationModelConvention("/Admin", model =>
+            // The sign-in has its own, tighter limit (its page model); the public pages (/, the DynDNS pages) theirs.
+            o.Conventions.AddFolderApplicationModelConvention("/", model =>
                 model.EndpointMetadata.Add(new EnableRateLimitingAttribute(
-                    model.ViewEnginePath == "/Admin/SignIn" ? AdminArea.SignInPolicy : AdminArea.PagePolicy)));
+                    !model.ViewEnginePath.StartsWith("/Admin/", StringComparison.Ordinal) ? PublicSite.PagePolicy
+                    : model.ViewEnginePath == "/Admin/SignIn" ? AdminArea.SignInPolicy
+                    : AdminArea.PagePolicy)));
         });
     }
 
@@ -230,11 +232,15 @@ public static class ServicesHost
             o.AddPolicy(InstanceApi.ApiPolicy, context => Window(context, 60));
             o.AddPolicy(AdminArea.SignInPolicy, context => Window(context, 20, Registrar.RegistrationPrefix));
             o.AddPolicy(AdminArea.PagePolicy, context => Window(context, 300, Registrar.RegistrationPrefix));
+            // The public pages: as many views as name checks, as many forms as API calls (a budget of their own each).
+            o.AddPolicy(PublicSite.PagePolicy, context => HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)
+                ? Window(context, 120, keyPrefix: "view:")
+                : Window(context, 60, keyPrefix: "form:"));
         });
     }
 
-    private static RateLimitPartition<string> Window(HttpContext context, int perMinute, int ipv6Prefix = 64) =>
-        RateLimitPartition.GetFixedWindowLimiter(Networks.LimitKey(context.ClientIp(), ipv6Prefix), _ => new FixedWindowRateLimiterOptions
+    private static RateLimitPartition<string> Window(HttpContext context, int perMinute, int ipv6Prefix = 64, string keyPrefix = "") =>
+        RateLimitPartition.GetFixedWindowLimiter(keyPrefix + Networks.LimitKey(context.ClientIp(), ipv6Prefix), _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = perMinute,
             Window = TimeSpan.FromMinutes(1),

@@ -28,7 +28,7 @@ services:
       Services__Edge__ProxyProtocol: "${MATOS_SERVICES_PROXY_PROTOCOL:-false}"
       Services__Edge__HttpProxyProtocol: "${MATOS_SERVICES_HTTP_PROXY_PROTOCOL:-false}"
     ports:
-      - "127.0.0.1:8080:8080"   # API, tunnel, status page -> https://services.mattiverse.de and the DynDNS page https://my.mattiverse.de
+      - "127.0.0.1:8080:8080"   # API, tunnel, the public pages and /admin -> https://services.mattiverse.de and the DynDNS page https://my.mattiverse.de
       - "127.0.0.1:8443:8443"   # edge, TLS by SNI          -> *.my.mattiverse.de:443 (passthrough)
       - "127.0.0.1:8081:8081"   # edge, HTTP by Host        -> *.my.mattiverse.de:80
       # Direct mode and DynDNS names (after the delegation of my.mattiverse.de), on server1's public address:

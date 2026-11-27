@@ -1,0 +1,32 @@
+@model MatOS.Services.Pages.DynDns.DynDnsSettings
+@*
+    The settings of a name for a FritzBox, Matddns, ddclient and curl. The caller puts them into a card (after a registration) or into the
+    collapsed part of the manage page. A copy button shows once js/dyndns.js runs (the copying itself is MatUi's data-copy).
+*@
+<h3>FritzBox</h3>
+<p><em>Internet &gt; Permit Access &gt; DynDNS</em>: switch DynDNS on, provider <em>User-defined</em>, then:</p>
+<dl class="mat-kv">
+    <dt>Update URL</dt>
+    <dd class="mat-stack mat-stack--sm">
+        <pre id="s-fritz-url" class="mat-code msv-wrap">@Model.FritzUrl</pre>
+        <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm msv-copy" data-copy="#s-fritz-url" hidden><icon name="copy" /><span>Copy</span></button>
+    </dd>
+    <dt>Domain name</dt><dd><code>@Model.Address</code></dd>
+    <dt>User name</dt><dd><code>@Model.Name</code></dd>
+    <dt>Password</dt><dd>your key</dd>
+</dl>
+
+<h3>Matddns</h3>
+<p>A domain group of the kind <em>DynDns</em> with the record <code>@Model.Address</code>, user name <code>@Model.Name</code>, password your key, and the update URL:</p>
+<pre id="s-matddns" class="mat-code msv-wrap">@Model.MatddnsUrl</pre>
+<button type="button" class="mat-btn mat-btn--secondary mat-btn--sm msv-copy" data-copy="#s-matddns" hidden><icon name="copy" /><span>Copy</span></button>
+
+<h3>ddclient</h3>
+<p>In <code>/etc/ddclient.conf</code>:</p>
+<pre id="s-ddclient" class="mat-code msv-wrap">@Model.Ddclient</pre>
+<button type="button" class="mat-btn mat-btn--secondary mat-btn--sm msv-copy" data-copy="#s-ddclient" hidden><icon name="copy" /><span>Copy</span></button>
+
+<h3>curl, or any script</h3>
+<p>Without <code>myip</code> the address the request comes from counts; add <code>&amp;myip=…</code> to name one.</p>
+<pre id="s-curl" class="mat-code msv-wrap">@Model.Curl</pre>
+<button type="button" class="mat-btn mat-btn--secondary mat-btn--sm msv-copy" data-copy="#s-curl" hidden><icon name="copy" /><span>Copy</span></button>

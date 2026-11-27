@@ -33,7 +33,7 @@ installation is reachable from outside.
 
 | Port (inside) | What |
 |---|---|
-| `8080` | HTTP: the API below, the tunnel endpoints (WebSocket) and a small status page; published behind server1's existing proxy as `https://services.mattiverse.de` |
+| `8080` | HTTP: the API below, the tunnel endpoints (WebSocket), the public pages (a short start page, DynDNS) and the admin area `/admin`; published behind server1's existing proxy as `https://services.mattiverse.de` |
 | `8443` | the **edge** for TLS (SNI passthrough): names below the zone go into the tunnel of their installation, any other name to `Services__Edge__FallbackHttps` (host:port) if set, else the connection is closed |
 | `8081` | the **edge** for plain HTTP (`Host` header): the same; ACME HTTP-01 and the redirect to https |
 | `5353` (UDP + TCP) | the authoritative **DNS** for the zone (only needed for the direct mode) |
@@ -99,9 +99,61 @@ together (then `429` without looking at the password). The tunnel endpoints have
 address gets `429` on both tunnel endpoints for the rest of the minute. The client address is the one the trusted proxy names; see
 `Services__TrustedProxies` and "Setting it up" for how it must reach the service.
 
-`GET /` is a short public page (on the host of the zone itself, `my.mattiverse.de`, the DynDNS page below). `/admin` is the admin area: Razor Pages in the look of every Mat app (MatUi, linked from MatOS.Web), a sign-in with an e-mail address and a password (PBKDF2, a session per browser in the table `UserSession`, the cookie `HttpOnly`, `SameSite=Strict`, `Secure` behind https, an antiforgery token on every form, a strict content security policy, `noindex`); the installations with their facts, tunnel, domains and the actions disconnect, back to tunnel mode, block/unblock and give back, each written to the table `AdminAction`. A blocked name is refused by the API (`409 blocked` on registration, `403 blocked` on a change or a give-back), the tunnel (`403`), the edge (`403` over HTTP, closed over TLS), the DNS (`NXDOMAIN`) and `/nic/update` (`abuse`), and it never expires. The admin area answers only on the host of `Services__PublicUrl`, never on the zone or below it, and is `404` while no account exists (the Basic auth of before is gone).
+**Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
+`ns`, `ns1`, `ns2`, `dns`, `api`, `admin`, `root`, `services`, `service`, `matos`, `my`, `mattiverse`, `status`, `support`, `help`, `test`, `demo`, `app`, `apps`,
+`login`, `auth`, `id`, `cdn`, `static`, `assets`, `ftp`, `vpn`, `tunnel`, `edge`, `relay`, `localhost`. Upper case input is lowered.
+A name that is never used expires (`Services__ExpireUnusedAfterDays`).
 
-**The statistics** (for the admin area): counted in memory and written every minute and when the service stops. Per installation, hour, host
+## The pages: one stack, the stack of every Mat app
+
+Every page of the service is ASP.NET Core **Razor Pages** with the tag helpers, the list models and the partials of MatOS.Web, in the look of
+**MatUi** (the toolkit of MatDesign): `mat-*` classes, icons of its sprite, no inline style, no inline script, no event-handler attribute, colours
+as tokens only, a phone width of 390 px without sideways scrolling. Nothing of it is copied: `MatOS.Services.csproj` links MatOS.Web's copy of
+the toolkit (`wwwroot/matui`, brought by `scripts/update-matui.ps1`), its controls and its partials, so one update reaches both apps. The few
+classes of the service's own are `msv-*` in `wwwroot/css/services.css` (tokens only); its behaviour is plain JavaScript without a build step
+(`wwwroot/js/services.js` for the admin area, `wwwroot/js/dyndns.js` for the DynDNS pages). The data is EF Core with SQLite in the volume
+(`services.db`, migrated at every start). `tests/MatOS.Services.Tests/ServicesUiTests.cs` checks the source of the pages as MatOS's WebUiTests do,
+and `tests/e2e/services.js` every page in a real browser: `cd tests/e2e && npm install && node services.js` starts a local `dotnet run` of the
+service in `Development` (a data folder of its own in the temp folder, free ports, the test account), checks every page of the admin area and the
+public pages light, dark and at 390 px (one `h1`, no inline style or script, no sideways scrolling, the strict policy, no script error), registers
+a name on the DynDNS page with its proof of work, manages it and gives it back, and stops the service again (`node services.js <url>` checks one
+that runs already).
+
+- **The public pages** (the layout `_Public`: a bar with the name and the theme of this browser, the page, the links at its foot):
+  `GET /` is a short page on what the service is (`noindex`); on the host of the zone itself, `my.mattiverse.de`, `/` is the DynDNS page below.
+  Their policy is as strict as the admin area's: `default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self';
+  form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'`, with `nosniff`, `X-Frame-Options: DENY`, `no-store` and
+  `Referrer-Policy: same-origin` (not `no-referrer`, with which a browser sends `Origin: null` on a POST and the same-origin check would refuse
+  the forms). They set **no cookie**: their forms carry no antiforgery token but the guards of `FormGuard` (below). A request no form takes
+  (`GET /dyndns/register`, a POST to a page without a form) is `405`; the pages are limited to 120 views and 60 forms per address and minute.
+- **The admin area** (`/admin`, the layout `_Layout` with the menu, `_Bare` for the sign-in): below.
+
+## The admin area
+
+`/admin`, only on the host of `Services__PublicUrl` (`services.mattiverse.de`; in `Development` also on the machine itself), never on the zone or
+below it, and `404` while no account exists, as if it did not exist. Its menu: Overview, Installations, Tunnels, Domains, Statistics, Users,
+Settings (read-only: the zone, the public address, the edge, the limits, the trusted proxies, the PROXY protocol, the retention; nothing secret),
+the account and the sign-out at its foot.
+
+- **Accounts** like every Mat app: the tables `User` (the e-mail address is the user name, a PBKDF2 hash like MatOS's, the role, the theme) and
+  `UserSession` (a `Token` per browser, checked on every request, so a sign-out ends it on the server). The first administrator comes once from
+  `Services__AdminEmail` + `Services__AdminPassword` (both or neither, no default address), on a start without any account; in `Development` the
+  test account `admin@example.com` / `Start12345`. After that the accounts live on the page Users (a list and a page to edit, the last one cannot
+  be deleted); Account changes the own password and signs out the other sessions. The Basic auth of before is gone.
+- **Protection**: the sign-in is limited to 20 requests per minute per address (an IPv6 address counts as its /48), an e-mail address is
+  locked for 15 minutes after 5 wrong passwords in 15 minutes (whether an account has it or not; a wrong current password on Change password
+  counts the same), and 30 wrong passwords per minute of everybody together stop the sign-in for the rest of the minute; the cookie is `HttpOnly`, `SameSite=Strict`, `Secure` behind https and only for `/admin`; an
+  antiforgery token on every form; the strict policy above with `no-referrer`, `noindex, nofollow` and no secret on any page (keys are hashes, the
+  admin password is never shown).
+- **Installations**: a list (search, filters for the kind, the mode, the tunnel and blocked, sort, pages) and a page per name with its facts,
+  live tunnel, own domains, last port check, statistics and history, and the actions disconnect, back to tunnel mode, block/unblock and give back,
+  each written to the table `AdminAction` (who, what, which name, when). A blocked name is refused by the API (`409 blocked` on registration,
+  `403 blocked` on a change or a give-back), the tunnel (`403`), the edge (`403` over HTTP, closed over TLS), the DNS (`NXDOMAIN`) and
+  `/nic/update` (`abuse`), it never expires and cannot be given back until it is unblocked.
+
+## The statistics
+
+Counted in memory and written every minute and when the service stops. Per installation, hour, host
 (the installation itself, `<app>`, its own domain; more than 32 hosts of one installation in an hour count together as `*`) and way (TLS, HTTP), the table
 `UsageHour` holds the connections, the refusals by reason (no tunnel, a limit, the stream not picked up in time, blocked), the bytes each way, the connection
 seconds, the peak of open connections and the distinct visitors; the fallback to server1's proxy has rows of its own (an empty name). `TunnelSession` holds every
@@ -113,12 +165,19 @@ given back and registered again by somebody else keeps the earlier holder's rows
 from its registration on (`Usage/InstanceUsage.cs`). The lists per installation (the overview, Statistics, the tunnels that dropped often) split the same
 way, so a name has the same numbers there as on its page; the rows of a name given back, or of its earlier holder, are an entry of their own marked
 *given back*, without a link. The API is counted per day, so for the last 24 hours its numbers are of today and yesterday (only today when the 24 hours
-start at midnight), and the page says so. **What is never stored**: a visitor's address, or a path or URL a
-visitor opens (the edge does not decrypt TLS and reads nothing of HTTP but the host). Visitors are counted as HMAC-SHA256 hashes of the address with a
-random salt per hour, kept in memory for that hour only and dropped (never written) with the hour's counters; only their number is stored, so the
-same visitor in two hours counts twice in a day's total. The addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address) are the
-operator's evidence and are stored. Retention (`Services__Usage__HourlyDays`, `DailyDays`, `TunnelSessionDays`): hourly rows 35 days, then rolled up into
-`UsageDay` and `DnsDay`, which are kept 400 days like `ApiDay`; tunnel sessions 180 days. A daily job rolls up and removes them for real.
+start at midnight), and the page says so.
+
+**What is stored, and what never is.** The visitors of an installation are other people, so:
+
+- **Never stored**: a visitor's address, or a path or URL a visitor opens (the edge does not decrypt TLS and reads nothing of HTTP but the host).
+- **Visitors** are counted as HMAC-SHA256 hashes of the address with a random salt per hour, kept in memory for that hour only and dropped (never
+  written) with the hour's counters; only their number is stored, so the same visitor in two hours counts twice in a day's total.
+- **Stored**: the addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address), the operator's evidence, as before; the
+  counts above; the administrators' actions (`AdminAction`) and sessions (`UserSession`: the browser and the address of a sign-in).
+
+**Retention** (`Services__Usage__HourlyDays`, `DailyDays`, `TunnelSessionDays`): hourly rows 35 days, then rolled up into `UsageDay` and
+`DnsDay`, which are kept 400 days like `ApiDay`; tunnel sessions 180 days. A daily job rolls up and removes them for real.
+
 The admin area shows them for a period of 24 hours, 7 days, 30 days or 12 months (`?period=24h|7d|30d|12m`, UTC, up to a minute behind): the overview
 (the numbers of now and today, the traffic, the installations with the most traffic and visitors, the latest registrations, the tunnels that ended three
 times or more in 24 hours), Statistics (the traffic and visitors over time, by installation, by app, by way and by mode, the refusals by reason, the DNS and
@@ -126,11 +185,6 @@ the API per day), an installation's own page (its traffic and visitors per app, 
 connected ones, refreshed every 5 seconds from `GET /admin/api/tunnels`, signed in only, and the ones that ended last). The charts are SVG drawn on the
 server (`Admin/Charts.cs`, the colours in `wwwroot/css/services.css`), each with the table of its numbers; a chart's `<title>` and `<desc>` have
 ids of their own (`chart-<id>-title`), never those of the page's headings.
-
-**Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
-`ns`, `ns1`, `ns2`, `dns`, `api`, `admin`, `root`, `services`, `service`, `matos`, `my`, `mattiverse`, `status`, `support`, `help`, `test`, `demo`, `app`, `apps`,
-`login`, `auth`, `id`, `cdn`, `static`, `assets`, `ftp`, `vpn`, `tunnel`, `edge`, `relay`, `localhost`. Upper case input is lowered.
-A name that is never used expires (`Services__ExpireUnusedAfterDays`).
 
 ## The tunnel
 
@@ -184,8 +238,8 @@ never reaches the database. TCP: at most 8 connections per address, each ends af
 
 The same names, for people **without MatOS**: a FritzBox, ddclient, Matddns, a script. The page is the zone itself, `https://my.mattiverse.de`
 (any request whose `Host` is `Services__Zone`; the same page is at `/dyndns` on every host, so `https://services.mattiverse.de/dyndns` works too).
-Plain HTML from code with one script of the service's own (`/dyndns/app.js`); the policy is `default-src 'none'; script-src 'self'; connect-src 'self';
-style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'`. No cookies, no third party, no captcha service.
+Razor Pages in the look of every Mat app (`Pages/DynDns`: Index, Manage, Rules; the layout `_Public`), with one script of the service's own
+(`/js/dyndns.js`) beside MatUi's; the strict policy of the public pages ("The pages" above). No cookies, no third party, no captcha service.
 
 - **Pick a name**: a field with a live check (`GET /api/v1/names/{name}`, the same name rules); *Get my name* registers it through the same
   registration as the API (the same limits per address and per hour). Such a name is marked **DynDNS-only** (`Instance.DynDnsOnly`), starts in

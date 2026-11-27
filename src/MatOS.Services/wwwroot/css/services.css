@@ -1,5 +1,5 @@
 /* =====================================================================
-   MatOS Services: the few things only the admin area has.
+   MatOS Services: the few things only the admin area and the public pages have.
    Everything else (the shell, lists, tables, stats, the segmented control, colours, dark mode) comes from MatUi (the copy in MatOS.Web, linked).
    The classes here start with msv-, the colours are tokens of the toolkit (rules CODE-02, CODE-04, COLOR-01).
    MatUi has no chart yet: msv-chart is a candidate for MatDesign.
@@ -46,3 +46,25 @@
 @media (prefers-reduced-motion: no-preference) {
   .msv-chart__hit, .msv-chart__hits rect { transition: fill var(--mat-dur-fast) var(--mat-ease); }
 }
+
+/* ---- The public pages (the layout _Public: /, the DynDNS pages): a bar, a narrow column, the footer at the bottom ---- */
+.msv-public { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.msv-public > .mat-page { flex: 1 0 auto; }
+
+/* The name in the bar: the logo and the words, a link home. */
+.msv-brand {
+  display: inline-flex; align-items: center; gap: var(--mat-space-3); min-width: 0;
+  color: var(--mat-text); font-weight: 650; text-decoration: none;
+}
+.msv-brand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msv-brand:hover { color: var(--mat-accent-text); }
+/* The planet of MatOS has its own rounded corners, so its tile is transparent (as MatOS.Web's matos.css does for mv-logo). */
+.msv-brand .mat-logo, .mat-auth__brand .mat-logo { background: none; }
+
+/* A key, an address or a setting to copy: it wraps on a phone instead of scrolling (a key is one long word). */
+.msv-wrap { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; }
+/* A copy button under its block keeps its own width in a column. */
+.msv-copy { align-self: flex-start; }
+
+/* The honeypot of the registration: a field people never see (nor a screen reader: aria-hidden) and bots fill in. */
+.msv-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

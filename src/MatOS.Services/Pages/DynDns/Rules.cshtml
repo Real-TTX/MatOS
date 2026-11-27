@@ -1,0 +1,53 @@
+@page "/dyndns/rules"
+@model MatOS.Services.Pages.DynDns.RulesModel
+@{
+    var o = Model.Options;
+    var zone = o.Zone;
+    var days = o.ExpireUnusedAfterDays;
+    ViewData["DynDns"] = true;
+    ViewData["Title"] = "Rules";
+    ViewData["Heading"] = "The rules";
+    ViewData["PageSub"] = "A free service, run in spare time. Short rules, so it stays free and useful.";
+}
+
+<section class="mat-card" aria-labelledby="rules-title">
+    <div class="mat-card__head"><icon name="book" /><h2 class="mat-card__title" id="rules-title">A name</h2></div>
+    <div class="mat-card__body mat-prose">
+        <ul>
+            <li>A name is <code>name.@(zone)</code>; every name below it (<code>nas.name.@(zone)</code>) points to the same address.</li>
+            <li>Names are 3 to 32 characters: letters, digits and hyphens (not at the start or the end). Some names are reserved.</li>
+            <li>At most @o.RegistrationsPerIpPerDay new names a day from one connection.</li>
+            @if (days > 0)
+            {
+                <li>A name that has not received a single address within @days days of its registration is given back automatically, so nobody can hoard names.</li>
+            }
+            <li>Only public addresses are stored: a name never points into a private network.</li>
+            <li>No phishing, malware, spam or anything illegal behind a name. A name that is abused is removed without notice.</li>
+            <li>The key is the only proof that a name is yours. It cannot be recovered; lose it and the name stays until it is given back or expires.</li>
+            <li>No guarantee: the service may be down now and then, and the rules may change.</li>
+        </ul>
+    </div>
+</section>
+
+<section class="mat-card" aria-labelledby="stored-title">
+    <div class="mat-card__head"><icon name="shield" /><h2 class="mat-card__title" id="stored-title">What the service stores</h2></div>
+    <div class="mat-card__body mat-prose">
+        <p>The name, a hash of the key (not the key itself), the addresses your router reports, the address the name was registered from,
+            and the times of registration and of the last update. Nothing else, no cookies, no tracking.</p>
+    </div>
+</section>
+
+<section class="mat-card" aria-labelledby="questions-title">
+    <div class="mat-card__head"><icon name="help-circle" /><h2 class="mat-card__title" id="questions-title">Questions, abuse</h2></div>
+    <div class="mat-card__body mat-prose">
+        <p>Open an issue at <a href="@(PublicSite.RepositoryUrl)/issues">@(PublicSite.RepositoryUrl)/issues</a>.</p>
+    </div>
+</section>
+
+<div class="mat-btn-row mat-btn-row--plain">
+    <a class="mat-btn mat-btn--secondary" href="@PublicSite.DynDnsBase"><icon name="back" /><span>Back</span></a>
+</div>
+
+@section Scripts {
+    <script src="~/js/dyndns.js" asp-append-version="true"></script>
+}

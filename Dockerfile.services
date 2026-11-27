@@ -40,7 +40,7 @@ RUN BUILD_DATE="${BuildDate:-$(date -u +%Y%m%d)}" && \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# 8080 the API, the tunnel endpoints and the status page; 8443/8081 the edge (TLS by SNI, HTTP by Host); 5353 the DNS of the zone.
+# 8080 the API, the tunnel endpoints, the public pages and the admin area; 8443/8081 the edge (TLS by SNI, HTTP by Host); 5353 the DNS of the zone.
 # The health check asks 8080, so keep the API there.
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     ASPNETCORE_ENVIRONMENT=Production \

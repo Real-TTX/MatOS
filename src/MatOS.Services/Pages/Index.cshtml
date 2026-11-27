@@ -1,0 +1,24 @@
+@page
+@model MatOS.Services.Pages.IndexModel
+@{
+    var zone = Model.Options.Zone;
+    ViewData["Title"] = "MatOS Services";
+    ViewData["PageSub"] = "Free addresses for MatOS.";
+    // Nobody's search result: the page only says what the host of the API is.
+    ViewData["NoIndex"] = true;
+}
+
+<section class="mat-card" aria-labelledby="what-title">
+    <div class="mat-card__head"><icon name="globe" /><h2 class="mat-card__title" id="what-title">What this is</h2></div>
+    <div class="mat-card__body mat-prose">
+        <p>A <a href="@PublicSite.RepositoryUrl">MatOS</a> installation without a domain of its own gets an address here, such as
+            <code>anna.@(zone)</code>, with its apps at <code>&lt;app&gt;.anna.@(zone)</code>. It is chosen in the setup assistant of MatOS;
+            there is nothing to do on this page.</p>
+        <p>Without MatOS: anybody can get a free DynDNS name for a router or a script at <a href="https://@(zone)">https://@(zone)</a>.</p>
+    </div>
+</section>
+
+<div class="mat-alert mat-alert--success" role="status">
+    <icon name="check-circle" />
+    <div class="mat-alert__body">The service runs. Installations reach it at <code>@Model.Options.PublicUrl</code>.</div>
+</div>

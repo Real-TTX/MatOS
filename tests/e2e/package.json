@@ -1,9 +1,10 @@
 {
   "name": "matos-e2e",
   "private": true,
-  "description": "End-to-end checks of the pages of MatOS in a real browser against a running stack (node run.js [base url]).",
+  "description": "End-to-end checks in a real browser: the pages of MatOS against a running stack (node run.js [base url]), the pages of MatOS Services against a dotnet run of its own (node services.js [base url]).",
   "scripts": {
-    "test": "node run.js"
+    "test": "node run.js",
+    "services": "node services.js"
   },
   "devDependencies": {
     "playwright-core": "^1.50.0"
