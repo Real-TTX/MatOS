@@ -19,6 +19,14 @@ COPY ["src/MatOS.Services/MatOS.Services.csproj", "src/MatOS.Services/"]
 RUN dotnet restore "src/MatOS.Services/MatOS.Services.csproj"
 
 COPY src/MatOS.Services src/MatOS.Services
+# The admin area links the toolkit MatUi, the controls and partials of MatOS.Web and MatOS's password hasher (MatOS.Services.csproj): the same files.
+COPY src/MatOS.Web/wwwroot/matui src/MatOS.Web/wwwroot/matui
+COPY ["src/MatOS.Web/wwwroot/img/logo.svg", "src/MatOS.Web/wwwroot/img/favicon.svg", "src/MatOS.Web/wwwroot/img/"]
+COPY src/MatOS.Web/Controls src/MatOS.Web/Controls
+COPY ["src/MatOS.Web/Support/Ui.cs", "src/MatOS.Web/Support/Toolkit.cs", "src/MatOS.Web/Support/Crumbs.cs", "src/MatOS.Web/Support/AppStatusView.cs", "src/MatOS.Web/Support/"]
+COPY ["src/MatOS.Web/Pages/Shared/_Toolbar.cshtml", "src/MatOS.Web/Pages/Shared/_Pager.cshtml", "src/MatOS.Web/Pages/Shared/_ValidationSummary.cshtml", "src/MatOS.Web/Pages/Shared/_StatusPill.cshtml", "src/MatOS.Web/Pages/Shared/"]
+COPY ["src/MatOS.Core/AppVersion.cs", "src/MatOS.Core/"]
+COPY ["src/MatOS.Core/Security/IPasswordHasher.cs", "src/MatOS.Core/Security/Pbkdf2PasswordHasher.cs", "src/MatOS.Core/Security/"]
 # Fall back to today's date when BuildDate is not supplied, so the version never ends in "-".
 RUN BUILD_DATE="${BuildDate:-$(date -u +%Y%m%d)}" && \
     dotnet publish "src/MatOS.Services/MatOS.Services.csproj" \

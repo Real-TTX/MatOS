@@ -224,30 +224,14 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task The_admin_view_needs_its_password()
+    public async Task Without_an_account_there_is_no_admin_area()
     {
-        await using (var without = await RunningService.StartAsync())
-        {
-            using var client = without.Client();
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/admin")).StatusCode);
-            Assert.Contains("MatOS Services", await client.GetStringAsync("/"));
-            Assert.Equal("ok", await client.GetStringAsync("/healthz"));
-        }
-
-        await using var service = await RunningService.StartAsync("--Services:AdminPassword=s3cret");
-        await service.RegisterAsync("jana");
-        using var anonymous = service.Client();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/admin")).StatusCode);
-
-        using var wrong = service.Client();
-        wrong.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String("admin:nope"u8.ToArray()));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await wrong.GetAsync("/admin")).StatusCode);
-
-        using var admin = service.Client();
-        admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String("admin:s3cret"u8.ToArray()));
-        var page = await admin.GetStringAsync("/admin");
-        Assert.Contains("jana", page);
-        Assert.Contains("1 installations", page);
+        await using var without = await RunningService.StartAsync("--Services:PublicUrl=http://127.0.0.1");
+        using var client = without.Client();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/admin/SignIn")).StatusCode);
+        Assert.Contains("MatOS Services", await client.GetStringAsync("/"));
+        Assert.Equal("ok", await client.GetStringAsync("/healthz"));
     }
 
     [Fact]

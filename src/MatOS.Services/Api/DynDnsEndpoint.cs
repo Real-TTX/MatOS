@@ -42,6 +42,12 @@ public static class DynDnsEndpoint
             return Results.Text("badauth");
         }
 
+        if (instance.Blocked)
+        {
+            // DynDNS2's own word for a host name that is blocked for abuse: clients stop updating it.
+            return Results.Text("abuse");
+        }
+
         var outcome = DynDns.Evaluate(
             instance.Name, options.Zone, instance.PublicIpv4, instance.PublicIpv6, hostname, myip, myipv6, context.ClientIp());
         var now = time.GetUtcNow().UtcDateTime;

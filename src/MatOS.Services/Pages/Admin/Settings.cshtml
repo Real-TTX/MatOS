@@ -1,0 +1,72 @@
+@page
+@inject MatOS.Services.Configuration.ServicesOptions Options
+@{
+    // Read-only: the configuration comes from the environment of the container (deploy/services/docker-compose.yml). Nothing secret is shown.
+    ViewData["Title"] = "Settings";
+    ViewData["PageSub"] = "The configuration of this service, from its environment. Change it in the compose file and restart.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", null));
+    var o = Options;
+    string YesNo(bool value) => value ? "Yes" : "No";
+}
+
+<div class="mat-stack mat-stack--lg">
+    <section class="mat-stack mat-stack--sm" aria-labelledby="names-title">
+        <h2 class="mat-itemlist__header" id="names-title">Names</h2>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Zone</dt><dd class="mat-mono">@o.Zone</dd>
+                <dt>Public address</dt><dd class="mat-mono">@o.PublicUrl</dd>
+                <dt>Name servers</dt><dd class="mat-mono">@string.Join(", ", o.Dns.NameServerList())</dd>
+                <dt>Unused names expire after</dt><dd>@(o.ExpireUnusedAfterDays == 0 ? "Never" : $"{o.ExpireUnusedAfterDays} days")</dd>
+                <dt>Registrations per address and day</dt><dd>@o.RegistrationsPerIpPerDay</dd>
+                <dt>Registrations per hour (everybody)</dt><dd>@o.RegistrationsPerHour</dd>
+                <dt>Proof of work of the DynDNS page</dt><dd>@(o.ProofOfWorkBits == 0 ? "None" : $"{o.ProofOfWorkBits} bits")</dd>
+            </dl>
+        </div></div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="edge-title">
+        <h2 class="mat-itemlist__header" id="edge-title">Edge</h2>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Public IPv4</dt><dd class="mat-mono">@AdminFormat.Text(o.Edge.PublicIpv4)</dd>
+                <dt>Public IPv6</dt><dd class="mat-mono">@AdminFormat.Text(o.Edge.PublicIpv6)</dd>
+                <dt>TLS port (SNI)</dt><dd>@o.Edge.HttpsPort</dd>
+                <dt>HTTP port (Host)</dt><dd>@o.Edge.HttpPort</dd>
+                <dt>Fallback for TLS</dt><dd class="mat-mono">@AdminFormat.Text(o.Edge.FallbackHttps)</dd>
+                <dt>Fallback for HTTP</dt><dd class="mat-mono">@AdminFormat.Text(o.Edge.FallbackHttp)</dd>
+                <dt>PROXY protocol in (TLS)</dt><dd>@YesNo(o.Edge.ProxyProtocol)</dd>
+                <dt>PROXY protocol in (HTTP)</dt><dd>@YesNo(o.Edge.HttpProxyProtocol)</dd>
+                <dt>PROXY protocol to the fallback</dt><dd>@YesNo(o.Edge.FallbackProxyProtocol)</dd>
+            </dl>
+        </div></div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="limits-title">
+        <h2 class="mat-itemlist__header" id="limits-title">Limits</h2>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Streams per installation</dt><dd>@o.Edge.MaxStreamsPerInstance</dd>
+                <dt>Connections into the tunnels</dt><dd>@o.Edge.MaxConnections</dd>
+                <dt>Connections to the fallback</dt><dd>@o.Edge.MaxFallbackConnections</dd>
+                <dt>Connections not identified yet</dt><dd>@o.Edge.MaxPendingConnections</dd>
+                <dt>Connections per visitor address</dt><dd>@o.Edge.MaxConnectionsPerAddress</dd>
+                <dt>New connections per visitor address and minute</dt><dd>@o.Edge.NewConnectionsPerAddressPerMinute</dd>
+                <dt>Idle timeout</dt><dd>@o.Edge.IdleTimeoutSeconds s</dd>
+                <dt>Tunnel ping / pong timeout</dt><dd>@o.Tunnel.PingSeconds s / @o.Tunnel.PongTimeoutSeconds s</dd>
+                <dt>Stream timeout</dt><dd>@o.Tunnel.StreamTimeoutSeconds s</dd>
+            </dl>
+        </div></div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="network-title">
+        <h2 class="mat-itemlist__header" id="network-title">Network</h2>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Trusted proxies</dt><dd class="mat-mono">@o.TrustedProxies</dd>
+                <dt>Listens on</dt><dd class="mat-mono">@o.ListenAddress</dd>
+                <dt>DNS</dt><dd>@(o.Dns.Enabled ? $"Port {o.Dns.Port}, TTL {o.Dns.Ttl} s" : "Off")</dd>
+            </dl>
+        </div></div>
+    </section>
+</div>

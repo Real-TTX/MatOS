@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace MatOS.Services.Instances;
 
 /// <summary>What the edge and the DNS need to know of an installation.</summary>
-public sealed record InstanceAddress(string Name, InstanceMode Mode, IPAddress? Ipv4, IPAddress? Ipv6);
+/// <param name="Blocked">An administrator blocked the name: the edge and the DNS refuse it.</param>
+public sealed record InstanceAddress(string Name, InstanceMode Mode, IPAddress? Ipv4, IPAddress? Ipv6, bool Blocked = false);
 
 /// <summary>
 /// Every installation's name and address, in memory, for the edge and the DNS. Both answer strangers from the internet: a flood of
@@ -51,7 +52,7 @@ public sealed class InstanceDirectory(IServiceScopeFactory scopes, TimeProvider 
             var db = scope.ServiceProvider.GetRequiredService<ServicesDbContext>();
             var row = await db.Instances.AsNoTracking()
                 .Where(i => i.Name == name)
-                .Select(i => new { i.Name, i.Mode, i.PublicIpv4, i.PublicIpv6 })
+                .Select(i => new { i.Name, i.Mode, i.PublicIpv4, i.PublicIpv6, i.Blocked })
                 .FirstOrDefaultAsync(cancellationToken);
             if (row is null)
             {
@@ -59,7 +60,7 @@ public sealed class InstanceDirectory(IServiceScopeFactory scopes, TimeProvider 
             }
             else
             {
-                names[name] = new InstanceAddress(row.Name, row.Mode, Parse(row.PublicIpv4), Parse(row.PublicIpv6));
+                names[name] = new InstanceAddress(row.Name, row.Mode, Parse(row.PublicIpv4), Parse(row.PublicIpv6), row.Blocked);
             }
         }
         finally
@@ -117,10 +118,10 @@ public sealed class InstanceDirectory(IServiceScopeFactory scopes, TimeProvider 
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ServicesDbContext>();
         var rows = await db.Instances.AsNoTracking()
-            .Select(i => new { i.Name, i.Mode, i.PublicIpv4, i.PublicIpv6 })
+            .Select(i => new { i.Name, i.Mode, i.PublicIpv4, i.PublicIpv6, i.Blocked })
             .ToListAsync(cancellationToken);
         var names = new ConcurrentDictionary<string, InstanceAddress>(
-            rows.Select(r => KeyValuePair.Create(r.Name, new InstanceAddress(r.Name, r.Mode, Parse(r.PublicIpv4), Parse(r.PublicIpv6)))),
+            rows.Select(r => KeyValuePair.Create(r.Name, new InstanceAddress(r.Name, r.Mode, Parse(r.PublicIpv4), Parse(r.PublicIpv6), r.Blocked))),
             StringComparer.Ordinal);
         _names = names;
         Interlocked.Exchange(ref _loadedTicks, time.GetUtcNow().UtcTicks);

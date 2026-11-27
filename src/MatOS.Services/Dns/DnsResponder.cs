@@ -10,7 +10,7 @@ public sealed record DnsZone(string Zone, IReadOnlyList<string> NameServers, IPA
 
 /// <summary>
 /// Answers queries for the zone: <c>SOA</c> and <c>NS</c> at the apex, <c>A</c>/<c>AAAA</c> for the apex (the edge) and for every installation
-/// (<c>{name}.{zone}</c> and anything below it, the wildcard): its own address in direct mode, the edge in tunnel mode. Unknown names are
+/// (<c>{name}.{zone}</c> and anything below it, the wildcard): its own address in direct mode, the edge in tunnel mode. Unknown and blocked names are
 /// NXDOMAIN, other zones REFUSED (the server is authoritative only, never a resolver).
 /// </summary>
 public sealed class DnsResponder(DnsZone zone, Func<string, CancellationToken, ValueTask<InstanceAddress?>> lookup)
@@ -81,7 +81,7 @@ public sealed class DnsResponder(DnsZone zone, Func<string, CancellationToken, V
         {
             var instanceName = HostNames.InstanceName(name, zone.Zone);
             var instance = instanceName is null ? null : await lookup(instanceName, cancellationToken);
-            if (instance is null)
+            if (instance is null || instance.Blocked)
             {
                 return Build(packet.Span, query, DnsRcode.NxDomain, true, [], soa, maxSize);
             }

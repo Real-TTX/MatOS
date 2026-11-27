@@ -19,8 +19,25 @@ public sealed class ServicesOptions
     /// <summary>How installations reach the API; shown on the status page.</summary>
     public string PublicUrl { get; set; } = "https://services.mattiverse.de";
 
-    /// <summary>The password of the administrator view at <c>/admin</c>; empty means there is no such view.</summary>
+    /// <summary>
+    /// The e-mail address of the first administrator of the admin area (<c>/admin</c>), with <see cref="AdminPassword"/>: the account is created
+    /// once, on a start without any account; after that the accounts are managed on the page Users. Without both (and without an account)
+    /// there is no admin area.
+    /// </summary>
+    public string? AdminEmail { get; set; }
+
+    /// <summary>The password of that first administrator (see <see cref="AdminEmail"/>); changing it later changes nothing.</summary>
     public string? AdminPassword { get; set; }
+
+    /// <summary>The host of <see cref="PublicUrl"/> (<c>services.mattiverse.de</c>): the only host the admin area answers on.</summary>
+    public string? PublicHost() => Uri.TryCreate(PublicUrl, UriKind.Absolute, out var uri) ? uri.Host.TrimEnd('.').ToLowerInvariant() : null;
+
+    /// <summary>Whether <paramref name="host"/> is the zone itself or a name below it (an installation, an app, the DynDNS page).</summary>
+    public bool IsZoneOrBelow(string host)
+    {
+        host = host.TrimEnd('.').ToLowerInvariant();
+        return host == Zone || host.EndsWith("." + Zone, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// Successful registrations per address in the last 24 h. An IPv6 address counts as its /48: a home or a server usually gets a /56
@@ -107,6 +124,31 @@ public sealed class ServicesOptions
         if (!string.IsNullOrWhiteSpace(Edge.FallbackHttp) && EdgeOptions.ParseHostPort(Edge.FallbackHttp) is null)
         {
             problems.Add("Services:Edge:FallbackHttp must be host:port.");
+        }
+
+        var email = string.IsNullOrWhiteSpace(AdminEmail) ? null : AdminEmail.Trim();
+        var password = string.IsNullOrEmpty(AdminPassword) ? null : AdminPassword;
+        if ((email is null) != (password is null))
+        {
+            // No default address: the first administrator is a real person's account, so a password alone is a mistake, not a choice.
+            problems.Add("Services:AdminEmail and Services:AdminPassword go together: set both (the first administrator of /admin) or neither.");
+        }
+        else if (email is not null && (!email.Contains('@') || email.Length > 256 || email.Any(char.IsWhiteSpace)))
+        {
+            problems.Add("Services:AdminEmail must be an e-mail address.");
+        }
+        else if (password is not null && password.Length < 8)
+        {
+            problems.Add("Services:AdminPassword must have at least 8 characters.");
+        }
+
+        if (PublicHost() is not { } publicHost)
+        {
+            problems.Add("Services:PublicUrl must be an absolute address such as https://services.mattiverse.de.");
+        }
+        else if (IsZoneOrBelow(publicHost))
+        {
+            problems.Add("Services:PublicUrl must not be the zone or a name below it: the admin area answers on its host.");
         }
 
         if (!IPAddress.TryParse(ListenAddress, out _))

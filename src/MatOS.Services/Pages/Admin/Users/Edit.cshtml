@@ -1,0 +1,47 @@
+@page
+@model MatOS.Services.Pages.Admin.Users.EditModel
+@{
+    ViewData["Title"] = Model.IsEdit ? "Edit user" : "New user";
+    ViewData["PageSub"] = Model.IsEdit ? "Change the name, the e-mail address or the password." : "An account that can sign in to the admin area.";
+    ViewData["ActiveHref"] = "/admin/Users";
+    ViewData["Crumbs"] = Crumbs.Of(("Users", "/admin/Users"), (Model.IsEdit ? Model.Input.Email : "New user", null));
+    ViewData["Width"] = "narrow";
+    var pwHint = Model.IsEdit ? "Leave blank to keep the current password. A new one ends the account's other sessions." : "At least 8 characters.";
+}
+
+<form method="post" class="mat-form" novalidate>
+    <input type="hidden" asp-for="Input.Id" />
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                <mat-field label="E-mail" asp-for="Input.Email" required="true" hint="The user name of the sign-in.">
+                    <input asp-for="Input.Email" type="email" class="mat-input" autocomplete="off" required data-msg-required="Please enter an e-mail address." />
+                </mat-field>
+
+                <mat-field label="Name" asp-for="Input.Name" required="true">
+                    <input asp-for="Input.Name" class="mat-input" autocomplete="off" required data-msg-required="Please enter a name." />
+                </mat-field>
+
+                <mat-field label="Password" asp-for="Input.Password" required="@(!Model.IsEdit)" hint="@pwHint">
+                    <input asp-for="Input.Password" type="password" class="mat-input" autocomplete="new-password" />
+                </mat-field>
+
+                <mat-field label="Confirm password" asp-for="Input.ConfirmPassword" required="@(!Model.IsEdit)">
+                    <input asp-for="Input.ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" />
+                </mat-field>
+            </div>
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+        <a href="/admin/Users" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        @if (Model.IsEdit && !Model.IsSelf)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" asp-page-handler="Delete" formnovalidate class="mat-btn mat-btn--danger mat-btn--end" data-confirm="Delete the user @Model.Input.Email? They can no longer sign in, and their sessions end." data-confirm-ok="Delete"><icon name="trash" /><span>Delete</span></button>
+        }
+    </div>
+</form>

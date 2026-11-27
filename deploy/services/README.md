@@ -64,6 +64,7 @@ curl -fsSLO https://raw.githubusercontent.com/Real-TTX/MatOS/main/deploy/service
 cat > .env <<'EOF'
 SERVER1_IPV4=203.0.113.10
 # SERVER1_IPV6=2001:db8::10
+MATOS_SERVICES_ADMIN_EMAIL=you@example.com
 MATOS_SERVICES_ADMIN_PASSWORD=a-long-random-password
 EOF
 docker compose up -d
@@ -72,6 +73,11 @@ curl -s http://127.0.0.1:8080/healthz    # ok
 
 (The file is in the repository `Real-TTX/MatOS` (called Mattiverse until 2026-11). Until the branch `feature/matos` is merged into
 `main`, copy the file instead.)
+
+The admin area is `https://services.mattiverse.de/admin`. `MATOS_SERVICES_ADMIN_EMAIL` and `MATOS_SERVICES_ADMIN_PASSWORD` go together (set both
+or neither; the service does not start with only one): they create the first administrator once, on the first start without any account. After
+that, change the password and add or remove administrators in the admin area itself (Account, Users); changing the two variables changes
+nothing. The old Basic auth of `/admin` is gone.
 
 The compose file publishes 8080, 8443 and 8081 on `127.0.0.1` for a proxy on the host. If the proxy runs in Docker itself, put both on one network
 instead (`docker network connect <proxy-network> matos-services`) and use `matos-services:8080` (and `:8443`, `:8081`) in the examples below.
@@ -326,7 +332,7 @@ dig +short @203.0.113.10 my.mattiverse.de SOA                                   
 ```
 
 The client address must arrive (rule 3): register a test name from two different networks and look at the column *From* of
-`https://services.mattiverse.de/admin` (Basic auth, any user name, the password from `MATOS_SERVICES_ADMIN_PASSWORD`). It must show the two public
+`https://services.mattiverse.de/admin/Installations` (sign in with `MATOS_SERVICES_ADMIN_EMAIL` and `MATOS_SERVICES_ADMIN_PASSWORD`; the Basic auth of before is gone). It must show the two public
 addresses, not `127.0.0.1` or a `172.x` address. Give the test names back afterwards (or let them expire after 7 days unused).
 
 ## Update and backup

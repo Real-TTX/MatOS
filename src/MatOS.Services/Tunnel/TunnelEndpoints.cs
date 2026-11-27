@@ -38,6 +38,14 @@ public static class TunnelEndpoints
             return;
         }
 
+        if (instance.Blocked)
+        {
+            // An administrator blocked the name: no tunnel, and the reason in plain words for the log of MatOS.
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("This name is blocked by the operator of MatOS Services.");
+            return;
+        }
+
         var name = instance.Name;
         if (!limits.TryConnect(name))
         {
@@ -53,7 +61,7 @@ public static class TunnelEndpoints
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
-        var session = registry.Connect(name, socket);
+        var session = registry.Connect(name, socket, context.ClientIp().ToString());
         logger.LogInformation("Tunnel of {Name} connected from {Ip}", name, context.ClientIp());
         await activity.TouchAsync(name);
         try

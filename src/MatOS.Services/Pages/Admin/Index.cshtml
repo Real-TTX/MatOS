@@ -1,0 +1,62 @@
+@page
+@model MatOS.Services.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Overview";
+    ViewData["PageSub"] = "MatOS Services right now: the names, the tunnels and the visitors at the edge.";
+    var tiles = new (string Label, int Value, string Href)[]
+    {
+        ("MatOS installations", Model.Installations, "/admin/Installations?kind=matos"),
+        ("DynDNS names", Model.DynDnsNames, "/admin/Installations?kind=dyndns"),
+        ("Tunnels connected now", Model.Tunnels, "/admin/Tunnels"),
+        ("Visitors at the edge now", Model.Visitors, "/admin/Tunnels"),
+        ("Registrations this week", Model.RegisteredThisWeek, "/admin/Installations?sort=created&dir=desc"),
+        ("Blocked names", Model.Blocked, "/admin/Installations?blocked=yes"),
+    };
+}
+
+<div class="mat-stack mat-stack--lg">
+    <section class="mat-grid mat-grid--3" aria-label="Numbers">
+        @foreach (var tile in tiles)
+        {
+            <a class="mat-card" href="@tile.Href">
+                <div class="mat-card__body mat-stat">
+                    <span class="mat-stat__label">@tile.Label</span>
+                    <span class="mat-stat__value">@tile.Value</span>
+                </div>
+            </a>
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="latest-title">
+        <h2 class="mat-itemlist__header" id="latest-title">Latest registrations</h2>
+        @if (Model.Latest.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon"><icon name="server" /></span>
+                <div class="mat-empty__title">No names yet</div>
+                <p>A name appears here once MatOS or the DynDNS page registers it.</p>
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Latest registrations</caption>
+                    <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col" class="mat-hide-sm">Kind</th><th scope="col" class="mat-hide-sm">Created</th><th scope="col" class="mat-hide-sm">From</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in Model.Latest)
+                        {
+                            <tr>
+                                <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@row.Instance.Name">@row.Instance.Name</a></div></td>
+                                <td data-label="Status"><partial name="_StatusPill" model="row.Status" /></td>
+                                <td data-label="Kind" class="mat-hide-sm">@row.Kind</td>
+                                <td data-label="Created" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(row.Instance.CreateDate)</td>
+                                <td data-label="From" class="mat-hide-sm mat-mono">@row.Instance.CreatedFromIp</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

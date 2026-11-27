@@ -98,7 +98,9 @@ src/MatOS.Web         Razor Pages, controls, JS/CSS, Program.cs
   Support/                   Toolkit (the icon sprite), Ui (Icon, Logo), Navigation (the menus: NavSet, NavItem, NavBadge), Launcher (the parts of MatOS as apps on the home screen and in its dock), EngineOverview (the five engines for the settings, the home screen and /Engines), HomeContributions (the launchers, quick actions and widgets of the apps for the home screen), Crumbs, AppUrls, FrameProbe, AppStatus, Format, SetupRequests (the request side of Core/Setup/SetupFlow: localhost to 127.0.0.1)
   wwwroot/matui/             the toolkit, a copy of MatDesign's; wwwroot/css/matos.css the few classes only this app has (mv-*, mv-in-window); css/os.css the home screen (os-*); css/onboarding.css the first start and the tour (ob-*, tokens only); js/matos.js its behaviour, js/os.js the home screen, js/onboarding.js the first start and the tour, js/window-mode.js a page in the window
 src/MatOS.Services         MatOS Services: names and keys (Instances/), the tunnel (Tunnel/), the edge that passes TLS by SNI and HTTP by Host without decrypting (Edge/),
-                             the DNS of the zone (Dns/), DynDNS2 for Matddns, the status and admin pages
+                             the DNS of the zone (Dns/), DynDNS2 for Matddns, the public pages (Pages/*.cs);
+                             the admin area /admin (Admin/: AdminArea the gate (API host only, 404 without an account, the headers), AdminAccounts + AdminAuth (User, UserSession, the cookie), AdminGuard (the lockout),
+                             InstanceAdmin (block, give back, AdminAction); Pages/Admin: Razor Pages with MatOS.Web's toolkit, controls and partials linked in the csproj, never copied)
 tests/MatOS.Tests       unit tests + WebUiTests (they read the source of the pages)
 tests/MatOS.Services.Tests its unit tests and in-process end-to-end tests (free ports; the DNS binds TCP first, then UDP on the same number)
 tests/e2e                    run.js: the pages in a real browser against the running dev stack; run.js --first-start: the first start on a MatOS without an account

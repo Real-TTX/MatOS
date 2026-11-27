@@ -1,0 +1,69 @@
+@page
+@model MatOS.Services.Pages.Admin.Installations.IndexModel
+@{
+    ViewData["Title"] = "Installations";
+    ViewData["PageSub"] = "Every name below the zone: MatOS installations and DynDNS names.";
+    ViewData["Crumbs"] = Crumbs.Of(("Installations", null));
+    ViewData["Width"] = "wide";
+    var list = Model.List;
+}
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="list.Toolbar" />
+
+    @if (list.Items.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="server" /></span>
+            @if (list.Filtered)
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>No installation matches. Change the search or the filter.</p>
+                <a class="mat-btn mat-btn--secondary" href="/admin/Installations">Reset the tools</a>
+            }
+            else
+            {
+                <div class="mat-empty__title">No installations yet</div>
+                <p>A name appears here once MatOS or the DynDNS page registers it.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Installations</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="mat-hide-sm">Kind</th>
+                        <th scope="col" class="mat-hide-sm">Mode</th>
+                        <th scope="col" class="mat-hide-sm">Address</th>
+                        <th scope="col" class="mat-hide-sm">Last seen</th>
+                        <th scope="col" class="mat-hide-sm">Created</th>
+                        <th scope="col" class="mat-hide-sm">Version</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in list.Items)
+                    {
+                        var i = row.Instance;
+                        <tr>
+                            <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@i.Name">@i.Name</a></div></td>
+                            <td data-label="Status"><partial name="_StatusPill" model="row.Status" /></td>
+                            <td data-label="Kind" class="mat-hide-sm">@row.Kind</td>
+                            <td data-label="Mode" class="mat-hide-sm">@row.Mode</td>
+                            <td data-label="Address" class="mat-hide-sm mat-mono">@AdminFormat.Text(i.PublicIpv4 ?? i.PublicIpv6)</td>
+                            <td data-label="Last seen" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(i.LastSeen)</td>
+                            <td data-label="Created" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Date(i.CreateDate)</td>
+                            <td data-label="Version" class="mat-hide-sm mat-muted">@AdminFormat.Text(i.Version)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <partial name="_Pager" model="list.Pager" />
+</div>

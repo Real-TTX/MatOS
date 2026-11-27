@@ -1,0 +1,37 @@
+@page
+@model MatOS.Services.Pages.Admin.DomainsModel
+@{
+    ViewData["Title"] = "Domains";
+    ViewData["PageSub"] = "Own domains of people that reach their installation through its tunnel.";
+    ViewData["Crumbs"] = Crumbs.Of(("Domains", null));
+}
+
+@if (Model.Domains.Count == 0)
+{
+    <div class="mat-empty">
+        <span class="mat-empty__icon"><icon name="globe" /></span>
+        <div class="mat-empty__title">No own domains</div>
+        <p>An installation adds its own domain in MatOS; it shows here once it is registered.</p>
+    </div>
+}
+else
+{
+    <div class="mat-table-wrap">
+        <table class="mat-table">
+            <caption class="mat-sr-only">Own domains</caption>
+            <thead><tr><th scope="col">Domain</th><th scope="col">Status</th><th scope="col">Installation</th><th scope="col" class="mat-hide-sm">Checked</th><th scope="col" class="mat-hide-sm">Detail</th></tr></thead>
+            <tbody>
+                @foreach (var d in Model.Domains)
+                {
+                    <tr>
+                        <td data-label="Domain" class="mat-mono">@d.Domain</td>
+                        <td data-label="Status"><partial name="_StatusPill" model="DomainPill.Of(d.Status)" /></td>
+                        <td data-label="Installation"><a href="/admin/Installations/Details?name=@d.Instance!.Name">@d.Instance!.Name</a></td>
+                        <td data-label="Checked" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(d.CheckedAt)</td>
+                        <td data-label="Detail" class="mat-hide-sm mat-muted">@AdminFormat.Text(d.Detail)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

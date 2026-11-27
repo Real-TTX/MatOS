@@ -1,4 +1,9 @@
 using System.Text.Json.Serialization;
+using MatOS.Core.Security;
+using MatOS.Services.Admin;
+using MatOS.Web.Support;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using MatOS.Services.Api;
 using MatOS.Services.Configuration;
@@ -24,7 +29,15 @@ public static class ServicesHost
     /// <param name="configure">Changes to the services after the defaults (the tests put in a resolver of their own).</param>
     public static WebApplication Build(string[] args, Action<IServiceCollection>? configure = null)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        // The web root is next to the assembly: the toolkit there is linked from MatOS.Web (MatOS.Services.csproj), and the tests start the
+        // service from their own bin folder, which has the same files.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args,
+            // The pages are found in this assembly, also when the tests (another entry assembly) start the service.
+            ApplicationName = typeof(ServicesHost).Assembly.GetName().Name,
+            WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+        });
 
         var options = builder.Configuration.GetSection(ServicesOptions.Section).Get<ServicesOptions>() ?? new ServicesOptions();
         options.Normalize();
@@ -52,7 +65,7 @@ public static class ServicesHost
         builder.Services.AddSingleton<InstanceActivity>();
         builder.Services.AddSingleton<RegistrationLock>();
         builder.Services.AddSingleton<TunnelLimits>(_ => new TunnelLimits());
-        builder.Services.AddSingleton<AdminGuard>();
+        AddAdminArea(builder.Services, options);
         builder.Services.AddSingleton<InstanceExpiry>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<InstanceExpiry>());
         builder.Services.AddSingleton<TunnelRegistry>();
@@ -76,8 +89,16 @@ public static class ServicesHost
         // The edge looks up the verified domains synchronously: they are in memory before the first connection.
         app.Services.GetRequiredService<CustomDomains>().ReloadAsync().GetAwaiter().GetResult();
 
+        AdminAccounts.EnsureFirstAsync(app.Services, app.Logger).GetAwaiter().GetResult();
+
         app.UseForwardedHeaders();
+        var area = app.Services.GetRequiredService<AdminArea>();
+        app.Use(area.GateAsync);
+        app.UseStaticFiles();
+        app.UseRouting();
         app.UseRateLimiter();
+        app.UseAuthentication();
+        app.UseAuthorization();
         // The pings of the control connection are MatOS's; these keep proxies in between from dropping a quiet stream.
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
@@ -88,7 +109,38 @@ public static class ServicesHost
         app.MapPortsApi();
         app.MapDomainsApi();
         app.MapTunnel();
+        app.MapRazorPages();
+        app.MapAdminApi();
         return app;
+    }
+
+    /// <summary>
+    /// The admin area (<c>/admin</c>, Pages/Admin): Razor Pages with MatOS.Web's controls and toolkit, the accounts and their sessions, the
+    /// cookie and the antiforgery token (docs/SERVICES.md "The admin area").
+    /// </summary>
+    private static void AddAdminArea(IServiceCollection services, ServicesOptions options)
+    {
+        // The keys of the cookies live in the volume, so a sign-in survives an update of the image.
+        services.AddDataProtection()
+            .SetApplicationName("MatOS.Services")
+            .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(options.DataPath, "keys")));
+        services.AddHttpContextAccessor();
+        services.AddSingleton<AdminGuard>();
+        services.AddSingleton<AdminArea>();
+        services.AddSingleton<Toolkit>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddScoped<AdminAccounts>();
+        services.AddScoped<InstanceAdmin>();
+        services.AddAdminAuth();
+        services.AddRazorPages(o =>
+        {
+            o.Conventions.AuthorizeFolder("/Admin", AdminAuth.Policy);
+            o.Conventions.AllowAnonymousToPage("/Admin/SignIn");
+            // The sign-in has its own, tighter limit (its page model).
+            o.Conventions.AddFolderApplicationModelConvention("/Admin", model =>
+                model.EndpointMetadata.Add(new EnableRateLimitingAttribute(
+                    model.ViewEnginePath == "/Admin/SignIn" ? AdminArea.SignInPolicy : AdminArea.PagePolicy)));
+        });
     }
 
     /// <summary>The container's health check: asks <c>/healthz</c> of the running service.</summary>
@@ -157,7 +209,8 @@ public static class ServicesHost
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             o.AddPolicy(InstanceApi.NamesPolicy, context => Window(context, 120));
             o.AddPolicy(InstanceApi.ApiPolicy, context => Window(context, 60));
-            o.AddPolicy(StatusPages.AdminPolicy, context => Window(context, 20, Registrar.RegistrationPrefix));
+            o.AddPolicy(AdminArea.SignInPolicy, context => Window(context, 20, Registrar.RegistrationPrefix));
+            o.AddPolicy(AdminArea.PagePolicy, context => Window(context, 300, Registrar.RegistrationPrefix));
         });
     }
 

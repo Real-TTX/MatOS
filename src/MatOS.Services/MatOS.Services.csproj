@@ -18,4 +18,48 @@
     <InternalsVisibleTo Include="MatOS.Services.Tests" />
   </ItemGroup>
 
+  <!--
+    The look of every Mat app, not a copy of it (CLAUDE.md "UI", rule CODE-03): the toolkit MatUi as MatOS.Web keeps it (wwwroot/matui, brought by
+    scripts/update-matui.ps1), the controls (tag helpers, the list models), the partials of a list and a form, and MatOS's password hasher are linked
+    from where they live. A change to them is made there and reaches both apps; Dockerfile.services copies these files into its build.
+  -->
+  <PropertyGroup>
+    <MatOSWeb>..\MatOS.Web\</MatOSWeb>
+    <!-- The web root is served from the output folder (below), never through the SDK's static web assets. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MatOSWeb)Controls\IconTagHelper.cs" Link="Shared\Controls\IconTagHelper.cs" />
+    <Compile Include="$(MatOSWeb)Controls\FieldTagHelper.cs" Link="Shared\Controls\FieldTagHelper.cs" />
+    <Compile Include="$(MatOSWeb)Controls\TabBarModel.cs" Link="Shared\Controls\TabBarModel.cs" />
+    <Compile Include="$(MatOSWeb)Controls\TabBarTagHelper.cs" Link="Shared\Controls\TabBarTagHelper.cs" />
+    <Compile Include="$(MatOSWeb)Controls\ListModels.cs" Link="Shared\Controls\ListModels.cs" />
+    <Compile Include="$(MatOSWeb)Support\Ui.cs" Link="Shared\Support\Ui.cs" />
+    <Compile Include="$(MatOSWeb)Support\Toolkit.cs" Link="Shared\Support\Toolkit.cs" />
+    <Compile Include="$(MatOSWeb)Support\Crumbs.cs" Link="Shared\Support\Crumbs.cs" />
+    <Compile Include="$(MatOSWeb)Support\AppStatusView.cs" Link="Shared\Support\AppStatusView.cs" />
+    <Compile Include="..\MatOS.Core\AppVersion.cs" Link="Shared\AppVersion.cs" />
+    <Compile Include="..\MatOS.Core\Security\IPasswordHasher.cs" Link="Shared\Security\IPasswordHasher.cs" />
+    <Compile Include="..\MatOS.Core\Security\Pbkdf2PasswordHasher.cs" Link="Shared\Security\Pbkdf2PasswordHasher.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(MatOSWeb)Pages\Shared\_Toolbar.cshtml" Link="Pages\Shared\_Toolbar.cshtml" />
+    <Content Include="$(MatOSWeb)Pages\Shared\_Pager.cshtml" Link="Pages\Shared\_Pager.cshtml" />
+    <Content Include="$(MatOSWeb)Pages\Shared\_ValidationSummary.cshtml" Link="Pages\Shared\_ValidationSummary.cshtml" />
+    <Content Include="$(MatOSWeb)Pages\Shared\_StatusPill.cshtml" Link="Pages\Shared\_StatusPill.cshtml" />
+  </ItemGroup>
+
+  <!--
+    The files of the web root go next to the assembly (bin and publish alike), and the service serves them from there (ServicesHost: WebRootPath):
+    linked files are not static web assets the SDK can find again in Development, and the tests start the service from their own bin folder.
+  -->
+  <ItemGroup>
+    <None Include="$(MatOSWeb)wwwroot\matui\**\*" Link="wwwroot\matui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(MatOSWeb)wwwroot\img\logo.svg" Link="wwwroot\img\logo.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(MatOSWeb)wwwroot\img\favicon.svg" Link="wwwroot\img\favicon.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

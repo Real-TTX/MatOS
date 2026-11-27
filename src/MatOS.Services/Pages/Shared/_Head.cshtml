@@ -1,0 +1,17 @@
+@model string
+@*
+    The <head> of every page of the admin area: the toolkit MatUi (the copy MatOS.Web keeps, linked into this project), its boot script first so the
+    saved theme applies before the first paint, and noindex: the admin area is nobody's search result.
+*@
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="@Ui.App.Accent" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>@Model</title>
+    <link rel="icon" href="~/img/favicon.svg" type="image/svg+xml" />
+    <script src="~/matui/matui.boot.js" asp-append-version="true"></script>
+    <link rel="stylesheet" href="~/matui/matui.css" asp-append-version="true" />
+</head>

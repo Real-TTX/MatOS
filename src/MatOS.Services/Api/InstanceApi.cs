@@ -38,6 +38,9 @@ public static class InstanceApi
 
     public static string ModeText(InstanceMode mode) => mode == InstanceMode.Direct ? "direct" : "tunnel";
 
+    /// <summary>The answer to a blocked installation that wants to change something: 403 and the reason in plain words.</summary>
+    public static IResult Blocked() => Results.Json(new ApiError("blocked"), statusCode: StatusCodes.Status403Forbidden);
+
     private static async Task<IResult> CheckNameAsync(string name, ServicesDbContext db, ServicesOptions options, CancellationToken ct)
     {
         var normalized = NameRules.Normalize(name);
@@ -49,8 +52,9 @@ public static class InstanceApi
             return Results.Ok(new NameAvailability(normalized, false, NameRules.Reason(problem.Value), address));
         }
 
-        var taken = await db.Instances.AnyAsync(i => i.Name == normalized, ct);
-        return Results.Ok(new NameAvailability(normalized, !taken, taken ? "taken" : null, $"{normalized}.{options.Zone}"));
+        var blocked = await db.Instances.Where(i => i.Name == normalized).Select(i => (bool?)i.Blocked).FirstOrDefaultAsync(ct);
+        var reason = blocked switch { true => "blocked", false => "taken", null => null };
+        return Results.Ok(new NameAvailability(normalized, blocked is null, reason, $"{normalized}.{options.Zone}"));
     }
 
     private static async Task<IResult> RegisterAsync(
@@ -65,6 +69,7 @@ public static class InstanceApi
             RegistrationStatus.Invalid => Results.BadRequest(new ApiError("invalid")),
             RegistrationStatus.Reserved => Results.Conflict(new ApiError("reserved")),
             RegistrationStatus.Taken => Results.Conflict(new ApiError("taken")),
+            RegistrationStatus.Blocked => Results.Conflict(new ApiError("blocked")),
             _ => Results.Json(new ApiError("too-many-registrations"), statusCode: StatusCodes.Status429TooManyRequests),
         };
     }
@@ -90,6 +95,11 @@ public static class InstanceApi
         if (instance is null)
         {
             return Results.Unauthorized();
+        }
+
+        if (instance.Blocked)
+        {
+            return Blocked();
         }
 
         InstanceMode mode;
@@ -130,6 +140,12 @@ public static class InstanceApi
         if (instance is null)
         {
             return Results.Unauthorized();
+        }
+
+        if (instance.Blocked)
+        {
+            // Given back, the name would be free for anybody: a blocked name stays until an administrator decides.
+            return Blocked();
         }
 
         await registrar.ReleaseAsync(db, instance, context.RequestAborted);

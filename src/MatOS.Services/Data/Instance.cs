@@ -49,6 +49,17 @@ public sealed class Instance
     /// <summary>The last port check the installation asked for with its key (the JSON of <c>POST /api/v1/ports/check</c>).</summary>
     public string? LastPortCheck { get; set; }
 
+    /// <summary>
+    /// An administrator blocked the name (abuse): the API, the tunnel, the edge, the DNS and <c>/nic/update</c> refuse it, and the row stays so
+    /// the name cannot be registered again while it is blocked.
+    /// </summary>
+    public bool Blocked { get; set; }
+
+    /// <summary>Why, in the administrator's words (shown in the admin area only).</summary>
+    public string? BlockedReason { get; set; }
+
+    public DateTime? BlockedAt { get; set; }
+
     /// <summary>Its own domains on the tunnel (docs/SERVICES.md "Your own domain through the tunnel").</summary>
     public List<CustomDomain> Domains { get; set; } = [];
 

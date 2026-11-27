@@ -1,0 +1,37 @@
+@page
+@model MatOS.Services.Pages.Admin.TunnelsModel
+@{
+    ViewData["Title"] = "Tunnels";
+    ViewData["PageSub"] = "The installations whose tunnel is connected right now.";
+    ViewData["Crumbs"] = Crumbs.Of(("Tunnels", null));
+}
+
+@if (Model.Sessions.Count == 0)
+{
+    <div class="mat-empty">
+        <span class="mat-empty__icon"><icon name="route" /></span>
+        <div class="mat-empty__title">No tunnel is connected</div>
+        <p>A MatOS installation in tunnel mode connects its tunnel by itself.</p>
+    </div>
+}
+else
+{
+    <div class="mat-table-wrap">
+        <table class="mat-table">
+            <caption class="mat-sr-only">Connected tunnels</caption>
+            <thead><tr><th scope="col">Name</th><th scope="col">Connected for</th><th scope="col">Streams</th><th scope="col" class="mat-hide-sm">Since</th><th scope="col" class="mat-hide-sm">From</th></tr></thead>
+            <tbody>
+                @foreach (var s in Model.Sessions)
+                {
+                    <tr>
+                        <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@s.Name">@s.Name</a></div></td>
+                        <td data-label="Connected for">@AdminFormat.Duration(Model.Now - s.ConnectedAt)</td>
+                        <td data-label="Streams">@s.ActiveStreams</td>
+                        <td data-label="Since" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(s.ConnectedAt)</td>
+                        <td data-label="From" class="mat-hide-sm mat-mono">@AdminFormat.Text(s.RemoteAddress)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

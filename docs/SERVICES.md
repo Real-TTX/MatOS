@@ -47,7 +47,7 @@ Configuration (environment, section `Services`):
 | `Services__Edge__PublicIpv4` / `PublicIpv6` | – | server1's address: the answer for installations in tunnel mode and for the zone itself |
 | `Services__Edge__FallbackHttps` / `FallbackHttp` | – | where other host names go (so the edge can sit in front of an existing proxy) |
 | `Services__Dns__NameServers` | `services.mattiverse.de` | the NS names the zone answers with |
-| `Services__AdminPassword` | – | the status page's administrator view (list of installations); without it there is none |
+| `Services__AdminEmail` / `AdminPassword` | – | the first administrator of the admin area (`/admin`), both or neither: created once, on a start without any account (in `Development` the test account `admin@example.com` / `Start12345` instead); after that the accounts live on the page Users. Without an account there is no admin area (`404`) |
 | `Services__RegistrationsPerIpPerDay` | `5` | successful registrations in the last 24 h per IPv4 address, or per /48 of an IPv6 address (a home or a server usually holds a whole /56 or /48) |
 | `Services__RegistrationsPerHour` | `60` | successful registrations of everybody in the last hour: the ceiling for somebody with very many addresses |
 | `Services__ExpireUnusedAfterDays` | `7` | a name that was never used (no tunnel ever connected, no address ever came through `/nic/update`) is given back this many days after its registration; `0` keeps every name. Names in use never expire |
@@ -93,14 +93,13 @@ without a valid key the answer is `401`. Errors are `{error}` with the code name
 | `GET /ip` | anonymous: the caller's address as plain text (for ddclient's `use=web` and scripts) |
 
 Rate limits per client address (an IPv6 address counts as its /64) and minute: 120 for the name check, 60 for the rest of the API and
-`/nic/update`; beyond that `429`. `/admin` allows 20 per minute per IPv4 address or IPv6 /48, and 30 wrong passwords per minute of everybody
+`/nic/update`; beyond that `429`. The sign-in of `/admin` allows 20 requests per minute per IPv4 address or IPv6 /48 (the rest of the admin area 300), 5 wrong passwords per e-mail address in 15 minutes (then that address is locked for 15 minutes, whether an account has it or not), and 30 wrong passwords per minute of everybody
 together (then `429` without looking at the password). The tunnel endpoints have no limit per request (every visitor is a stream request), but
 12 control connections per installation and minute, and 30 failed sign-ins (a key that does not exist) per address and minute, after which that
 address gets `429` on both tunnel endpoints for the rest of the minute. The client address is the one the trusted proxy names; see
 `Services__TrustedProxies` and "Setting it up" for how it must reach the service.
 
-`GET /` is a short public page (on the host of the zone itself, `my.mattiverse.de`, the DynDNS page below); `GET /admin` the list of installations (Basic auth with `Services__AdminPassword`, any user name; `404` when no
-password is set).
+`GET /` is a short public page (on the host of the zone itself, `my.mattiverse.de`, the DynDNS page below). `/admin` is the admin area: Razor Pages in the look of every Mat app (MatUi, linked from MatOS.Web), a sign-in with an e-mail address and a password (PBKDF2, a session per browser in the table `UserSession`, the cookie `HttpOnly`, `SameSite=Strict`, `Secure` behind https, an antiforgery token on every form, a strict content security policy, `noindex`); the installations with their facts, tunnel, domains and the actions disconnect, back to tunnel mode, block/unblock and give back, each written to the table `AdminAction`. A blocked name is refused by the API (`409 blocked` on registration, `403 blocked` on a change or a give-back), the tunnel (`403`), the edge (`403` over HTTP, closed over TLS), the DNS (`NXDOMAIN`) and `/nic/update` (`abuse`), and it never expires. The admin area answers only on the host of `Services__PublicUrl`, never on the zone or below it, and is `404` while no account exists (the Basic auth of before is gone).
 
 **Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
 `ns`, `ns1`, `ns2`, `dns`, `api`, `admin`, `root`, `services`, `service`, `matos`, `my`, `mattiverse`, `status`, `support`, `help`, `test`, `demo`, `app`, `apps`,

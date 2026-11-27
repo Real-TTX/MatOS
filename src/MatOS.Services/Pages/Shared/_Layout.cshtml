@@ -1,0 +1,143 @@
+@inject Toolkit Toolkit
+@{
+    // The shell of the admin area, as MatOS.Web's _Layout: the menu, the account and the theme at its foot, the breadcrumb, the flash of a redirect.
+    // A page fills in Title, PageSub (one line under the title), Crumbs (below "MatOS Services") and, where needed, Width ("narrow" or "wide").
+    const string name = "MatOS Services";
+    var title = ViewData["Title"] as string ?? name;
+    var sub = ViewData["PageSub"] as string;
+    var width = ViewData["Width"] as string;
+    var crumbs = ViewData["Crumbs"] as IReadOnlyList<(string Text, string? Url)> ?? [];
+    var active = ViewData["ActiveHref"] as string ?? AdminMenu.ActiveHref(Context.Request.Path.Value ?? "/admin");
+    var displayName = User.DisplayName();
+    var theme = User.Theme();
+
+    // The flash of a redirect after a POST (SHELL-12): "done" is a toast, something to read is an alert at the top of the content.
+    var flash = TempData["StatusMessage"] as string;
+    var flashIsError = TempData["IsError"] is true;
+}
+<!DOCTYPE html>
+<html lang="en" data-app="@Ui.App.Id" @(theme is "light" or "dark" ? Html.Raw($"data-theme=\"{theme}\"") : null)>
+<partial name="_Head" model="@(title == name ? name : $"{title} · {name}")" />
+<body>
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+
+    <div class="mat-app">
+        <aside class="mat-nav" id="mat-nav">
+            <div class="mat-nav__brand">
+                <a href="/admin" aria-label="@name, overview">
+                    @Ui.Logo()
+                    <span>
+                        <span class="mat-nav__name">@name</span>
+                        <span class="mat-nav__tagline">Administration</span>
+                    </span>
+                </a>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-nav__close" data-nav-close aria-label="Close the menu">@Ui.Icon("x")</button>
+            </div>
+
+            <nav class="mat-nav__scroll" aria-label="Main">
+                <ul class="mat-nav__list">
+                    @foreach (var item in AdminMenu.Items)
+                    {
+                        var isActive = item.Href == active;
+                        <li>
+                            <a class="mat-nav__item @(isActive ? "is-active" : "")" href="@item.Href" aria-current="@(isActive ? "page" : null)">
+                                @Ui.Icon(item.Icon)<span>@item.Title</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+
+            <div class="mat-nav__foot">
+                <div class="mat-nav__account">
+                    <button type="button" class="mat-user" data-menu-toggle="user-menu" aria-haspopup="menu" aria-expanded="false">
+                        <span class="mat-avatar" aria-hidden="true">@Ui.Initials(displayName)</span>
+                        <span class="mat-user__text">
+                            <span class="mat-user__name">@displayName</span>
+                            <span class="mat-user__role">Administrator</span>
+                        </span>
+                        @Ui.Icon("chevron-up", "mat-user__chev")
+                    </button>
+                    <button type="button" class="mat-theme" data-theme-toggle data-theme-save-url="/admin/api/theme" data-theme-state="system" aria-label="Theme: System. Click for Light." title="Theme: System. Click for Light.">
+                        <svg class="mat-icon" data-theme-icon="system" aria-hidden="true" focusable="false"><use href="#mat-i-monitor"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="light" aria-hidden="true" focusable="false"><use href="#mat-i-sun"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="dark" aria-hidden="true" focusable="false"><use href="#mat-i-moon"></use></svg>
+                    </button>
+                </div>
+                <div class="mat-nav__version">@name @MatOS.Core.AppVersion.Current</div>
+            </div>
+        </aside>
+
+        <div class="mat-main">
+            <header class="mat-topbar">
+                <button type="button" class="mat-burger" data-nav-toggle aria-label="Open the menu" aria-controls="mat-nav" aria-expanded="false">@Ui.Icon("menu")</button>
+                <nav class="mat-crumbs" aria-label="Breadcrumb">
+                    <ol>
+                        @if (crumbs.Count == 0)
+                        {
+                            <li aria-current="page">@name</li>
+                        }
+                        else
+                        {
+                            <li><a href="/admin">@name</a></li>
+                            @for (var i = 0; i < crumbs.Count; i++)
+                            {
+                                var c = crumbs[i];
+                                if (i == crumbs.Count - 1 || c.Url is null)
+                                {
+                                    <li aria-current="page">@c.Text</li>
+                                }
+                                else
+                                {
+                                    <li><a href="@c.Url">@c.Text</a></li>
+                                }
+                            }
+                        }
+                    </ol>
+                </nav>
+            </header>
+
+            <main class="mat-page @(width == "narrow" ? "mat-page--narrow" : width == "wide" ? "mat-page--wide" : "")" id="main">
+                @if (!string.IsNullOrEmpty(flash) && flashIsError)
+                {
+                    <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@flash</div></div>
+                }
+
+                <div class="mat-page__head">
+                    <div class="mat-page__title">
+                        <h1>@title</h1>
+                        @if (!string.IsNullOrEmpty(sub))
+                        {
+                            <p class="mat-page__sub">@sub</p>
+                        }
+                    </div>
+                </div>
+
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <div class="mat-menu" id="user-menu" role="menu" aria-label="@displayName" hidden>
+        <div class="mat-menu__head">
+            <span class="mat-avatar" aria-hidden="true">@Ui.Initials(displayName)</span>
+            <div><strong>@displayName</strong><small>@User.Email() · Administrator</small></div>
+        </div>
+        <a class="mat-menu__item" role="menuitem" href="/admin/Account">@Ui.Icon("user")<span>Show account</span></a>
+        <a class="mat-menu__item" role="menuitem" href="/admin/Account?tab=password">@Ui.Icon("key")<span>Change password</span></a>
+        <div class="mat-menu__sep" role="separator"></div>
+        <form method="post" action="/admin/SignOut">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="mat-menu__item" role="menuitem">@Ui.Icon("logout")<span>Sign out</span></button>
+        </form>
+    </div>
+
+    @if (!string.IsNullOrEmpty(flash) && !flashIsError)
+    {
+        <div data-toast="@flash" data-tone="success" hidden></div>
+    }
+
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
+</body>
+</html>

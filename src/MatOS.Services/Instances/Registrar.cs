@@ -13,6 +13,9 @@ public enum RegistrationStatus
     Reserved,
     Taken,
     TooMany,
+
+    /// <summary>The name is blocked by an administrator: it cannot be registered (again).</summary>
+    Blocked,
 }
 
 /// <summary>A registration's outcome; <see cref="Key"/> is set when it was created (and is never stored).</summary>
@@ -58,9 +61,9 @@ public sealed class Registrar(
                 return new RegistrationResult(RegistrationStatus.TooMany, name);
             }
 
-            if (await db.Instances.AnyAsync(i => i.Name == name, ct))
+            if (await db.Instances.Where(i => i.Name == name).Select(i => (bool?)i.Blocked).FirstOrDefaultAsync(ct) is { } blocked)
             {
-                return new RegistrationResult(RegistrationStatus.Taken, name);
+                return new RegistrationResult(blocked ? RegistrationStatus.Blocked : RegistrationStatus.Taken, name);
             }
 
             key = InstanceKeys.Create();

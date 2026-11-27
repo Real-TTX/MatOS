@@ -1,0 +1,63 @@
+@page
+@model MatOS.Services.Pages.Admin.Users.IndexModel
+@{
+    ViewData["Title"] = "Users";
+    ViewData["PageSub"] = "Who can sign in to the admin area. Every account is an administrator.";
+    ViewData["Crumbs"] = Crumbs.Of(("Users", null));
+    var currentUserId = User.UserId();
+    var list = Model.List;
+}
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="list.Toolbar" />
+
+    @if (list.Items.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="users" /></span>
+            <div class="mat-empty__title">Nothing matches</div>
+            <p>No user matches. Change the search.</p>
+            <a class="mat-btn mat-btn--secondary" href="/admin/Users">Reset the tools</a>
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Users</caption>
+                <thead>
+                    <tr><th scope="col">E-mail</th><th scope="col" class="mat-hide-sm">Name</th><th scope="col">Role</th><th scope="col" class="mat-hide-sm">Last sign-in</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in list.Items)
+                    {
+                        <tr>
+                            <td data-label="E-mail"><div class="mat-table__name"><a href="/admin/Users/Edit?id=@u.Id">@u.Email</a></div></td>
+                            <td data-label="Name" class="mat-hide-sm">@u.Name</td>
+                            <td data-label="Role">Administrator</td>
+                            <td data-label="Last sign-in" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(u.LastSignIn)</td>
+                            <td class="mat-table__cell-actions">
+                                <div class="mat-table__actions">
+                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/admin/Users/Edit?id=@u.Id" aria-label="Edit @u.Email" data-tip="Edit"><icon name="edit" /></a>
+                                    @if (u.Id != currentUserId)
+                                    {
+                                        <form method="post" asp-page-handler="Delete" data-confirm="Delete the user @u.Email? They can no longer sign in, and their sessions end." data-confirm-ok="Delete" data-confirm-danger>
+                                            <input type="hidden" name="id" value="@u.Id" />
+                                            <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Delete @u.Email" data-tip="Delete"><icon name="trash" /></button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <partial name="_Pager" model="list.Pager" />
+
+    <div class="mat-actions">
+        <a href="/admin/Users/Edit" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New user</span></a>
+    </div>
+</div>

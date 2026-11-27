@@ -52,7 +52,8 @@ public sealed class InstanceExpiry(
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ServicesDbContext>();
         var unused = await db.Instances
-            .Where(i => i.FirstTunnel == null && i.PublicIpv4 == null && i.PublicIpv6 == null && i.CreateDate < before)
+            // A blocked name stays (it must not become free by waiting).
+            .Where(i => !i.Blocked && i.FirstTunnel == null && i.PublicIpv4 == null && i.PublicIpv6 == null && i.CreateDate < before)
             .ToListAsync(cancellationToken);
         if (unused.Count == 0)
         {

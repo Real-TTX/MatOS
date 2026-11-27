@@ -13,9 +13,10 @@ public sealed class TunnelRegistry(TimeProvider time, ILogger<TunnelRegistry> lo
 
     public int Count => _sessions.Count;
 
-    public TunnelSession Connect(string name, WebSocket control)
+    /// <param name="remote">The address the installation connected from (shown in the admin area).</param>
+    public TunnelSession Connect(string name, WebSocket control, string? remote = null)
     {
-        var session = new TunnelSession(name, control, time);
+        var session = new TunnelSession(name, control, time) { RemoteAddress = remote };
         TunnelSession? replaced = null;
         _sessions.AddOrUpdate(name, session, (_, old) =>
         {
@@ -37,13 +38,16 @@ public sealed class TunnelRegistry(TimeProvider time, ILogger<TunnelRegistry> lo
     /// <summary>Removes the session only if it is still the current one (a replaced session must not remove its successor).</summary>
     public void Disconnect(TunnelSession session) => _sessions.TryRemove(new KeyValuePair<string, TunnelSession>(session.Name, session));
 
-    /// <summary>Closes the tunnel of a name that was given back.</summary>
-    public async Task CloseAsync(string name)
+    /// <summary>Closes the tunnel of a name (given back, blocked, ended by an administrator); false when none was connected.</summary>
+    public async Task<bool> CloseAsync(string name, string reason = "the name was given back")
     {
-        if (_sessions.TryRemove(name, out var session))
+        if (!_sessions.TryRemove(name, out var session))
         {
-            await session.CloseAsync("the name was given back");
+            return false;
         }
+
+        await session.CloseAsync(reason);
+        return true;
     }
 
     public IReadOnlyCollection<TunnelSession> Sessions => _sessions.Values.ToList();

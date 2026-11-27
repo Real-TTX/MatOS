@@ -1,0 +1,83 @@
+@page
+@model MatOS.Services.Pages.Admin.AccountModel
+@{
+    ViewData["Title"] = "Account";
+    ViewData["PageSub"] = "Who you are here, where you are signed in, and your password.";
+    ViewData["Crumbs"] = Crumbs.Of(("Account", null));
+    ViewData["Width"] = "narrow";
+}
+
+<tab-bar model="Model.Tabs" label="Account" />
+
+@if (!Model.PasswordTab)
+{
+    <div class="mat-stack mat-stack--lg">
+        <section class="mat-stack mat-stack--sm" aria-labelledby="who-title">
+            <h2 class="mat-itemlist__header" id="who-title">You</h2>
+            <div class="mat-card"><div class="mat-card__body">
+                <dl class="mat-kv">
+                    <dt>Name</dt><dd>@Model.Account.Name</dd>
+                    <dt>E-mail</dt><dd>@Model.Account.Email</dd>
+                    <dt>Role</dt><dd>Administrator</dd>
+                    <dt>Last sign-in</dt><dd>@AdminFormat.Time(Model.Account.LastSignIn)</dd>
+                </dl>
+            </div></div>
+        </section>
+
+        <section class="mat-stack mat-stack--sm" aria-labelledby="sessions-title">
+            <h2 class="mat-itemlist__header" id="sessions-title">Signed in</h2>
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Your sessions</caption>
+                    <thead><tr><th scope="col">Browser</th><th scope="col">Last used</th><th scope="col" class="mat-hide-sm">From</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in Model.Sessions)
+                        {
+                            <tr>
+                                <td data-label="Browser">
+                                    @AdminFormat.Text(s.UserAgent)
+                                    @if (s.Token == Model.CurrentToken)
+                                    {
+                                        <span class="mat-pill mat-pill--ok">This one</span>
+                                    }
+                                </td>
+                                <td data-label="Last used" class="mat-nowrap">@AdminFormat.Time(s.LastSeenAt)</td>
+                                <td data-label="From" class="mat-hide-sm mat-mono">@AdminFormat.Text(s.IpAddress)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" asp-page-handler="SignOutOthers" data-confirm="Sign out every other session of your account?" data-confirm-ok="Sign out">
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" class="mat-btn mat-btn--secondary"><icon name="logout" /><span>Sign out the other sessions</span></button>
+                </div>
+            </form>
+        </section>
+    </div>
+}
+else
+{
+    <form method="post" class="mat-form" novalidate>
+        <partial name="_ValidationSummary" />
+
+        <div class="mat-card" role="group" aria-label="Change password">
+            <div class="mat-card__body mat-stack">
+                <mat-field label="Current password" asp-for="Input.CurrentPassword" required="true">
+                    <input asp-for="Input.CurrentPassword" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your current password." />
+                </mat-field>
+                <mat-field label="New password" asp-for="Input.NewPassword" required="true" hint="At least 8 characters. Your other sessions are signed out.">
+                    <input asp-for="Input.NewPassword" type="password" class="mat-input" autocomplete="new-password" required minlength="8" data-msg-required="Please enter a new password." data-msg-range="Use at least 8 characters." />
+                </mat-field>
+                <mat-field label="Confirm new password" asp-for="Input.ConfirmPassword" required="true">
+                    <input asp-for="Input.ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" required data-msg-required="Please repeat the new password." />
+                </mat-field>
+            </div>
+        </div>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+            <a href="/admin/Account" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        </div>
+    </form>
+}

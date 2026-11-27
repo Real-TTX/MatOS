@@ -17,6 +17,53 @@ namespace MatOS.Services.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
+            modelBuilder.Entity("MatOS.Services.Data.AdminAction", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstanceName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstanceName", "CreateDate");
+
+                    b.ToTable("AdminAction", (string)null);
+                });
+
             modelBuilder.Entity("MatOS.Services.Data.CustomDomain", b =>
                 {
                     b.Property<long>("Id")
@@ -64,6 +111,16 @@ namespace MatOS.Services.Data.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Blocked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("BlockedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BlockedReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreateDate")
                         .HasColumnType("TEXT");
@@ -148,6 +205,117 @@ namespace MatOS.Services.Data.Migrations
                     b.ToTable("Registration", (string)null);
                 });
 
+            modelBuilder.Entity("MatOS.Services.Data.User", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSignIn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("\"UpdateState\" <> 0");
+
+                    b.ToTable("User", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.UserSession", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserSession", (string)null);
+                });
+
             modelBuilder.Entity("MatOS.Services.Data.CustomDomain", b =>
                 {
                     b.HasOne("MatOS.Services.Data.Instance", "Instance")
@@ -159,9 +327,25 @@ namespace MatOS.Services.Data.Migrations
                     b.Navigation("Instance");
                 });
 
+            modelBuilder.Entity("MatOS.Services.Data.UserSession", b =>
+                {
+                    b.HasOne("MatOS.Services.Data.User", "User")
+                        .WithMany("Sessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("MatOS.Services.Data.Instance", b =>
                 {
                     b.Navigation("Domains");
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.User", b =>
+                {
+                    b.Navigation("Sessions");
                 });
 #pragma warning restore 612, 618
         }

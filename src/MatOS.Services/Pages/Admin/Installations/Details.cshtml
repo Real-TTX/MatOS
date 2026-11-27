@@ -1,0 +1,217 @@
+@page
+@model MatOS.Services.Pages.Admin.Installations.DetailsModel
+@{
+    var i = Model.Instance;
+    var row = Model.Row;
+    var tunnel = row.Tunnel;
+    ViewData["Title"] = i.Name;
+    ViewData["PageSub"] = $"{i.Name}.{Model.Zone} · {row.Kind} · {row.Mode} mode";
+    ViewData["Crumbs"] = Crumbs.Of(("Installations", "/admin/Installations"), (i.Name, null));
+    var portCheck = Model.PortCheck;
+}
+
+@if (i.Blocked)
+{
+    <div class="mat-alert mat-alert--danger" role="alert">
+        <icon name="lock" />
+        <div class="mat-alert__body">
+            <strong>Blocked since @AdminFormat.Time(i.BlockedAt).</strong>
+            The API, the tunnel, the edge, the DNS and DynDNS refuse this name. Reason: @AdminFormat.Text(i.BlockedReason)
+        </div>
+    </div>
+}
+
+<div class="mat-stack mat-stack--lg">
+    <section class="mat-stack mat-stack--sm" aria-labelledby="facts-title">
+        <h2 class="mat-itemlist__header" id="facts-title">Facts</h2>
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <dl class="mat-kv">
+                    <dt>Status</dt>
+                    <dd><partial name="_StatusPill" model="row.Status" /></dd>
+                    <dt>Address</dt>
+                    <dd class="mat-mono">@i.Name.@Model.Zone</dd>
+                    <dt>Kind</dt>
+                    <dd>@(i.DynDnsOnly ? "DynDNS name (the public DynDNS page)" : "MatOS installation")</dd>
+                    <dt>Mode</dt>
+                    <dd>@(i.Mode == InstanceMode.Direct ? "Direct: the DNS points at its own address" : "Tunnel: visitors come through the edge")</dd>
+                    <dt>IPv4</dt>
+                    <dd class="mat-mono">@AdminFormat.Text(i.PublicIpv4)</dd>
+                    <dt>IPv6</dt>
+                    <dd class="mat-mono">@AdminFormat.Text(i.PublicIpv6)</dd>
+                    <dt>Version</dt>
+                    <dd>@AdminFormat.Text(i.Version)</dd>
+                    <dt>Created</dt>
+                    <dd>@AdminFormat.Time(i.CreateDate)</dd>
+                    <dt>From</dt>
+                    <dd class="mat-mono">@AdminFormat.Text(i.CreatedFromIp)</dd>
+                    <dt>Last seen</dt>
+                    <dd>@AdminFormat.Time(i.LastSeen)</dd>
+                    <dt>First tunnel</dt>
+                    <dd>@AdminFormat.Time(i.FirstTunnel)</dd>
+                    @if (Model.ExpiresAt is { } expires)
+                    {
+                        <dt>Expires unused</dt>
+                        <dd>@AdminFormat.Date(expires) (given back by itself unless a tunnel or an address comes first)</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="tunnel-title">
+        <h2 class="mat-itemlist__header" id="tunnel-title">Tunnel</h2>
+        <div class="mat-card">
+            <div class="mat-card__body">
+                @if (tunnel is null)
+                {
+                    <p class="mat-muted">@(i.DynDnsOnly ? "A DynDNS name never opens a tunnel." : "No tunnel is connected right now.")</p>
+                }
+                else
+                {
+                    <dl class="mat-kv">
+                        <dt>Connected since</dt>
+                        <dd>@AdminFormat.Time(tunnel.ConnectedAt) (@AdminFormat.Duration(Model.Now - tunnel.ConnectedAt))</dd>
+                        <dt>From</dt>
+                        <dd class="mat-mono">@AdminFormat.Text(tunnel.RemoteAddress)</dd>
+                        <dt>Active streams</dt>
+                        <dd>@tunnel.ActiveStreams</dd>
+                    </dl>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="domains-title">
+        <h2 class="mat-itemlist__header" id="domains-title">Own domains</h2>
+        @if (Model.Domains.Count == 0)
+        {
+            <p class="mat-muted">No own domain goes through this installation's tunnel.</p>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Own domains</caption>
+                    <thead><tr><th scope="col">Domain</th><th scope="col">Status</th><th scope="col" class="mat-hide-sm">Checked</th><th scope="col" class="mat-hide-sm">Detail</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in Model.Domains)
+                        {
+                            <tr>
+                                <td data-label="Domain" class="mat-mono">@d.Domain</td>
+                                <td data-label="Status"><partial name="_StatusPill" model="DomainPill.Of(d.Status)" /></td>
+                                <td data-label="Checked" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(d.CheckedAt)</td>
+                                <td data-label="Detail" class="mat-hide-sm mat-muted">@AdminFormat.Text(d.Detail)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="ports-title">
+        <h2 class="mat-itemlist__header" id="ports-title">Last port check</h2>
+        @if (portCheck is null)
+        {
+            <p class="mat-muted">This installation has not checked its ports.</p>
+        }
+        else
+        {
+            <p class="mat-muted">@AdminFormat.Time(portCheck.CheckedAt), for <span class="mat-mono">@(portCheck.Ipv4 ?? portCheck.Ipv6)</span></p>
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Last port check</caption>
+                    <thead><tr><th scope="col">Port</th><th scope="col">Result</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in portCheck.Ports)
+                        {
+                            <tr>
+                                <td data-label="Port" class="mat-mono">@p.Port</td>
+                                <td data-label="Result">@MatOS.Services.Instances.PortCheck.Words(p.Ipv4 ?? p.Ipv6, p.Web)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="actions-title">
+        <h2 class="mat-itemlist__header" id="actions-title">Actions</h2>
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack">
+                <div class="mat-btn-row mat-btn-row--plain">
+                    @if (tunnel is not null)
+                    {
+                        <form method="post" asp-page-handler="Disconnect" asp-route-name="@i.Name" data-confirm="Disconnect the tunnel of @i.Name? Its visitors lose their connections; MatOS connects again by itself." data-confirm-ok="Disconnect">
+                            <button type="submit" class="mat-btn mat-btn--secondary"><icon name="plug" /><span>Disconnect the tunnel</span></button>
+                        </form>
+                    }
+                    @if (i.Mode == InstanceMode.Direct && !i.DynDnsOnly)
+                    {
+                        <form method="post" asp-page-handler="TunnelMode" asp-route-name="@i.Name" data-confirm="Switch @i.Name back to tunnel mode? The name then points at the edge, and visitors reach it only while its tunnel is connected." data-confirm-ok="Switch">
+                            <button type="submit" class="mat-btn mat-btn--secondary"><icon name="route" /><span>Switch back to tunnel mode</span></button>
+                        </form>
+                    }
+                    @if (i.Blocked)
+                    {
+                        <form method="post" asp-page-handler="Unblock" asp-route-name="@i.Name" data-confirm="Unblock @i.Name? The API, the tunnel, the edge, the DNS and DynDNS accept it again." data-confirm-ok="Unblock">
+                            <button type="submit" class="mat-btn mat-btn--secondary"><icon name="check" /><span>Unblock</span></button>
+                        </form>
+                    }
+                </div>
+
+                @if (!i.Blocked)
+                {
+                    <form method="post" asp-page-handler="Block" asp-route-name="@i.Name" class="mat-form" novalidate data-confirm="Block @i.Name? Its tunnel ends, and the API, the tunnel, the edge, the DNS and DynDNS refuse the name until it is unblocked." data-confirm-ok="Block" data-confirm-danger>
+                        <mat-field label="Reason for a block" for-id="block-reason" hint="Kept with the name and in the history; only administrators see it." required="true">
+                            <input id="block-reason" name="Reason" class="mat-input" maxlength="300" autocomplete="off" required data-msg-required="Please give a reason for the block." />
+                        </mat-field>
+                        <div class="mat-btn-row mat-btn-row--plain">
+                            <button type="submit" class="mat-btn mat-btn--danger"><icon name="lock" /><span>Block the name</span></button>
+                        </div>
+                    </form>
+                }
+
+                <form method="post" asp-page-handler="GiveBack" asp-route-name="@i.Name" data-confirm="Give @i.Name back? The name, its own domains and its tunnel go, and anybody can register the name again. This cannot be undone." data-confirm-ok="Give back" data-confirm-danger>
+                    <div class="mat-btn-row mat-btn-row--plain">
+                        <button type="submit" class="mat-btn mat-btn--danger"><icon name="trash" /><span>Give the name back</span></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="history-title">
+        <h2 class="mat-itemlist__header" id="history-title">History</h2>
+        @if (Model.History.Count == 0)
+        {
+            <p class="mat-muted">No administrator has changed this name.</p>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">What administrators did</caption>
+                    <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col" class="mat-hide-sm">Who</th><th scope="col" class="mat-hide-sm">Detail</th></tr></thead>
+                    <tbody>
+                        @foreach (var a in Model.History)
+                        {
+                            <tr>
+                                <td data-label="When" class="mat-nowrap">@AdminFormat.Time(a.CreateDate)</td>
+                                <td data-label="What">@AdminActions.Words(a.Action)</td>
+                                <td data-label="Who" class="mat-hide-sm">@a.UserEmail</td>
+                                <td data-label="Detail" class="mat-hide-sm mat-muted">@AdminFormat.Text(a.Detail)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <div class="mat-btn-row">
+        <a href="/admin/Installations" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+    </div>
+</div>

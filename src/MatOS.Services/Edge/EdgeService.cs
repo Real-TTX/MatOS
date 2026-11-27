@@ -305,6 +305,17 @@ public sealed class EdgeService(
 
     private async Task StreamAsync(Socket client, bool tls, string name, ReadOnlyMemory<byte> peeked, CancellationToken stoppingToken)
     {
+        if (await directory.FindAsync(name, stoppingToken) is { Blocked: true })
+        {
+            // Blocked by an administrator: never passed on, also not by a tunnel that is still on its way out.
+            if (!tls)
+            {
+                await TryReplyAsync(client, 403, "This address is blocked", "This address is blocked by the operator of MatOS Services.");
+            }
+
+            return;
+        }
+
         var session = registry.Get(name);
         if (session is null)
         {

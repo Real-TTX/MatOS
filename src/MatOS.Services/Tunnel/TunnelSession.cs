@@ -74,6 +74,9 @@ public sealed class TunnelSession(string name, WebSocket control, TimeProvider t
 
     public DateTimeOffset ConnectedAt { get; } = time.GetUtcNow();
 
+    /// <summary>The address the installation connected from: the operator's evidence, as <c>Instance.CreatedFromIp</c>.</summary>
+    public string? RemoteAddress { get; init; }
+
     public int ActiveStreams => Volatile.Read(ref _activeStreams);
 
     /// <summary>Cancelled when the control connection ends; the edge stops waiting for streams of a session that is gone.</summary>

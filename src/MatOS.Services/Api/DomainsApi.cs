@@ -57,6 +57,11 @@ public static class DomainsApi
             return Results.Unauthorized();
         }
 
+        if (instance.Blocked)
+        {
+            return InstanceApi.Blocked();
+        }
+
         var (added, problem) = await domains.AddAsync(db, instance, request?.Domain, context.RequestAborted);
         return problem switch
         {

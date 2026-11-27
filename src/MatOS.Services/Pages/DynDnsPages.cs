@@ -187,6 +187,7 @@ public static class DynDnsPages
             RegistrationStatus.Invalid => "A name has 3 to 32 characters: letters, digits and hyphens, not at the start or the end.",
             RegistrationStatus.Reserved => $"{address} is reserved. Please pick another name.",
             RegistrationStatus.Taken => $"{address} is taken already. Please pick another name.",
+            RegistrationStatus.Blocked => $"{address} is blocked and cannot be registered. Please pick another name.",
             _ => "Too many new names from your connection today. Please try again tomorrow.",
         };
         if (error is not null)

@@ -1,0 +1,13 @@
+@page
+@{
+    ViewData["Title"] = "Statistics";
+    ViewData["PageSub"] = "Who uses the tunnel, the DNS and the API, and how much.";
+    ViewData["Crumbs"] = Crumbs.Of(("Statistics", null));
+}
+
+<div class="mat-empty">
+    <span class="mat-empty__icon"><icon name="bar-chart" /></span>
+    <div class="mat-empty__title">No statistics yet</div>
+    <p>The service does not collect usage numbers yet. Until it does, the overview and the tunnels show what happens right now.</p>
+    <a class="mat-btn mat-btn--secondary" href="/admin/Tunnels">Show the tunnels</a>
+</div>
