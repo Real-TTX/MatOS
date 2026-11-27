@@ -58,6 +58,12 @@ public sealed class StatisticsModel(ServicesDbContext db, UsageStats stats, Time
 
     public ApiTotals ApiTotals { get; private set; } = new();
 
+    /// <summary>The time <see cref="ApiTotals"/> covers: the API is counted per day, so for the last 24 hours it is today and yesterday.</summary>
+    public string ApiSpan { get; private set; } = "";
+
+    /// <summary>Whether the API covers other time than the period (the days a period of hours touches).</summary>
+    public bool ApiSpanDiffers => ApiSpan != Period.Label;
+
     public async Task OnGetAsync()
     {
         var ct = HttpContext.RequestAborted;
@@ -93,7 +99,7 @@ public sealed class StatisticsModel(ServicesDbContext db, UsageStats stats, Time
 
         // Tunnel or direct: the mode an installation has now (DynDNS names are always direct).
         var modes = await db.Instances.AsNoTracking().Select(i => new { i.Name, i.Mode, i.DynDnsOnly }).ToListAsync(ct);
-        var usageByName = byInstance.ToDictionary(u => u.Key, u => u.Totals, StringComparer.Ordinal);
+        var usageByName = byInstance.Where(u => !u.GivenBack).ToDictionary(u => u.Key, u => u.Totals, StringComparer.Ordinal);
         ByMode = modes
             .GroupBy(m => m.DynDnsOnly ? "DynDNS names" : m.Mode == InstanceMode.Direct ? "MatOS, direct" : "MatOS, tunnel")
             .OrderBy(g => g.Key == "MatOS, tunnel" ? 0 : g.Key == "MatOS, direct" ? 1 : 2)
@@ -106,6 +112,7 @@ public sealed class StatisticsModel(ServicesDbContext db, UsageStats stats, Time
 
         var api = await stats.ApiSeriesAsync(Period, ct);
         Api = StatsCharts.Api("api", Period, api);
+        ApiSpan = StatsCharts.ApiSpan(Period, api.Count);
         ApiTotals = new ApiTotals
         {
             Registrations = api.Sum(a => a.Totals.Registrations),

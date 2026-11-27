@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MatOS.Services.Usage;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -67,6 +68,17 @@ public partial class AdminAreaTests
                 Assert.Contains("aria-current=\"true\"", html);
                 Assert.DoesNotContain(" style=", html);
                 Assert.Contains("/css/services.css", html);
+
+                // Every id once, and every aria-labelledby names ids that are there (the charts' titles never meet the headings).
+                var ids = Regex.Matches(html, "\\sid=\"([^\"]+)\"").Select(m => m.Groups[1].Value).ToList();
+                var twice = ids.GroupBy(i => i).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+                Assert.True(twice.Count == 0, $"{url}: the ids {string.Join(", ", twice)} are there more than once");
+                foreach (var label in Regex.Matches(html, "aria-labelledby=\"([^\"]+)\"").SelectMany(m => m.Groups[1].Value.Split(' ')))
+                {
+                    Assert.True(ids.Contains(label), $"{url}: aria-labelledby names {label}, which is not there");
+                }
+
+                Assert.Contains("id=\"chart-traffic-title\"", html);
             }
         }
 

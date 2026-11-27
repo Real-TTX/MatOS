@@ -62,6 +62,8 @@ public class StatisticsTests
                 Hour("berta", Utc(11, 26, 8), "", "tls", connections: 5, toVisitor: 5000),
                 Hour("berta", Utc(11, 26, 10), "", "tls", connections: 1, toVisitor: 10),
                 Hour(UsageRecorder.Fallback, Utc(11, 26, 11), "", "tls", connections: 7, toVisitor: 7000),
+                // Given back: no installation holds the name now.
+                Hour("carla", Utc(11, 26, 11), "", "tls", connections: 2, toVisitor: 20),
                 Hour("anna", Utc(11, 20, 5), "", "tls", connections: 1, toVisitor: 1));
             db.UsageDays.Add(new UsageDay { InstanceName = "anna", Day = Utc(3, 10), Host = "", Way = "tls", Connections = 4, BytesToVisitor = 4000 });
             db.DnsHours.AddRange(
@@ -74,6 +76,13 @@ public class StatisticsTests
             }
 
             db.TunnelSessions.Add(new TunnelSessionEntry { InstanceName = "berta", ConnectedAt = Utc(11, 26, 9), DisconnectedAt = Utc(11, 26, 10) });
+
+            // The earlier holder of berta dropped three more times before the name was registered again, and so did carla, given back since.
+            for (var i = 0; i < 3; i++)
+            {
+                db.TunnelSessions.Add(new TunnelSessionEntry { InstanceName = "berta", ConnectedAt = Utc(11, 26, 6 + i), DisconnectedAt = Utc(11, 26, 7 + i) });
+                db.TunnelSessions.Add(new TunnelSessionEntry { InstanceName = "carla", ConnectedAt = Utc(11, 26, 6 + i), DisconnectedAt = Utc(11, 26, 7 + i) });
+            }
         });
 
         var day = StatsPeriod.Of("24h", Now);
@@ -87,19 +96,36 @@ public class StatisticsTests
             // The installations, never the fallback.
             var series = await stats.SeriesAsync(day, null, CancellationToken.None);
             Assert.Equal(24, series.Count);
-            Assert.Equal(10, series.Sum(b => b.Connections));
-            Assert.Equal((3L, 1600L, 100L, 3L), (series[22].Connections, series[22].Bytes, series[22].BytesToInstance, series[22].RefusedNoTunnel));
+            Assert.Equal(12, series.Sum(b => b.Connections));
+            Assert.Equal((5L, 1620L, 100L, 3L), (series[22].Connections, series[22].Bytes, series[22].BytesToInstance, series[22].RefusedNoTunnel));
             Assert.Equal(1, series[23].Connections);
-            Assert.Equal(10, (await stats.SinceAsync(Utc(11, 26), CancellationToken.None)).Connections);
+            Assert.Equal(12, (await stats.SinceAsync(Utc(11, 26), CancellationToken.None)).Connections);
 
             // A year: the daily rows (rolled up) and the hourly rows in their months.
             var months = await stats.SeriesAsync(year, null, CancellationToken.None);
             Assert.Equal((4L, 4000L), (months[3].Connections, months[3].BytesToVisitor));
-            Assert.Equal(11, months[11].Connections);
+            Assert.Equal(13, months[11].Connections);
 
-            var byInstance = (await stats.ByInstanceAsync(day, CancellationToken.None)).ToDictionary(u => u.Key, u => u.Totals);
+            // Per installation from its registration on, as its details page counts: the earlier holder of berta is an entry of its own,
+            // given back (no link), and so is a name nobody holds now.
+            var all = await stats.ByInstanceAsync(day, CancellationToken.None);
+            var byInstance = all.Where(u => !u.GivenBack).ToDictionary(u => u.Key, u => u.Totals);
             Assert.Equal(["anna", "berta"], byInstance.Keys.Order());
             Assert.Equal((1650L, 4L, 3L), (byInstance["anna"].Bytes, byInstance["anna"].Visitors, byInstance["anna"].Refused));
+            Assert.Equal((1L, 10L), (byInstance["berta"].Connections, byInstance["berta"].Bytes));
+            Assert.Equal(
+                (await stats.SeriesAsync(day, berta, CancellationToken.None)).Sum(b => b.Bytes),
+                byInstance["berta"].Bytes);
+            var givenBack = all.Where(u => u.GivenBack).ToDictionary(u => u.Key, u => u.Totals);
+            Assert.Equal(["berta", "carla"], givenBack.Keys.Order());
+            Assert.Equal((5L, 5000L), (givenBack["berta"].Connections, givenBack["berta"].Bytes));
+            Assert.Equal(2, givenBack["carla"].Connections);
+
+            // A period of days: the daily rows are split at the day of the registration.
+            var yearByInstance = await stats.ByInstanceAsync(year, CancellationToken.None);
+            Assert.Equal(4L + 5, yearByInstance.Single(u => u.Key == "anna" && !u.GivenBack).Totals.Connections);
+            Assert.Equal(1, yearByInstance.Single(u => u.Key == "berta" && !u.GivenBack).Totals.Connections);
+            Assert.Equal(5, yearByInstance.Single(u => u.Key == "berta" && u.GivenBack).Totals.Connections);
 
             // One installation: from its registration on.
             Assert.Equal(1, (await stats.SeriesAsync(day, berta, CancellationToken.None)).Sum(b => b.Connections));
@@ -108,7 +134,7 @@ public class StatisticsTests
             Assert.Equal(500, hosts["cloud"]);
 
             var ways = (await stats.ByWayAsync(day, CancellationToken.None)).ToDictionary(u => u.Key, u => u.Totals.Connections);
-            Assert.Equal((9L, 1L, 7L), (ways["tunnel tls"], ways["tunnel http"], ways["fallback tls"]));
+            Assert.Equal((11L, 1L, 7L), (ways["tunnel tls"], ways["tunnel http"], ways["fallback tls"]));
             Assert.False(ways.ContainsKey("fallback http"));
 
             var dns = await stats.DnsSeriesAsync(day, null, CancellationToken.None);
@@ -125,9 +151,21 @@ public class StatisticsTests
             var week = await stats.ApiSeriesAsync(StatsPeriod.Of("7d", Now), CancellationToken.None);
             Assert.Equal((7, 2L), (week.Count, week[5].Totals.Registrations));
 
-            var dropped = Assert.Single(await stats.DroppedOftenAsync(Now.UtcDateTime.AddDays(-1), 3, 8, CancellationToken.None));
-            Assert.Equal(("anna", 3, Utc(11, 26, 5)), (dropped.Name, dropped.Sessions, dropped.Last));
-            Assert.Equal(4, (await stats.SessionsAsync(null, 10, CancellationToken.None)).Count);
+            // ... and says so: today and yesterday, or only today when the 24 hours start at midnight.
+            Assert.Equal("today and yesterday", StatsCharts.ApiSpan(day, api.Count));
+            Assert.Equal("The API, per day, today and yesterday", StatsCharts.Api("api", day, api).Title);
+            var fromMidnight = StatsPeriod.Of("24h", new DateTimeOffset(2026, 11, 26, 23, 10, 0, TimeSpan.Zero));
+            var oneDay = await stats.ApiSeriesAsync(fromMidnight, CancellationToken.None);
+            Assert.Equal([Utc(11, 26)], oneDay.Select(a => a.Start));
+            Assert.Equal("The API, per day, today", StatsCharts.Api("api", fromMidnight, oneDay).Title);
+            Assert.Equal("the last 7 days", StatsCharts.ApiSpan(StatsPeriod.Of("7d", Now), week.Count));
+
+            // Dropped often: berta's four sessions all began before the name was registered again (its earlier holder's, no link).
+            var dropped = await stats.DroppedOftenAsync(Now.UtcDateTime.AddDays(-1), 3, 8, CancellationToken.None);
+            Assert.Equal(
+                [("berta", 4, Utc(11, 26, 10), true), ("anna", 3, Utc(11, 26, 5), false), ("carla", 3, Utc(11, 26, 9), true)],
+                dropped.Select(d => (d.Name, d.Sessions, d.Last, d.GivenBack)));
+            Assert.Equal(10, (await stats.SessionsAsync(null, 10, CancellationToken.None)).Count);
             Assert.Equal(Utc(11, 26, 5), (await stats.SessionsAsync(anna, 10, CancellationToken.None))[0].DisconnectedAt);
 
             // The earlier holder's session of berta (09:00) is not the new installation's.
@@ -153,8 +191,10 @@ public class StatisticsTests
         ]);
 
         var svg = chart.Svg().ToString()!;
-        Assert.Contains("<title id=\"traffic-title\">Traffic &lt;today&gt;</title>", svg);
-        Assert.Contains("aria-labelledby=\"traffic-title traffic-desc\"", svg);
+        // The ids of the drawing never meet those of the page's headings (traffic-title is the heading of the section).
+        Assert.Contains("<title id=\"chart-traffic-title\">Traffic &lt;today&gt;</title>", svg);
+        Assert.Contains("<desc id=\"chart-traffic-desc\">", svg);
+        Assert.Contains("aria-labelledby=\"chart-traffic-title chart-traffic-desc\"", svg);
         Assert.Contains("viewBox=\"0 0 240 100\"", svg);
         Assert.DoesNotContain("style=", svg);
         Assert.DoesNotContain("fill=", svg);

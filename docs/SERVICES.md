@@ -110,7 +110,10 @@ tunnel that ended (connected, disconnected, why, the address it came from, the M
 registrations, give-backs, port checks, name checks and rate-limit refusals per day (the API and the DynDNS page of the installations: a registration
 refused by its limit counts as a rate-limit refusal; an administrator's give-back is in `AdminAction`, not here). The rows are keyed by the name; a name
 given back and registered again by somebody else keeps the earlier holder's rows for the totals, and the views of one installation read only the rows
-from its registration on (`Usage/InstanceUsage.cs`). **What is never stored**: a visitor's address, or a path or URL a
+from its registration on (`Usage/InstanceUsage.cs`). The lists per installation (the overview, Statistics, the tunnels that dropped often) split the same
+way, so a name has the same numbers there as on its page; the rows of a name given back, or of its earlier holder, are an entry of their own marked
+*given back*, without a link. The API is counted per day, so for the last 24 hours its numbers are of today and yesterday (only today when the 24 hours
+start at midnight), and the page says so. **What is never stored**: a visitor's address, or a path or URL a
 visitor opens (the edge does not decrypt TLS and reads nothing of HTTP but the host). Visitors are counted as HMAC-SHA256 hashes of the address with a
 random salt per hour, kept in memory for that hour only and dropped (never written) with the hour's counters; only their number is stored, so the
 same visitor in two hours counts twice in a day's total. The addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address) are the
@@ -121,7 +124,8 @@ The admin area shows them for a period of 24 hours, 7 days, 30 days or 12 months
 times or more in 24 hours), Statistics (the traffic and visitors over time, by installation, by app, by way and by mode, the refusals by reason, the DNS and
 the API per day), an installation's own page (its traffic and visitors per app, its tunnel sessions, its DNS answers and DynDNS updates) and Tunnels (the
 connected ones, refreshed every 5 seconds from `GET /admin/api/tunnels`, signed in only, and the ones that ended last). The charts are SVG drawn on the
-server (`Admin/Charts.cs`, the colours in `wwwroot/css/services.css`), each with the table of its numbers.
+server (`Admin/Charts.cs`, the colours in `wwwroot/css/services.css`), each with the table of its numbers; a chart's `<title>` and `<desc>` have
+ids of their own (`chart-<id>-title`), never those of the page's headings.
 
 **Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
 `ns`, `ns1`, `ns2`, `dns`, `api`, `admin`, `root`, `services`, `service`, `matos`, `my`, `mattiverse`, `status`, `support`, `help`, `test`, `demo`, `app`, `apps`,

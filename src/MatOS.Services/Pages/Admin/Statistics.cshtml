@@ -14,7 +14,7 @@
         ("Visitors (counted per hour)", AdminFormat.Number(t.Visitors)),
         ("Refused connections", AdminFormat.Number(t.Refused)),
         ("DNS answers", AdminFormat.Number(Model.DnsTotals.Queries)),
-        ("Registrations", AdminFormat.Number(Model.ApiTotals.Registrations)),
+        (Model.ApiSpanDiffers ? $"Registrations, {Model.ApiSpan}" : "Registrations", AdminFormat.Number(Model.ApiTotals.Registrations)),
     };
     string Details(string name) => $"/admin/Installations/Details?name={Uri.EscapeDataString(name)}&period={p.Key}";
     var periodNav = new PeriodNav(p, "/admin/Statistics");
@@ -25,7 +25,7 @@
 
 <div class="mat-stack mat-stack--lg">
     <div class="msv-section-head">
-        <p class="mat-muted">Everything below is of @p.Label.</p>
+        <p class="mat-muted">Everything below is of @p.Label@(Model.ApiSpanDiffers ? $"; the API, counted per day, of {Model.ApiSpan}" : "").</p>
         <partial name="_Period" model="periodNav" />
     </div>
 
@@ -144,7 +144,19 @@
                         @foreach (var u in Model.MostRefused)
                         {
                             <tr>
-                                <td data-label="Installation"><div class="mat-table__name mat-mono"><a href="@Details(u.Key)">@u.Key</a></div></td>
+                                <td data-label="Installation">
+                                    <div class="mat-table__name mat-mono">
+                                        @if (u.GivenBack)
+                                        {
+                                            <span>@u.Key</span>
+                                            <span class="mat-muted mat-small">given back</span>
+                                        }
+                                        else
+                                        {
+                                            <a href="@Details(u.Key)">@u.Key</a>
+                                        }
+                                    </div>
+                                </td>
                                 <td data-label="Refused" class="mat-num">@AdminFormat.Number(u.Totals.Refused)</td>
                                 <td data-label="No tunnel" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.RefusedNoTunnel)</td>
                                 <td data-label="Limit" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.RefusedLimit)</td>
@@ -176,7 +188,8 @@
         <h2 class="mat-itemlist__header" id="api-title">The API per day</h2>
         <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Api" /></div></div>
         <div class="mat-card"><div class="mat-card__body">
-            <dl class="mat-kv">
+            <dl class="mat-kv" aria-label="The API, @Model.ApiSpan">
+                <dt>Of</dt><dd>@(char.ToUpperInvariant(Model.ApiSpan[0]) + Model.ApiSpan[1..])</dd>
                 <dt>Name checks</dt><dd>@AdminFormat.Number(Model.ApiTotals.NameChecks)</dd>
                 <dt>Port checks</dt><dd>@AdminFormat.Number(Model.ApiTotals.PortChecks)</dd>
                 <dt>Registrations</dt><dd>@AdminFormat.Number(Model.ApiTotals.Registrations)</dd>

@@ -29,8 +29,17 @@ public sealed class Chart
     /// <summary>The colours of the series in order (services.css: <c>msv-chart__s1</c> to <c>msv-chart__s4</c>).</summary>
     public const int Colours = 4;
 
-    /// <summary>Unique on its page: the ids of the title and the description of the drawing.</summary>
+    /// <summary>Unique among the charts of its page: the ids of the title and the description of the drawing are made from it.</summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The id of the drawing's <c>&lt;title&gt;</c>: <c>chart-</c> in front, so it never meets the ids of a page's sections and headings
+    /// (<c>traffic-title</c> is the heading of a section, <c>chart-traffic-title</c> the title of its chart).
+    /// </summary>
+    public string TitleId => $"chart-{Id}-title";
+
+    /// <summary>The id of the drawing's <c>&lt;desc&gt;</c>.</summary>
+    public string DescId => $"chart-{Id}-desc";
 
     /// <summary>The name of the drawing (its <c>&lt;title&gt;</c>) and of its table.</summary>
     public required string Title { get; init; }
@@ -108,9 +117,9 @@ public sealed class Chart
             .Append("</span></div>");
 
         sb.Append("<svg class=\"msv-chart__plot\" viewBox=\"0 0 ").Append(width).Append(' ').Append(height)
-            .Append("\" preserveAspectRatio=\"none\" role=\"img\" aria-labelledby=\"").Append(E(Id)).Append("-title ").Append(E(Id)).Append("-desc\">");
-        sb.Append("<title id=\"").Append(E(Id)).Append("-title\">").Append(E(Title)).Append("</title>");
-        sb.Append("<desc id=\"").Append(E(Id)).Append("-desc\">").Append(E(Description())).Append("</desc>");
+            .Append("\" preserveAspectRatio=\"none\" role=\"img\" aria-labelledby=\"").Append(E(TitleId)).Append(' ').Append(E(DescId)).Append("\">");
+        sb.Append("<title id=\"").Append(E(TitleId)).Append("\">").Append(E(Title)).Append("</title>");
+        sb.Append("<desc id=\"").Append(E(DescId)).Append("\">").Append(E(Description())).Append("</desc>");
         sb.Append("<line class=\"msv-chart__grid\" x1=\"0\" y1=\"").Append(N(height - top)).Append("\" x2=\"").Append(width).Append("\" y2=\"").Append(N(height - top)).Append("\" />");
         sb.Append("<line class=\"msv-chart__grid\" x1=\"0\" y1=\"").Append(N(height - (top / 2))).Append("\" x2=\"").Append(width).Append("\" y2=\"").Append(N(height - (top / 2))).Append("\" />");
 

@@ -1,5 +1,6 @@
 @model UsageTable
-@* Usage by a key: the traffic both ways, the connections, the visitors and the refusals (secondary columns hidden on a phone). *@
+@* Usage by a key: the traffic both ways, the connections, the visitors and the refusals (secondary columns hidden on a phone). A row of a name
+   given back (or of the earlier holder of a name registered again) has no link: no details page shows its numbers. *@
 <div class="mat-table-wrap">
     <table class="mat-table">
         <caption class="mat-sr-only">@Model.Caption</caption>
@@ -18,7 +19,7 @@
             @foreach (var row in Model.Rows)
             {
                 var t = row.Totals;
-                var link = Model.Link(row.Key);
+                var link = row.GivenBack ? null : Model.Link(row.Key);
                 <tr>
                     <td data-label="@Model.KeyHeader">
                         <div class="mat-table__name @(Model.Mono ? "mat-mono" : "")">
@@ -29,6 +30,10 @@
                             else
                             {
                                 <a href="@link">@Model.Text(row.Key)</a>
+                            }
+                            @if (row.GivenBack)
+                            {
+                                <span class="mat-muted mat-small">given back</span>
                             }
                         </div>
                     </td>

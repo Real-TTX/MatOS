@@ -14,6 +14,16 @@
     };
     var periodNav = new PeriodNav(Model.Period, "/admin", "traffic");
 }
+@functions {
+    // A name in a list: a link to its page, or plain and marked when no installation holds these numbers now (given back, or its earlier holder).
+    private static Microsoft.AspNetCore.Html.IHtmlContent Name(string name, bool givenBack, string href)
+    {
+        var e = System.Net.WebUtility.HtmlEncode(name);
+        return new Microsoft.AspNetCore.Html.HtmlString(givenBack
+            ? $"<div class=\"mat-table__name\"><span>{e}</span><span class=\"mat-muted mat-small\">given back</span></div>"
+            : $"<div class=\"mat-table__name\"><a href=\"{System.Net.WebUtility.HtmlEncode(href)}\">{e}</a></div>");
+    }
+}
 
 <div class="mat-stack mat-stack--lg">
     <section class="mat-grid mat-grid--3" aria-label="Numbers">
@@ -59,7 +69,7 @@
                             @foreach (var u in Model.TopByTraffic)
                             {
                                 <tr>
-                                    <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@u.Key&period=@Model.Period.Key">@u.Key</a></div></td>
+                                    <td data-label="Name">@Name(u.Key, u.GivenBack, $"/admin/Installations/Details?name={Uri.EscapeDataString(u.Key)}&period={Model.Period.Key}")</td>
                                     <td data-label="Traffic" class="mat-num">@AdminFormat.Bytes(u.Totals.Bytes)</td>
                                     <td data-label="Connections" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.Connections)</td>
                                 </tr>
@@ -86,7 +96,7 @@
                             @foreach (var u in Model.TopByVisitors)
                             {
                                 <tr>
-                                    <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@u.Key&period=@Model.Period.Key">@u.Key</a></div></td>
+                                    <td data-label="Name">@Name(u.Key, u.GivenBack, $"/admin/Installations/Details?name={Uri.EscapeDataString(u.Key)}&period={Model.Period.Key}")</td>
                                     <td data-label="Visitors" class="mat-num">@AdminFormat.Number(u.Totals.Visitors)</td>
                                     <td data-label="Connections" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.Connections)</td>
                                 </tr>
@@ -118,7 +128,7 @@
                         @foreach (var d in Model.Dropped)
                         {
                             <tr>
-                                <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@d.Name#sessions-title">@d.Name</a></div></td>
+                                <td data-label="Name">@Name(d.Name, d.GivenBack, $"/admin/Installations/Details?name={Uri.EscapeDataString(d.Name)}#sessions-title")</td>
                                 <td data-label="Ended" class="mat-num">@d.Sessions times</td>
                                 <td data-label="Last" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(d.Last)</td>
                             </tr>

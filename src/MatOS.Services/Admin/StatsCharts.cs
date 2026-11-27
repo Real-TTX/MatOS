@@ -43,6 +43,14 @@ public static class StatsCharts
         new("Address changes", buckets.Select(b => b.AddressChanges).ToList(), AdminFormat.Number, Plot: false, Secondary: true),
     ]);
 
+    /// <summary>
+    /// The time the numbers of the API cover in words. The API is counted per day, so a period of hours gets the whole days it touches:
+    /// "today" when it starts at midnight, else "today and yesterday" (more than the 24 hours), and the period itself otherwise.
+    /// </summary>
+    public static string ApiSpan(StatsPeriod period, int days) => period.Size != BucketSize.Hour
+        ? period.Label
+        : days <= 1 ? "today" : "today and yesterday";
+
     /// <summary>The API per day (also for a period of hours: it is counted per day), stacked.</summary>
     public static Chart Api(string id, StatsPeriod period, IReadOnlyList<(DateTime Start, ApiTotals Totals)> days)
     {
@@ -51,7 +59,7 @@ public static class StatsCharts
         return new Chart
         {
             Id = id,
-            Title = $"The API, {(byDay ? "per day, today and yesterday" : period.Label)}",
+            Title = $"The API, {(byDay ? "per day, " : "")}{ApiSpan(period, days.Count)}",
             BucketName = byDay ? "Day" : period.BucketName,
             AxisLabels = days.Select(d => byDay ? d.Start.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture) : period.AxisLabel(d.Start)).ToList(),
             RowLabels = days.Select(d => byDay ? d.Start.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) : period.RowLabel(d.Start)).ToList(),

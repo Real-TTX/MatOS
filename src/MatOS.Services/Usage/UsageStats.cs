@@ -115,11 +115,14 @@ public sealed class ApiTotals
     public long RateLimited { get; set; }
 }
 
-/// <summary>Usage that belongs to a key (an installation, a host, a way).</summary>
-public sealed record KeyedUsage(string Key, UsageTotals Totals);
+/// <summary>
+/// Usage that belongs to a key (an installation, a host, a way). <see cref="GivenBack"/>: the usage of a name that is no longer registered, or of
+/// the earlier holder of a name that was registered again (no details page shows it).
+/// </summary>
+public sealed record KeyedUsage(string Key, UsageTotals Totals, bool GivenBack = false);
 
-/// <summary>An installation whose tunnel ended often.</summary>
-public sealed record DroppedTunnel(string Name, int Sessions, DateTime Last);
+/// <summary>An installation whose tunnel ended often (<see cref="GivenBack"/>: a name no longer registered, or its earlier holder).</summary>
+public sealed record DroppedTunnel(string Name, int Sessions, DateTime Last, bool GivenBack = false);
 
 /// <summary>
 /// Reads the statistics for the pages of the admin area (docs/SERVICES.md "The statistics"): the hourly rows of the last weeks and the daily
@@ -156,7 +159,11 @@ public sealed class UsageStats(ServicesDbContext db)
         return UsageTotals.Sum(rows.Select(r => r.Totals));
     }
 
-    /// <summary>The usage of the period per installation, unordered.</summary>
+    /// <summary>
+    /// The usage of the period per installation, unordered. The rows of a name count for its installation from its registration on (the
+    /// filters of <see cref="InstanceUsage"/>, so the numbers match its details page); the rows of a name that was given back, and the rows of
+    /// an earlier holder of a name registered again, come as their own entries marked <see cref="KeyedUsage.GivenBack"/>.
+    /// </summary>
     public async Task<IReadOnlyList<KeyedUsage>> ByInstanceAsync(StatsPeriod period, CancellationToken ct)
     {
         var (hours, days) = Rows(period, null);
@@ -166,7 +173,47 @@ public sealed class UsageStats(ServicesDbContext db)
             all.AddRange(await SumAsync(days, d => d.InstanceName, ct));
         }
 
-        return Merge(all);
+        var names = all.Select(a => a.Key).Distinct(StringComparer.Ordinal).ToList();
+        var registered = (await db.Instances.AsNoTracking().Where(i => names.Contains(i.Name)).Select(i => new { i.Name, i.CreateDate }).ToListAsync(ct))
+            .ToDictionary(i => i.Name, i => DateTime.SpecifyKind(i.CreateDate, DateTimeKind.Utc), StringComparer.Ordinal);
+
+        // A name registered before the period: every row of the period is its installation's. One registered in the period may have rows of an
+        // earlier holder before its registration, so its rows are read per hour (or day) and split at the hour (or day) it was registered in.
+        var from = period.From;
+        var recent = registered.Where(r => r.Value >= from).Select(r => r.Key).ToList();
+        var current = new List<(string Key, UsageTotals Totals)>();
+        var earlier = new List<(string Key, UsageTotals Totals)>();
+        foreach (var (key, totals) in all)
+        {
+            if (!registered.ContainsKey(key))
+            {
+                earlier.Add((key, totals));
+            }
+            else if (!recent.Contains(key, StringComparer.Ordinal))
+            {
+                current.Add((key, totals));
+            }
+        }
+
+        if (recent.Count > 0)
+        {
+            foreach (var (key, totals) in await SumAsync(hours.Where(h => recent.Contains(h.InstanceName)), h => new { h.InstanceName, h.Hour }, ct))
+            {
+                var since = UsageRecorder.HourOf(new DateTimeOffset(registered[key.InstanceName], TimeSpan.Zero));
+                (DateTime.SpecifyKind(key.Hour, DateTimeKind.Utc) >= since ? current : earlier).Add((key.InstanceName, totals));
+            }
+
+            if (days is not null)
+            {
+                foreach (var (key, totals) in await SumAsync(days.Where(d => recent.Contains(d.InstanceName)), d => new { d.InstanceName, d.Day }, ct))
+                {
+                    var since = UsageRecorder.DayOf(new DateTimeOffset(registered[key.InstanceName], TimeSpan.Zero));
+                    (DateTime.SpecifyKind(key.Day, DateTimeKind.Utc) >= since ? current : earlier).Add((key.InstanceName, totals));
+                }
+            }
+        }
+
+        return [.. Merge(current), .. Merge(earlier).Select(u => u with { GivenBack = true })];
     }
 
     /// <summary>The usage of the period per host (the app below an installation, its own domain; empty for the installation itself).</summary>
@@ -318,16 +365,25 @@ public sealed class UsageStats(ServicesDbContext db)
             .OrderByDescending(s => s.DisconnectedAt).ThenByDescending(s => s.Id).Take(take).ToListAsync(ct);
 
     /// <summary>The installations whose tunnel ended at least <paramref name="atLeast"/> times since <paramref name="since"/>, the most first.</summary>
+    /// <remarks>
+    /// A session counts for the installation that holds the name now when it began after its registration (as in <see cref="InstanceUsage"/>);
+    /// the sessions of a name given back, or of its earlier holder, are their own entry marked <see cref="DroppedTunnel.GivenBack"/>.
+    /// </remarks>
     public async Task<IReadOnlyList<DroppedTunnel>> DroppedOftenAsync(DateTime since, int atLeast, int take, CancellationToken ct)
     {
-        var rows = await db.TunnelSessions.Where(s => s.DisconnectedAt >= since)
-            .GroupBy(s => s.InstanceName)
-            .Select(g => new { Name = g.Key, Sessions = g.Count(), Last = g.Max(s => s.DisconnectedAt) })
+        var rows = await (
+                from s in db.TunnelSessions
+                where s.DisconnectedAt >= since
+                join i in db.Instances on s.InstanceName equals i.Name into holders
+                from i in holders.DefaultIfEmpty()
+                select new { s.InstanceName, s.DisconnectedAt, GivenBack = i == null || s.ConnectedAt < i.CreateDate })
+            .GroupBy(s => new { s.InstanceName, s.GivenBack })
+            .Select(g => new { g.Key.InstanceName, g.Key.GivenBack, Sessions = g.Count(), Last = g.Max(s => s.DisconnectedAt) })
             .Where(g => g.Sessions >= atLeast)
-            .OrderByDescending(g => g.Sessions).ThenBy(g => g.Name)
+            .OrderByDescending(g => g.Sessions).ThenBy(g => g.InstanceName).ThenBy(g => g.GivenBack)
             .Take(take)
             .ToListAsync(ct);
-        return rows.Select(r => new DroppedTunnel(r.Name, r.Sessions, DateTime.SpecifyKind(r.Last, DateTimeKind.Utc))).ToList();
+        return rows.Select(r => new DroppedTunnel(r.InstanceName, r.Sessions, DateTime.SpecifyKind(r.Last, DateTimeKind.Utc), r.GivenBack)).ToList();
     }
 
     /// <summary>The words of a way of <see cref="ByWayAsync"/>.</summary>
