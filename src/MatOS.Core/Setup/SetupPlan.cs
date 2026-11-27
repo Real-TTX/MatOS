@@ -201,6 +201,54 @@ public static partial class SetupPlan
         return steps.Where(s => s.Key != key && reached.Contains(s.Key)).ToList();
     }
 
+    /// <summary>
+    /// The failed lines a line of <paramref name="key"/> runs on that need no failed line themselves (the closure over <see cref="SetupRunStep.Needs"/>), in
+    /// the order of the plan: a line that failed because one of these failed works again only after them, so its "Try again" retries these (their own "Try
+    /// again" puts the failed line behind them). Empty when nothing it needs failed. <paramref name="failed"/> says whether a line failed.
+    /// </summary>
+    public static IReadOnlyList<SetupRunStep> FailedNeeds(IReadOnlyList<SetupRunStep> steps, string key, Func<string, bool> failed)
+    {
+        var byKey = steps.GroupBy(s => s.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var open = new Stack<string>();
+        if (byKey.TryGetValue(key, out var start))
+        {
+            start.Needs.ForEach(open.Push);
+        }
+
+        while (open.TryPop(out var need))
+        {
+            if (byKey.TryGetValue(need, out var line) && reached.Add(need))
+            {
+                line.Needs.ForEach(open.Push);
+            }
+        }
+
+        bool HasFailedNeed(SetupRunStep line)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var next = new Stack<string>(line.Needs);
+            while (next.TryPop(out var need))
+            {
+                if (!seen.Add(need) || !byKey.TryGetValue(need, out var other))
+                {
+                    continue;
+                }
+
+                if (failed(need))
+                {
+                    return true;
+                }
+
+                other.Needs.ForEach(next.Push);
+            }
+
+            return false;
+        }
+
+        return steps.Where(s => s.Key != key && reached.Contains(s.Key) && failed(s.Key) && !HasFailedNeed(s)).ToList();
+    }
+
     /// <summary>The engine in plain words, with its name after it: what the progress screen and the summary say.</summary>
     public static string EngineLabel(string catalogId) => catalogId switch
     {

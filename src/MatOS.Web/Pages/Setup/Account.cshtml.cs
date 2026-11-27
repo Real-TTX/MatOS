@@ -60,6 +60,9 @@ public class AccountModel : PageModel
     /// <summary>"Test the sign-in" can be offered: the line is done and the addresses are ready (<see cref="AccountView.CanTest"/>).</summary>
     public bool CanTest { get; private set; }
 
+    /// <summary>The self check when it failed: the page says why and offers its Try again (<see cref="AccountView.FailedSelfCheck"/>).</summary>
+    public SetupStepView? SelfCheck { get; private set; }
+
     /// <summary>A sign-in through MatIdentity came back as this account already.</summary>
     public bool SignInTested { get; private set; }
 
@@ -189,6 +192,7 @@ public class AccountModel : PageModel
             Line = only.Steps.FirstOrDefault();
             Phase = AccountView.PhaseOf(only);
             CanTest = AccountView.CanTest(view);
+            SelfCheck = AccountView.FailedSelfCheck(view);
         }
         else
         {

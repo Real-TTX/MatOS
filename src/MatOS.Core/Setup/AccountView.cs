@@ -4,15 +4,20 @@ namespace MatOS.Core.Setup;
 public static class AccountView
 {
     /// <summary>
-    /// "Test the sign-in" is offered once the line "signin" is done and the self check is done or not part of the run: the sign-in needs the public address
-    /// of MatIdentity, which is ready only when the addresses are.
+    /// "Test the sign-in" is offered once the line "signin" is done and the self check is over (done, failed) or not part of the run: the sign-in needs the
+    /// public address of MatIdentity, which is ready only when the addresses are. A failed self check does not change by itself, so the test is offered then
+    /// too (it asks MatIdentity before the sign-in and says when it does not answer), beside the Try again of the self check (<see cref="FailedSelfCheck"/>).
     /// </summary>
     public static bool CanTest(SetupProgressView view)
     {
         var signIn = view.Steps.FirstOrDefault(s => s.Key == SetupPlan.SignInKey);
         var selfCheck = view.Steps.FirstOrDefault(s => s.Key == SetupPlan.SelfCheckKey);
-        return signIn?.State == SetupProgress.Done && (selfCheck is null || selfCheck.State == SetupProgress.Done);
+        return signIn?.State == SetupProgress.Done && (selfCheck is null || selfCheck.State is SetupProgress.Done or SetupProgress.Failed);
     }
+
+    /// <summary>The self check when it failed (the screen names it and offers its Try again), else null.</summary>
+    public static SetupStepView? FailedSelfCheck(SetupProgressView view)
+        => view.Steps.FirstOrDefault(s => s.Key == SetupPlan.SelfCheckKey && s.State == SetupProgress.Failed);
 
     /// <summary>
     /// What the test of the sign-in says: a sign-in through MatIdentity as this account (<paramref name="subject"/> is its <c>ExternalSubject</c>) works;

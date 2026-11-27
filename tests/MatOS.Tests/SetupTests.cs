@@ -461,6 +461,56 @@ public class SetupTests
     }
 
     [Fact]
+    public void Try_again_of_a_line_whose_need_failed_goes_to_the_first_failed_need()
+    {
+        var steps = Planned(BothPhases(Choices(Reach.Free, "anna"), handOver: true));
+        var failed = new HashSet<string> { "engine:matidentity", "signin" };
+
+        // The sign-in failed because MatIdentity did: its Try again is MatIdentity's, and the sign-in follows as its failed dependent.
+        Assert.Equal(["engine:matidentity"], SetupPlan.FailedNeeds(steps, "signin", failed.Contains).Select(s => s.Key));
+        Assert.Contains(SetupPlan.Dependents(steps, "engine:matidentity"), s => s.Key == "signin");
+
+        // Only the first failed lines of the chain: MatDock failed too, so it is tried first (MatIdentity and the sign-in follow from it).
+        failed.Add("engine:matdock");
+        Assert.Equal(["engine:matdock"], SetupPlan.FailedNeeds(steps, "signin", failed.Contains).Select(s => s.Key));
+
+        // Through a line that did not fail: MatSMTP failed because MatDock did.
+        Assert.Equal(["engine:matdock"], SetupPlan.FailedNeeds(steps, "engine:matsmtp", new HashSet<string> { "engine:matdock", "engine:matsmtp" }.Contains).Select(s => s.Key));
+
+        // Nothing it needs failed: the line is tried again itself.
+        Assert.Empty(SetupPlan.FailedNeeds(steps, "signin", new HashSet<string> { "signin" }.Contains));
+        Assert.Empty(SetupPlan.FailedNeeds(steps, "engine:matdock", failed.Contains));
+        Assert.Empty(SetupPlan.FailedNeeds(steps, "nothing", failed.Contains));
+    }
+
+    [Fact]
+    public void A_line_that_failed_because_a_need_failed_names_it()
+    {
+        var run = new SetupRun
+        {
+            Steps =
+            [
+                new SetupRunStep { Key = "engine:matidentity", Kind = SetupPlan.EngineKind, Label = "Sign-in (MatIdentity)", JobId = 1 },
+                new SetupRunStep { Key = "signin", Kind = SetupPlan.SignInKind, Label = "Your account", JobId = 2, Needs = ["engine:matidentity"] },
+            ],
+        };
+        var jobs = new Dictionary<long, SetupJobState>
+        {
+            [1] = new(JobStatus.Failed, null, "pull access denied for x"),
+            [2] = new(JobStatus.Failed, null, "MatIdentity is not installed yet: try its line first, then this one."),
+        };
+
+        var view = SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow);
+        Assert.Equal(SetupProgress.NeedFailed("Sign-in (MatIdentity)"), view.Steps[1].Error);
+        Assert.Contains("Try again does Sign-in (MatIdentity) first", view.Steps[1].Error, StringComparison.Ordinal);
+        Assert.NotEqual(view.Steps[1].Error, view.Steps[0].Error);
+
+        // Once MatIdentity is done, the line says its own reason again (the hint stays in its first sentence).
+        jobs[1] = new(JobStatus.Succeeded, null, null);
+        Assert.Equal("MatIdentity is not installed yet: try its line first, then this one.", SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow).Steps[1].Error);
+    }
+
+    [Fact]
     public void The_first_steps_are_MatDock_then_MatSMTP()
     {
         var none = new HashSet<string>();

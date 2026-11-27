@@ -98,6 +98,20 @@
             {
                 <p class="ob-small"><span class="mat-pill mat-pill--ok">The sign-in works</span></p>
             }
+            @if (Model.SelfCheck is { } check)
+            {
+                @* The self check failed: it does not change by itself. Its reason and its Try again are here; the test is offered anyway (it asks MatIdentity first). *@
+                <div class="mat-alert mat-alert--warning" role="status">
+                    <icon name="alert" />
+                    <div class="mat-alert__body">@check.Label did not work: @(check.Error ?? SetupProgress.Unknown) The sign-in may not work from outside until it does.</div>
+                </div>
+                <form method="post" asp-page="/Setup/Progress" asp-page-handler="Retry" data-ob-retry class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
+                    <input type="hidden" name="key" value="@check.Key" />
+                    <input type="hidden" name="returnUrl" value="@MatOS.Web.Pages.Setup.AccountModel.Self" />
+                    <button type="submit" class="mat-btn mat-btn--secondary"><icon name="refresh" /><span>Try the check again</span></button>
+                    <a class="mat-btn mat-btn--ghost" href="@SetupFlow.ProgressPage"><span>All lines</span></a>
+                </form>
+            }
             @if (Model.CanTest)
             {
                 <p class="ob-small">Test it once: a new tab signs you in through MatIdentity. @password Your session here stays as it is.</p>

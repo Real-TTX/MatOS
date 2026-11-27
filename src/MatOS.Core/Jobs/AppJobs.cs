@@ -89,7 +89,7 @@ public static class AppJobs
             var db = ctx.Services.GetRequiredService<MatOSDbContext>();
             if (!await db.InstalledApps.AnyAsync(a => a.CatalogId == MatIdentityClient.CatalogIdValue && a.Lifecycle == AppLifecycle.Installed, ctx.Cancellation))
             {
-                throw new InvalidOperationException("MatIdentity is not installed yet. Try its line first, then this one.");
+                throw new InvalidOperationException("MatIdentity is not installed yet: try its line first, then this one.");
             }
 
             var identity = ctx.Services.GetRequiredService<IdentityLink>();

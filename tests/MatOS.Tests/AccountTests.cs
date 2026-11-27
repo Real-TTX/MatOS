@@ -15,9 +15,22 @@ public class AccountTests
     [Theory]
     [InlineData(SetupProgress.Waiting)]
     [InlineData(SetupProgress.Working)]
-    [InlineData(SetupProgress.Failed)]
-    public void The_test_waits_while_the_self_check_is_not_done(string selfCheck)
+    public void The_test_waits_while_the_self_check_is_not_over(string selfCheck)
         => Assert.False(AccountView.CanTest(View((SetupPlan.SignInKey, SetupProgress.Done), (SetupPlan.SelfCheckKey, selfCheck))));
+
+    [Fact]
+    public void A_failed_self_check_is_named_with_its_try_again_and_the_test_is_offered_anyway()
+    {
+        // A failed self check does not change by itself: the screen must not say "still getting ready" for good.
+        var failed = View((SetupPlan.SignInKey, SetupProgress.Done), (SetupPlan.SelfCheckKey, SetupProgress.Failed));
+        Assert.True(AccountView.CanTest(failed));
+        Assert.Equal(SetupPlan.SelfCheckKey, AccountView.FailedSelfCheck(failed)?.Key);
+
+        Assert.Null(AccountView.FailedSelfCheck(View((SetupPlan.SignInKey, SetupProgress.Done), (SetupPlan.SelfCheckKey, SetupProgress.Working))));
+        Assert.Null(AccountView.FailedSelfCheck(View((SetupPlan.SignInKey, SetupProgress.Failed))));
+        // The sign-in itself still has to be done.
+        Assert.False(AccountView.CanTest(View((SetupPlan.SignInKey, SetupProgress.Failed), (SetupPlan.SelfCheckKey, SetupProgress.Failed))));
+    }
 
     [Fact]
     public void The_test_is_offered_when_the_sign_in_and_the_self_check_are_done_or_there_is_no_self_check()

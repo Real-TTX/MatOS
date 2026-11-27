@@ -156,6 +156,12 @@ public static partial class SetupProgress
             var state = states[step.Key];
             var error = state == Failed ? (job is null ? "This step was lost. Try it again." : Plain(job.Error, step.Kind)) : null;
 
+            // A line that failed because a line it needs failed says which one: its "Try again" does that line first (SetupService.RetryAsync).
+            if (state == Failed && SetupPlan.FailedNeeds(run.Steps, step.Key, key => states.GetValueOrDefault(key) == Failed) is [var first, ..])
+            {
+                error = NeedFailed(first.Label);
+            }
+
             // A waiting line says what it waits for: the first line it needs that is not over yet.
             var waitsFor = state == Waiting
                 ? step.Needs.Select(need => run.Steps.FirstOrDefault(s => s.Key == need))
@@ -223,6 +229,9 @@ public static partial class SetupProgress
         var minutes = (int)Math.Ceiling(left.TotalMinutes);
         return minutes == 1 ? "About a minute left" : $"About {minutes} minutes left";
     }
+
+    /// <summary>What a failed line says when a line it needs failed before it: Try again does that line first, then this one.</summary>
+    public static string NeedFailed(string label) => $"It needs {label}, which did not work. Try again does {label} first, then this.";
 
     /// <summary>What the line says when nothing plainer can be told; "Show details" has the whole error.</summary>
     public const string Unknown = "This did not work this time.";

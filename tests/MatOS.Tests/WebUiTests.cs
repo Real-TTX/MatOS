@@ -266,17 +266,25 @@ public partial class WebUiTests
     {
         var mode = Read("wwwroot", "js", "window-mode.js");
         Assert.Contains("window.top.postMessage({ type: 'mv-open', url: own, title: a.getAttribute('data-title') || '' }, location.origin);", mode, StringComparison.Ordinal);
-        Assert.Matches(@"own\.charAt\(0\) === '/' && own\.charAt\(1\) !== '/' && own\.charAt\(1\) !== '\\\\'[^}]*mv-open", mode);
+        Assert.Matches(@"own = ownPath\(own\);\s*if \(own\) \{[^}]*mv-open", mode);
 
+        // The path check: a control character (the address parser drops a tab or a line break: /<tab>/host is //host) or a backslash is refused, and the path is
+        // resolved and kept only on this origin; the resolved path is what opens. The same in both scripts.
+        const string check = "if (typeof path !== 'string' || path.charAt(0) !== '/' || /[\\u0000-\\u001F\\u007F\\\\]/.test(path)) { return null; }";
+        Assert.Contains(check, mode, StringComparison.Ordinal);
+        Assert.Contains("return u.origin === window.location.origin ? u.pathname + u.search + u.hash : null;", mode, StringComparison.Ordinal);
         var os = Read("wwwroot", "js", "os.js");
-        Assert.Contains("function ownPath(path) { return typeof path === 'string' && path.charAt(0) === '/' && path.charAt(1) !== '/' && path.charAt(1) !== '\\\\'; }", os, StringComparison.Ordinal);
+        Assert.Contains(check, os, StringComparison.Ordinal);
+        Assert.Contains("return u.origin === location.origin ? u.pathname + u.search + u.hash : null;", os, StringComparison.Ordinal);
+        Assert.Contains("path = ownPath(path);", os, StringComparison.Ordinal);
         var listener = Regex.Match(os, @"window\.addEventListener\('message', function \(e\) \{(.*?)\n  \}\);", RegexOptions.Singleline);
         Assert.True(listener.Success, "the message listener of os.js");
         var body = listener.Groups[1].Value;
         var origin = body.IndexOf("e.origin !== location.origin", StringComparison.Ordinal);
         var frame = body.IndexOf("o.frame.contentWindow === e.source", StringComparison.Ordinal);
-        var path = body.IndexOf("!ownPath(e.data.url)", StringComparison.Ordinal);
-        var opens = body.IndexOf("open(e.data.url", StringComparison.Ordinal);
+        var path = body.IndexOf("var url = ownPath(e.data.url);", StringComparison.Ordinal);
+        var opens = body.IndexOf("open(url, ", StringComparison.Ordinal);
+        Assert.DoesNotContain("open(e.data.url", body, StringComparison.Ordinal);
         Assert.True(origin >= 0 && frame > origin && path > frame && opens > path, "mv-open is opened only behind the origin, the frame and the path checks");
 
         // The end of the first start opens the list in a window, once.

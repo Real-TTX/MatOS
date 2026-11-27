@@ -606,13 +606,43 @@ public sealed class SetupService
     /// <summary>
     /// "Try again" of a failed line: the lines that follow from it and still wait are taken off the queue first, then its work is queued once more (an install
     /// the way the store's "Try again" does it), then those lines and the failed ones that follow from it, behind it. False when the line is not failed.
+    /// A line that failed because a line it needs failed (<see cref="SetupPlan.FailedNeeds"/>) cannot work by itself: those lines are tried again instead, and
+    /// this one follows behind them as one of their failed dependents.
     /// </summary>
     public async Task<bool> RetryAsync(string key, CancellationToken ct = default)
     {
         await Gate.WaitAsync(ct);
         try
         {
-            return await RetryCoreAsync(key, ct) > 0;
+            var run = (await _config.GetAsync(ct)).Setup;
+            if (run?.Steps.FirstOrDefault(s => s.Key == key) is not { } step)
+            {
+                return false;
+            }
+
+            var ids = run.Steps.Select(s => s.JobId).ToList();
+            var status = await _db.Jobs.AsNoTracking().Where(j => ids.Contains(j.Id)).ToDictionaryAsync(j => j.Id, j => j.Status, ct);
+            bool Failed(string stepKey)
+                => run.Steps.FirstOrDefault(s => s.Key == stepKey) is { } line && (!status.TryGetValue(line.JobId, out var s) || s == JobStatus.Failed);
+
+            if (!Failed(step.Key))
+            {
+                return false;
+            }
+
+            var needs = SetupPlan.FailedNeeds(run.Steps, key, Failed);
+            if (needs.Count == 0)
+            {
+                return await RetryCoreAsync(key, ct) > 0;
+            }
+
+            var count = 0;
+            foreach (var need in needs)
+            {
+                count += await RetryCoreAsync(need.Key, ct);
+            }
+
+            return count > 0;
         }
         finally
         {

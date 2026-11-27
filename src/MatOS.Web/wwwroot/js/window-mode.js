@@ -14,6 +14,15 @@
   if (!inWindow) { return; }
 
   var html = document.documentElement;
+  // A path of this MatOS only, never another address (//host, /\host, and /<tab>/host: the address parser drops tabs and line breaks, so a control
+  // character or a backslash is refused outright): resolved against this page and kept only on this origin, the resolved path. Null for anything else.
+  function ownPath(path) {
+    if (typeof path !== 'string' || path.charAt(0) !== '/' || /[\u0000-\u001F\u007F\\]/.test(path)) { return null; }
+    var u;
+    try { u = new URL(path, window.location.href); } catch (err) { return null; }
+    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : null;
+  }
+
   var home = function (close) { window.top.postMessage({ type: 'mv-home', close: !!close }, window.location.origin); };
 
   if (html.hasAttribute('data-os')) { home(true); return; }
@@ -27,7 +36,8 @@
     // A link that opens a window of its own (data-window, the list "Getting started"): the home screen opens it beside this one. A path of this MatOS only.
     var own = a.getAttribute('data-window');
     if (own !== null) {
-      if (own.charAt(0) === '/' && own.charAt(1) !== '/' && own.charAt(1) !== '\\') {
+      own = ownPath(own);
+      if (own) {
         e.preventDefault();
         window.top.postMessage({ type: 'mv-open', url: own, title: a.getAttribute('data-title') || '' }, location.origin);
       }

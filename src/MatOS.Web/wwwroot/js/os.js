@@ -614,8 +614,15 @@
     if (w === active()) { minimize(w); } else { show(w); }
   });
 
-  // A path of this MatOS only, never another address (//host, /\host).
-  function ownPath(path) { return typeof path === 'string' && path.charAt(0) === '/' && path.charAt(1) !== '/' && path.charAt(1) !== '\\'; }
+  // A path of this MatOS only, never another address (//host, /\host, and /<tab>/host: the address parser drops tabs and line breaks, so a control
+  // character or a backslash is refused outright). The path is resolved against this page and kept only when it stays on this origin; what opens is the
+  // resolved path, never the raw string. Null for anything else.
+  function ownPath(path) {
+    if (typeof path !== 'string' || path.charAt(0) !== '/' || /[\u0000-\u001F\u007F\\]/.test(path)) { return null; }
+    var u;
+    try { u = new URL(path, location.href); } catch (err) { return null; }
+    return u.origin === location.origin ? u.pathname + u.search + u.hash : null;
+  }
 
   // A page in a window asks to go home (a link to /): its window is put away; a page that landed on the home screen closes its window.
   // A page in a window asks for a window of its own (mv-open, a link with data-window there): it opens beside it. Only from this origin and from a frame
@@ -625,8 +632,9 @@
     var w = wins.filter(function (o) { return o.frame.contentWindow === e.source; })[0];
     if (!w) { return; }
     if (e.data.type === 'mv-open') {
-      if (!ownPath(e.data.url)) { return; }
-      open(e.data.url, { title: typeof e.data.title === 'string' ? e.data.title : '' });
+      var url = ownPath(e.data.url);
+      if (!url) { return; }
+      open(url, { title: typeof e.data.title === 'string' ? e.data.title : '' });
       return;
     }
     if (e.data.close) { close(w); } else { minimize(w); }
@@ -639,7 +647,8 @@
       var path;
       try { path = decodeURIComponent(h.slice(1)); } catch (e) { return; }
       // a path of this MatOS only, never another address
-      if (!ownPath(path)) { return; }
+      path = ownPath(path);
+      if (!path) { return; }
       var w = wins.filter(function (o) { return !o.leaving && (pathOf(o) === path || o.url === path || o.start === path); })[0];
       if (!w) { open(path, { fromAddress: true, title: '' }); } else if (w !== active()) { show(w, { fromAddress: true }); }
     } else if (active()) {
