@@ -115,7 +115,7 @@ public class AddressModel : PageModel
         if (!result.Ok)
         {
             // A refusal of the name belongs to the field; a service that cannot be asked to the whole form.
-            ModelState.AddModelError(result.Error is "invalid" or "taken" or "reserved" ? nameof(Name) : string.Empty, result.Message ?? ServicesClient.UnreachableMessage);
+            ModelState.AddModelError(result.Error is "invalid" or "taken" or "blocked" or "reserved" ? nameof(Name) : string.Empty, result.Message ?? ServicesClient.UnreachableMessage);
             await LoadAsync(remote: false);
             return Page();
         }

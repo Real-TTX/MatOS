@@ -457,7 +457,7 @@ public sealed class SetupService
                         var message = reserved.Error == "exists" && config.Hosted is { } other
                             ? $"This MatOS has the free address {other.Address} already. Choose that name, or give it back in Settings, Address."
                             : reserved.Message ?? ServicesClient.UnreachableMessage;
-                        var field = reserved.Error is "invalid" or "taken" or "reserved" or "exists" ? "Name" : string.Empty;
+                        var field = reserved.Error is "invalid" or "taken" or "blocked" or "reserved" or "exists" ? "Name" : string.Empty;
                         return new SetupStart(null, [new SetupProblem(field, message)]);
                     }
                 }

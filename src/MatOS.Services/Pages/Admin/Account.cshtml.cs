@@ -66,9 +66,9 @@ public sealed class AccountModel(AdminAccounts accounts) : PageModel
             return Page();
         }
 
-        if (!accounts.CheckPassword(Account, Input.CurrentPassword))
+        if (accounts.CheckCurrentPassword(Account, Input.CurrentPassword) is { } error)
         {
-            ModelState.AddModelError("Input.CurrentPassword", "The current password is not right.");
+            ModelState.AddModelError("Input.CurrentPassword", error);
             return Page();
         }
 

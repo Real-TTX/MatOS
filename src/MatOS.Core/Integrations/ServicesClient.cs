@@ -346,6 +346,8 @@ public sealed partial class ServicesClient
         "invalid" => "Use 3 to 32 letters, digits and dashes; no dash at the start or the end.",
         "reserved" => "This name is reserved. Please choose another one.",
         "taken" => "This name is taken. Please choose another one.",
+        // A name an administrator blocked: for the person it is simply not to be had.
+        "blocked" => "This name is not available. Please choose another one.",
         "too-many-registrations" => "Too many addresses were registered from your internet connection today. Please try again tomorrow.",
         "too-many-requests" => "The address service is busy with requests from your connection. Please wait a minute and try again.",
         "no-public-ip" => "The address service does not know the public IP of this machine yet. Keep the tunnel for a few minutes and try again.",

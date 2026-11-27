@@ -57,9 +57,17 @@ public sealed class InstanceAdmin(
         logger.LogInformation("{Name} was unblocked by {By}", instance.Name, by);
     }
 
-    /// <summary>Gives the name back as the API's give-back does: the row, its domains and its tunnel go, and the name is free again.</summary>
+    /// <summary>
+    /// Gives the name back as the API's give-back does: the row, its domains and its tunnel go, and the name is free again. Never a blocked
+    /// name (the block would go with the row and the name would be free for anybody): it is unblocked first.
+    /// </summary>
     public async Task GiveBackAsync(Instance instance, string by, CancellationToken ct)
     {
+        if (instance.Blocked)
+        {
+            throw new InvalidOperationException($"{instance.Name} is blocked: unblock it before giving it back.");
+        }
+
         var name = instance.Name;
         await registrar.ReleaseAsync(db, instance, ct);
         await AuditAsync(by, AdminActions.GiveBack, name, null, ct);

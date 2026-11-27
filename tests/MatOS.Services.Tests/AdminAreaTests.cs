@@ -137,6 +137,32 @@ public partial class AdminAreaTests
     }
 
     [Fact]
+    public async Task Wrong_current_passwords_count_like_wrong_sign_ins()
+    {
+        await using var service = await StartAsync();
+        var thief = new Browser(service);
+        Assert.True(await thief.SignInAsync(Email, Password));
+
+        Dictionary<string, string> Change(string current) => new()
+        {
+            ["Input.CurrentPassword"] = current,
+            ["Input.NewPassword"] = "another-long-password",
+            ["Input.ConfirmPassword"] = "another-long-password",
+        };
+
+        for (var i = 0; i < AdminGuard.MaxFailures; i++)
+        {
+            var wrong = await thief.PostFormAsync("/admin/Account?tab=password", "/admin/Account", Change("wrong-password-" + i));
+            Assert.Equal(HttpStatusCode.OK, wrong.StatusCode);
+        }
+
+        // Locked: even the right current password is refused now, and the sign-in of the account too.
+        var right = await thief.PostFormAsync("/admin/Account?tab=password", "/admin/Account", Change(Password));
+        Assert.Contains("Too many wrong passwords", await right.Content.ReadAsStringAsync());
+        Assert.False(await new Browser(service).SignInAsync(Email, Password));
+    }
+
+    [Fact]
     public async Task The_admin_area_answers_only_on_the_host_of_the_api()
     {
         await using var service = await StartAsync();
@@ -197,6 +223,10 @@ public partial class AdminAreaTests
             Assert.Contains("phishing", page);
             Assert.Contains("Blocked the name", page);
             Assert.Contains(Email, page);
+
+            // Nor can an administrator while it is blocked (the block would go with the row).
+            Assert.Equal(HttpStatusCode.Redirect, (await admin.PostFormAsync(details, details + "&handler=GiveBack", [])).StatusCode);
+            Assert.Equal("blocked", (await anonymous.GetFromJsonAsync<NameAvailability>("/api/v1/names/berta"))!.Reason);
 
             Assert.Equal(HttpStatusCode.Redirect, (await admin.PostFormAsync(details, details + "&handler=Unblock", [])).StatusCode);
             Assert.Equal(DnsRcode.NoError, (await DynDnsPageTests.AskAsync(service.Dns, "app.berta.my.mattiverse.de", DnsType.A)).Rcode);

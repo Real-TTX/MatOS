@@ -174,11 +174,18 @@
                     </form>
                 }
 
-                <form method="post" asp-page-handler="GiveBack" asp-route-name="@i.Name" data-confirm="Give @i.Name back? The name, its own domains and its tunnel go, and anybody can register the name again. This cannot be undone." data-confirm-ok="Give back" data-confirm-danger>
-                    <div class="mat-btn-row mat-btn-row--plain">
-                        <button type="submit" class="mat-btn mat-btn--danger"><icon name="trash" /><span>Give the name back</span></button>
-                    </div>
-                </form>
+                @if (i.Blocked)
+                {
+                    <p class="mat-muted">A blocked name cannot be given back: the block would go with it, and anybody could register the name again. Unblock it first.</p>
+                }
+                else
+                {
+                    <form method="post" asp-page-handler="GiveBack" asp-route-name="@i.Name" data-confirm="Give @i.Name back? The name, its own domains and its tunnel go, and anybody can register the name again. This cannot be undone." data-confirm-ok="Give back" data-confirm-danger>
+                        <div class="mat-btn-row mat-btn-row--plain">
+                            <button type="submit" class="mat-btn mat-btn--danger"><icon name="trash" /><span>Give the name back</span></button>
+                        </div>
+                    </form>
+                }
             </div>
         </div>
     </section>

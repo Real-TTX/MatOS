@@ -339,3 +339,10 @@ addresses, not `127.0.0.1` or a `172.x` address. Give the test names back afterw
 
 `docker compose pull && docker compose up -d`. The database migrates itself on start. Everything is in the volume `matos-services-data`
 (`/data/services.db`, SQLite); the keys in it are hashes, so a copy of it opens no tunnel.
+
+**Updating from the version with the Basic auth of `/admin`** (before the admin area had accounts): that version needed only
+`MATOS_SERVICES_ADMIN_PASSWORD`. The new one refuses to start when only one of `MATOS_SERVICES_ADMIN_EMAIL` and
+`MATOS_SERVICES_ADMIN_PASSWORD` is set, and with it the tunnel, the edge, the DNS and the API stay down. So **before** `docker compose pull`,
+add `MATOS_SERVICES_ADMIN_EMAIL=<your e-mail address>` to the `.env` (it and the password become the first administrator on the first start),
+or remove `MATOS_SERVICES_ADMIN_PASSWORD` (then no administrator is created, and `/admin` cannot be used until one is). Check with
+`docker compose logs matos-services` after `up -d` that it started.

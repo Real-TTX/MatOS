@@ -32,6 +32,7 @@ internal static class DynDnsScript
               if (answer.available) show(answer.address + ' is free.', 'yes');
               else if (answer.reason === 'taken') show(answer.address + ' is taken. Try another name.', 'no');
               else if (answer.reason === 'reserved') show(answer.name + ' is reserved. Try another name.', 'no');
+              else if (answer.reason === 'blocked') show(answer.address + ' is not available. Try another name.', 'no');
               else show('3 to 32 characters: letters, digits and hyphens, not at the start or the end.', 'no');
             } catch {
               show('', '');

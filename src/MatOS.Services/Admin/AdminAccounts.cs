@@ -207,7 +207,32 @@ public sealed class AdminAccounts(ServicesDbContext db, IPasswordHasher hasher, 
         await db.SaveChangesAsync(ct);
     }
 
-    public bool CheckPassword(User user, string password) => hasher.Verify(password, user.PasswordHash);
+    /// <summary>
+    /// Checks the current password of a signed-in account (changing the password): counted by the same <see cref="AdminGuard"/> as the
+    /// sign-in, so a stolen session cookie cannot guess the password faster than the sign-in could. Null when it is right, else the error.
+    /// </summary>
+    public string? CheckCurrentPassword(User user, string password)
+    {
+        if (guard.IsBlocked)
+        {
+            return "Too many wrong passwords. Please try again in a minute.";
+        }
+
+        if (guard.LockedUntil(user.Email) is { } until)
+        {
+            var minutes = Math.Max(1, (int)Math.Ceiling((until - time.GetUtcNow()).TotalMinutes));
+            return $"Too many wrong passwords. Please try again in {minutes} minutes.";
+        }
+
+        if (!hasher.Verify(password, user.PasswordHash))
+        {
+            guard.Failed(user.Email);
+            return "The current password is not right.";
+        }
+
+        guard.Succeeded(user.Email);
+        return null;
+    }
 
     public async Task SetThemeAsync(User user, string theme, CancellationToken ct)
     {

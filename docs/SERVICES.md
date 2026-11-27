@@ -77,8 +77,8 @@ without a valid key the answer is `401`. Errors are `{error}` with the code name
 
 | Method and path | |
 |---|---|
-| `GET /api/v1/names/{name}` | anonymous. `200 {name, available, reason?, address?}`; `reason` is `invalid`, `reserved` or `taken`; `address` = `{name}.{zone}` (left out for an invalid name); `name` is the lowered form |
-| `POST /api/v1/instances` | anonymous, rate-limited. `{name, version?}` → `201 {name, zone, key, mode}`. The key is returned **once**. `409` `taken`/`reserved`, `400` `invalid`, `429` `too-many-registrations` from this address (or from everybody in the last hour) |
+| `GET /api/v1/names/{name}` | anonymous. `200 {name, available, reason?, address?}`; `reason` is `invalid`, `reserved`, `taken` or `blocked` (an administrator blocked the name; a client treats it like `taken`); `address` = `{name}.{zone}` (left out for an invalid name); `name` is the lowered form |
+| `POST /api/v1/instances` | anonymous, rate-limited. `{name, version?}` → `201 {name, zone, key, mode}`. The key is returned **once**. `409` `taken`/`reserved`/`blocked`, `400` `invalid`, `429` `too-many-registrations` from this address (or from everybody in the last hour) |
 | `GET /api/v1/instance` | `{name, zone, mode, publicIp, publicIpv4, publicIpv6, tunnelConnected, lastSeen}`; `publicIp` is the IPv4 address, else the IPv6 one; `lastSeen` is ISO 8601 in UTC with its `Z` (`2026-11-26T16:02:18.1234567Z`), as every time of the API |
 | `PUT /api/v1/instance` | `{mode: "tunnel" \| "direct"}` → the same as `GET`; direct is refused (`409` `no-public-ip`) while no public IP is known; tunnel is refused for a DynDNS-only name (`409` `dyndns-only`); another mode is `400` `invalid-mode` |
 | `POST /api/v1/instance/check` | the service tries to reach the installation directly on 80 and 443 (the IP of the request if it is a public one, else the stored one): `{publicIp, http, https, detail}`; `http` is true only when the answer comes from Caddy (`Server: Caddy`), `https` when a TLS handshake for `{name}.{zone}` succeeds (`detail` says whether the certificate is valid yet). Addresses that are not public are never probed |
@@ -93,7 +93,7 @@ without a valid key the answer is `401`. Errors are `{error}` with the code name
 | `GET /ip` | anonymous: the caller's address as plain text (for ddclient's `use=web` and scripts) |
 
 Rate limits per client address (an IPv6 address counts as its /64) and minute: 120 for the name check, 60 for the rest of the API and
-`/nic/update`; beyond that `429`. The sign-in of `/admin` allows 20 requests per minute per IPv4 address or IPv6 /48 (the rest of the admin area 300), 5 wrong passwords per e-mail address in 15 minutes (then that address is locked for 15 minutes, whether an account has it or not), and 30 wrong passwords per minute of everybody
+`/nic/update`; beyond that `429`. The sign-in of `/admin` allows 20 requests per minute per IPv4 address or IPv6 /48 (the rest of the admin area 300), 5 wrong passwords per e-mail address in 15 minutes (then that address is locked for 15 minutes, whether an account has it or not; a wrong current password on Change password counts the same), and 30 wrong passwords per minute of everybody
 together (then `429` without looking at the password). The tunnel endpoints have no limit per request (every visitor is a stream request), but
 12 control connections per installation and minute, and 30 failed sign-ins (a key that does not exist) per address and minute, after which that
 address gets `429` on both tunnel endpoints for the rest of the minute. The client address is the one the trusted proxy names; see

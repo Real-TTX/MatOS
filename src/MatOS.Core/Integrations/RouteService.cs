@@ -277,7 +277,7 @@ public sealed class RouteService
             }
 
             last = registration.Message;
-            if (registration.Error is not ("taken" or "reserved" or "invalid"))
+            if (registration.Error is not ("taken" or "blocked" or "reserved" or "invalid"))
             {
                 break;
             }

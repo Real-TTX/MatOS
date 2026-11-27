@@ -115,6 +115,12 @@ public sealed class DetailsModel(ServicesDbContext db, TunnelRegistry registry, 
             return NotFound();
         }
 
+        if (Instance.Blocked)
+        {
+            // Given back, a blocked name would be free for anybody (the API refuses its owner for the same reason): unblock it first.
+            return Done($"{Instance.Name} is blocked: unblock it before giving it back.", error: true);
+        }
+
         var name = Instance.Name;
         await admin.GiveBackAsync(Instance, User.Email(), HttpContext.RequestAborted);
         TempData["StatusMessage"] = $"{name} was given back; the name is free again.";
