@@ -550,7 +550,7 @@ const pages = [
       await page.locator('.mv-step.is-active [data-next]').click();
       await page.waitForTimeout(120);
     }
-    expectEqual(await page.locator('[data-wizard-summary] dt').count(), 4, 'rows of the summary');
+    expectEqual(await page.locator('[data-wizard-summary] dt').count(), 5, 'rows of the summary (host, domain, engines, DNS provider, DNS records)');
     await page.locator('.mv-step.is-active [data-prev]').click();
     expectEqual(await page.locator('[data-step-label]').innerText(), 'Step 3 of 4', 'back goes one step');
   });
