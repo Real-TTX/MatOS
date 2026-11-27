@@ -19,7 +19,7 @@ public enum AccountSignIn
 /// <summary>
 /// The second step and the password of one person (docs/ARCHITECTURE.md "MatIdentity, the single sign-on", "The second step"). The second step lives in
 /// MatIdentity and only there: MatOS never builds one of its own. A person who signs in through it changes it, and their sign-in password, on MatIdentity's
-/// own account pages (<see cref="SecurityUrl"/>, <see cref="PasswordUrl"/>), opened in a new tab; MatOS's own password of such a person is only the way in
+/// own account pages (<see cref="SecurityUrl"/>, <see cref="PasswordUrl"/>, in MatOS's look through <c>?brand=</c>), opened in a new tab; MatOS's own password of such a person is only the way in
 /// while MatIdentity does not answer.
 /// </summary>
 /// <param name="SignIn">How the person signs in.</param>
@@ -53,9 +53,19 @@ public sealed record AccountSecurity(AccountSignIn SignIn, string? SecurityUrl, 
             return new AccountSecurity(AccountSignIn.NoSingleSignOn, null, null, hasPassword);
         }
 
-        return string.IsNullOrWhiteSpace(user.ExternalSubject)
-            ? new AccountSecurity(AccountSignIn.LocalAccount, null, null, hasPassword)
-            : new AccountSecurity(AccountSignIn.SingleSignOn, authority + SecurityPath, authority + PasswordPath, hasPassword);
+        if (string.IsNullOrWhiteSpace(user.ExternalSubject))
+        {
+            return new AccountSecurity(AccountSignIn.LocalAccount, null, null, hasPassword);
+        }
+
+        // MatOS's brand (SelfBrand): MatIdentity shows the page in MatOS's look; one without that brand, or an older one, ignores it and shows its own account.
+        var clientId = identity!.ClientId?.Trim();
+        var brand = string.IsNullOrEmpty(clientId) ? null : "brand=" + Uri.EscapeDataString(clientId);
+        return new AccountSecurity(
+            AccountSignIn.SingleSignOn,
+            authority + SecurityPath + (brand is null ? string.Empty : "?" + brand),
+            authority + PasswordPath + (brand is null ? string.Empty : "&" + brand),
+            hasPassword);
     }
 
     /// <summary>The public address of MatIdentity without a trailing slash, or null when it is not an absolute http(s) address.</summary>

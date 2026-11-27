@@ -52,15 +52,29 @@ public class AccountSecurityTests
     {
         var security = AccountSecurity.Of(Connected, Person("sub-anna"));
         Assert.Equal(AccountSignIn.SingleSignOn, security.SignIn);
-        Assert.Equal("https://id.example.com/Account/Security", security.SecurityUrl);
-        Assert.Equal("https://id.example.com/Account/Profile?tab=password", security.PasswordUrl);
+        Assert.Equal("https://id.example.com/Account/Security?brand=matos", security.SecurityUrl);
+        Assert.Equal("https://id.example.com/Account/Profile?tab=password&brand=matos", security.PasswordUrl);
     }
 
     [Theory]
-    [InlineData("http://192.168.1.10:8102", "http://192.168.1.10:8102/Account/Security")]
-    [InlineData("https://example.com/id/", "https://example.com/id/Account/Security")]
+    [InlineData("http://192.168.1.10:8102", "http://192.168.1.10:8102/Account/Security?brand=matos")]
+    [InlineData("https://example.com/id/", "https://example.com/id/Account/Security?brand=matos")]
     public void The_link_follows_the_address_of_MatIdentity(string authority, string expected)
         => Assert.Equal(expected, AccountSecurity.Of(new IdentitySignIn { Authority = authority }, Person("sub-anna")).SecurityUrl);
+
+    [Fact]
+    public void The_pages_are_asked_for_in_the_look_of_MatOS_s_own_client()
+    {
+        // An install of Mattiverse keeps its client id, and its brand with it (SelfBrand).
+        var renamed = AccountSecurity.Of(new IdentitySignIn { Authority = "https://id.example.com", ClientId = "mattiverse" }, Person("sub-anna"));
+        Assert.Equal("https://id.example.com/Account/Security?brand=mattiverse", renamed.SecurityUrl);
+        Assert.Equal("https://id.example.com/Account/Profile?tab=password&brand=mattiverse", renamed.PasswordUrl);
+
+        // Without a client id there is no brand to name: MatIdentity's own pages.
+        var none = AccountSecurity.Of(new IdentitySignIn { Authority = "https://id.example.com", ClientId = " " }, Person("sub-anna"));
+        Assert.Equal("https://id.example.com/Account/Security", none.SecurityUrl);
+        Assert.Equal("https://id.example.com/Account/Profile?tab=password", none.PasswordUrl);
+    }
 
     [Fact]
     public void A_person_of_the_single_sign_on_without_a_password_of_MatOS_gets_no_form()

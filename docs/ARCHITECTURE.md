@@ -551,10 +551,11 @@ MatIdentity; MatOS administers them in its area **People** (below) and MatIdenti
   sign-in password* links MatIdentity's `/Account/Profile?tab=password` (the password they sign in with), and the form below is MatOS's own password, which only works
   while MatIdentity does not answer (the local form) and leaves the sign-in password alone; a person who came through MatIdentity has no password of MatOS
   (`FindOrCreateExternalAsync`) and gets no form (a post of it goes back to the tab). A local account keeps the form as before (the person who set MatOS up and waits
-  for MatIdentity: it gets the new password too, `OwnerHandover`). **Not in MatOS's look:** those two pages are MatIdentity's account pages in its own shell, which its
-  branded sign-in does not cover (MatIdentity docs/ARCHITECTURE.md "Branded sign-in": "Not branded: the account pages"). Dressing them up would take a branded
-  variant of its account layout (its menu, the tabs Profile, Devices, the links home), not a small change, and docs/INTEGRATION.md names no branch of MatIdentity for
-  MatOS's changes, so it was left for the owner to decide (docs/INTEGRATION.md "MatIdentity").
+  for MatIdentity: it gets the new password too, `OwnerHandover`). **In MatOS's look:** both links carry `?brand=<MatOS's client id>` (the brand MatOS gives its
+  sign-in, `SelfBrand`), and MatIdentity shows its account pages for such a link in that look (MatIdentity docs/ARCHITECTURE.md "The account from a link of the app",
+  its layout `_BrandedAccount`): MatOS's name, logo and accent, *Back to MatOS*, the tabs of the account, no menu and no word of MatIdentity; the authenticator app
+  names MatOS. MatIdentity takes that brand only from the link, never from the cookie of a sign-in, so its own account stays its own; an older MatIdentity ignores
+  `brand` and shows its own shell, which still works.
 
 ## MatSMTP, the mail relay
 

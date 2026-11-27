@@ -517,7 +517,7 @@ const pages = [
       expectTrue(!!href && href !== '#', 'a button goes somewhere');
       if (/^https?:/.test(href)) {
         expectEqual(await links.nth(i).getAttribute('target'), '_blank', 'the page of the second step opens in a new tab');
-        expectTrue(/\/Account\/Security$/.test(href), 'it is the page of the second step');
+        expectTrue(/\/Account\/Security(\?brand=[^&]+)?$/.test(href), 'it is the page of the second step: ' + href);
       }
     }
     expectEqual(/MatIdentity/.test(await page.locator('[aria-label="Second step"]').innerText()), false, 'the tab does not name the engine');
@@ -590,6 +590,12 @@ const pages = [
   });
   await phone.ctx.close();
 
+  // A person who signs in through the single sign-on (docs/ARCHITECTURE.md "The second step"): the tab Security links MatIdentity's page of the second step (in MatOS's
+  // look, ?brand=), the tab Password its sign-in password and no form for a password MatOS does not have. A throwaway person of MatIdentity (People) is given MatOS,
+  // signs in through it, and is removed again with their account of MatOS. Without MatIdentity connected there is nobody to sign in that way.
+  console.log('The single sign-on');
+  await singleSignOn();
+
   // MatOS's sign-in looks like MatOS (docs/ARCHITECTURE.md): no word of MatIdentity on the way in or out; the sign-out ends on MatOS's own page.
   console.log('The sign-in and the sign-out');
   await check('the signed-out page is MatOS\'s and names no MatIdentity', async () => {
@@ -628,6 +634,116 @@ const pages = [
   const failed = results.filter(r => !r.ok).length;
   console.log(`\n${results.length - failed} of ${results.length} checks passed`);
   process.exit(failed ? 1 : 0);
+
+  async function singleSignOn() {
+    const admin = await signedIn({ viewport: { width: 1360, height: 900 } });
+    await admin.page.goto(BASE + '/Account/Profile?tab=security');
+    if (/no single sign-on yet/.test(await admin.page.locator('[aria-label="Second step"]').innerText())) {
+      console.log('  skip  MatOS has no single sign-on (MatIdentity is not connected)');
+      await admin.ctx.close();
+      return;
+    }
+
+    const name = 'e2e-sso-' + Date.now().toString(36);
+    const password = 'Quiet-Harbor-4711';
+    let subject = null;
+    await check('a person of MatIdentity is made in People and given MatOS', async () => {
+      const p = admin.page;
+      await p.goto(BASE + '/People/Edit');
+      await p.fill('#Input_DisplayName', 'E2E single sign-on');
+      await p.fill('#Input_UserName', name);
+      await p.fill('#Input_Email', name + '@example.com');
+      await p.fill('#Input_Password', password);
+      await p.fill('#Input_ConfirmPassword', password);
+      await Promise.all([p.waitForURL(/\/People\/Edit\?id=/), p.click('form.mat-form button[type=submit]:not([formnovalidate])')]);
+      subject = new URL(p.url()).searchParams.get('id');
+      const give = p.locator('table.mat-table tbody tr', { hasText: 'MatOS' }).locator('a[href*="/People/Access"]').first();
+      await Promise.all([p.waitForURL(/\/People\/Access/), give.click()]);
+      await p.check('input[name="Given"]');
+      await Promise.all([p.waitForURL(u => u.pathname !== '/People/Access'), p.click('form.mat-form button[type=submit]')]);
+    });
+
+    if (subject) {
+      const sso = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+      const page = await sso.newPage();
+      page.on('pageerror', e => errors.push(page.url() + ': ' + e.message));
+      let signedInThere = false;
+      await check('the person signs in through the single sign-on', async () => {
+        await page.goto(BASE + '/Account/Login');
+        await page.waitForURL(u => u.origin !== new URL(BASE).origin);
+        await page.locator('input[type=email], input[name*="user" i], input[name*="mail" i]').first().fill(name);
+        await page.locator('input[type=password]').first().fill(password);
+        await Promise.all([page.waitForURL(u => u.origin === new URL(BASE).origin && !u.pathname.startsWith('/Account/'), { timeout: 15000 }), page.locator('button[type=submit]').first().click()]);
+        signedInThere = true;
+      });
+
+      if (signedInThere) {
+        const looks = [['light', 1360, 'light'], ['dark', 1360, 'dark'], ['phone', 390, 'light']];
+        await check('the tab Security: what the second step is, and its page where it lives, light, dark and on a phone', async () => {
+          for (const [mode, width, scheme] of looks) {
+            await page.setViewportSize({ width, height: 844 });
+            await page.emulateMedia({ colorScheme: scheme });
+            await page.goto(BASE + '/Account/Profile?tab=security', { waitUntil: 'networkidle' });
+            const card = page.locator('[aria-label="Second step"]');
+            const link = card.locator('a.mat-btn');
+            expectEqual(await link.count(), 1, mode + ': one button');
+            expectTrue(/^https?:\/\/[^/]+(\/.*)?\/Account\/Security\?brand=[^&]+$/.test(await link.getAttribute('href')), mode + ': MatIdentity\'s page of the second step in MatOS\'s look: ' + await link.getAttribute('href'));
+            expectEqual(await link.getAttribute('target'), '_blank', mode + ': in a new tab (a passkey cannot be made in the window)');
+            expectEqual(await link.getAttribute('rel'), 'noopener', mode + ': without a way back into MatOS');
+            expectTrue(!/MatIdentity/.test(await card.innerText()), mode + ': the tab does not name the engine');
+            expectEqual(await page.locator('h1').count(), 1, mode + ': h1');
+            const wide = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            expectTrue(wide <= 1, `${mode}: scrolls sideways by ${wide}px`);
+            expectEqual(await page.locator('[style]').count(), 0, mode + ': elements with an inline style');
+          }
+          await page.setViewportSize({ width: 1360, height: 900 });
+          await page.emulateMedia({ colorScheme: 'light' });
+          const [tab] = await Promise.all([sso.waitForEvent('page'), page.locator('[aria-label="Second step"] a.mat-btn').click()]);
+          await tab.waitForLoadState('networkidle');
+          expectEqual(new URL(tab.url()).pathname, '/Account/Security', 'the page of the second step opens without a second sign-in');
+          expectTrue(await tab.getByText('Authenticator app').count() >= 1, 'with the authenticator app');
+          expectEqual(await tab.locator('[data-passkey-register]').count(), 1, 'and the passkeys');
+          if (await tab.locator('html[data-app="brand"]').count() === 1) {
+            expectTrue(!/matidentity/i.test(await tab.locator('body').innerText()) && !/matidentity/i.test(await tab.title()), 'in MatOS\'s look: no word of MatIdentity');
+            expectEqual(await tab.locator('.mat-nav').count(), 0, 'without the menu of MatIdentity');
+            expectEqual(await tab.locator('a.mat-btn', { hasText: 'Back to' }).count(), 1, 'a way back to MatOS');
+          } else {
+            console.log('        note: this MatIdentity shows its own account (its account pages take no brand yet)');
+          }
+          await tab.close();
+        });
+        await check('the tab Password: the sign-in password where it lives, and no form for a password MatOS does not have', async () => {
+          await page.goto(BASE + '/Account/Profile?tab=password', { waitUntil: 'networkidle' });
+          const link = page.locator('[aria-label="Sign-in password"] a.mat-btn');
+          expectEqual(await link.count(), 1, 'one button');
+          expectTrue(/\/Account\/Profile\?tab=password&brand=[^&]+$/.test(await link.getAttribute('href')), 'MatIdentity\'s password tab in MatOS\'s look: ' + await link.getAttribute('href'));
+          expectEqual(await link.getAttribute('target'), '_blank', 'in a new tab');
+          expectEqual(await page.locator('#Input_CurrentPassword').count(), 0, 'no form of MatOS\'s own password');
+        });
+      }
+      await sso.close();
+    }
+
+    await check('the person and their account of MatOS are removed again', async () => {
+      const p = admin.page;
+      if (subject) {
+        await p.goto(BASE + '/People/Edit?id=' + encodeURIComponent(subject));
+        await p.click('button[formaction*="handler=Delete"]');
+        await p.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
+        await p.waitForURL(u => !u.pathname.startsWith('/People/Edit'));
+      }
+      await p.goto(BASE + '/Users?q=' + encodeURIComponent(name));
+      const row = p.locator('table.mat-table tbody tr', { hasText: name });
+      if (await row.count() > 0) {
+        await row.first().locator('button[aria-label^="Delete"]').click();
+        await p.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
+        await p.waitForLoadState('networkidle');
+        await p.goto(BASE + '/Users?q=' + encodeURIComponent(name));
+      }
+      expectEqual(await p.locator('table.mat-table tbody tr', { hasText: name }).count(), 0, 'no account of MatOS left');
+    });
+    await admin.ctx.close();
+  }
 })();
 
 // The first start on a MatOS without any account (--first-start): Welcome, the account, the engines, the way to the apps, the one button.

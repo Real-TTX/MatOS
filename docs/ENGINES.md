@@ -198,9 +198,11 @@ sends `id_token_hint`, so MatIdentity's `/connect/logout` ends the session witho
 its session cookie whenever it writes the cookie again (theme, wallpaper, password: `SessionCookie.RefreshAsync`); without a hint the question is asked in MatOS's look.
 
 **A person's own second step and password** (docs/ARCHITECTURE.md "The second step"). MatOS has no API call for them: the account tabs Security and Password link
-two pages of MatIdentity below its public address (the `authority` of the sign-in), `/Account/Security` (authenticator app, recovery codes, passkeys) and
-`/Account/Profile?tab=password`, opened in a new tab (`Core/Users/AccountSecurity`). They are MatIdentity's own account pages: its session lets the person in, and
-they are not branded (MatIdentity's "Branded sign-in" covers the pages of a sign-in only). MatIdentity says nothing about whether a person's second step is on
+two pages of MatIdentity below its public address (the `authority` of the sign-in), `/Account/Security?brand=<clientId>` (authenticator app, recovery codes, passkeys)
+and `/Account/Profile?tab=password&brand=<clientId>`, opened in a new tab (`Core/Users/AccountSecurity`). They are MatIdentity's account pages, and its session lets
+the person in; `brand` (MatOS's own client id, the brand it set) shows them in MatOS's look, without MatIdentity's menu and, with `hideIdentity`, without its name
+(MatIdentity docs/ARCHITECTURE.md "Branded sign-in", "The account from a link of the app"; on its `dev` since 2026-11-27). The account pages take a brand only from that
+`?brand`, never from the cookie of a sign-in; a MatIdentity without that change, or a client without a brand, shows its own account. MatIdentity says nothing about whether a person's second step is on
 (neither SCIM nor `/api/v1`), so MatOS does not show it; an administrator resets it with the action `resetSecondStep`.
 
 ## MatSMTP (`ghcr.io/real-ttx/matsmtp`)
