@@ -117,6 +117,66 @@ const pages = [
     }
     expectTrue(new Set(seen.slice(0, 3)).size === 3 && seen[3] === seen[0], 'system, light and dark, then the first again: ' + seen.join(' > '));
   });
+  console.log('The Task Manager');
+  await check('the Task Manager: the host in five cards, the list in parts, an app opens to its containers', async () => {
+    await page.goto(BASE + '/Tasks');
+    expectEqual(await page.locator('.mv-tm-card').count(), 5, 'processor, memory, network, disk activity, storage');
+    expectTrue(await page.locator('tbody.mv-tm-section').count() >= 1, 'at least one part (Apps, System, Something else)');
+    const group = page.locator('tbody.mv-tm-group:has([data-group-toggle])').first();
+    const toggle = group.locator('[data-group-toggle]');
+    if ((await toggle.getAttribute('aria-expanded')) === 'true') { await toggle.click(); }
+    expectTrue(!(await group.locator('tr.mv-tm-row').first().isVisible()), 'an app starts closed');
+    await toggle.click();
+    expectEqual(await toggle.getAttribute('aria-expanded'), 'true', 'the toggle says it is open');
+    expectTrue(await group.locator('tr.mv-tm-row').first().isVisible(), 'its containers show');
+    await toggle.click();
+  });
+  await check('the Task Manager is live: its numbers come as JSON and the charts fill', async () => {
+    await page.goto(BASE + '/Tasks');
+    const response = await page.waitForResponse(r => r.url().includes('handler=Live'), { timeout: 10000 });
+    expectEqual(response.status(), 200, 'the numbers answer');
+    const data = await response.json();
+    expectEqual(data.cards.length, 5, 'five cards in the answer');
+    expectTrue(Array.isArray(data.groups) && data.groups.length > 0, 'the groups in the answer');
+    expectEqual(data.signature, await page.locator('#tm-list').getAttribute('data-signature'), 'the rows are those the page drew');
+    if (data.measured) {
+      await page.waitForFunction(() => (document.querySelector('[data-card="cpu"] [data-f="line"]').getAttribute('d') || '').startsWith('M'), null, { timeout: 15000 });
+      expectTrue(await page.locator('[data-card="cpu"] svg.mv-tm-chart').isVisible(), 'the chart of the processor shows');
+    }
+  });
+  await check('the Task Manager sorts by a column, finds a container, and acts only on what MatOS runs', async () => {
+    await page.goto(BASE + '/Tasks');
+    await page.click('th a.mat-table__sort[href*="sort=memory"]');
+    await page.waitForURL(u => u.search.includes('sort=memory'));
+    expectEqual(await page.locator('th[aria-sort="descending"]').innerText(), 'Memory', 'sorted by memory, most first');
+    expectEqual(await page.locator('tbody[data-key="matos"] form').count(), 0, 'MatOS does not stop itself');
+    expectEqual(await page.locator('tbody.mv-tm-group[data-section="other"] form').count(), 0, 'nothing else on the host is changed');
+    expectEqual(await page.locator('tbody[data-key="app:matdock"] form').count(), 0, 'MatDock is not restarted from here');
+    const name = await page.locator('tr.mv-tm-row a[href^="/Tasks/Log"]').first().innerText();
+    await page.goto(BASE + '/Tasks?q=' + encodeURIComponent(name));
+    expectTrue(await page.locator(`tr.mv-tm-row a:text-is("${name}"), .mv-tm-lone a:text-is("${name}")`).first().isVisible(), 'the search shows the container, its app open');
+    await page.goto(BASE + '/Tasks?q=no-such-thing-anywhere');
+    expectEqual(await page.locator('#tm-list .mat-empty').count(), 1, 'nothing matches says so');
+  });
+  await check('the log of a container opens in a window of the home screen', async () => {
+    // a context of its own: the windows it opens stay out of the checks of the home screen below
+    const own = await signedIn({ viewport: { width: 1360, height: 900 } });
+    const page = own.page;
+    await page.goto(BASE + '/');
+    await page.click('.os-grid .os-app[data-window="/Tasks"]');
+    await page.waitForFunction(() => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === 'Task Manager'; });
+    const frame = page.frameLocator('.os-window.is-active .os-window__frame');
+    const group = frame.locator('tbody.mv-tm-group:has([data-group-toggle])').first();
+    if ((await group.locator('[data-group-toggle]').getAttribute('aria-expanded')) !== 'true') { await group.locator('[data-group-toggle]').click(); }
+    const link = group.locator('tr.mv-tm-row a[href^="/Tasks/Log"]').first();
+    const name = await link.innerText();
+    await link.click();
+    await page.waitForFunction(n => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === n; }, name);
+    await page.frameLocator('.os-window.is-active .os-window__frame').locator('pre.mv-log').waitFor({ timeout: 15000 });
+    expectEqual(await page.locator('.os-window').count(), 2, 'the log in a window of its own, beside the Task Manager');
+    await own.ctx.close();
+  });
+
   console.log('The home screen (MatOS)');
   const win = () => page.frameLocator('.os-window.is-active .os-window__frame');
   const winTitle = () => page.locator('.os-window.is-active [data-win-title]').innerText();
