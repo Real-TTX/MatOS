@@ -114,9 +114,11 @@ public sealed class OwnerHandover
 
             await RecordAsync(owner, existing is null ? HandOverOutcome.Created : HandOverOutcome.Linked, ct);
 
-            // The baseline of the list "Getting started": a person more than now in MatIdentity is "a person invited".
-            var peopleNow = everyone.Count + (existing is null ? 1 : 0);
-            await _config.UpdateAsync(c => c.GettingStarted.PeopleAtStart = peopleNow, ct);
+            // The baseline of the list "Getting started": a person more than now in MatIdentity is "a person invited". One written before (a first look at
+            // the list, an earlier hand-over) stays, raised by the owner when they were created now (GettingStarted.BaselineAfterHandover).
+            var created = existing is null;
+            var peopleNow = everyone.Count + (created ? 1 : 0);
+            await _config.UpdateAsync(c => c.GettingStarted.PeopleAtStart = GettingStarted.BaselineAfterHandover(c.GettingStarted.PeopleAtStart, peopleNow, created), ct);
             await ForgetAsync(ct);
             log(existing is null
                 ? $"{owner.Email} signs in to MatOS and every app with the same e-mail and password as before."

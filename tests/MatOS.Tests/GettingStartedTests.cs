@@ -75,6 +75,47 @@ public class GettingStartedTests
     }
 
     [Fact]
+    public void The_first_look_writes_a_baseline_only_when_there_is_none()
+    {
+        // A MatIdentity without a hand-over: the first look that MatIdentity answered is the baseline.
+        Assert.Equal(3, GettingStarted.FirstLookBaseline(peopleAtStart: null, hasIdentity: true, people: 3));
+
+        // A baseline there already (the hand-over), no MatIdentity, or no answer: nothing is written.
+        Assert.Null(GettingStarted.FirstLookBaseline(peopleAtStart: 2, hasIdentity: true, people: 3));
+        Assert.Null(GettingStarted.FirstLookBaseline(peopleAtStart: null, hasIdentity: false, people: 3));
+        Assert.Null(GettingStarted.FirstLookBaseline(peopleAtStart: null, hasIdentity: true, people: null));
+    }
+
+    [Fact]
+    public void The_hand_over_sets_the_baseline_and_keeps_one_written_before()
+    {
+        // During the run, before any look: admin and the owner just created are the baseline, so the owner is no person invited.
+        var baseline = GettingStarted.BaselineAfterHandover(peopleAtStart: null, peopleNow: 2, created: true);
+        Assert.Equal(2, baseline);
+        Assert.False(GettingStarted.HasPerson(users: 1, usersAtStart: 1, people: 2, peopleAtStart: baseline));
+        Assert.True(GettingStarted.HasPerson(users: 1, usersAtStart: 1, people: 3, peopleAtStart: baseline));
+
+        // A hand-over that succeeds late: the first look wrote 1 (admin), a person was invited since (2), now the owner is created (3). The baseline only
+        // takes the owner, so the person invited still counts.
+        baseline = GettingStarted.BaselineAfterHandover(peopleAtStart: 1, peopleNow: 3, created: true);
+        Assert.Equal(2, baseline);
+        Assert.True(GettingStarted.HasPerson(users: 1, usersAtStart: 1, people: 3, peopleAtStart: baseline));
+
+        // An owner who was in MatIdentity already is only linked: they were counted, the baseline stays.
+        Assert.Equal(4, GettingStarted.BaselineAfterHandover(peopleAtStart: 4, peopleNow: 6, created: false));
+    }
+
+    [Fact]
+    public void A_hidden_list_still_belongs_to_this_MatOS()
+    {
+        var hidden = new SystemConfig { WizardCompleted = true, Setup = new SetupRun { Phase = 2, ContinuedAt = DateTime.UtcNow } };
+        hidden.GettingStarted.ClosedAt = DateTime.UtcNow;
+        Assert.True(GettingStarted.Belongs(hidden));
+        Assert.False(GettingStarted.ShowFor(hidden));
+        Assert.False(GettingStarted.Belongs(new SystemConfig { WizardCompleted = true }));
+    }
+
+    [Fact]
     public void Only_a_run_of_the_assistant_shows_the_list()
     {
         var run = new SetupRun { Phase = 2, ContinuedAt = DateTime.UtcNow };

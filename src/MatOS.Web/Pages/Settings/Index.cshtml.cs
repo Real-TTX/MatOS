@@ -43,6 +43,9 @@ public class IndexModel : PageModel
     /// <summary>Whether the apps can be reached from the internet; null without an address on the internet.</summary>
     public ReachView? Reach { get; private set; }
 
+    /// <summary>The list "Getting started" belongs to this MatOS: the settings lead to it, also once it is hidden from the home screen.</summary>
+    public bool HasGettingStarted { get; private set; }
+
     [TempData] public string? StatusMessage { get; set; }
 
     public class InputModel
@@ -78,12 +81,14 @@ public class IndexModel : PageModel
             BackupStopContainers = config.Backups.StopContainers,
         };
         Dns = await DnsFormAsync(config);
+        HasGettingStarted = MatOS.Core.Setup.GettingStarted.Belongs(config);
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
         var ct = HttpContext.RequestAborted;
         var before = await _config.GetAsync(ct);
+        HasGettingStarted = MatOS.Core.Setup.GettingStarted.Belongs(before);
         var provider = DnsProviders.Find(DnsProvider);
         var credentials = DnsForm.CredentialsOf(DnsProvider, DnsCredentials);
         var baseDomain = string.IsNullOrWhiteSpace(Input.BaseDomain) ? null : Input.BaseDomain.Trim().ToLowerInvariant();

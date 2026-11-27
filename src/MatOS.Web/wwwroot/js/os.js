@@ -1748,10 +1748,11 @@
   // The windows of before a reload, then an address with a window in it (last: everything above is ready).
   restoreWindows();
   fromAddress();
-  // The end of the first start (/?start=1): the list "Getting started" in a window. The query goes, so a reload or a refresh does not open it again.
+  // The end of the first start (/?start=1): the list "Getting started" in a window, only on an administrator's home screen (the page is theirs). The query
+  // goes for everyone, so a reload or a refresh does not open it again.
   if (/(?:^\?|&)start=1(?:&|$)/.test(location.search)) {
     history.replaceState(history.state, '', location.pathname + location.hash);
-    open('/Start', { title: 'Getting started' });
+    if (pagesEl && pagesEl.hasAttribute('data-os-admin')) { open('/Start', { title: 'Getting started' }); }
   }
   if (pagesEl && parseInt(pagesEl.getAttribute('data-autorefresh'), 10) > 0) { refreshIn(parseInt(pagesEl.getAttribute('data-autorefresh'), 10)); }
 })();

@@ -359,7 +359,7 @@
 }
 
 @* data-autorefresh only when there is a value: Razor writes data-x="" for a null, and the script would reload every 5 seconds. *@
-<div class="os-pages" data-os-pages @(Model.AsItComes ? Html.Raw("data-os-default") : null) @(Model.RefreshMs is { } refreshMs ? Html.Raw($"data-autorefresh=\"{refreshMs}\"") : null)>
+<div class="os-pages" data-os-pages @(isAdmin ? Html.Raw("data-os-admin") : null) @(Model.AsItComes ? Html.Raw("data-os-default") : null) @(Model.RefreshMs is { } refreshMs ? Html.Raw($"data-autorefresh=\"{refreshMs}\"") : null)>
     @for (var p = 0; p < Model.Pages.Count; p++)
     {
         <div class="os-grid os-page" data-page role="group" aria-label="Page @(p + 1) of @Model.Pages.Count">

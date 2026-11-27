@@ -127,6 +127,9 @@ public class ScheduleEditModel : PageModel
                 },
                 app?.Engine,
                 HttpContext.RequestAborted);
+
+            // The row "Choose backups" of the list "Getting started" ticks off on its next look.
+            HttpContext.RequestServices.GetRequiredService<MatOS.Core.Setup.GettingStartedService>().Forget();
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
         {

@@ -40,7 +40,7 @@ public class IndexModel : PageModel
     {
         var ct = HttpContext.RequestAborted;
         var config = await _config.GetAsync(ct);
-        Belongs = config.Setup?.ContinuedAt is not null && config.WizardCompleted;
+        Belongs = GettingStarted.Belongs(config);
         Hidden = config.GettingStarted.ClosedAt is not null;
         JustHidden = hidden == 1 && Hidden;
         if (Belongs)
@@ -49,7 +49,7 @@ public class IndexModel : PageModel
         }
     }
 
-    /// <summary>Hide this list: the widget Setup does not offer it any more; the page stays, with the way back.</summary>
+    /// <summary>Hide this list: the widget Setup does not offer it any more; the page stays, reached from the settings (General), with the way back.</summary>
     public async Task<IActionResult> OnPostHideAsync()
     {
         await _config.UpdateAsync(c => c.GettingStarted.ClosedAt ??= DateTime.UtcNow, HttpContext.RequestAborted);

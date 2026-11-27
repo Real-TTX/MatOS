@@ -46,9 +46,13 @@ public static class GettingStarted
     /// <summary>The page of the list.</summary>
     public const string Page = "/Start";
 
-    /// <summary>The list belongs to this MatOS: its first start confirmed the way to the apps (<see cref="SetupRun.ContinuedAt"/>), is done, and the list is not hidden.</summary>
+    /// <summary>The list belongs to this MatOS: its first start confirmed the way to the apps (<see cref="SetupRun.ContinuedAt"/>) and is done, hidden or not.</summary>
+    public static bool Belongs(SystemConfig config)
+        => config.Setup?.ContinuedAt is not null && config.WizardCompleted;
+
+    /// <summary>The list is on the home screen: it belongs to this MatOS (<see cref="Belongs"/>) and is not hidden.</summary>
     public static bool ShowFor(SystemConfig config)
-        => config.Setup?.ContinuedAt is not null && config.WizardCompleted && config.GettingStarted.ClosedAt is null;
+        => Belongs(config) && config.GettingStarted.ClosedAt is null;
 
     /// <summary>
     /// The rows in their order: an app, a person, the mail (only while it is not checked, also when it was left for later), the sign-in (only with MatIdentity),
@@ -85,6 +89,21 @@ public static class GettingStarted
     /// </summary>
     public static bool HasPerson(int users, int? usersAtStart, int? people, int? peopleAtStart)
         => (usersAtStart is { } u && users > u) || (people is { } p && peopleAtStart is { } pStart && p > pStart);
+
+    /// <summary>
+    /// The baseline of the people in MatIdentity that a look at the list writes: the count of now when MatIdentity answered and there is none yet (a MatIdentity
+    /// that came without a hand-over), else nothing (null).
+    /// </summary>
+    public static int? FirstLookBaseline(int? peopleAtStart, bool hasIdentity, int? people)
+        => peopleAtStart is null && hasIdentity ? people : null;
+
+    /// <summary>
+    /// The baseline after the hand-over of the owner to MatIdentity (<c>OwnerHandover</c>): the people of now when there is none yet; else the baseline stays,
+    /// one higher when the hand-over created the owner there (the owner is no person invited). So a hand-over that succeeds late does not hide the people
+    /// invited in the meantime.
+    /// </summary>
+    public static int BaselineAfterHandover(int? peopleAtStart, int peopleNow, bool created)
+        => peopleAtStart is { } b ? (created ? b + 1 : b) : peopleNow;
 }
 
 /// <summary>
@@ -128,7 +147,7 @@ public sealed class GettingStartedService
 
         // A MatIdentity that came without a hand-over (no person waited) has no baseline: the people of the first look at the list are it.
         var start = config.GettingStarted;
-        if (hasIdentity && start.PeopleAtStart is null && engines.People is { } people)
+        if (GettingStarted.FirstLookBaseline(start.PeopleAtStart, hasIdentity, engines.People) is { } people)
         {
             await _config.UpdateAsync(c => c.GettingStarted.PeopleAtStart ??= people, ct);
             start = (await _config.GetAsync(ct)).GettingStarted;
@@ -149,7 +168,7 @@ public sealed class GettingStartedService
     public async Task<IReadOnlyList<ChecklistItem>> ItemsAsync(long? userId, CancellationToken ct = default)
         => GettingStarted.Items(await FactsAsync(userId, ct));
 
-    /// <summary>The engines are asked again on the next look (a row the person just did).</summary>
+    /// <summary>The engines are asked again on the next look: a row the person just did (a backup schedule saved, a person created).</summary>
     public void Forget() => _cache.Remove(CacheKey);
 
     private async Task<EngineFacts> EngineFactsAsync(bool hasIdentity, CancellationToken ct)

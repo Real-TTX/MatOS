@@ -77,3 +77,19 @@
         <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
     </div>
 </form>
+
+@if (Model.HasGettingStarted)
+{
+    @* The way back to the list "Getting started", also once it is hidden from the home screen. *@
+    <section class="mat-stack mat-stack--sm" aria-labelledby="group-getting-started">
+        <h2 class="mat-itemlist__header" id="group-getting-started">Getting started</h2>
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack mat-stack--sm">
+                <p class="mat-muted">The few things to do after the first start, ticked off by themselves.</p>
+                <div class="mat-actions">
+                    <a class="mat-btn mat-btn--secondary" href="/Start" data-window="/Start" data-title="Getting started">Open the list</a>
+                </div>
+            </div>
+        </div>
+    </section>
+}

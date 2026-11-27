@@ -132,13 +132,15 @@ in the browser (the owner's choice of 2026-11-26). It replaced the old path (`/S
   Matcad on 443 from outside. At home, where MatOS is not behind Matcad, it checks that Matcad's proxy answers on the shared network and that MatOS answers at
   the address of this computer (or says where to open it): a deviation from "through Matcad", on purpose.
 - **Getting started** (`/Start`, `Core/Setup/GettingStarted.cs`) is the end of the assistant: a list of the toolkit (`mat-itemlist--tasks`) whose rows tick
-  themselves off (`GettingStartedService`, the questions to the engines kept a minute; the page looks again every 30 seconds): an app installed (not an
-  engine), a person invited (more MatOS accounts than at `ContinueAsync`, `GettingStartedState.UsersAtStart`, or more people in MatIdentity than after the
-  hand-over, `PeopleAtStart`, set by `OwnerHandover`; without a hand-over the first look at the list is the baseline), the mail (while it is not checked,
-  also after *Later*; a page of the first start, so a tab of its own), the sign-in tested (only with MatIdentity), a backup schedule, the tour. It belongs only
-  to a run of this assistant (`GettingStarted.ShowFor`: `SetupRun.ContinuedAt`, `WizardCompleted`, not hidden), so a MatOS set up before never shows it. Once
-  the run is over without a failed line the *Setup* widget opens it in a window ("Getting started", *n of m done*); *Hide this list* (`ClosedAt`) takes the
-  widget away, and the page keeps *Show it again*.
+  themselves off (`GettingStartedService`, the questions to the engines kept a minute and dropped when a backup schedule is saved or a person created; the
+  page looks again every 30 seconds): an app installed (not an engine), a person invited (more MatOS accounts than at `ContinueAsync`,
+  `GettingStartedState.UsersAtStart`, or more people in MatIdentity than the baseline `PeopleAtStart`: written by `OwnerHandover`, or without a hand-over by the
+  first look at the list; a hand-over after that keeps it and adds only the owner it created, `GettingStarted.BaselineAfterHandover`), the mail (while it is
+  not checked, also after *Later*; a page of the first start, so a tab of its own), the sign-in tested (only with MatIdentity), a backup schedule, the tour.
+  It belongs only to a run of this assistant (`GettingStarted.Belongs`: `SetupRun.ContinuedAt`, `WizardCompleted`), so a MatOS set up before never shows it.
+  Once the run is over without a failed line the *Setup* widget opens it in a window ("Getting started", *n of m done*) while it is not hidden
+  (`GettingStarted.ShowFor`); *Hide this list* (`ClosedAt`) takes the widget away, and *Settings, General* keeps the way back to the page (*Open the list*),
+  which has *Show it again*. `/?start=1` opens it only on an administrator's home screen (`data-os-admin`).
 - **A window opens a window.** A link with `data-window` in a page inside a window (`js/window-mode.js`) does not navigate: it posts `{ type: 'mv-open', url,
   title }` to the home screen on its own origin, and `js/os.js` opens it beside the first only from that origin, from a frame of one of its windows, and for a
   path of this MatOS (never `//host` or `/\host`, the rule of an address with a window in it).

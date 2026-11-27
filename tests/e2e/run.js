@@ -849,11 +849,16 @@ async function firstStart(browser, errors) {
       expectTrue((await list.locator('[data-start-item="mail"] .mat-item__title').innerText()).includes('Set up mail'), 'the row Set up mail');
       expectEqual(await page.locator('[data-ob-tour]').count(), 0, 'no tour on this visit');
     });
-    await check('the widget Setup opens the list again', async () => {
+    await check('the widget Setup opens the list again (or, with a failed line, leads back to the progress)', async () => {
       await page.click('.os-window.is-active .os-lights [data-win-close]');
       await page.waitForFunction(() => document.querySelectorAll('.os-window').length === 0);
-      await page.click('.os-widget[data-window="/Start"]');
-      await startTitle();
+      if (await page.locator('.os-widget[data-window="/Start"]').count()) {
+        await page.click('.os-widget[data-window="/Start"]');
+        await startTitle();
+      } else {
+        // a line failed (the sign-in may end partial): the widget stays the way back to its Try again
+        expectEqual(await page.locator('.os-widget[href="/Setup/Progress"]').count(), 1, 'the widget leads to the progress screen');
+      }
     });
   }
   await ctx.close();

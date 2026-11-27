@@ -126,6 +126,12 @@ public class EditModel : PageModel
             var saved = IsEdit ? await _people.UpdatePersonAsync(Id!, input, actor, ct) : await _people.CreatePersonAsync(input, actor, ct);
             await _people.SetGroupsOfAsync(saved.Subject, Input.GroupIds.ToHashSet(StringComparer.Ordinal), actor, ct);
             HttpContext.RequestServices.GetRequiredService<PersonAccess>().Forget(saved.Subject);
+            if (!IsEdit)
+            {
+                // The row "Invite a person" of the list "Getting started" ticks off on its next look.
+                HttpContext.RequestServices.GetRequiredService<MatOS.Core.Setup.GettingStartedService>().Forget();
+            }
+
             StatusMessage = IsEdit ? "Saved." : input.Password is null ? $"{saved.DisplayName} is created; MatIdentity sends the invitation to {saved.Email}." : $"{saved.DisplayName} is created.";
             IsError = false;
             return RedirectToPage(new { id = saved.Subject });
