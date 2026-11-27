@@ -111,6 +111,12 @@ in the browser (the owner's choice of 2026-11-26). It replaced the old path (`/S
   (`SetupProgress.Plain`: a restart, Docker did not answer, a program that is not available for download, no internet, a busy download service, which port of
   this computer is taken, it did not start in time; the free address has its own words); the technical rest is in the details. *Try again* queues the line
   once more (`SetupService.RetryAsync`, an install the way the store's *Try again* does it) and keeps the line.
+- **Your account in MatIdentity** (`/Setup/Account`) waits for the line "signin" (`?key=signin`) and says how the hand-over ended (`SystemConfig.HandOver`:
+  created, linked to a person MatIdentity knew, who is made an administrator there, or a lost password). *Test the sign-in* goes through MatIdentity in a
+  tab of its own (`prompt=login`) and back to the page, which compares `sub` with the account and signs the external cookie out: no session, no change of
+  the role. It is offered once the self check is done (`AccountView.CanTest`). **Notifications / mail** (`/Setup/Mail`) waits for MatSMTP and shows what it
+  says (`MailSetup`: its platform state `accounts` and `accountsHealth`, the check `testAccount` when its definition has it, `/api/setup/mail`), and keeps
+  where MatOS writes to its administrator (`SystemConfig.AdminEmail`); *Later* leaves it for the list *Getting started*. Both end on the home screen.
 - **It goes on by itself.** The *Setup* widget of the home screen (an administrator's, a plain link: the first start takes the whole tab) leads to the engines
   while there is no run, to the choices ("Not finished") until the way to the apps is confirmed, back to the progress screen while it works or a line failed, and goes once all is done. A restart of MatOS in the middle (the worker
   marks waiting and running jobs failed) queues the interrupted lines again in the order of the plan (`SetupService.ResumeAsync`, from `JobRunnerService`).

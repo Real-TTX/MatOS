@@ -17,7 +17,7 @@ public static class OnboardingEndpoints
     public static void MapOnboardingApi(this WebApplication app)
     {
         // GET /api/setup/progress[?key=<line>] -> {phase, percent, finished, anyFailed, headline, estimate, steps: [{key, label, kind, state, jobId, error, waitsFor}]};
-        // with a key only that line (a screen that waits for it); 404 before the first start began.
+        // with a key only that line (a screen that waits for it), and for ?key=signin also {signInTested, canTest}; 404 before the first start began.
         app.MapGet(ProgressPath, async (HttpContext http, SetupService setup, SystemConfigService config, string? key, CancellationToken ct) =>
         {
             http.Response.Headers.CacheControl = "no-store";
@@ -27,15 +27,21 @@ public static class OnboardingEndpoints
                 return Results.NotFound();
             }
 
+            // The screen of the sign-in also needs whether it can be tested (the addresses are ready) and whether it was: it comes again when either changes.
+            var signIn = key == SetupPlan.SignInKey;
+            var canTest = signIn && AccountView.CanTest(view);
             if (!string.IsNullOrEmpty(key))
             {
                 view = SetupProgress.Only(view, key);
             }
 
-            var phase = (await config.GetAsync(ct)).Setup?.Phase ?? 2;
+            var stored = await config.GetAsync(ct);
+            var phase = stored.Setup?.Phase ?? 2;
             return Results.Json(new
             {
                 phase,
+                signInTested = signIn ? stored.GettingStarted.SignInTestedAt is not null : (bool?)null,
+                canTest = signIn ? canTest : (bool?)null,
                 percent = view.Percent,
                 finished = view.Finished,
                 anyFailed = view.AnyFailed,

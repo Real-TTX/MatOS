@@ -765,6 +765,49 @@ async function firstStart(browser, errors) {
       expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
       expectTrue(await page.locator('[data-ob-next-screen]').isVisible(), 'the next screen when it is done');
     });
+    await check('Next: the sign-in in MatIdentity, or the mail without it', async () => {
+      const withIdentity = (await page.locator('[data-ob-next-screen]').getAttribute('href')).endsWith('/Setup/Account');
+      await Promise.all([page.waitForLoadState('load'), page.click('[data-ob-next-screen]')]);
+      const path = new URL(page.url()).pathname;
+      if (withIdentity) {
+        expectEqual(path, '/Setup/Account', 'on the sign-in');
+        await page.waitForFunction(() => { const p = document.querySelector('[data-ob-progress]'); return !p || p.getAttribute('data-ob-phase') !== 'working'; }, null, { timeout: 5 * 60 * 1000 });
+        await page.waitForLoadState('load');
+        if (await page.locator('[data-ob-when="ready"]:not([hidden])').count()) {
+          expectTrue((await page.locator('.ob-card').innerText()).includes('anna@example.com'), 'the ready block names the e-mail');
+        }
+        expectTrue((await page.locator('.ob-note').innerText()).includes('admin'), 'the break-glass note');
+        await Promise.all([page.waitForURL(/\/Setup\/Mail/), page.click('[data-ob-next-screen]')]);
+      } else {
+        expectEqual(path, '/Setup/Mail', 'without MatIdentity the mail follows');
+      }
+    });
+    await check('the mail: the facts of MatSMTP, and Later leaves the assistant', async () => {
+      expectEqual(new URL(page.url()).pathname, '/Setup/Mail', 'on the mail');
+      expectEqual(await page.locator('dl.mat-kv[data-ob-mail] [data-ob-fact]').count(), 3, 'answers, accounts, health');
+      expectEqual(await page.locator('form.mat-form[novalidate] input[name=AdminEmail][type=email]').count(), 1, 'where MatOS writes to you');
+    });
+    const endState = await ctx.storageState();
+    for (const [mode, options] of looks) {
+      const lookCtx = await browser.newContext({ ...options, storageState: endState });
+      const look = await lookCtx.newPage();
+      look.on('pageerror', e => errors.push(look.url() + ': ' + e.message));
+      await check(mode + ': the sign-in and the mail, nothing sideways', async () => {
+        for (const screen of ['/Setup/Account', '/Setup/Mail']) {
+          await look.goto(origin + screen);
+          expectEqual(await look.locator('h1').count(), 1, screen + ': h1');
+          expectEqual(await look.locator('[style]').count(), 0, screen + ': elements with an inline style');
+          const wide = await look.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          expectTrue(wide <= 1, screen + ' scrolls sideways by ' + wide + 'px');
+        }
+      });
+      await lookCtx.close();
+    }
+    await check('Later leaves the assistant for the home screen', async () => {
+      await page.goto(origin + '/Setup/Mail');
+      await Promise.all([page.waitForURL(u => !new URL(u).pathname.startsWith('/Setup')), page.click('button[formnovalidate]')]);
+      expectEqual(new URL(page.url()).pathname, '/', 'on the home screen');
+    });
   }
   await ctx.close();
 

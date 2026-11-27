@@ -546,6 +546,29 @@ public class SetupTests
     }
 
     [Fact]
+    public void A_run_without_the_sign_in_gives_the_screen_of_the_sign_in_nothing_to_wait_for()
+    {
+        // A seeded administrator, nobody waited for MatIdentity: no line "signin" (the screen says to add yourself in People instead).
+        var run = Run(("engine:matdock", SetupPlan.EngineKind, 1), ("engine:matidentity", SetupPlan.EngineKind, 2), ("selfcheck", SetupPlan.SelfCheckKind, 3));
+        var jobs = new Dictionary<long, SetupJobState> { [1] = new(JobStatus.Succeeded, null, null), [2] = new(JobStatus.Succeeded, null, null), [3] = new(JobStatus.Succeeded, null, null) };
+        var all = SetupProgress.Of(run, id => jobs.GetValueOrDefault(id), DateTime.UtcNow);
+
+        var signin = SetupProgress.Only(all, SetupPlan.SignInKey);
+        Assert.Empty(signin.Steps);
+        Assert.False(signin.Finished);
+        Assert.Equal(0, signin.Percent);
+        Assert.False(AccountView.CanTest(all));
+    }
+
+    [Fact]
+    public void The_screens_after_the_progress_and_the_end_of_the_assistant()
+    {
+        Assert.Equal("/Setup/Account", SetupFlow.AccountPage);
+        Assert.Equal("/Setup/Mail", SetupFlow.MailPage);
+        Assert.Equal("/", SetupFlow.DesktopUrl());
+    }
+
+    [Fact]
     public void A_run_stored_before_the_phases_is_in_its_second_phase()
     {
         var run = System.Text.Json.JsonSerializer.Deserialize<SetupRun>("""{"Reach":"home","Steps":[{"Key":"engine:matdock","Kind":"engine","Label":"x","JobId":1}]}""")!;

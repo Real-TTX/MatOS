@@ -239,7 +239,7 @@ public partial class WebUiTests
     public void The_pages_of_the_first_start_are_in_its_own_look()
     {
         var setup = Directory.EnumerateFiles(Path.Combine(Web, "Pages", "Setup"), "*.cshtml").Where(f => !Path.GetFileName(f).StartsWith('_')).ToList();
-        Assert.Equal(["Choose.cshtml", "Engines.cshtml", "Index.cshtml", "Progress.cshtml"], setup.Select(Path.GetFileName).Order());
+        Assert.Equal(["Account.cshtml", "Choose.cshtml", "Engines.cshtml", "Index.cshtml", "Mail.cshtml", "Progress.cshtml"], setup.Select(Path.GetFileName).Order());
         Assert.All(setup, f => Assert.Contains("Layout = \"_Onboarding\"", File.ReadAllText(f), StringComparison.Ordinal));
 
         var layout = Read("Pages", "Shared", "_Onboarding.cshtml");

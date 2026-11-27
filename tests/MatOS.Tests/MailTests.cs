@@ -311,4 +311,78 @@ public class MailTests
         var handler = new StubHandler().Answer("GET", "relay-users", """[{"id":"matbu","managedBy":"matos"},{"id":"printer"},{"id":"matdock","managedBy":"matos"}]""");
         Assert.Equal(["matbu", "matdock"], await new MatSmtpClient(new StubLocator(), new StubFactory(handler)).ListRelayUsersAsync(default));
     }
+
+    // ------------------------------------------------------------------ the screen "Notifications / mail" (MailSetup)
+
+    private static PlatformValue Value(string json, string? level = null, string? text = null)
+        => new(System.Text.Json.JsonDocument.Parse(json).RootElement.Clone(), level, text);
+
+    [Fact]
+    public void StatusFrom_reads_the_accounts_and_their_health_from_the_state()
+    {
+        var state = new Dictionary<string, PlatformValue>
+        {
+            [MatOS.Core.Setup.MailSetup.AccountsKey] = Value("2"),
+            [MatOS.Core.Setup.MailSetup.HealthKey] = Value("\"ok\"", "ok", "All accounts answer"),
+        };
+
+        var (accounts, level, text) = MatOS.Core.Setup.MailSetup.StatusFrom(state);
+
+        Assert.Equal(2, accounts);
+        Assert.Equal("ok", level);
+        Assert.Equal("All accounts answer", text);
+
+        // the value alone (no level, no text) says both
+        var plain = MatOS.Core.Setup.MailSetup.StatusFrom(new Dictionary<string, PlatformValue> { [MatOS.Core.Setup.MailSetup.HealthKey] = Value("\"OK\"") });
+        Assert.Equal("ok", plain.HealthLevel);
+        Assert.Equal("OK", plain.HealthText);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("\"two\"")]
+    [InlineData("null")]
+    [InlineData("2.5")]
+    [InlineData("-1")]
+    public void StatusFrom_gives_no_number_for_a_missing_or_odd_value(string? accounts)
+    {
+        var state = new Dictionary<string, PlatformValue>();
+        if (accounts is not null)
+        {
+            state[MatOS.Core.Setup.MailSetup.AccountsKey] = Value(accounts);
+        }
+
+        var (count, level, text) = MatOS.Core.Setup.MailSetup.StatusFrom(state);
+        Assert.Null(count);
+        Assert.Null(level);
+        Assert.Null(text);
+    }
+
+    [Fact]
+    public void Say_puts_the_check_in_plain_words()
+    {
+        var ok = MatOS.Core.Setup.MailSetup.Say(new PlatformResult(true, "Done.", new Dictionary<string, string>()));
+        Assert.True(ok.Ok);
+        Assert.Equal(MatOS.Core.Setup.MailSetup.Works, ok.Message);
+
+        var own = MatOS.Core.Setup.MailSetup.Say(new PlatformResult(true, "Sent a test mail to anna@example.com.", new Dictionary<string, string>()));
+        Assert.Equal("Sent a test mail to anna@example.com.", own.Message);
+
+        var failed = MatOS.Core.Setup.MailSetup.Say(new PlatformResult(false, "The SMTP server refused the password.", new Dictionary<string, string>()));
+        Assert.False(failed.Ok);
+        Assert.Equal("The SMTP server refused the password.", failed.Message);
+
+        var silent = MatOS.Core.Setup.MailSetup.Say(new PlatformResult(false, null, new Dictionary<string, string>()));
+        Assert.False(silent.Ok);
+        Assert.NotEmpty(silent.Message);
+    }
+
+    [Fact]
+    public void Say_without_the_action_says_that_MatSMTP_cannot_check_yet()
+    {
+        var none = MatOS.Core.Setup.MailSetup.Say(null);
+        Assert.False(none.Ok);
+        Assert.Equal(MatOS.Core.Setup.MailSetup.CannotCheck, none.Message);
+        Assert.Contains("cannot check its account yet", none.Message, StringComparison.Ordinal);
+    }
 }

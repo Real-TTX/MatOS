@@ -86,6 +86,8 @@
 .ob-actions { margin: 0; padding: 0; border: 0; }
 .ob-actions--center { justify-content: center; }
 .ob-hero + .ob-actions, .ob-check + .ob-actions { justify-content: center; }
+/* The buttons beside the facts of the mail (open the accounts, check one): close under the facts, no rule above. */
+.ob-mail-actions { margin: 0; padding: 0; border: 0; gap: var(--mat-space-2, 8px); }
 
 /* ---- How you reach your apps: three big choices (radio buttons, the arrow keys move between them) ---- */
 .ob-reach { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }

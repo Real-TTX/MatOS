@@ -1,0 +1,138 @@
+@page
+@using MatOS.Core.Setup
+@model MatOS.Web.Pages.Setup.AccountModel
+@{
+    Layout = "_Onboarding";
+    ViewData["Title"] = "Your account in MatIdentity";
+    var phase = Model.Phase;
+    var email = Model.Email;
+    var outcome = Model.HandOver?.Outcome;
+    var password = outcome switch
+    {
+        HandOverOutcome.Linked => "MatIdentity asks for the password you have there.",
+        HandOverOutcome.PasswordLost => "Set a password for yourself in People first: MatIdentity asks for it.",
+        _ => "MatIdentity asks for the password you chose for MatOS.",
+    };
+
+    string StateText(SetupStepView step) => step.State switch
+    {
+        SetupProgress.Waiting => step.WaitsFor is { } waits ? $"Waits for {waits}" : "Waiting",
+        SetupProgress.Working => "Working on it",
+        SetupProgress.Done => "Done",
+        _ => step.Error ?? SetupProgress.Unknown,
+    };
+}
+
+@* The first start, step 6: the account in MatIdentity. It waits for the line "signin" (js/onboarding.js polls /api/setup/progress?key=signin and shows the
+   block of its state); once it is over the page comes again with what happened. "Test the sign-in" opens a tab of its own; this tab asks again when it is
+   shown again. Next is always there. *@
+<div class="ob-flow" data-ob-progress="@(Model.HasSigninLine ? MatOS.Web.Infrastructure.OnboardingEndpoints.ProgressPath : null)" data-ob-wait="@(Model.HasSigninLine ? SetupPlan.SignInKey : null)"
+     data-ob-phase="@phase" data-ob-reload data-ob-can-test="@(Model.CanTest ? "true" : "false")" data-ob-tested="@(Model.SignInTested ? "true" : "false")">
+    <partial name="_Steps" model="5" />
+
+    <section class="ob-card ob-card--wide" aria-labelledby="ob-account-title">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("key")</span>
+            <h1 class="ob-title ob-title--step" id="ob-account-title" data-ob-headline>Your account in MatIdentity</h1>
+            <p class="ob-lead">MatIdentity is the one sign-in for MatOS and every app.</p>
+        </div>
+
+        <p class="mat-sr-only" role="status" aria-live="polite" data-ob-announce></p>
+
+        @if (Model.HasSigninLine && Model.Line is { } line)
+        {
+            <div data-ob-when="working" hidden="@(phase != "working")">
+                <p class="ob-lead">MatOS is giving your account to MatIdentity. This takes a moment; you can go on, it keeps working.</p>
+            </div>
+
+            <div data-ob-when="ready" hidden="@(phase != "ready")">
+                @switch (outcome)
+                {
+                    case HandOverOutcome.Linked:
+                        <p class="ob-lead">MatIdentity knew @email already: you sign in with the password you have there. MatOS made sure you are an administrator there, so you keep the administration of MatOS.</p>
+                        break;
+                    case HandOverOutcome.PasswordLost:
+                        <p class="ob-lead">Set a password for @email in <a href="/People">People</a>: the password of the first start could not be read any more.</p>
+                        break;
+                    case HandOverOutcome.Created:
+                        <p class="ob-lead">You sign in everywhere as @email, with the password you chose for MatOS.</p>
+                        break;
+                    default:
+                        <p class="ob-lead">MatIdentity knows you: you sign in to MatOS and every app through it.</p>
+                        break;
+                }
+            </div>
+
+            @* The line itself: its state in words, and Try again when it failed (back to this page, js/onboarding.js does it without leaving it). *@
+            <ol class="ob-tasks" data-ob-tasks>
+                <li class="ob-task" data-ob-task="@line.Key" data-state="@line.State" data-job="@line.JobId">
+                    <span class="ob-task__mark" aria-hidden="true">
+                        <span class="ob-task__dot"></span>
+                        <span class="ob-task__spin"></span>
+                        <span class="ob-task__ok">@Ui.Icon("check")</span>
+                        <span class="ob-task__bad">@Ui.Icon("x")</span>
+                    </span>
+                    <span class="ob-task__text">
+                        <span class="ob-task__label">@line.Label</span>
+                        <span class="ob-task__state" data-ob-state-text>@StateText(line)</span>
+                    </span>
+                    <span class="ob-task__actions">
+                        <form method="post" asp-page="/Setup/Progress" asp-page-handler="Retry" data-ob-retry>
+                            <input type="hidden" name="key" value="@line.Key" />
+                            <input type="hidden" name="returnUrl" value="@MatOS.Web.Pages.Setup.AccountModel.Self" />
+                            <button type="submit" class="mat-btn mat-btn--secondary mat-btn--sm"><icon name="refresh" /><span>Try again</span></button>
+                        </form>
+                    </span>
+                </li>
+            </ol>
+        }
+        else
+        {
+            <p class="ob-lead">Your MatOS account is not in MatIdentity yet: add yourself in <a href="/People">People</a>, then you sign in everywhere with it.</p>
+        }
+
+        @* The test: offered once the line is done and the addresses are ready. *@
+        <div class="ob-done" data-ob-when="ready" hidden="@(phase != "ready")">
+            @if (Model.SignInTested && Model.TestResult is null)
+            {
+                <p class="ob-small"><span class="mat-pill mat-pill--ok">The sign-in works</span></p>
+            }
+            @if (Model.CanTest)
+            {
+                <p class="ob-small">Test it once: a new tab signs you in through MatIdentity. @password Your session here stays as it is.</p>
+                <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
+                    <a class="mat-btn mat-btn--secondary" href="/Setup/Account?handler=Test" target="_blank" rel="opener"><icon name="login" /><span>Test the sign-in</span></a>
+                </div>
+            }
+            else
+            {
+                <p class="ob-small">Your addresses are still getting ready: test it from the Getting started list later.</p>
+            }
+        </div>
+
+        @if (Model.TestResult is { } said)
+        {
+            <div class="mat-alert @(Model.TestOk ? "mat-alert--success" : "mat-alert--warning")" role="status">
+                <icon name="@(Model.TestOk ? "check-circle" : "alert")" />
+                <div class="mat-alert__body">@said</div>
+            </div>
+        }
+
+        @* The break-glass administrator of MatIdentity: the way in when the own account cannot sign in. *@
+        <p class="ob-note">@Ui.Icon("shield")<span>
+            MatIdentity has an administrator of its own, <strong>admin</strong>, with a generated password: the way in when your own account cannot sign in.
+            @if (Model.IdentityAppId is { } identityApp)
+            {
+                <a href="/Apps/Details?id=@identityApp">The page of MatIdentity</a><text> shows it.</text>
+            }
+            else
+            {
+                <text>The page of MatIdentity in your apps shows it.</text>
+            }
+        </span></p>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-actions">
+            <a class="mat-btn mat-btn--primary mat-btn--lg" href="@SetupFlow.MailPage" data-ob-next-screen><span>Next: mail</span><icon name="arrow-right" /></a>
+        </div>
+    </section>
+</div>

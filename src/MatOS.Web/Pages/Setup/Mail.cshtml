@@ -1,0 +1,97 @@
+@page
+@using MatOS.Core.Setup
+@model MatOS.Web.Pages.Setup.MailModel
+@{
+    Layout = "_Onboarding";
+    ViewData["Title"] = "Notifications and mail";
+    var phase = Model.Phase;
+    var s = Model.Status;
+    var answers = !s.Installed ? "Not installed yet" : s.Answers ? "Answers" : "Does not answer yet";
+    var accounts = s.Accounts is { } n ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : "Not known yet";
+    var pill = s.HealthLevel switch
+    {
+        "ok" => "mat-pill--ok",
+        "warn" or "warning" => "mat-pill--warn",
+        "error" or "danger" => "mat-pill--error",
+        _ => "mat-pill--info",
+    };
+
+    string StateText(SetupStepView step) => step.State switch
+    {
+        SetupProgress.Waiting => step.WaitsFor is { } waits ? $"Waits for {waits}" : "Waiting",
+        SetupProgress.Working => "Working on it",
+        SetupProgress.Done => "Done",
+        _ => step.Error ?? SetupProgress.Unknown,
+    };
+}
+
+@* The first start, step 7: the mail. It waits for MatSMTP (js/onboarding.js polls /api/setup/progress?key=engine:matsmtp); the facts come from
+   /api/setup/mail (data-ob-mail, asked every 5 seconds until MatSMTP answers). Finish keeps the address, Later leaves it for the list "Getting started". *@
+<div class="ob-flow" data-ob-progress="@(Model.HasMailLine ? MatOS.Web.Infrastructure.OnboardingEndpoints.ProgressPath : null)" data-ob-wait="@(Model.HasMailLine ? SetupPlan.EngineKey(MatOS.Core.Engines.EngineIds.MatSmtp) : null)" data-ob-phase="@phase">
+    <partial name="_Steps" model="6" />
+
+    <section class="ob-card ob-card--wide" aria-labelledby="ob-mail-title">
+        <div class="ob-head">
+            <span class="ob-head__icon" aria-hidden="true">@Ui.Icon("mail")</span>
+            <h1 class="ob-title ob-title--step" id="ob-mail-title" data-ob-headline>Notifications and mail</h1>
+            <p class="ob-lead">MatSMTP sends the mail of your apps and tells you when something needs you.</p>
+        </div>
+
+        <p class="mat-sr-only" role="status" aria-live="polite" data-ob-announce></p>
+
+        @if (Model.HasMailLine && Model.Line is { } line)
+        {
+            <p class="ob-small" data-ob-when="working" hidden="@(phase != "working")">MatSMTP is still being installed. You can fill in the address already.</p>
+            <ol class="ob-tasks" data-ob-tasks data-ob-when="working partial" hidden="@(phase == "ready")">
+                <li class="ob-task" data-ob-task="@line.Key" data-state="@line.State" data-job="@line.JobId">
+                    <span class="ob-task__mark" aria-hidden="true">
+                        <span class="ob-task__dot"></span>
+                        <span class="ob-task__spin"></span>
+                        <span class="ob-task__ok">@Ui.Icon("check")</span>
+                        <span class="ob-task__bad">@Ui.Icon("x")</span>
+                    </span>
+                    <span class="ob-task__text">
+                        <span class="ob-task__label">@line.Label</span>
+                        <span class="ob-task__state" data-ob-state-text>@StateText(line)</span>
+                    </span>
+                    <span class="ob-task__actions">
+                        <form method="post" asp-page="/Setup/Progress" asp-page-handler="Retry" data-ob-retry>
+                            <input type="hidden" name="key" value="@line.Key" />
+                            <input type="hidden" name="returnUrl" value="@MatOS.Web.Pages.Setup.MailModel.Self" />
+                            <button type="submit" class="mat-btn mat-btn--secondary mat-btn--sm"><icon name="refresh" /><span>Try again</span></button>
+                        </form>
+                    </span>
+                </li>
+            </ol>
+        }
+
+        @* What MatSMTP says: filled again by js/onboarding.js until it answers. *@
+        <dl class="mat-kv" data-ob-mail="@MatOS.Web.Infrastructure.SetupEndpoints.MailPath">
+            <dt>MatSMTP</dt>
+            <dd data-ob-fact="answers">@answers</dd>
+            <dt>SMTP accounts</dt>
+            <dd data-ob-fact="accounts">@accounts</dd>
+            <dt>Health</dt>
+            <dd data-ob-fact="health"><span class="mat-pill @pill" data-ob-fact-pill>@(s.HealthText ?? s.HealthLevel ?? "Not known yet")</span></dd>
+        </dl>
+
+        <div class="mat-btn-row mat-btn-row--plain ob-mail-actions">
+            <a class="mat-btn mat-btn--secondary" href="@s.AccountsUrl" target="_blank" rel="noopener" data-ob-mail-accounts hidden="@(s.AccountsUrl is null)"><icon name="external" /><span>Open the SMTP accounts</span></a>
+            <button type="button" class="mat-btn mat-btn--secondary" data-ob-mail-test="@MatOS.Web.Infrastructure.SetupEndpoints.MailTestPath" hidden="@(!s.CanTest)"><icon name="check-circle" /><span>Check the mail account</span></button>
+        </div>
+        <p class="ob-small" data-ob-mail-cannot hidden="@(s.CanTest || !s.Installed)">@MailSetup.CannotCheck</p>
+        <p class="ob-small" role="status" aria-live="polite" data-ob-mail-say></p>
+
+        <form method="post" class="mat-form" novalidate>
+            <partial name="_ValidationSummary" />
+            <mat-field label="Where MatOS writes to you" asp-for="AdminEmail" required="true" hint="MatOS sends notifications here, for example when a backup fails.">
+                <input asp-for="AdminEmail" type="email" class="mat-input mat-input--lg" autocomplete="email" inputmode="email" spellcheck="false" required maxlength="254"
+                       data-msg-required="Please enter the e-mail address MatOS writes to, or choose Later." data-msg-type="Enter an e-mail address like anna@example.com." />
+            </mat-field>
+            <div class="mat-btn-row mat-btn-row--plain ob-actions">
+                <button type="submit" class="mat-btn mat-btn--primary mat-btn--lg" asp-page-handler="Finish"><span>Finish</span><icon name="arrow-right" /></button>
+                <button type="submit" class="mat-btn mat-btn--ghost" asp-page-handler="Later" formnovalidate><span>Later</span></button>
+            </div>
+        </form>
+    </section>
+</div>

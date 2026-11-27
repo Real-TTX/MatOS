@@ -85,6 +85,18 @@ public sealed class SystemConfig
     /// </summary>
     public Setup.PendingOwner? Owner { get; set; }
 
+    /// <summary>
+    /// How the person who set up MatOS came to MatIdentity (<c>OwnerHandover</c>): created with their password, linked to a person MatIdentity knew, or the
+    /// password was lost. The screen "Your account in MatIdentity" says it in plain words; null before the hand-over (or without MatIdentity).
+    /// </summary>
+    public global::MatOS.Core.Setup.HandOverResult? HandOver { get; set; }
+
+    /// <summary>Where MatOS writes to its administrator (the screen "Notifications / mail"); null until it is given.</summary>
+    public string? AdminEmail { get; set; }
+
+    /// <summary>What the person did after the first start (the list "Getting started"): the mail left for later, checked, the sign-in tested, the list closed.</summary>
+    public global::MatOS.Core.Setup.GettingStartedState GettingStarted { get; set; } = new();
+
     /// <summary>Default theme for new users: system, light or dark.</summary>
     public string DefaultTheme { get; set; } = "system";
 

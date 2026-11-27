@@ -55,10 +55,10 @@ public class ProgressModel : PageModel
     public string NextLabel { get; private set; } = "Next: mail";
 
     /// <summary>The screen of the sign-in in MatIdentity (it waits for the line "signin").</summary>
-    public const string AccountPage = "/Setup/Account";
+    public const string AccountPage = SetupFlow.AccountPage;
 
     /// <summary>The screen of the mail (it waits for MatSMTP).</summary>
-    public const string MailPage = "/Setup/Mail";
+    public const string MailPage = SetupFlow.MailPage;
 
     public async Task<IActionResult> OnGetAsync()
     {

@@ -76,9 +76,13 @@ public static class AppJobs
         => async ctx =>
         {
             var config = ctx.Services.GetRequiredService<SystemConfigService>();
-            if ((await config.GetAsync(ctx.Cancellation)).Owner is null)
+            var current = await config.GetAsync(ctx.Cancellation);
+            if (current.Owner is null)
             {
-                ctx.Log("MatIdentity knows you: you sign in to MatOS and every app with your e-mail and password.");
+                // Handed over already (by the connection of the engines), or nobody waited at all (an account made before, a lost hand-over).
+                ctx.Log(current.HandOver is { } handOver
+                    ? $"MatIdentity knows {handOver.Email}: you sign in to MatOS and every app through it."
+                    : "Warning: Nobody waited to be handed over to MatIdentity. Add yourself in People to sign in through it.");
                 return;
             }
 

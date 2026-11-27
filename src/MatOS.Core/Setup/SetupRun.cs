@@ -60,6 +60,55 @@ public sealed class PendingOwner
     public string Email { get; set; } = string.Empty;
 }
 
+/// <summary>The ways the person who set up MatOS came to MatIdentity (<see cref="HandOverResult.Outcome"/>).</summary>
+public static class HandOverOutcome
+{
+    /// <summary>MatIdentity got them as a new person, with the e-mail and password of the first start.</summary>
+    public const string Created = "created";
+
+    /// <summary>MatIdentity knew them already (the same user name or e-mail): they sign in with the password they have there.</summary>
+    public const string Linked = "linked";
+
+    /// <summary>The password of the first start could not be read any more: a password is set for them in People.</summary>
+    public const string PasswordLost = "passwordLost";
+}
+
+/// <summary>How the hand-over to MatIdentity ended (<see cref="Configuration.SystemConfig.HandOver"/>).</summary>
+public sealed class HandOverResult
+{
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary><see cref="HandOverOutcome.Created"/>, <see cref="HandOverOutcome.Linked"/> or <see cref="HandOverOutcome.PasswordLost"/>.</summary>
+    public string Outcome { get; set; } = HandOverOutcome.Created;
+
+    public DateTime At { get; set; }
+}
+
+/// <summary>What happened after the first start, for the list "Getting started" (<see cref="Configuration.SystemConfig.GettingStarted"/>).</summary>
+public sealed class GettingStartedState
+{
+    /// <summary>When the list began (the end of the first start); null before.</summary>
+    public DateTime? StartedAt { get; set; }
+
+    /// <summary>The number of MatOS accounts at that moment (a new one is "a person invited").</summary>
+    public int? UsersAtStart { get; set; }
+
+    /// <summary>The number of people in MatIdentity at that moment.</summary>
+    public int? PeopleAtStart { get; set; }
+
+    /// <summary>The person left the mail for later (the screen "Notifications / mail", Later).</summary>
+    public bool MailLater { get; set; }
+
+    /// <summary>When the mail account of MatSMTP answered the check last.</summary>
+    public DateTime? MailCheckedAt { get; set; }
+
+    /// <summary>When a sign-in through MatIdentity came back as the person's own account (the screen "Your account in MatIdentity").</summary>
+    public DateTime? SignInTestedAt { get; set; }
+
+    /// <summary>When the person hid the list.</summary>
+    public DateTime? ClosedAt { get; set; }
+}
+
 /// <summary>What the progress screen needs of a job.</summary>
 public sealed record SetupJobState(JobStatus Status, DateTime? StartedAt, string? Error);
 

@@ -7,7 +7,9 @@
                                                                 (data-ob-test-row per row, data-ob-test-run, data-ob-test-say)
      <div data-ob-records="/api/setup/ip">                      the records of an own domain by hand: the domain and the addresses written in
      <div data-ob-progress="/api/setup/progress">              the progress screen: polled, only what changed is exchanged; "Try again" (data-ob-retry),
-                                                                "Show details" (data-ob-details)
+                                                                "Show details" (data-ob-details); data-ob-wait="signin" follows one line (the sign-in, the
+                                                                mail), data-ob-reload brings the page again when it is over
+     <dl data-ob-mail="/api/setup/mail">                        the facts of MatSMTP (data-ob-fact) and "Check the mail account" (data-ob-mail-test)
      <div data-ob-tour="/api/home/tour">                        the tour of the home screen: one mark at a time (data-ob-tour-step, data-target)
    The toolkit's script does the rest (validation on submit, data-show-if, data-copy). */
 (function () {
@@ -326,9 +328,12 @@
 
   // ------------------------------------------------------------------ the progress screen
 
-  var progress = $('[data-ob-progress]');
-  if (progress) {
-    var url = progress.getAttribute('data-ob-progress');
+  // Every block that follows lines: the progress screen (all of them), and a screen that waits for one (data-ob-wait="signin": ?key=signin). With
+  // data-ob-reload the page comes again when its line is over, or when what it offers changed (data-ob-can-test, data-ob-tested): its words are the server's.
+  $$('[data-ob-progress]').forEach(function (progress) {
+    var wait = progress.getAttribute('data-ob-wait');
+    var url = progress.getAttribute('data-ob-progress') + (wait ? '?key=' + encodeURIComponent(wait) : '');
+    var reloads = progress.hasAttribute('data-ob-reload');
     var bar = $('[data-ob-bar]', progress);
     var percent = $('[data-ob-percent]', progress);
     var estimate = $('[data-ob-estimate]', progress);
@@ -372,7 +377,17 @@
       if (signedOut) { signedOut.hidden = true; }
     }
 
+    // The page comes again (data-ob-reload): the line is over now, or the test of the sign-in can be offered, or it was made in the other tab.
+    function stale(d, next) {
+      if (!reloads) { return false; }
+      if (phase === 'working' && next !== 'working') { return true; }
+      if (typeof d.canTest === 'boolean' && String(d.canTest) !== progress.getAttribute('data-ob-can-test')) { return true; }
+      return typeof d.signInTested === 'boolean' && String(d.signInTested) !== progress.getAttribute('data-ob-tested');
+    }
+
     function apply(d) {
+      var next = !d.finished ? 'working' : d.anyFailed ? 'partial' : 'ready';
+      if (stale(d, next)) { window.location.reload(); return; }
       if (bar) { bar.value = d.percent; bar.textContent = d.percent + ' %'; }
       if (percent) { percent.textContent = String(d.percent); }
       if (estimate) { estimate.textContent = d.estimate || ''; }
@@ -402,7 +417,7 @@
         var open = $('[data-ob-log]:not([hidden])', li);
         if (open) { loadLog(li); }
       });
-      setPhase(!d.finished ? 'working' : d.anyFailed ? 'partial' : 'ready');
+      setPhase(next);
     }
 
     function poll() {
@@ -463,7 +478,73 @@
         .then(function () { if (button) { button.disabled = false; } });
     });
 
+    // Back to this tab (the test of the sign-in ran in another one): ask at once.
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { poll(); } });
+
     if (phase === 'working') { poll(); } else { timer = setTimeout(poll, 15000); }
+  });
+
+  // ------------------------------------------------------------------ the facts of the mail
+
+  // What MatSMTP says (GET /api/setup/mail), every 5 seconds until it is installed and answers; "Check the mail account" posts with the token, waits while it
+  // runs and 30 seconds after (the server refuses a second one within that time too), and says the result in the polite line.
+  var mail = $('[data-ob-mail]');
+  if (mail) {
+    var pills = { ok: 'mat-pill--ok', warn: 'mat-pill--warn', warning: 'mat-pill--warn', error: 'mat-pill--error', danger: 'mat-pill--error' };
+    var fact = function (key) { return $('[data-ob-fact="' + key + '"]', mail); };
+    var mailTest = $('[data-ob-mail-test]');
+    var mailCannot = $('[data-ob-mail-cannot]');
+    var mailSay = $('[data-ob-mail-say]');
+    var mailAccounts = $('[data-ob-mail-accounts]');
+    var mailBusy = false;
+
+    var applyMail = function (d) {
+      var answers = fact('answers');
+      if (answers) { answers.textContent = !d.installed ? 'Not installed yet' : d.answers ? 'Answers' : 'Does not answer yet'; }
+      var accounts = fact('accounts');
+      if (accounts) { accounts.textContent = typeof d.accounts === 'number' ? String(d.accounts) : 'Not known yet'; }
+      var pill = $('[data-ob-fact-pill]', mail);
+      if (pill) {
+        pill.className = 'mat-pill ' + (pills[d.healthLevel] || 'mat-pill--info');
+        pill.textContent = d.healthText || d.healthLevel || 'Not known yet';
+      }
+      if (mailAccounts) {
+        if (d.accountsUrl) { mailAccounts.href = d.accountsUrl; }
+        mailAccounts.hidden = !d.accountsUrl;
+      }
+      if (mailTest && !mailBusy) { mailTest.hidden = !d.canTest; }
+      if (mailCannot) { mailCannot.hidden = !!d.canTest || !d.installed; }
+    };
+
+    var pollMail = function () {
+      fetch(mail.getAttribute('data-ob-mail'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { if (!r.ok || (r.headers.get('Content-Type') || '').indexOf('json') < 0) { throw new Error('HTTP ' + r.status); } return r.json(); })
+        .then(function (d) { applyMail(d); if (!(d.installed && d.answers)) { setTimeout(pollMail, 5000); } })
+        .catch(function () { setTimeout(pollMail, 5000); });
+    };
+
+    if (mailTest) {
+      mailTest.addEventListener('click', function () {
+        if (mailBusy) { return; }
+        mailBusy = true;
+        mailTest.disabled = true;
+        mailTest.setAttribute('aria-busy', 'true');
+        if (mailSay) { mailSay.textContent = 'Checking the mail account ...'; }
+        fetch(mailTest.getAttribute('data-ob-mail-test'), {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Accept': 'application/json', 'RequestVerificationToken': token() },
+        })
+          .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+          .then(function (d) { if (mailSay) { mailSay.textContent = d.message || (d.ok ? 'The mail account works.' : 'The check did not work.'); } })
+          .catch(function () { if (mailSay) { mailSay.textContent = 'The check could not run right now. Try it again in a moment.'; } })
+          .then(function () {
+            mailTest.removeAttribute('aria-busy');
+            setTimeout(function () { mailBusy = false; mailTest.disabled = false; }, 30000);
+          });
+      });
+    }
+
+    pollMail();
   }
 
   // ------------------------------------------------------------------ the tour of the home screen

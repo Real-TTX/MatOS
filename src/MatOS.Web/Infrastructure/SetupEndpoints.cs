@@ -7,12 +7,20 @@ namespace MatOS.Web.Infrastructure;
 /// <summary>
 /// The endpoints of the screen of the choices (docs/ARCHITECTURE.md "The first start"): the public addresses MatOS Services saw (the records of an own domain
 /// made by hand) and the test of the answers (the card "Test"). Administrators only, and only while the first start is not past the choices: afterwards they
-/// answer <c>409 {redirect}</c> with the screen it goes on at.
+/// answer <c>409 {redirect}</c> with the screen it goes on at. The screen of the mail has two more: MatSMTP's state and the check of its account.
 /// </summary>
 public static class SetupEndpoints
 {
     public const string IpPath = "/api/setup/ip";
     public const string TestPath = "/api/setup/test";
+    public const string MailPath = "/api/setup/mail";
+    public const string MailTestPath = "/api/setup/mail/test";
+
+    /// <summary>How often the mail account may be checked (per process): once in this time.</summary>
+    public static readonly TimeSpan MailTestPause = TimeSpan.FromSeconds(30);
+
+    /// <summary>When the mail account was checked last (ticks of UTC), shared by every request of this process.</summary>
+    private static long _lastMailTest;
 
     /// <summary>What the card posts (the answers of the tree as they are now).</summary>
     public sealed record TestBody(string? Reach, string? Name, string? Domain, string? Provider, string? IpMode, string? FixedIp, string? Cname);
@@ -63,6 +71,64 @@ public static class SetupEndpoints
                 summary = SetupPlan.Summary(ChoicesOf(input)),
             });
         }).RequireAuthorization("AdminOnly");
+
+        // GET /api/setup/mail -> {installed, answers, accounts, healthLevel, healthText, accountsUrl, canTest}: MatSMTP for the screen of the mail.
+        app.MapGet(MailPath, async (HttpContext http, MailSetup mail, CancellationToken ct) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            var s = await mail.StatusAsync(ct);
+            return Results.Json(new
+            {
+                installed = s.Installed,
+                answers = s.Answers,
+                accounts = s.Accounts,
+                healthLevel = s.HealthLevel,
+                healthText = s.HealthText,
+                accountsUrl = s.AccountsUrl,
+                canTest = s.CanTest,
+            });
+        }).RequireAuthorization("AdminOnly");
+
+        // POST /api/setup/mail/test (the anti-forgery token in the header RequestVerificationToken) -> {ok, message}: "Check the mail account", at most once in
+        // 30 seconds for the whole process (a second click, a second tab: "Checked just now.").
+        app.MapPost(MailTestPath, async (HttpContext http, IAntiforgery antiforgery, MailSetup mail, CancellationToken ct) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            try
+            {
+                await antiforgery.ValidateRequestAsync(http);
+            }
+            catch (AntiforgeryValidationException)
+            {
+                return Results.BadRequest();
+            }
+
+            if (!MayCheckMail(DateTime.UtcNow))
+            {
+                return Results.Json(new { ok = false, message = "Checked just now." });
+            }
+
+            var check = await mail.TestAsync(ct);
+            return Results.Json(new { ok = check.Ok, message = check.Message });
+        }).RequireAuthorization("AdminOnly");
+    }
+
+    /// <summary>Whether the mail account may be checked now (and takes the turn): not within <see cref="MailTestPause"/> of the last check.</summary>
+    private static bool MayCheckMail(DateTime now)
+    {
+        while (true)
+        {
+            var last = Interlocked.Read(ref _lastMailTest);
+            if (last != 0 && now.Ticks - last < MailTestPause.Ticks)
+            {
+                return false;
+            }
+
+            if (Interlocked.CompareExchange(ref _lastMailTest, now.Ticks, last) == last)
+            {
+                return true;
+            }
+        }
     }
 
     /// <summary>The answers of the card as choices, for the sentence of what "Set up the rest" will do (<see cref="SetupPlan.Summary"/>).</summary>

@@ -11,7 +11,9 @@ namespace MatOS.Core.Integrations;
 /// the sign-in page goes there; MatIdentity seeds only its own administrator <c>admin</c> with a generated password, so the person would stand before a
 /// sign-in they have no account for. The first start keeps their e-mail and password (protected) until MatIdentity is there, then MatIdentity gets them as a person
 /// through SCIM (an administrator, the same e-mail and password, no change asked), the local account is linked to that person, and the password is forgotten.
-/// A person with that user name or e-mail in MatIdentity already (a MatIdentity that was there before) is only linked: their password there stays theirs.
+/// A person with that user name or e-mail in MatIdentity already (a MatIdentity that was there before) is only linked: their password there stays theirs, and
+/// they are made an administrator there when they were not (a sign-in through MatIdentity takes the role from it). How it ended is kept
+/// (<see cref="SystemConfig.HandOver"/>) for the screen "Your account in MatIdentity".
 /// </summary>
 public sealed class OwnerHandover
 {
@@ -75,6 +77,7 @@ public sealed class OwnerHandover
         {
             // The keys of MatOS were lost with the volume: nothing to hand over. The person signs in locally (?local=1) and sets a password in MatIdentity.
             log($"Warning: the password of {owner.Email} cannot be read any more; set one for them in People.");
+            await RecordAsync(owner, HandOverOutcome.PasswordLost, ct);
             await ForgetAsync(ct);
             return false;
         }
@@ -92,6 +95,14 @@ public sealed class OwnerHandover
                 string.Equals(p.UserName, owner.Username, StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrEmpty(p.Email) && string.Equals(p.Email, owner.Email, StringComparison.OrdinalIgnoreCase)));
             var person = existing ?? await _people.CreatePersonAsync(PersonFor(owner, password), actor: null, ct);
+            if (existing is { Administrator: false })
+            {
+                // A sign-in through MatIdentity sets the role from its token (UserService.FindOrCreateExternalAsync): a person who is no administrator there
+                // would lose the administration of the MatOS they set up. Their password there stays as it is.
+                person = await _people.UpdatePersonAsync(existing.Subject, AdministratorOf(existing), actor: null, ct);
+                _logger.LogInformation("{Email} was in MatIdentity already and is made an administrator there.", owner.Email);
+                log($"{owner.Email} was in MatIdentity already and is an administrator there now, so they keep the administration of MatOS.");
+            }
 
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == owner.UserId, ct);
             if (user is not null && string.IsNullOrEmpty(user.ExternalSubject))
@@ -100,6 +111,7 @@ public sealed class OwnerHandover
                 await _db.SaveChangesAsync(ct);
             }
 
+            await RecordAsync(owner, existing is null ? HandOverOutcome.Created : HandOverOutcome.Linked, ct);
             await ForgetAsync(ct);
             log(existing is null
                 ? $"{owner.Email} signs in to MatOS and every app with the same e-mail and password as before."
@@ -113,4 +125,12 @@ public sealed class OwnerHandover
             return false;
         }
     }
+
+    /// <summary>The details of a person MatIdentity knew, unchanged but for the administration (no new password).</summary>
+    public static IdentityPersonInput AdministratorOf(IdentityPerson person)
+        => new(person.UserName, person.DisplayName, person.Email, person.Active, Administrator: true, Password: null);
+
+    /// <summary>Keeps how the hand-over ended, for the screen "Your account in MatIdentity".</summary>
+    private Task RecordAsync(PendingOwner owner, string outcome, CancellationToken ct)
+        => _config.UpdateAsync(c => c.HandOver = new HandOverResult { Email = owner.Email, Outcome = outcome, At = DateTime.UtcNow }, ct);
 }
