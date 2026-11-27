@@ -1,0 +1,81 @@
+# Vaultwarden – a password manager that speaks with the Bitwarden apps (https://github.com/dani-garcia/vaultwarden).
+x-matos:
+  id: vaultwarden
+  name: Vaultwarden
+  tagline: Your passwords, on every device
+  description: >-
+    Vaultwarden keeps passwords, passkeys, cards and notes encrypted with a master password that only you know. The Bitwarden apps and browser
+    extensions fill them in on your phone and computer; share a collection with the family.
+  category: Security
+  role: app
+  state: third-party
+  stateNote: Signs in through MatIdentity and sends its mail through MatSMTP; the vault itself still opens with each person's master password, as Bitwarden's design asks.
+  icon: vaultwarden.svg
+  homepage: https://github.com/dani-garcia/vaultwarden
+  # Its single sign-on (Vaultwarden's SSO_*) and its mail (SMTP_*) are filled from the bindings when the start below finds them.
+  consumes:
+    - capability: identity.oidc
+      params:
+        callback: /identity/connect/oidc-signin
+        signedOut: /
+        backchannel: ""
+    - capability: mail.smtp
+      params:
+        sender: vaultwarden
+  ui:
+    service: vaultwarden
+    port: 80
+    hostPort: 8222
+  variables:
+    - key: SIGNUPS_ALLOWED
+      label: Anybody may create an account
+      default: "true"
+      help: true or false. With MatIdentity a person signs up through the one sign-in; false keeps strangers out of the form of Vaultwarden.
+      advanced: true
+  notes:
+    - The web vault needs https (or the address localhost), since the browser encrypts only there. Reach it under the domain of MatOS.
+    - With MatIdentity the sign-in page of Vaultwarden has "Use single sign-on"; the vault is then unlocked with the master password the person sets on the first sign-in.
+    - Its own sign-in needs MatOS to know its public address (a domain, or the address of this machine in the settings) and MatIdentity to be reachable at its public address from the apps.
+  credentials:
+    - label: First sign-in
+      value: Create an account in Vaultwarden (or use single sign-on). The first account has no special rights; the admin page is off.
+
+services:
+  vaultwarden:
+    # Vaultwarden has been 1.x from the start: latest is its major line.
+    image: vaultwarden/server:latest
+    restart: unless-stopped
+    # Vaultwarden reads its settings from its own names: the start fills them from the bindings, and only when there is one (an empty SSO_ or SMTP_
+    # setting would stop it). $$ is a $ for the shell; compose fills the rest from the .env.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -n "$$MAT_PUBLIC_URL" ]; then export DOMAIN="$$MAT_PUBLIC_URL"; fi
+        if [ -n "$$MATIDENTITY_CLIENT_ID" ] && [ -n "$$MAT_PUBLIC_URL" ]; then
+          export SSO_ENABLED=true SSO_PKCE=true SSO_AUTHORITY="$$MATIDENTITY_AUTHORITY" \
+            SSO_CLIENT_ID="$$MATIDENTITY_CLIENT_ID" SSO_CLIENT_SECRET="$$MATIDENTITY_CLIENT_SECRET" SSO_SCOPES="email profile"
+        fi
+        if [ -n "$$MATSMTP_HOST" ]; then
+          case "$$MATSMTP_TLS" in tls) SMTP_SECURITY=force_tls ;; starttls) SMTP_SECURITY=starttls ;; *) SMTP_SECURITY=off ;; esac
+          export SMTP_SECURITY SMTP_HOST="$$MATSMTP_HOST" SMTP_PORT="$$MATSMTP_PORT" SMTP_USERNAME="$$MATSMTP_USERNAME" \
+            SMTP_PASSWORD="$$MATSMTP_PASSWORD" SMTP_FROM="$$MATSMTP_FROM" SMTP_FROM_NAME=Vaultwarden
+        fi
+        exec /start.sh
+    environment:
+      SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED:-true}
+      MAT_PUBLIC_URL: ${MAT_PUBLIC_URL:-}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      - vaultwarden-data:/data
+
+volumes:
+  vaultwarden-data:

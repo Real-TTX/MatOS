@@ -1,0 +1,68 @@
+# Home Assistant – home automation (https://www.home-assistant.io).
+x-matos:
+  id: home-assistant
+  name: Home Assistant
+  tagline: Your home, automated
+  description: >-
+    Home Assistant brings lights, heating, plugs, sensors and thousands of other devices into one place, with dashboards and automations
+    that run in your home, without a cloud.
+  category: Home
+  role: app
+  state: third-party
+  stateNote: Runs in a network of its own like every app, so devices it would find by itself on the home network (mDNS, Bluetooth, USB) are added by their address.
+  icon: home-assistant.svg
+  homepage: https://www.home-assistant.io
+  ui:
+    service: homeassistant
+    port: 8123
+    hostPort: 8123
+  notes:
+    - On the first visit Home Assistant asks for the owner account, the place of your home and the devices it found.
+    - "MatOS starts it with a configuration that trusts the reverse proxy (http: use_x_forwarded_for), so it can be reached under the domain. The file is configuration.yaml in the volume and yours to change."
+    - It does not run in the host network as a Home Assistant of its own would. Devices on the home network are added by their IP address; USB sticks (Zigbee, Z-Wave) need a device line in the compose file.
+  credentials:
+    - label: First sign-in
+      value: Home Assistant asks you to create the owner account.
+
+services:
+  homeassistant:
+    # Home Assistant has no major versions (2026.11, 2026.12, ...): stable is its released line.
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    # Behind a reverse proxy Home Assistant answers 400 unless it trusts it. The first start writes a configuration that does (the private networks,
+    # where Matcad reaches it), and the files the default one includes; later starts leave the files as the owner changed them.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /config/configuration.yaml ]; then
+          printf '%s\n' \
+            '# Written by MatOS on the first start; yours to change.' \
+            'default_config:' \
+            '' \
+            'frontend:' \
+            '  themes: !include_dir_merge_named themes' \
+            '' \
+            'automation: !include automations.yaml' \
+            'script: !include scripts.yaml' \
+            'scene: !include scenes.yaml' \
+            '' \
+            'http:' \
+            '  use_x_forwarded_for: true' \
+            '  trusted_proxies:' \
+            '    - 10.0.0.0/8' \
+            '    - 172.16.0.0/12' \
+            '    - 192.168.0.0/16' \
+            > /config/configuration.yaml
+          mkdir -p /config/themes
+          printf '[]\n' > /config/automations.yaml
+          touch /config/scripts.yaml /config/scenes.yaml
+        fi
+        exec /init
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - homeassistant-config:/config
+
+volumes:
+  homeassistant-config:

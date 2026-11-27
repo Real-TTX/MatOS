@@ -48,7 +48,7 @@ public class AppStateTests
     [InlineData(AppStates.Beta, "matboard matbu matcloud matddns matdo matdrive matfile matmail matoffice matpaper matplay matshape matsplit mattrakr")]
     [InlineData(AppStates.Alpha, "matcms matdesign matmon")]
     [InlineData(AppStates.Preview, "matai")]
-    [InlineData(AppStates.ThirdParty, "nginx-proxy-manager portainer")]
+    [InlineData(AppStates.ThirdParty, "home-assistant immich jellyfin nextcloud nginx-proxy-manager paperless-ngx portainer uptime-kuma vaultwarden")]
     public void BuiltInCatalog_HasTheApprovedStates(string state, string ids)
     {
         var expected = ids.Split(' ').Order().ToList();
