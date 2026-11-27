@@ -380,9 +380,23 @@ public static partial class SetupPlan
         // "then MatFile, MatDo and MatDrive, and makes ...": a comma closes the list of the apps before the second half of the sentence.
         var sentence = what + (apps.Count > 0 && where.StartsWith(" and ", StringComparison.Ordinal) ? "," : string.Empty) + where + ".";
 
-        // An own domain with a DNS account: where its records point, in a second sentence.
-        return choices.Reach == Reach.Domain && !string.IsNullOrWhiteSpace(choices.BaseDomain) && choices.Ip is { } ip ? $"{sentence} {ip.Sentence}." : sentence;
+        // An own domain with a DNS account: where its records point, in a second sentence. Only Matddns writes them; without it (a fixed address needs no
+        // address updater, EnginesFor) the person makes them at the DNS provider.
+        if (choices.Reach != Reach.Domain || string.IsNullOrWhiteSpace(choices.BaseDomain) || choices.Ip is not { } ip)
+        {
+            return sentence;
+        }
+
+        return EnginesOf(choices.Engines).Contains(EngineIds.Matddns) ? $"{sentence} {ip.Sentence}." : $"{sentence} {RecordsByHand(ip.FixedIp)}";
     }
+
+    /// <summary>
+    /// The second sentence of <see cref="Summary"/> for an own domain without Matddns: nothing writes the records, the person creates them at the DNS provider
+    /// (js/onboarding.js says the same).
+    /// </summary>
+    public static string RecordsByHand(string? ip) => string.IsNullOrWhiteSpace(ip)
+        ? "Create the records of your domain at your DNS provider yourself."
+        : $"Create the records of your domain at your DNS provider yourself, pointing to {ip}.";
 
     /// <summary>
     /// The first half of <see cref="Summary"/>: what MatOS installs, without a number (the person does not pick the engines; which ones follow from the

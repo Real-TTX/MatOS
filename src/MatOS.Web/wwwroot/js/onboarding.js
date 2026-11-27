@@ -153,13 +153,18 @@
       else if (value === 'domain' && domain && domain.value.trim()) { text += ' and puts your apps under ' + domain.value.trim().toLowerCase(); }
       else if (value === 'home') { text += ' for use here at home'; }
       text += '.';
-      // an own domain with a DNS account: where its records point (DnsIp.Sentence says the same)
+      // an own domain with a DNS account: where its records point (DnsIp.Sentence says the same). A fixed address gets no address updater
+      // (SetupPlan.EnginesFor), and only it writes records: the person makes them by hand (SetupPlan.RecordsByHand).
       var provider = $('#DnsProvider', flow);
       if (value === 'domain' && domain && domain.value.trim() && provider && provider.value) {
         var answer = $('input[name="DnsIp"]:checked', flow), fixed = $('[name="DnsFixedIp"]', flow);
-        text += answer && answer.value === 'fixed' && fixed && fixed.value.trim()
-          ? ' Your domain points to ' + fixed.value.trim() + '.'
-          : ' Your domain follows your internet address.';
+        if (answer && answer.value === 'fixed') {
+          text += fixed && fixed.value.trim()
+            ? ' Create the records of your domain at your DNS provider yourself, pointing to ' + fixed.value.trim() + '.'
+            : ' Create the records of your domain at your DNS provider yourself.';
+        } else {
+          text += ' Your domain follows your internet address.';
+        }
       }
       return text;
     }

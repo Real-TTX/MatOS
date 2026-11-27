@@ -85,6 +85,19 @@
             }
         </ol>
 
+        @if (Model.PhaseOne)
+        {
+            @* Phase 1 (the way to the apps is not confirmed yet): the way back to the choices, at any time; no way home and no countdown. *@
+            <p class="ob-small">MatOS keeps installing while you answer how you reach your apps.</p>
+            <div class="mat-btn-row mat-btn-row--plain ob-actions ob-actions--center">
+                <form method="post" asp-page-handler="RetryAll" data-ob-when="partial" hidden="@(phase != "partial")" data-ob-retry-all>
+                    <button type="submit" class="mat-btn mat-btn--secondary mat-btn--lg"><icon name="refresh" /><span>Try all again</span></button>
+                </form>
+                <a href="/Setup/Choose" class="mat-btn mat-btn--primary mat-btn--lg" data-ob-choose><icon name="chevron-left" /><span>Back to how you reach your apps</span></a>
+            </div>
+        }
+        else
+        {
         <div class="ob-done" data-ob-when="ready partial" hidden="@(phase == "working")">
             @if (Model.Reach is { } reach)
             {
@@ -113,5 +126,6 @@
                 <button type="button" class="mat-btn mat-btn--ghost mat-btn--sm" data-ob-stay>Stay here</button>
             </p>
         </div>
+        }
     </section>
 </div>

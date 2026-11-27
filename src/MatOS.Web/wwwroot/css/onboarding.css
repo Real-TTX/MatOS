@@ -110,7 +110,7 @@
 .ob-panel { padding: 4px 2px 0; animation: ob-fade .35s var(--os-ease) both; }
 .ob-note { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--mat-surface-2); color: var(--mat-text-muted); font-size: var(--mat-fs-sm); line-height: 1.5; }
 .ob-note .mat-icon { flex: none; margin-top: 2px; color: var(--os-accent); }
-.ob-advanced, .ob-more { border-top: 1px solid var(--mat-border); padding-top: 6px; }
+.ob-advanced { border-top: 1px solid var(--mat-border); padding-top: 6px; }
 .ob-phase1 { text-align: center; overflow-wrap: anywhere; }
 
 /* ---- The engines: fixed rows, nothing to tick ---- */

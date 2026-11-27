@@ -66,6 +66,14 @@
             </div>
         }
 
+        @if (Model.Problem is { } problem)
+        {
+            <div class="ob-check ob-check--bad" role="alert">
+                <span class="ob-check__icon" aria-hidden="true">@Ui.Icon("alert")</span>
+                <div class="ob-check__body"><p>@problem</p></div>
+            </div>
+        }
+
         <div class="mat-btn-row mat-btn-row--plain ob-actions">
             @if (docker.Ready)
             {

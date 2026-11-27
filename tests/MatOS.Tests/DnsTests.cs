@@ -107,6 +107,17 @@ public class DnsTests
     }
 
     [Fact]
+    public void A_fixed_address_without_Matddns_says_the_records_are_made_by_hand()
+    {
+        // A fixed address needs no address updater (EnginesFor), and only Matddns writes records: the summary must not promise them.
+        var engines = SetupPlan.EnginesFor(Reach.Domain, "cloudflare", DnsIp.Fixed).ToArray();
+        Assert.DoesNotContain(EngineIds.Matddns, engines);
+        Assert.Equal("MatOS sets up its engines and puts your apps under example.com. Create the records of your domain at your DNS provider yourself, pointing to 93.184.216.34.",
+            SetupPlan.Summary(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34"), engines), _ => null));
+        Assert.DoesNotContain(SetupPlan.Steps(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34"), engines), new HashSet<string>(), _ => null), s => s.Key == SetupPlan.DnsKey);
+    }
+
+    [Fact]
     public void An_own_domain_has_a_line_for_its_records_and_the_check_comes_last()
     {
         var steps = SetupPlan.Steps(Domain(new DnsIp(DnsIp.Fixed, "93.184.216.34")), new HashSet<string>(), _ => null);

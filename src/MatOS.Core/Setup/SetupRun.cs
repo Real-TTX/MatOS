@@ -134,7 +134,8 @@ public static partial class SetupProgress
         var finished = views.All(v => v.State is Done or Failed);
         var anyFailed = views.Any(v => v.State == Failed);
         var percent = views.Count == 0 || finished ? 100 : (int)Math.Round(score * 100 / views.Count);
-        var headline = !finished ? "Setting up your MatOS" : anyFailed ? "Almost there" : "Your MatOS is ready";
+        // In phase 1 only the first engines are queued: done with them is not "ready" (the way to the apps is still to be confirmed).
+        var headline = !finished ? "Setting up your MatOS" : anyFailed ? "Almost there" : SetupPlan.Continued(run) ? "Your MatOS is ready" : "The first engines are ready";
         return new SetupProgressView(views, Math.Clamp(percent, 0, 100), finished, anyFailed, headline, finished ? string.Empty : Estimate(left));
     }
 

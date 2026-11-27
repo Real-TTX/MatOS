@@ -21,13 +21,15 @@ public class EnginesModel : PageModel
     private readonly SetupService _setup;
     private readonly AppService _apps;
     private readonly DockerService _docker;
+    private readonly ILogger<EnginesModel> _log;
 
-    public EnginesModel(SystemConfigService config, SetupService setup, AppService apps, DockerService docker)
+    public EnginesModel(SystemConfigService config, SetupService setup, AppService apps, DockerService docker, ILogger<EnginesModel> log)
     {
         _config = config;
         _setup = setup;
         _apps = apps;
         _docker = docker;
+        _log = log;
     }
 
     /// <summary>The engines this screen names, in the order they are installed; the address engines follow from the next screen.</summary>
@@ -65,9 +67,26 @@ public class EnginesModel : PageModel
         }
 
         // Once: a second click or a second tab gets the stored run back (BeginAsync holds one lock for all of the first start).
-        await _setup.BeginAsync(null, HttpContext.RequestAborted);
+        try
+        {
+            await _setup.BeginAsync(null, HttpContext.RequestAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "The first engines could not be queued.");
+            // What was queued before the problem is stored with the run (BeginAsync): then the first start goes on there, else this screen says why.
+            if (SetupFlow.NextPage(await _config.GetAsync(HttpContext.RequestAborted)) == SetupFlow.EnginesPage)
+            {
+                Problem = $"MatOS could not start installing its engines: {ex.Message.TrimEnd('.')}. Try Next again in a moment.";
+                return Page();
+            }
+        }
+
         return Redirect(SetupFlow.ChoosePage);
     }
+
+    /// <summary>Next did not work (the first engines could not be queued): the reason in plain words, on this screen.</summary>
+    public string? Problem { get; private set; }
 
     /// <summary>The first start stands elsewhere (a run exists, or MatOS was set up before the runs): there, not here.</summary>
     private async Task<IActionResult?> ElsewhereAsync()

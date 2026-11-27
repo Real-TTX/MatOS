@@ -1,4 +1,5 @@
 using MatOS.Core.Configuration;
+using MatOS.Core.Docker;
 using MatOS.Core.Engines;
 using MatOS.Core.Entities;
 using MatOS.Core.Apps;
@@ -22,12 +23,16 @@ public class ChooseModel : PageModel
     private readonly SystemConfigService _config;
     private readonly SetupService _setup;
     private readonly AppService _apps;
+    private readonly DockerService _docker;
+    private readonly ILogger<ChooseModel> _log;
 
-    public ChooseModel(SystemConfigService config, SetupService setup, AppService apps)
+    public ChooseModel(SystemConfigService config, SetupService setup, AppService apps, DockerService docker, ILogger<ChooseModel> log)
     {
         _config = config;
         _setup = setup;
         _apps = apps;
+        _docker = docker;
+        _log = log;
     }
 
     [BindProperty] public string Reach { get; set; } = MatOS.Core.Setup.Reach.Free;
@@ -144,9 +149,19 @@ public class ChooseModel : PageModel
     {
         var ct = HttpContext.RequestAborted;
         var config = await _config.GetAsync(ct);
-        if (config.Setup is null && !config.WizardCompleted)
+        // Only when Docker answers (else every line would fail), and never as an error page: without a run the person lands on the screen of the engines,
+        // which says why (Docker, or the reason the lines could not be queued).
+        if (config.Setup is null && !config.WizardCompleted && IndexModel.AdviceFor(await _docker.GetEngineInfoAsync(ct)).Ready)
         {
-            await _setup.BeginAsync(null, ct);
+            try
+            {
+                await _setup.BeginAsync(null, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogWarning(ex, "The first engines could not be queued.");
+            }
+
             config = await _config.GetAsync(ct);
         }
 

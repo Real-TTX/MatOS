@@ -671,6 +671,8 @@ async function firstStart(browser, errors) {
   if (process.env.MATOS_FIRST_START_INSTALL === '1') {
     let first = [];
     await check('Next on the engines queues MatDock and MatSMTP, once', async () => {
+      // the token of the form as it is now: posted once more below, like a second tab that still shows the engines
+      const token = await page.locator('form[data-ob-flow] input[name="__RequestVerificationToken"]').inputValue();
       await Promise.all([page.waitForURL(/\/Setup\/Choose/), page.click('.ob-step.is-active button[type=submit]')]);
       const progress = await (await page.request.get(origin + '/api/setup/progress')).json();
       first = progress.steps.map(s => s.key + '#' + s.jobId);
@@ -681,6 +683,12 @@ async function firstStart(browser, errors) {
       expectEqual(new URL(page.url()).pathname, '/Setup/Choose', 'the engines lead on to the choices');
       const again = await (await page.request.get(origin + '/api/setup/progress')).json();
       expectEqual(again.steps.map(s => s.key + '#' + s.jobId), first, 'the same lines and jobs');
+      // a second POST of the engines (the old form of a second tab) does not queue a second run either
+      const repost = await page.request.post(origin + '/Setup/Engines', { form: { __RequestVerificationToken: token }, maxRedirects: 0 });
+      expectEqual(repost.status(), 302, 'the second post is sent on');
+      expectEqual(new URL(repost.headers()['location'], origin).pathname, '/Setup/Choose', 'to the choices');
+      const third = await (await page.request.get(origin + '/api/setup/progress')).json();
+      expectEqual(third.steps.map(s => s.key + '#' + s.jobId), first, 'still the same lines and jobs');
     });
     await check('the way to the apps: three choices, the name checked while typing, the first engines said in one line', async () => {
       expectEqual(await page.locator('.ob-choice input[name=Reach]').count(), 3, 'three choices');
@@ -707,7 +715,8 @@ async function firstStart(browser, errors) {
       await page.waitForFunction(() => document.querySelector('[data-ob-progress]').getAttribute('data-ob-phase') !== 'working', null, { timeout: 15 * 60 * 1000 });
       expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
     });
-  }  await ctx.close();
+  }
+  await ctx.close();
 
   await check('no script errors in the first start', async () => { expectEqual(errors, [], 'errors'); });
   await browser.close();

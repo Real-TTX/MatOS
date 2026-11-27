@@ -42,6 +42,12 @@ public class ProgressModel : PageModel
     /// </summary>
     public string? LoopbackUrl { get; private set; }
 
+    /// <summary>
+    /// The run is still in phase 1 (only MatDock and MatSMTP; the way to the apps is not confirmed yet, <see cref="SetupPlan.Continued"/>): the page came from
+    /// "Try again" on the choices. It leads back there, not to the home screen, and does not go on by itself.
+    /// </summary>
+    public bool PhaseOne { get; private set; }
+
     public async Task<IActionResult> OnGetAsync()
     {
         var ct = HttpContext.RequestAborted;
@@ -53,6 +59,7 @@ public class ProgressModel : PageModel
 
         View = view;
         var config = await _config.GetAsync(ct);
+        PhaseOne = config.Setup is not null && !SetupPlan.Continued(config.Setup);
         WithIdentity = config.Setup?.WithIdentity == true;
         SelfUrl = config.Setup is { Reach: { } r } ? SetupPlan.SelfUrl(r, config) : null;
         Reach = config.Setup?.Steps.Any(s => s.Key == SetupPlan.ReachKey) == true ? await ReachView.BuildAsync(config, _db, ct) : null;

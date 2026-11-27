@@ -131,9 +131,9 @@ public class SetupTests
     }
 
     [Fact]
-    public void An_engine_that_is_there_already_counts_as_chosen_although_its_fixed_box_is_not_sent()
+    public void An_engine_that_is_there_already_counts_as_chosen_although_the_choices_leave_it_out()
     {
-        // The box of an installed Matcad is ticked and disabled, so the form sends InstallMatcad=false.
+        // The choices name the engines a run installs (an installed one need not be among them): what is installed counts as chosen for the problems.
         var withoutMatcad = EngineIds.All.Where(e => e != EngineIds.Matcad).ToHashSet();
         var installed = new HashSet<string> { EngineIds.MatDock, EngineIds.Matcad, "matfile" };
         Assert.Empty(SetupPlan.Problems(Choices(Reach.Free, "anna", engines: withoutMatcad), new SystemConfig(), installed));
