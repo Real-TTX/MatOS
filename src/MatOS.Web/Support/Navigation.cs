@@ -77,8 +77,8 @@ public static class Navigation
     /// What the signed-in user sees: the launcher (Home, Apps, and the Store for an administrator) and, for an administrator, the
     /// Administration menu with the backups, the activity (a badge counts what is running), the users and the settings.
     /// </summary>
-    /// <param name="updateAvailable">A newer MatOS is there: a badge on Settings, Updates.</param>
-    public static IReadOnlyList<NavSet> For(bool isAdmin, int activeJobs, bool updateAvailable = false)
+    /// <param name="updateNotice">What waits in Settings, Updates (a newer MatOS, security updates of this computer), or null: a badge there.</param>
+    public static IReadOnlyList<NavSet> For(bool isAdmin, int activeJobs, string? updateNotice = null)
     {
         var launcher = new NavSet("launcher", "MatOS", "home",
         [
@@ -108,7 +108,7 @@ public static class Navigation
                     new("General", "/Settings", null),
                     new("Address", "/Settings/Address", null),
                     new("Engines", "/Settings/Engines", null),
-                    new("Updates", "/Settings/Updates", null, updateAvailable ? new NavBadge(string.Empty, "accent", "new version of MatOS") : null),
+                    new("Updates", "/Settings/Updates", null, updateNotice is not null ? new NavBadge(string.Empty, "accent", updateNotice) : null),
                     new("System", "/Settings/System", null),
                     new("Setup wizard", "/Wizard", null),
                 ]),
