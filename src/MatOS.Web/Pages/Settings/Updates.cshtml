@@ -1,0 +1,182 @@
+@page
+@using MatOS.Core.Updates
+@model MatOS.Web.Pages.Settings.UpdatesModel
+@{
+    ViewData["Title"] = "Updates";
+    ViewData["PageSub"] = "MatOS, its engines and your apps: up to date by a click, or by themselves at night.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Updates", null));
+    ViewData["Width"] = "narrow";
+    var check = Model.Settings.Check;
+    var last = Model.Settings.Last;
+}
+
+<partial name="_SettingsTabs" model="@("updates")" />
+
+<section class="mat-stack mat-stack--sm" aria-labelledby="upd-matos">
+    <h2 class="mat-itemlist__header" id="upd-matos">MatOS</h2>
+    @if (Model.Restarting)
+    {
+        @* The page asks itself again until MatOS is back on its new version (or the old one was put back): data-await-restart in js/matos.js. *@
+        <div class="mat-alert mat-alert--info" role="status" data-await-restart>
+            <icon name="refresh" />
+            <div class="mat-alert__body">
+                <strong>MatOS is updating itself.</strong>
+                <p class="mat-small">It downloads the new version and restarts; this page comes back by itself. If the new version does not start, the old one is put back with its data.</p>
+                @if (Model.Running is { } job)
+                {
+                    <p class="mat-small"><a href="/Jobs/Details?id=@job.Id">Show the details</a></p>
+                }
+            </div>
+        </div>
+    }
+
+    <ul class="mat-itemlist mat-itemlist--inset mv-facts" aria-labelledby="upd-matos">
+        <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Version</span></span><span class="mat-item__end"><span>@Model.Version</span></span></div></li>
+        <li class="mat-item mat-item--wrap">
+            <div class="mat-item__main">
+                <span class="mat-item__body">
+                    <span class="mat-item__title">Newer version</span>
+                    <span class="mat-item__text">
+                        @if (check is null)
+                        {
+                            @:Not checked yet.
+                        }
+                        else
+                        {
+                            @:Checked @Format.Ago(check.CheckedAt)@(check.Image is { } image ? $", {image}" : "").
+                        }
+                    </span>
+                </span>
+                <span class="mat-item__end">
+                    @if (check is null)
+                    {
+                        <span class="mat-pill">Unknown</span>
+                    }
+                    else if (check.Available)
+                    {
+                        <span class="mat-pill mat-pill--accent">Available</span>
+                    }
+                    else if (check.Error is not null)
+                    {
+                        <span class="mat-pill mat-pill--warn">Could not check</span>
+                    }
+                    else
+                    {
+                        <span class="mat-pill mat-pill--ok">Up to date</span>
+                    }
+                </span>
+            </div>
+        </li>
+        @if (last is not null)
+        {
+            <li class="mat-item mat-item--wrap">
+                <div class="mat-item__main">
+                    <span class="mat-item__body">
+                        <span class="mat-item__title">Last update of MatOS</span>
+                        <span class="mat-item__text">@Format.Ago(last.At): @last.Message@(last.FromVersion is { } from ? $" (from {from}{(last.ToVersion is { } to ? $" to {to}" : "")})" : "")</span>
+                    </span>
+                    <span class="mat-item__end"><span class="mat-pill mat-pill--@(last.IsSuccess ? "ok" : "error")">@(last.IsSuccess ? "Done" : last.Outcome == SelfUpdateResult.RolledBack ? "Put back" : "Failed")</span></span>
+                </div>
+            </li>
+        }
+    </ul>
+
+    @if (check?.Error is { } error)
+    {
+        <p class="mat-small mat-muted">@error</p>
+    }
+
+    <div class="mat-actions">
+        <form method="post" asp-page-handler="Update">
+            @if (check?.Available == true)
+            {
+                <button type="submit" class="mat-btn mat-btn--primary" disabled="@Model.Restarting" data-confirm="Update MatOS now? It restarts and is away for a minute; your apps keep running." data-confirm-ok="Update"><icon name="download" /><span>Update MatOS</span></button>
+            }
+            else
+            {
+                <button type="submit" class="mat-btn mat-btn--secondary" disabled="@Model.Restarting" data-confirm="Download the newest MatOS and restart on it, if there is one? Your apps keep running." data-confirm-ok="Update"><icon name="download" /><span>Update MatOS</span></button>
+            }
+        </form>
+        <form method="post" asp-page-handler="Check">
+            <button type="submit" class="mat-btn mat-btn--ghost" disabled="@Model.Restarting"><icon name="refresh" /><span>Check now</span></button>
+        </form>
+    </div>
+</section>
+
+<form method="post" class="mat-form" novalidate>
+    <partial name="_ValidationSummary" />
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="upd-auto">
+        <h2 class="mat-itemlist__header" id="upd-auto">Automatic updates</h2>
+        <div class="mat-card">
+            <div class="mat-card__body mat-stack">
+                @if (!Model.Settings.Chosen)
+                {
+                    <p class="mat-small mat-muted">Not chosen yet: nothing is updated by itself until you save a choice.</p>
+                }
+                <fieldset class="mat-field">
+                    <legend class="mat-legend">What updates by itself</legend>
+                    <div class="mat-choices">
+                        <label class="mat-choice">
+                            <input type="radio" name="Input.Mode" value="@UpdateMode.All" checked="@(Model.Input.Mode == UpdateMode.All)" />
+                            <span class="mat-choice__text">
+                                <strong>Everything, MatOS included</strong>
+                                <small>The apps, the engines and MatOS itself. MatOS restarts at night when there is a new version; a version that does not start is put back.</small>
+                            </span>
+                        </label>
+                        <label class="mat-choice">
+                            <input type="radio" name="Input.Mode" value="@UpdateMode.Apps" checked="@(Model.Input.Mode == UpdateMode.Apps)" />
+                            <span class="mat-choice__text">
+                                <strong>Apps and engines @(UpdateMode.Recommended == UpdateMode.Apps ? "(recommended)" : "")</strong>
+                                <small>MatOS itself only when you click Update MatOS; it tells you when there is a new version.</small>
+                            </span>
+                        </label>
+                        <label class="mat-choice">
+                            <input type="radio" name="Input.Mode" value="@UpdateMode.Off" checked="@(Model.Input.Mode == UpdateMode.Off)" />
+                            <span class="mat-choice__text">
+                                <strong>Off</strong>
+                                <small>Nothing updates by itself. Each app has its Update, and MatOS tells you when it has a new version.</small>
+                            </span>
+                        </label>
+                    </div>
+                    <span class="mat-error" data-valmsg-for="Input.Mode"></span>
+                </fieldset>
+                <div class="mat-form__grid" data-show-if="Input.Mode" data-show-value="@UpdateMode.All,@UpdateMode.Apps" hidden="@(Model.Input.Mode == UpdateMode.Off)">
+                    <mat-field label="Start at" asp-for="Input.WindowStart" required="true" hint="The updates run within two hours from then, by the clock of this machine (UTC unless MatOS has a time zone).">
+                        <input asp-for="Input.WindowStart" type="time" class="mat-input" required data-msg-required="Please choose a time." />
+                    </mat-field>
+                    <div class="mat-field">
+                        <span class="mat-label">Before an app is updated</span>
+                        <label class="mat-check">
+                            <input asp-for="Input.BackupFirst" type="checkbox" />
+                            <span class="mat-check__text">Back it up (only when it has a new version)</span>
+                        </label>
+                        <span class="mat-error"></span>
+                    </div>
+                </div>
+                @if (Model.Settings.EffectiveMode != UpdateMode.Off)
+                {
+                    <p class="mat-small mat-muted">Next time: @Model.NextWindow.ToString("g").</p>
+                }
+                @if (Model.Settings.LastRunAt is { } ran)
+                {
+                    <p class="mat-small mat-muted">Last time @Format.Ago(ran): @(Model.Settings.LastStatus ?? "running.")@if (Model.LastAutomatic is { } auto) { <text> </text><a href="/Jobs/Details?id=@auto.Id">Details</a> }</p>
+                }
+            </div>
+        </div>
+    </section>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+    </div>
+</form>
+
+@if (Model.HelperLog is { Length: > 0 } helperLog)
+{
+    <details class="mat-collapse mv-details">
+        <summary><span>The log of the last update of MatOS</span><span class="mat-accordion__chev" aria-hidden="true"><icon name="chevron-down" /></span></summary>
+        <div class="mat-accordion__body">
+            <pre class="mat-code">@helperLog</pre>
+        </div>
+    </details>
+}

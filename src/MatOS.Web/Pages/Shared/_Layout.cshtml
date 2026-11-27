@@ -7,7 +7,7 @@
     var isAdmin = User.IsAdmin();
     var config = await ConfigSvc.GetAsync(Context.RequestAborted);
     var activeJobs = isAdmin ? await JobSvc.CountActiveAsync(Context.RequestAborted) : 0;
-    var menus = Navigation.For(isAdmin, activeJobs);
+    var menus = Navigation.For(isAdmin, activeJobs, isAdmin && config.Updates is { Check.Available: true, Pending: null });
     var active = ViewData["ActiveHref"] as string ?? Navigation.ActiveHref(menus, Context.Request.Path.Value ?? "/");
     var current = menus.FirstOrDefault(m => m.Contains(active)) ?? menus[0];
     var hasSwitcher = menus.Count > 1;

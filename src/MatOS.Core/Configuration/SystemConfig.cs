@@ -33,6 +33,9 @@ public sealed class SystemConfig
 
     public BackupDefaults Backups { get; set; } = new();
 
+    /// <summary>The automatic updates and MatOS's own (docs/ARCHITECTURE.md "How MatOS updates itself").</summary>
+    public Updates.UpdateSettings Updates { get; set; } = new();
+
     /// <summary>The DNS account of the domain (the credentials themselves are in <see cref="ProtectedSecrets"/> under <c>dns</c>).</summary>
     public DnsSettings Dns { get; set; } = new();
 

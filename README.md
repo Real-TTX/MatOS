@@ -69,7 +69,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 
 **Operations**
 - **Install, update, start, stop, restart, uninstall**: every long task is a job with a **live log**, and the status bar shows that it runs
-- **Update** pulls newer images, re-creates only what changed, and backs up first if you want
+- **Update** pulls newer images, re-creates only what changed, and backs up first if you want; **automatic updates** do it at night (off, apps and engines, or MatOS too)
+- **MatOS updates itself**: it shows a new version, and one click (or the night) restarts it on it, with the old version put back if the new one does not start
 - **Backups** are MatDock's: compose + `.env` + all volumes, optionally with the app stopped (consistent databases),
   **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too
 - If you **change a stack in MatDock**, the next update keeps your version
@@ -222,7 +223,10 @@ reached from anywhere", or "only at home" with what to do about it, a FRITZ!Box 
 through my router* for those who want to forward the ports themselves.
 
 Then your home screen opens with a short tour. The same e-mail and password sign you in afterwards, also when MatIdentity (the one sign-in) is
-there. To change the setup later: Settings, *Setup wizard*. An update is `docker compose pull && docker compose up -d`; everything lives in the
+there. To change the setup later: Settings, *Setup wizard*. **Updates:** MatOS shows when it has a new version (a mark on *Settings*) and updates
+itself with one click in Settings, *Updates*; a version that does not start is put back by itself. It can also update your apps, the engines and
+itself at night (the first start asks once; [how it works](docs/ARCHITECTURE.md#how-matos-updates-itself)). By hand it is still
+`docker compose pull && docker compose up -d`; everything lives in the
 `matos-data` volume.
 
 | Tag | Built from | Use it for |

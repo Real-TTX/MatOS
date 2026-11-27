@@ -16,6 +16,12 @@ if (args.Contains("--healthcheck"))
     return await HealthCheck.RunAsync();
 }
 
+// The helper of a self-update (docs/ARCHITECTURE.md "How MatOS updates itself"): a short-lived container of the new image re-creates MatOS's container.
+if (args.Contains(MatOS.Core.Updates.SelfUpdateHelper.Argument))
+{
+    return await MatOS.Core.Updates.SelfUpdateHelper.RunAsync(args);
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------

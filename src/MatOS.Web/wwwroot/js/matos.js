@@ -39,6 +39,23 @@
     setTimeout(reload, wait);
   }
 
+  // ------------------------------------------------------------------ MatOS updates itself: <div data-await-restart>
+  // The page asks for itself every few seconds while MatOS is away (a failed request is the restart) and reloads once it answers without the mark: the new
+  // version is up, or the old one was put back. A plain reload would end on the browser's error page while MatOS is away.
+
+  if ($('[data-await-restart]')) {
+    var awaitRestart = function () {
+      fetch(location.href, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          if (html !== null && html.indexOf('data-await-restart') === -1) { location.reload(); return; }
+          setTimeout(awaitRestart, 4000);
+        })
+        .catch(function () { setTimeout(awaitRestart, 4000); });
+    };
+    setTimeout(awaitRestart, 4000);
+  }
+
   // ------------------------------------------------------------------ numbers that move: <section id="..." data-live="5000">
   // The page is fetched again and only the marked parts are exchanged, so the window, the scroll position and the tools stay as they are (the Task Manager).
 

@@ -42,7 +42,7 @@ function expectEqual(actual, expected, what) {
 
 const pages = [
   '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
-  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
+  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
   '/Start',
 ];
 
@@ -797,6 +797,10 @@ async function firstStart(browser, errors) {
     expectEqual(await page.locator('.ob-engine--later[aria-disabled=true]').count(), 1, 'MatAi, coming later');
     expectEqual(await page.locator('.ob-engines input').count(), 0, 'no box to tick');
     expectEqual(await page.locator('[data-ob-prev]').count(), 0, 'no Back');
+  });
+  await check('the engines: the one question of the updates, the recommended answer chosen', async () => {
+    expectEqual(await page.locator('input[name="Updates"]').count(), 3, 'three answers');
+    expectEqual(await page.locator('input[name="Updates"]:checked').getAttribute('value'), 'apps', 'apps and engines at night');
   });
   const state = await ctx.storageState();
   for (const [mode, options] of looks) {

@@ -417,8 +417,12 @@
     <nav class="os-dock" aria-label="Dock">
         @foreach (var app in Model.Dock)
         {
-            <a class="os-dock__app" href="@app.Href" data-window="@app.Href" data-title="@app.Name" aria-label="@app.Name" data-tip="@app.Name">
+            <a class="os-dock__app" href="@app.Href" data-window="@app.Href" data-title="@app.Name" aria-label="@(app.Count is null ? app.Name : $"{app.Name}, {app.CountLabel}")" data-tip="@app.Name">
                 <span class="os-ico @app.Look" aria-hidden="true">@Ui.Icon(app.Icon)</span>
+                @if (app.Count is { } count)
+                {
+                    <span class="os-count">@count<span class="mat-sr-only"> @app.CountLabel</span></span>
+                }
             </a>
         }
     </nav>
