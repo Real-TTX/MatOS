@@ -372,6 +372,27 @@ A user file with the same `id` replaces the built-in entry. The three engines ca
 All apps and engines share the Docker network `matos` with MatOS itself (it attaches itself on start), so they reach each other by container name
 (`matos-<app>-<service>`). If Docker's address pools are used up, `MatOS__NetworkSubnet` gives the network an explicit subnet.
 
+## The Task Manager
+
+`/Tasks` is a task manager like that of a desktop system, inside MatOS's window. It only **reads** from MatDock (the owner's rule: MatOS asks the engine):
+
+- **The host** in five cards: processor, memory, network, disk activity (each with a small chart) and storage (a meter); under them the uptime, how many
+  containers run and the version of Docker. MatDock's `GET /api/v1/host` is a live reading (at most three seconds old, with the cores, the sizes in bytes and the
+  uptime); an older MatDock answers 404 and the last reading of its environment (percent only, up to five minutes old) stands in.
+- **What runs, by app** (`Core/Tasks/TaskBoard`): an app of MatOS is one group of its containers (its compose project); MatOS itself (its container and the rest
+  of its project) and the engines are *System*; the rest of the host is *Something else on this host*, grouped by compose project or as a lone container. A group
+  is a group of the toolkit's table (LIST-16), closed at first, with the sums of its containers; the list sorts by processor, memory, network, disk or name.
+- **Rates and charts** come from `TaskMonitor` (a singleton, memory only): MatDock says the network and disk I/O of a container as totals since it started, so a
+  rate is the step between two readings; the charts keep the last 60 readings. It only learns while somebody looks, which is all it is for. When nothing moved at
+  all, the reading was MatDock's shared `docker stats` again and the last rates stay.
+- **Live:** `js/tasks.js` asks `/Tasks?handler=Live` (the same query as the list) every three seconds and puts the numbers in place; the server writes the
+  numbers (`Support/TaskView`), so the page and its JSON say the same. When the rows themselves change (`data-signature`: which there are, running or not, what
+  can be done) it fetches the list again. It waits while the tab is hidden or a question is open.
+- **Actions** (administrators only, the folder is AdminOnly; each asks first): an app restarts, stops and starts as an app (its lifecycle job, as on its page), a
+  container on its own (`AppJobs.ContainerAction`, MatDock does it). Only what MatOS runs: never MatOS itself or MatDock, an engine only restarts, and nothing
+  else on the host is touched (its log can be read). Without MatDock nothing can be done and only MatOS's own containers are listed.
+- The log of a container (`/Tasks/Log`) opens in a window of its own and follows by itself.
+
 ## How a long task runs
 
 Nothing slow runs inside a web request. The page validates and records, then queues a **job** (`Job` table): a single

@@ -1,0 +1,87 @@
+/* MatOS: the Task Manager (Pages/Tasks/Index.cshtml, js/tasks.js). The toolkit's tokens only, no literal colour (WebUiTests);
+   its own classes start with mv-tm. The cards of the host with their charts on top, then the list of what runs: an app is a group of
+   the toolkit's table (LIST-16) whose heading row carries the numbers of the app, its containers hang below it. */
+
+.mv-tm { display: flex; flex-direction: column; gap: var(--mat-gap); min-width: 0; }
+
+/* ---- The host: five cards, a chart in each but the storage, which has a meter. */
+.mv-tm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: var(--mat-gap); }
+.mv-tm-card { display: flex; flex-direction: column; min-width: 0; padding: var(--mat-space-3) var(--mat-space-4); overflow: hidden; }
+.mv-tm-card__head { display: flex; align-items: center; gap: var(--mat-space-2); color: var(--mat-text-muted); font-size: var(--mat-fs-sm); font-weight: 600; }
+.mv-tm-card__head .mat-icon { color: var(--mv-tm-tone, var(--mat-accent-text)); }
+.mv-tm-card__value { margin-top: var(--mat-space-1); font-size: var(--mat-fs-xl); font-weight: 700; line-height: var(--mat-lh-tight); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mv-tm-card__sub { color: var(--mat-text-muted); font-size: var(--mat-fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-tm-chart { display: block; width: 100%; height: 44px; margin-top: var(--mat-space-3); overflow: visible; }
+.mv-tm-chart[hidden] { display: none; }
+.mv-tm-chart__line { fill: none; stroke: var(--mv-tm-tone, var(--mat-accent)); stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.mv-tm-chart__area { fill: var(--mv-tm-tone, var(--mat-accent)); fill-opacity: .14; stroke: none; }
+.mv-tm-card__empty { display: flex; align-items: center; min-height: 44px; margin: var(--mat-space-3) 0 0; color: var(--mat-text-faint); font-size: var(--mat-fs-xs); }
+.mv-tm-card__empty[hidden] { display: none; }
+.mv-tm-card .mv-tm-card__meter { flex: none; display: block; width: 100%; max-width: none; height: 8px; margin-top: auto; }
+.mv-tm-card__sub + .mv-tm-card__meter { margin-top: var(--mat-space-4); }
+/* Each card has a colour of its own, so the charts can be told apart at a glance. */
+.mv-tm-card[data-card="cpu"] { --mv-tm-tone: var(--mat-accent); }
+.mv-tm-card[data-card="memory"] { --mv-tm-tone: var(--mat-success); }
+.mv-tm-card[data-card="network"] { --mv-tm-tone: var(--mat-info); }
+.mv-tm-card[data-card="disk"] { --mv-tm-tone: var(--mat-warning); }
+.mv-tm-facts { margin: 0; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+.mv-tm-stale { color: var(--mat-warning-text); }
+.mv-tm-stale[hidden] { display: none; }
+
+/* ---- The list. */
+.mv-tm-table .mv-tm-col-name { width: 100%; min-width: 14rem; }
+.mv-tm-table .mv-tm-col-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mv-tm-table td.mv-tm-col-num small { display: block; color: var(--mat-text-muted); font-size: var(--mat-fs-xs); }
+.mv-tm-cpu { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--mat-space-2); }
+.mv-tm-cpu .mv-progress { flex: none; width: 56px; height: 6px; }
+.mv-tm-cpu > span { min-width: 5ch; text-align: right; }
+
+/* A part of the list: Apps, System, Something else on this host. */
+.mv-tm-section__head > th { padding-top: var(--mat-space-4); color: var(--mat-text); background: var(--mat-surface); border-bottom: 0; }
+.mv-tm-section__head .mat-badge { margin-left: var(--mat-space-1); }
+.mat-table tbody tr.mv-tm-section__head:hover { background: none; }
+
+/* An app is the line itself, not a heading over it: no band behind it, the numbers in their columns. */
+.mv-tm .mat-group__head > .mat-group__cell { background: none; }
+.mv-tm .mat-group__head > td { border-top: 1px solid var(--mat-border); }
+.mv-tm .mat-group__head > .mat-group__cell { padding: var(--mat-space-1) 0; }
+.mv-tm .mat-group__toggle { gap: var(--mat-space-2); }
+/* The whole line answers the pointer (the row's hover), not only the cell of the toggle. */
+.mv-tm .mat-group__toggle:hover { background: none; }
+.mv-tm-name { display: flex; flex-direction: column; min-width: 0; text-align: left; font-weight: 600; }
+.mv-tm-name > small { display: flex; align-items: center; gap: var(--mat-space-1); color: var(--mat-text-muted); font-size: var(--mat-fs-xs); font-weight: 400; }
+.mv-tm-name a { color: inherit; }
+.mv-tm-lone { display: flex; align-items: center; gap: var(--mat-space-3); min-width: 0; padding: var(--mat-space-1) var(--mat-space-3) var(--mat-space-1) calc(var(--mat-group-x) + var(--mat-space-2)); }
+.mv-tm-stackicon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--mat-radius-sm); background: var(--mat-surface-3); color: var(--mat-text-muted); }
+.mv-tm-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mat-border-strong); }
+.mv-tm-dot[data-state="running"] { background: var(--mat-success); }
+.mv-tm-dot[data-state="partial"] { background: var(--mat-warning); }
+.mv-tm-row .mat-table__name { font-weight: 500; }
+.mv-tm-row .mat-table__name small { font-size: var(--mat-fs-xs); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .mv-tm-cpu .mv-progress::-webkit-progress-value { transition: width var(--mat-dur) var(--mat-ease); }
+}
+
+/* ---- A phone: every line is a card, the name on top; the network and the disk stay in the cards of the host. */
+@media (max-width: 720px) {
+  .mv-tm-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-tm-card[data-card="storage"] { grid-column: 1 / -1; }
+  .mv-tm-card__value { font-size: var(--mat-fs-lg); }
+  .mv-tm-table .mv-tm-col-name { min-width: 0; }
+  .mv-tm-section__head > th { display: block; padding: var(--mat-space-3) var(--mat-space-4) var(--mat-space-1); }
+  .mv-tm .mat-group__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--mat-space-2); padding: var(--mat-space-2) var(--mat-space-3); border-top: 1px solid var(--mat-border); }
+  .mv-tm .mat-group__head > td { border-top: 0; }
+  .mv-tm .mat-group__head > .mat-group__cell { grid-column: 1; grid-row: 1; padding: 0; }
+  .mv-tm .mat-group__head > td.mat-table__cell-actions { grid-column: 2; grid-row: 1; width: auto; }
+  .mv-tm .mat-group__head > td.mv-tm-col-num { grid-column: 1 / -1; padding: var(--mat-space-1) 0 0 calc(var(--mat-space-6) + var(--mat-space-2)); }
+  .mv-tm .mat-group__head > td.mv-tm-col-num small { display: inline; margin-left: var(--mat-space-2); }
+  .mv-tm-lone { padding-left: var(--mat-space-1); }
+  .mv-tm .mv-tm-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--mat-space-2); padding-left: calc(var(--mat-space-6) + var(--mat-space-3)); }
+  .mv-tm-row > td.mv-tm-col-name { grid-column: 1; grid-row: 1; justify-content: flex-start; text-align: left; }
+  .mv-tm-row > td.mat-table__cell-actions { grid-column: 2; grid-row: 1; width: auto; }
+  .mv-tm-row > td.mv-tm-col-num { grid-column: 1 / -1; }
+  .mv-tm-row td.mv-tm-col-num small { display: inline; margin-left: var(--mat-space-2); }
+  /* the label at the left, the number and its share together at the right */
+  .mv-tm .mat-table td.mv-tm-col-num::before { flex: 1 1 auto; }
+}

@@ -31,6 +31,11 @@
         @* The store and the page of an app in it: the look of an app store from the toolkit's tokens (css/store.css). *@
         <link rel="stylesheet" href="~/css/store.css" asp-append-version="true" />
     }
+    @if (ViewData["Tasks"] is true)
+    {
+        @* The Task Manager: its cards, charts and the list grouped by app (css/tasks.css). *@
+        <link rel="stylesheet" href="~/css/tasks.css" asp-append-version="true" />
+    }
     @if (ViewData["Onboarding"] is true)
     {
         @* The first start and the tour of the home screen: the look of MatOS OS around the toolkit's controls (docs/ARCHITECTURE.md, "The first start"). *@

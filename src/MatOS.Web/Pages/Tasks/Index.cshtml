@@ -1,157 +1,238 @@
 @page
-@using System.Globalization
+@using MatOS.Core.Tasks
 @model MatOS.Web.Pages.Tasks.IndexModel
 @{
     ViewData["Title"] = "Task Manager";
-    ViewData["PageSub"] = "Everything that runs on this machine and what it uses.";
+    ViewData["PageSub"] = "What runs on this machine and what it uses, live.";
     ViewData["Crumbs"] = Crumbs.Of(("Task Manager", null));
-    var list = Model.List;
-    string Percent(double value) => value.ToString(value < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " %";
-    string Tone(double value) => value >= 90 ? "error" : value >= 75 ? "warn" : "ok";
-}
+    ViewData["Tasks"] = true;
+    var view = Model.View;
+    var snap = view.Snapshot;
+    var list = view.List;
+    var searching = !string.IsNullOrWhiteSpace(view.Query.Search);
 
-@* The numbers move: the two parts marked data-live are fetched again every few seconds and exchanged in place (js/matos.js), the window stays as it is. *@
-<section class="mv-stats" id="tasks-host" data-live="5000" aria-label="The host">
-    @if (Model.Engine.Load is { } load)
+    void Meter(double? value, string text, string label)
     {
-        <div class="mat-card mat-stat mv-stat mv-stat--row">
-            <span class="mv-stat__icon"><icon name="activity" /></span>
-            <div class="mv-stat__body">
-                <div class="mat-stat__value">@Percent(load.CpuPercent)</div>
-                <div class="mat-stat__label">Processor</div>
-                <progress class="mv-progress" max="100" value="@((int)load.CpuPercent)" data-tone="@Tone(load.CpuPercent)" aria-label="Processor"></progress>
-            </div>
-        </div>
-        <div class="mat-card mat-stat mv-stat mv-stat--row">
-            <span class="mv-stat__icon"><icon name="layers" /></span>
-            <div class="mv-stat__body">
-                <div class="mat-stat__value">@Percent(load.MemoryPercent)</div>
-                <div class="mat-stat__label">Memory</div>
-                <progress class="mv-progress" max="100" value="@((int)load.MemoryPercent)" data-tone="@Tone(load.MemoryPercent)" aria-label="Memory"></progress>
-            </div>
-        </div>
-        <div class="mat-card mat-stat mv-stat mv-stat--row">
-            <span class="mv-stat__icon"><icon name="hard-drive" /></span>
-            <div class="mv-stat__body">
-                <div class="mat-stat__value">@Percent(load.DiskPercent)</div>
-                <div class="mat-stat__label">Disk</div>
-                <progress class="mv-progress" max="100" value="@((int)load.DiskPercent)" data-tone="@Tone(load.DiskPercent)" aria-label="Disk"></progress>
-            </div>
-        </div>
+        <span class="mv-tm-cpu">
+            <progress class="mv-progress" max="100" value="@((int)Math.Clamp(value ?? 0, 0, 100))" data-tone="@TaskFormat.Tone(value)" data-f="cpuMeter" aria-label="@label"></progress>
+            <span data-f="cpu">@text</span>
+        </span>
     }
-    <div class="mat-card mat-stat mv-stat mv-stat--row">
-        <span class="mv-stat__icon"><icon name="box" /></span>
-        <div class="mv-stat__body">
-            <div class="mat-stat__value">@Model.Running <small>of @Model.Total</small></div>
-            <div class="mat-stat__label">Programs running</div>
-        </div>
-    </div>
-</section>
 
-@if (!Model.Measured)
-{
-    <div class="mat-alert mat-alert--warn" role="status">
-        <icon name="alert" />
-        <div>MatDock does not answer, so only the programs of MatOS are listed, without what they use, and nothing can be changed here.</div>
-    </div>
+    // Restart (what runs), Stop (what runs) and Start (what does not) as forms with a question first: the handler, the key of the line and the list as it was.
+    async Task Actions(string handler, string key, string name, TaskActions actions, bool running)
+    {
+        if (actions.HasFlag(TaskActions.Restart) && running)
+        {
+            <form method="post" asp-page-handler="@handler" data-confirm="Restart @name? It is away for a moment." data-confirm-ok="Restart">
+                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="restart" /><input type="hidden" name="back" value="@Model.Back" />
+                <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Restart @name" data-tip="Restart"><icon name="refresh" /></button>
+            </form>
+        }
+        if (actions.HasFlag(TaskActions.StopStart) && running)
+        {
+            <form method="post" asp-page-handler="@handler" data-confirm="Stop @name? It does not work until it is started again." data-confirm-ok="Stop" data-confirm-danger>
+                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="stop" /><input type="hidden" name="back" value="@Model.Back" />
+                <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Stop @name" data-tip="Stop"><icon name="stop" /></button>
+            </form>
+        }
+        else if (actions.HasFlag(TaskActions.StopStart))
+        {
+            <form method="post" asp-page-handler="@handler" data-confirm="Start @name?" data-confirm-ok="Start">
+                <input type="hidden" name="key" value="@key" /><input type="hidden" name="verb" value="start" /><input type="hidden" name="back" value="@Model.Back" />
+                <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Start @name" data-tip="Start"><icon name="play" /></button>
+            </form>
+        }
+    }
+
+    async Task Head(string sort, string label, string css)
+    {
+        <th scope="col" class="@css" aria-sort="@view.AriaSort(sort)">
+            <a class="mat-table__sort" href="@view.SortUrl(sort)">@label<icon name="arrow-up" /></a>
+        </th>
+    }
 }
 
-<div class="mat-list">
-    <partial name="_Toolbar" model="list.Toolbar" />
-
-    <div id="tasks-list" data-live="5000">
-        @if (list.Items.Count == 0)
+@*
+    The Task Manager (docs/ARCHITECTURE.md "The Task Manager"): the cards of the host with their charts, then the list of what runs, an app as a group of its
+    containers (the toolkit's groups in a table, LIST-16). js/tasks.js asks ?handler=Live every three seconds and puts the numbers in place (data-f); when the
+    rows themselves change (data-signature) it fetches the list of the page again.
+*@
+<div class="mv-tm" data-tasks="/Tasks?handler=Live">
+    <section class="mv-tm-cards" aria-label="The host">
+        @foreach (var card in view.Cards)
         {
-            <div class="mat-empty">
-                <span class="mat-empty__icon"><icon name="bar-chart" /></span>
-                @if (list.Toolbar.Matching != list.Toolbar.Total)
+            <div class="mat-card mv-tm-card" data-card="@card.Key">
+                <div class="mv-tm-card__head"><icon name="@card.Icon" /><span>@card.Label</span></div>
+                <div class="mv-tm-card__value" data-f="value">@card.Value</div>
+                <div class="mv-tm-card__sub" data-f="sub">@card.Sub</div>
+                @if (card.Key == "storage")
                 {
-                    <div class="mat-empty__title">Nothing matches</div>
-                    <p>Change the search or the filter.</p>
-                    <a class="mat-btn mat-btn--secondary" href="/Tasks">Reset the tools</a>
+                    <progress class="mv-progress mv-tm-card__meter" max="100" value="@((int)Math.Clamp(card.Meter ?? 0, 0, 100))" data-tone="@TaskFormat.Tone(card.Meter)" data-f="meter" aria-label="@card.Label"></progress>
                 }
                 else
                 {
-                    <div class="mat-empty__title">Nothing runs yet</div>
-                    <p>Programs appear here once an app is installed.</p>
+                    <svg class="mv-tm-chart" viewBox="0 0 @TaskFormat.ChartWidth @TaskFormat.ChartHeight" preserveAspectRatio="none" aria-hidden="true" focusable="false" hidden="@(!card.HasChart)">
+                        <path class="mv-tm-chart__area" d="@card.Area" data-f="area" />
+                        <path class="mv-tm-chart__line" d="@card.Line" data-f="line" vector-effect="non-scaling-stroke" />
+                    </svg>
+                    <p class="mv-tm-card__empty" data-f="empty" hidden="@card.HasChart">@card.Empty</p>
                 }
             </div>
         }
-        else
-        {
-            <div class="mat-table-wrap">
-                <table class="mat-table mv-tasks">
-                    <caption class="mat-sr-only">Programs</caption>
-                    <thead>
-                        <tr><th scope="col">Program</th><th scope="col">State</th><th scope="col">Processor</th><th scope="col">Memory</th><th scope="col" class="mat-hide-sm">How long</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var task in list.Items)
-                        {
-                            var c = task.Container;
-                            var of = c.Project.Length == 0 ? c.Image : c.Service.Length == 0 ? c.Project : $"{c.Project} · {c.Service}";
-                            <tr>
-                                <td data-label="Program">
-                                    <div class="mat-table__name">
-                                        <span class="mv-task__dot @(c.IsRunning ? "is-running" : "")" aria-hidden="true"></span>
-                                        <span><a href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)">@c.Name</a><small>@of</small></span>
-                                    </div>
-                                </td>
-                                <td data-label="State">
-                                    <span class="mv-cellgroup"><span class="mat-pill @(c.IsRunning ? "mat-pill--ok" : "mat-pill--plain")">@(c.IsRunning ? "Running" : "Stopped")</span>
-                                    @if (task.Own) { <span class="mat-pill mat-pill--accent">MatOS</span> }</span>
-                                </td>
-                                <td data-label="Processor">
-                                    @if (task.CpuPercent is { } cpu)
-                                    {
-                                        <span class="mv-load"><progress class="mv-progress" max="100" value="@((int)Math.Min(cpu, 100))" data-tone="@Tone(cpu)" aria-label="Processor of @c.Name"></progress><span>@Percent(cpu)</span></span>
-                                    }
-                                    else
-                                    {
-                                        <span class="mat-muted">–</span>
-                                    }
-                                </td>
-                                <td data-label="Memory" class="mat-nowrap">
-                                    @if (task.MemoryBytes is { } bytes)
-                                    {
-                                        <span class="mv-cellgroup"><span class="mv-task__mem">@Format.Size(bytes)</span> <span class="mat-muted">@Percent(task.MemoryPercent ?? 0)</span></span>
-                                    }
-                                    else
-                                    {
-                                        <span class="mat-muted">–</span>
-                                    }
-                                </td>
-                                <td data-label="How long" class="mat-hide-sm mat-muted">@MatOS.Core.Docker.ContainerStatusText.Plain(c.Status)</td>
-                                <td class="mat-table__cell-actions">
-                                    <div class="mat-table__actions">
-                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="/Tasks/Log?name=@Uri.EscapeDataString(c.Name)" aria-label="Show the log of @c.Name" data-tip="Show the log"><icon name="file-text" /></a>
-                                        @if (Model.CanAct(task))
-                                        {
-                                            @if (c.IsRunning)
-                                            {
-                                                <form method="post" asp-page-handler="Action" asp-route-name="@c.Name" asp-route-verb="restart" data-confirm="Restart @c.Name? It is away for a moment." data-confirm-ok="Restart">
-                                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Restart @c.Name" data-tip="Restart"><icon name="refresh" /></button>
-                                                </form>
-                                                <form method="post" asp-page-handler="Action" asp-route-name="@c.Name" asp-route-verb="stop" data-confirm="Stop @c.Name? Its app may stop working until it is started again." data-confirm-ok="Stop" data-confirm-danger>
-                                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Stop @c.Name" data-tip="Stop"><icon name="stop" /></button>
-                                                </form>
-                                            }
-                                            else
-                                            {
-                                                <form method="post" asp-page-handler="Action" asp-route-name="@c.Name" asp-route-verb="start">
-                                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Start @c.Name" data-tip="Start"><icon name="play" /></button>
-                                                </form>
-                                            }
-                                        }
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+    </section>
+    <p class="mv-tm-facts"><span data-f="facts">@view.Facts</span> <span class="mv-tm-stale" data-f="stale" hidden>· Not live right now: MatOS does not answer.</span></p>
 
-        <partial name="_Pager" model="list.Pager" />
+    <div id="tm-alerts">
+    @if (snap.Error is not null)
+    {
+        <div class="mat-alert mat-alert--error" role="alert">
+            <icon name="alert" />
+            <div>@snap.Error The page tries again by itself.</div>
+        </div>
+    }
+    else if (!snap.Measured)
+    {
+        <div class="mat-alert mat-alert--warn" role="status">
+            <icon name="alert" />
+            <div>MatDock does not answer, so only the apps of MatOS are listed, without what they use, and nothing can be changed here. The page tries again by itself.</div>
+        </div>
+    }
+    </div>
+
+    <div class="mat-list">
+        <partial name="_Toolbar" model="list.Toolbar" />
+
+        <div id="tm-list" data-signature="@view.Signature">
+            @if (list.Items.Count == 0)
+            {
+                <div class="mat-empty">
+                    <span class="mat-empty__icon"><icon name="bar-chart" /></span>
+                    @if (list.Toolbar.Matching != list.Toolbar.Total)
+                    {
+                        <div class="mat-empty__title">Nothing matches</div>
+                        <p>Change the search or the filter.</p>
+                        <a class="mat-btn mat-btn--secondary" href="/Tasks">Reset the tools</a>
+                    }
+                    else if (snap.Error is not null)
+                    {
+                        <div class="mat-empty__title">Nothing to show right now</div>
+                        <p>As soon as MatDock or Docker answers again, what runs appears here.</p>
+                    }
+                    else
+                    {
+                        <div class="mat-empty__title">Nothing runs yet</div>
+                        <p>Apps appear here once one is installed.</p>
+                        <a class="mat-btn mat-btn--primary" href="/Store" data-window="/Store" data-title="Store"><icon name="store" /><span>Open the store</span></a>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table mv-tm-table" data-groups="tasks">
+                        <caption class="mat-sr-only">What runs, by app</caption>
+                        <thead>
+                            <tr>
+                                @{ await Head("name", "Name", "mv-tm-col-name"); await Head("cpu", "Processor", "mv-tm-col-num mat-num"); await Head("memory", "Memory", "mv-tm-col-num mat-num"); await Head("network", "Network", "mv-tm-col-num mat-num mat-hide-sm"); await Head("disk", "Disk", "mv-tm-col-num mat-num mat-hide-sm"); }
+                                <th scope="col"><span class="mat-sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        @foreach (var (part, groups) in view.Sections)
+                        {
+                            <tbody class="mv-tm-section" data-section="@part.ToString().ToLowerInvariant()">
+                                <tr class="mv-tm-section__head"><th scope="rowgroup" colspan="6">@TaskView.SectionLabel(part) <span class="mat-badge mat-badge--soft">@groups.Count</span></th></tr>
+                            </tbody>
+                            @foreach (var g in groups)
+                            {
+                                var open = TaskView.OpenUrl(g);
+                                // A search that found containers, not the app, shows them: the group stays open as drawn.
+                                var fixedOpen = searching && !g.Name.Contains(view.Query.Search!, StringComparison.OrdinalIgnoreCase);
+                                <tbody class="mat-group mv-tm-group @(g.IsSingle || fixedOpen ? string.Empty : "is-collapsed")" data-group="@g.Key" data-key="@g.Key" data-section="@part.ToString().ToLowerInvariant()" @Html.Raw(fixedOpen ? "data-group-fixed" : string.Empty)>
+                                    <tr class="mat-group__head">
+                                        <td class="mat-group__cell mv-tm-col-name">
+                                            <div class="mat-group__bar">
+                                                @if (g.IsSingle)
+                                                {
+                                                    var row = g.Rows[0];
+                                                    <div class="mv-tm-lone">
+                                                        <span class="mv-tm-dot" data-state="@TaskView.StateOf(g)" data-f="dot" aria-hidden="true"></span>
+                                                        <span class="mv-tm-name"><a href="@TaskView.LogUrl(row)" data-window="@TaskView.LogUrl(row)" data-title="@row.Container.Name">@g.Name</a><small><span>@TaskView.RowSub(row)</span> · <span data-f="status">@MatOS.Core.Docker.ContainerStatusText.Plain(row.Container.Status)</span></small></span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="mat-group__toggle" data-group-toggle aria-expanded="@((g.IsSingle || fixedOpen) ? "true" : "false")">
+                                                        <icon name="chevron-down" class="mat-group__chev" />
+                                                        @if (g.App is not null || g.Key == TaskBoard.SelfKey)
+                                                        {
+                                                            <app-icon name="@g.Name" icon="@(g.Key == TaskBoard.SelfKey ? "/img/logo.svg" : g.App!.Icon)" size="sm" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="mv-tm-stackicon" aria-hidden="true"><icon name="box" /></span>
+                                                        }
+                                                        <span class="mv-tm-name"><span class="mat-group__title">@g.Name</span><small><span class="mv-tm-dot" data-state="@TaskView.StateOf(g)" data-f="dot" aria-hidden="true"></span><span data-f="state">@TaskView.StateText(g)</span></small></span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td data-label="Processor" class="mv-tm-col-num">@{ Meter(g.Cpu, TaskFormat.Percent(g.Cpu), "Processor of " + g.Name); }</td>
+                                        <td data-label="Memory" class="mv-tm-col-num"><span data-f="memory">@TaskFormat.Size(g.MemoryBytes)</span><small data-f="memorySub">@TaskView.MemorySub(g.MemoryPercent)</small></td>
+                                        <td data-label="Network" class="mv-tm-col-num mat-hide-sm" data-f="net">@TaskFormat.Rate(g.Net)</td>
+                                        <td data-label="Disk" class="mv-tm-col-num mat-hide-sm" data-f="disk">@TaskFormat.Rate(g.Disk)</td>
+                                        <td class="mat-table__cell-actions">
+                                            <div class="mat-table__actions">
+                                                @if (open is not null)
+                                                {
+                                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@open" data-window="@open" data-title="@g.Name" aria-label="Open @g.Name" data-tip="Open"><icon name="external" /></a>
+                                                }
+                                                @if (g.IsSingle)
+                                                {
+                                                    <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@TaskView.LogUrl(g.Rows[0])" data-window="@TaskView.LogUrl(g.Rows[0])" data-title="@g.Rows[0].Container.Name" aria-label="Show the log of @g.Name" data-tip="Show the log"><icon name="file-text" /></a>
+                                                }
+                                                @{ await Actions("Group", g.Key, g.Name, g.Actions, g.Running > 0); }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @if (!g.IsSingle)
+                                    {
+                                        @foreach (var row in g.Rows)
+                                        {
+                                            var c = row.Container;
+                                            var log = TaskView.LogUrl(row);
+                                            <tr class="mat-group__item mv-tm-row" data-key="@row.Key">
+                                                <td data-label="" class="mv-tm-col-name">
+                                                    <div class="mat-table__name">
+                                                        <span class="mv-tm-dot" data-state="@(row.IsRunning ? "running" : "stopped")" aria-hidden="true"></span>
+                                                        <span><a href="@log" data-window="@log" data-title="@c.Name">@c.Name</a><small><span>@TaskView.RowSub(row)</span> · <span data-f="status">@MatOS.Core.Docker.ContainerStatusText.Plain(c.Status)</span></small></span>
+                                                    </div>
+                                                </td>
+                                                <td data-label="Processor" class="mv-tm-col-num">@{ Meter(row.Task.CpuPercent, TaskFormat.Percent(row.Task.CpuPercent), "Processor of " + c.Name); }</td>
+                                                <td data-label="Memory" class="mv-tm-col-num"><span data-f="memory">@TaskFormat.Size(row.Task.MemoryBytes)</span><small data-f="memorySub">@TaskView.MemorySub(row.Task.MemoryPercent)</small></td>
+                                                <td data-label="Network" class="mv-tm-col-num mat-hide-sm" data-f="net">@TaskFormat.Rate(row.Rate.Net)</td>
+                                                <td data-label="Disk" class="mv-tm-col-num mat-hide-sm" data-f="disk">@TaskFormat.Rate(row.Rate.Disk)</td>
+                                                <td class="mat-table__cell-actions">
+                                                    <div class="mat-table__actions">
+                                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@log" data-window="@log" data-title="@c.Name" aria-label="Show the log of @c.Name" data-tip="Show the log"><icon name="file-text" /></a>
+                                                        @{ await Actions("Container", row.Key, c.Name, row.Actions, row.IsRunning); }
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            }
+                        }
+                    </table>
+                </div>
+            }
+
+            <partial name="_Pager" model="list.Pager" />
+        </div>
     </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/tasks.js" asp-append-version="true"></script>
+}

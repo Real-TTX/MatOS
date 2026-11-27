@@ -134,6 +134,9 @@ through the mounted socket) unless `?environment=<name or id>` says otherwise.
 | `POST /api/v1/stacks/{name}/actions/{action}` | `action` = `start` \| `stop` \| `restart` \| `pull` \| `redeploy` \| `update`. `update` = pull, re-create only if an image changed, body `{backupFirst: bool}` (a bundle backup first, abort if it fails); the operation's `result` is `{"changed": bool}`. `202 {operationId}` |
 | `DELETE /api/v1/stacks/{name}?volumes=false` | `docker compose down` (with `--volumes` if asked), then the stack is removed from MatDock. `202 {operationId}` |
 | `GET /api/v1/stacks/{name}/logs?service=&tail=300` | `{"text": "..."}` |
+| `GET /api/v1/containers?maxAge=3` | every container of the host (the Task Manager): `{id, name, image, state, status, stack, service, ports, cpuPercent (of one core), cpuOfHostPercent, hostCores, memoryPercent, memoryBytes, netRxBytes, netTxBytes, blockReadBytes, blockWriteBytes}`; the I/O are totals since the container started; `maxAge` (3-30 s) is how old MatDock's shared `docker stats` may be. The I/O, the share of the host and `maxAge` came with apiVersion 5 (MatDock branch `feature/task-manager-api`); MatOS reads an older answer too. |
+| `GET /api/v1/host` | a live reading of the host, at most three seconds old (apiVersion 5): `{cores, cpuPercent, load1, memoryTotalBytes, memoryUsedBytes, memoryPercent, diskTotalBytes, diskUsedBytes, diskPercent, uptimeSeconds, containersRunning, dockerVersion, at}`; an older MatDock answers 404 and MatOS uses the reading of `GET /api/v1/environments` |
+| `POST /api/v1/containers/{name}/actions/{action}`, `GET /api/v1/containers/{name}/logs?tail=` | start, stop, restart one container; its log as text |
 | `GET /api/v1/operations/{id}?offset=` | the operation, see the common rules |
 
 Backups (a stack bundle: all volumes + compose + env + image references; MatDock's existing bundle backup):

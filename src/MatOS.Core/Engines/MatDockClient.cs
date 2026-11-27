@@ -41,9 +41,16 @@ public sealed class MatDockClient : EngineClient
             .OfType<JsonObject>()
             .FirstOrDefault(e => e["type"]?.GetValue<string>() == "local");
 
-    /// <summary>Every container of the host with its CPU and memory (MatDock samples them, so the first answer takes a moment).</summary>
-    public async Task<JsonArray?> ListContainersAsync(CancellationToken ct = default)
-        => await SendAsync(HttpMethod.Get, "containers", null, TimeSpan.FromSeconds(12), ct) as JsonArray;
+    /// <summary>
+    /// Every container of the host with its CPU, memory, network and disk I/O (MatDock samples them, so the first answer takes a moment). <paramref name="maxAgeSeconds"/>
+    /// is how old MatDock's shared sample may be (3-30; the Task Manager asks for a fresh one).
+    /// </summary>
+    public async Task<JsonArray?> ListContainersAsync(CancellationToken ct = default, int? maxAgeSeconds = null)
+        => await SendAsync(HttpMethod.Get, maxAgeSeconds is { } age ? $"containers?maxAge={age}" : "containers", null, TimeSpan.FromSeconds(12), ct) as JsonArray;
+
+    /// <summary>A live reading of the host (CPU, memory and disk in bytes, uptime), at most a few seconds old; an older MatDock answers 404 (an exception).</summary>
+    public async Task<JsonObject?> GetHostAsync(CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Get, "host", null, ReadTimeout, ct) as JsonObject;
 
     /// <summary>Starts, stops or restarts one container (<c>start</c>, <c>stop</c>, <c>restart</c>); MatDock answers when Docker is done.</summary>
     public Task ContainerActionAsync(string container, string action, CancellationToken ct = default)
