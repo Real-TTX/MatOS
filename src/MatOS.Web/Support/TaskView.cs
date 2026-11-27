@@ -28,9 +28,10 @@ public sealed class TaskView
     public IEnumerable<(TaskSection Section, List<TaskGroup> Groups)> Sections
         => List.Items.GroupBy(g => g.Section).OrderBy(g => g.Key).Select(g => (g.Key, g.ToList()));
 
-    /// <summary>What changes the rows themselves (which there are, running or not, what can be done): when it differs, the script fetches the page again.</summary>
-    public string Signature => string.Join('|', List.Items.Select(g =>
-        $"{g.Key}:{(int)g.Actions}:{string.Join(',', g.Rows.Select(r => $"{r.Key}{(r.IsRunning ? '+' : '-')}{(int)r.Actions}"))}"));
+    /// <summary>What changes the rows themselves (which there are, running or not, what can be done): when it differs, the script fetches the page again.
+    /// Not their order: the list is sorted by live numbers and the script moves the rows itself, so a new order must not reload the page.</summary>
+    public string Signature => string.Join('|', List.Items.OrderBy(g => g.Key, StringComparer.Ordinal).Select(g =>
+        $"{g.Key}:{(int)g.Actions}:{string.Join(',', g.Rows.OrderBy(r => r.Key, StringComparer.Ordinal).Select(r => $"{r.Key}{(r.IsRunning ? '+' : '-')}{(int)r.Actions}"))}"));
 
     /// <summary>The line under the cards: how long the host is up, what runs, the version of Docker.</summary>
     public string Facts
