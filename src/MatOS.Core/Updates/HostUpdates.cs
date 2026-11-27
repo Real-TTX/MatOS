@@ -14,7 +14,7 @@ public static class HostReach
     /// <summary>MatDock answered.</summary>
     public const string Ok = "ok";
 
-    /// <summary>MatDock answers, but its version has no updates of the host yet (an API before version 5).</summary>
+    /// <summary>MatDock answers, but its version has no updates of the host yet (an API before version 7).</summary>
     public const string Outdated = "outdated";
 
     /// <summary>MatDock is not there or did not answer.</summary>

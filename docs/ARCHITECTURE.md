@@ -121,7 +121,7 @@ and a container cannot re-create itself: stopping it ends the process that would
 
 The operating system of the machine Docker runs on is updated **through MatDock** (it can: a throwaway helper container asks the host's apt and hands an
 upgrade to the host's systemd, MatDock's docs/UPDATE-MANAGEMENT.md sections 13 and 18). MatOS shows it in its own look and keeps the engine out of sight
-(the owner, 2026-11-27: "MatDock kann das alles. Müssen das nur gut verstecken"). docs/ENGINES.md "MatDock" has the calls (`apiVersion` 5).
+(the owner, 2026-11-27: "MatDock kann das alles. Müssen das nur gut verstecken"). docs/ENGINES.md "MatDock" has the calls (`apiVersion` 7).
 
 - **Settings, Updates, *This computer*** (`Core/Updates/HostUpdates.cs`: `HostUpdateService`, `HostUpdateState`): the system, the updates waiting (how
   many, how many for security, Docker's new version), the last check, a restart that is needed. *Check now* and *Install updates* are jobs (the log live);
@@ -136,7 +136,7 @@ upgrade to the host's systemd, MatDock's docs/UPDATE-MANAGEMENT.md sections 13 a
   *Restart it when an update needs it* restarts it at the very end, but not in a night in which MatOS restarts on a new version (the helper would be cut off).
   Both are **off** until the owner chooses them: whether they become defaults (or a question of the first start) is the owner's decision, not made yet.
 - **What MatOS cannot update**: a host without apt (Docker Desktop, Alpine, ...) is named with a sentence, no buttons; a host without systemd lets the start
-  of an upgrade fail with the host's message. An older MatDock (an API before 5) shows a hint to update the engines.
+  of an upgrade fail with the host's message. An older MatDock (an API before 7) shows a hint to update the engines.
 
 ## The first start
 

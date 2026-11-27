@@ -139,7 +139,7 @@ through the mounted socket) unless `?environment=<name or id>` says otherwise.
 | `POST /api/v1/containers/{name}/actions/{action}`, `GET /api/v1/containers/{name}/logs?tail=` | start, stop, restart one container; its log as text |
 | `GET /api/v1/operations/{id}?offset=` | the operation, see the common rules |
 
-The operating system of this computer (`apiVersion` 5, MatDock branch `feature/host-updates-api`; MatOS's side: docs/ARCHITECTURE.md "The updates of this computer",
+The operating system of this computer (`apiVersion` 7, MatDock branch `feature/host-updates-api`; MatOS's side: docs/ARCHITECTURE.md "The updates of this computer",
 `MatDockClient`, `Core/Updates/HostUpdates.cs`). An older MatDock answers `404`: MatOS then asks for an update of the engines.
 
 | Method and path | |

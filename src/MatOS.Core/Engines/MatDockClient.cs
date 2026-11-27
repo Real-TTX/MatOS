@@ -286,10 +286,10 @@ public sealed class MatDockClient : EngineClient
         return body;
     }
 
-    // ------------------------------------------------------------------ the operating system of this computer (apiVersion 5)
+    // ------------------------------------------------------------------ the operating system of this computer (apiVersion 7)
 
     /// <summary>The API version that has the updates of the host (<c>/host/updates</c>, <c>/host/reboot</c>).</summary>
-    public const int HostUpdatesApiVersion = 5;
+    public const int HostUpdatesApiVersion = 7;
 
     /// <summary>What MatDock's last check of the host found (it looks every six hours by itself); asks the host nothing.</summary>
     public async Task<JsonObject?> GetHostUpdatesAsync(CancellationToken ct = default)
