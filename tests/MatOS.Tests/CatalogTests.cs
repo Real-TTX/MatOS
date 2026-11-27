@@ -167,6 +167,7 @@ public class CatalogTests
     [InlineData("matboard", "MATBOARD_ADMIN_PASSWORD")]
     [InlineData("matshape", "MATSHAPE_ADMIN_PASSWORD")]
     [InlineData("matcloud", "MATCLOUD_ADMIN_PASSWORD")]
+    [InlineData("matcmscloud", "MATCMSCLOUD_ADMIN_PASSWORD")]
     public void The_administrator_of_an_app_is_seeded_from_a_generated_password_nobody_is_asked_for(string id, string variable)
     {
         var app = CreateCatalog().Get(id)!;
@@ -273,5 +274,45 @@ public class CatalogTests
 
         Assert.True(app.Screenshots[0].IsUrl);
         Assert.Equal("mine/b.webp", app.Screenshots[1].Src);
+    }
+
+    [Fact]
+    public void MatCMS_Cloud_signs_in_through_MatIdentity_mails_through_MatSMTP_and_links_the_MatCMS_sites()
+    {
+        var catalog = CreateCatalog();
+        var cloud = catalog.Get("matcmscloud")!;
+
+        // An app of the contract: MAT_API_KEY, so the broker reads its /api (it provides cms.cloud there) and binds the sites to it.
+        Assert.True(cloud.Platform);
+        Assert.Contains(cloud.Variables, v => v.Key == "MAT_API_KEY" && v.Generate && v.Hidden);
+        Assert.Contains(cloud.Consumes, c => c.Capability == Capabilities.IdentityOidc);
+        Assert.Equal("cloud", Assert.Single(cloud.Consumes, c => c.Capability == Capabilities.MailSmtp).Params["sender"]);
+        Assert.Equal("/login", cloud.Ui!.SignIn);
+        Assert.Equal(("web", 8080), (cloud.Ui.Service, cloud.Ui.Port));
+
+        // One volume and NO Docker socket: MatOS updates the sites it installed, the cloud only tells about an update (the entry says so).
+        Assert.Contains("matcmscloud-data:/app/appdata", cloud.ComposeYaml);
+        Assert.DoesNotContain("docker.sock:/var/run/docker.sock", cloud.ComposeYaml.Split('\n').Where(l => !l.TrimStart().StartsWith('#')).Select(l => l.Trim()).Where(l => l.StartsWith("- ")));
+        Assert.Contains(cloud.Notes, n => n.Contains("No Docker socket"));
+
+        // MatCMS has no /api of the contract: its entry says it consumes cms.cloud, so a site joins a cloud installed beside it.
+        Assert.Contains(catalog.Get("matcms")!.Consumes, c => c.Capability == "cms.cloud" && c.Version == 1);
+    }
+
+    [Fact]
+    public void No_service_has_an_empty_environment()
+    {
+        // "environment:" with nothing under it is null, which docker compose refuses ("must be a mapping"): MatCMS could not be installed with it.
+        foreach (var app in CreateCatalog().GetAll())
+        {
+            var lines = app.ComposeYaml.Replace("\r", "").Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Trim() != "environment:") continue;
+                var indent = lines[i].Length - lines[i].TrimStart().Length;
+                var next = lines.Skip(i + 1).FirstOrDefault(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('#')) ?? "";
+                Assert.True(next.Length - next.TrimStart().Length > indent, $"{app.Id}: an empty environment: (line {i + 1})");
+            }
+        }
     }
 }

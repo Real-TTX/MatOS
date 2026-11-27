@@ -1,0 +1,71 @@
+# MatCMS Cloud – the control plane of MatCMS websites (it lives in the MatCMS repository, src/MatCMS.Cloud).
+x-matos:
+  id: matcmscloud
+  name: MatCMS Cloud
+  tagline: One place for all your MatCMS websites
+  description: Watches the versions of your MatCMS websites, mails you when one goes offline or has an update, and rolls out settings, users, plugins, components and templates to many sites at once through profiles. MatCMS websites installed by MatOS connect to it by themselves.
+  category: Websites
+  role: app
+  state: alpha
+  stateNote: The one sign-in, the mail through MatSMTP and the automatic link of MatCMS sites are on MatCMS's dev branch; the image of :latest has them with its next release.
+  icon: matcmscloud.svg
+  homepage: https://github.com/Real-TTX/MatCMS
+  # Pictures for its page in the store: files below wwwroot/img/store, taken from the running app.
+  screenshots:
+    - src: matcmscloud/overview.webp
+      caption: Overview of the websites
+    - src: matcmscloud/instances.webp
+      caption: The websites
+    - src: matcmscloud/profile.webp
+      caption: A profile
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the cloud uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"). It says the same in its /api, and that it provides
+  # cms.cloud: every MatCMS that MatOS installs (its entry consumes cms.cloud) gets a key and joins the cloud's default profile by itself.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its notifications through MatSMTP (MATSMTP_*)
+      params:
+        sender: cloud
+  ui:
+    service: web
+    port: 8080
+    hostPort: 9100
+    # With MatIdentity the cloud is opened here: its sign-in goes straight on to MatIdentity and back into the cloud.
+    signIn: /login
+  variables:
+    - key: MATCMSCLOUD_ADMIN_PASSWORD
+      label: Password of the account admin
+      type: secret
+      generate: true
+      hidden: true
+  notes:
+    - The first person who signs in through MatIdentity becomes the administrator of the cloud; everyone after is an operator who sees only the websites an administrator gives them. The account admin (its password is under the credentials) stays as the way in when MatIdentity is down (/login?local=1).
+    - No Docker socket. MatOS updates the MatCMS websites it installed itself, so the cloud only tells you about an update. To let the cloud update sites itself, add /var/run/docker.sock:/var/run/docker.sock to its volumes in a catalog copy (access to the socket is access to the whole host).
+    - Back up the volume matcmscloud-data (the database, the keys and the backups of the sites).
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${MATCMSCLOUD_ADMIN_PASSWORD}
+      secret: true
+    - label: Note
+      value: The local account, for /login?local=1 when MatIdentity is down.
+
+services:
+  web:
+    image: ghcr.io/real-ttx/matcms-cloud:latest
+    restart: unless-stopped
+    environment:
+      MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+      # The first account of an empty database (else admin / admin).
+      MATCMSCLOUD_ADMIN_PASSWORD: ${MATCMSCLOUD_ADMIN_PASSWORD}
+      # No Docker access: every site is "remote" to the cloud (notify only); MatOS updates the sites it installed.
+      MatCmsCloud__Docker__Endpoint: ""
+    volumes:
+      # Database, data-protection keys, uploads and backups: everything lives here.
+      - matcmscloud-data:/app/appdata
+
+volumes:
+  matcmscloud-data:
