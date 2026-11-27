@@ -29,6 +29,21 @@ public abstract class PublicPageModel : PageModel
     }
 
     /// <summary>
+    /// A method no handler of the page takes (PUT, DELETE, PATCH, ...): Razor Pages would render the page without a handler, so it answers
+    /// <c>405</c> instead.
+    /// </summary>
+    public override void OnPageHandlerExecuting(PageHandlerExecutingContext context)
+    {
+        if (context.HandlerMethod is null)
+        {
+            context.Result = NoSuchForm();
+            return;
+        }
+
+        base.OnPageHandlerExecuting(context);
+    }
+
+    /// <summary>
     /// Whether the address names a form (<c>/dyndns/register</c>): a GET of it reaches the page's OnGet (Razor Pages takes the handler without a
     /// name when none has that name), which answers <see cref="NoSuchForm"/> instead of the page.
     /// </summary>

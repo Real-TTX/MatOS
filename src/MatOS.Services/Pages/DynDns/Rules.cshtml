@@ -33,7 +33,12 @@
     <div class="mat-card__head"><icon name="shield" /><h2 class="mat-card__title" id="stored-title">What the service stores</h2></div>
     <div class="mat-card__body mat-prose">
         <p>The name, a hash of the key (not the key itself), the addresses your router reports, the address the name was registered from,
-            and the times of registration and of the last update. Nothing else, no cookies, no tracking.</p>
+            and the times of registration and of the last update.</p>
+        <p>Counts per name, to run the service and to spot abuse: per hour how many DNS answers the name got and how many updates and address changes
+            your router sent. They are kept @o.Usage.HourlyDays days per hour, then added up per day and kept @o.Usage.DailyDays days. Never the address
+            of whoever looks the name up.</p>
+        <p>When a name is blocked for abuse, the reason and the administrator's action are kept as evidence.</p>
+        <p>No cookies, no tracking.</p>
     </div>
 </section>
 

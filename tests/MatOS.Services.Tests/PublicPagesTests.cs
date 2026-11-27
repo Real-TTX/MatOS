@@ -89,6 +89,33 @@ public partial class PublicPagesTests
     }
 
     [Theory]
+    [InlineData("/")]
+    [InlineData("/dyndns")]
+    [InlineData("/dyndns/register")]
+    [InlineData("/dyndns/manage")]
+    [InlineData("/dyndns/rules")]
+    public async Task A_method_no_form_takes_is_405(string path)
+    {
+        await using var service = await RunningService.StartAsync();
+        using var client = service.Client();
+        foreach (var method in new[] { HttpMethod.Put, HttpMethod.Delete, HttpMethod.Patch })
+        {
+            using var request = new HttpRequestMessage(method, path) { Content = new StringContent("") };
+            var response = await client.SendAsync(request);
+            Assert.True(response.StatusCode == HttpStatusCode.MethodNotAllowed, $"{method} {path}: {(int)response.StatusCode}");
+        }
+    }
+
+    [Fact]
+    public async Task The_start_page_has_one_address()
+    {
+        await using var service = await RunningService.StartAsync();
+        using var client = service.Client();
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/Index")).StatusCode);
+    }
+
+    [Theory]
     [InlineData("/dyndns/register")]
     [InlineData("/dyndns/ports")]
     [InlineData("/dyndns/manage")]
