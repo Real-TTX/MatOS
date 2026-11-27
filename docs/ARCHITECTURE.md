@@ -90,15 +90,26 @@ in the browser (the owner's choice of 2026-11-26). It replaced the old path (`/S
   **one job per line** (`SetupPlan.Steps`): the engines that are missing in the order of `EngineIds.All`, the first apps (prepared like the store does:
   `AppService.PrepareInstallAsync` and `JobKind.Install`; the single worker runs them after the engines), engines that were there already are connected
   (`ConnectEngines`), the sign-in of the person when MatIdentity is part of it (`AppJobs.HandOverOwner`, below), the records of an own domain with a DNS account (`AppJobs.DomainRecords`, its line names where they point), the free address
-  (`AppJobs.FreeAddress`: the tunnel is up), and last, with an address on the internet and Matcad, the check of the reachability (`AppJobs.CheckReach`). The lines and their jobs are `SystemConfig.Setup` (`SetupRun`). An engine that is there already counts as chosen
+  (`AppJobs.FreeAddress`: the tunnel is up), with an address on the internet and Matcad the check of the reachability (`AppJobs.CheckReach`), and last, for
+  every way, the self check (`SetupPlan.SelfCheckKey`, `AppJobs.CheckSelf`: MatOS answers where the person opens it). The lines and their jobs are `SystemConfig.Setup` (`SetupRun`). An engine that is there already counts as chosen
   (its box is fixed, and a fixed box is not sent).
+- **Two phases.** `SetupService.BeginAsync` (phase 1) queues MatDock and MatSMTP first (`SetupPlan.FirstSteps`), so their downloads run while the person
+  still answers; `ContinueAsync` (phase 2) checks the answers, sets the way and queues the rest; `StartAsync` does both. Only phase 2 sets `WizardCompleted`:
+  a problem with the answers (a name taken meanwhile) leaves the run in phase 1, and `/Setup/Choose` and the *Setup* widget stay on the choices until the
+  way is confirmed (`SetupPlan.Continued`). What was queued is stored even when a later line could not be (no line is queued twice on a resubmit).
+- **Every line names the lines it runs on** (`SetupRunStep.Needs`, `SetupPlan.NeedsOf`, only the keys of the run): its job is queued behind their jobs and
+  `AppJobs.Gated` refuses to run while one of them still waits or runs (it fails, and an install's app is marked failed, so nothing stays "installing"); a
+  need that is over, done or failed, lets it run. *Try again* of a line takes the lines that follow from it (`SetupPlan.Dependents`, the closure) off the
+  queue first and queues them, and the failed ones among them, behind its new job. A waiting line says what it waits for.
+- **The direct way of a free address** is offered only with `MatOS__ServicesDirectAvailable` (`HostedAddressService.DirectAvailable`); until then a free
+  address stays in the tunnel, and Settings, Address does not switch to direct.
 - **The progress screen** asks `GET /api/setup/progress` (administrators) every two seconds and exchanges only what changed (`SetupProgress.Of`: waiting,
   working, done, failed; the percent and the estimate come from what a step usually takes). A failure is said in plain words with what to do
   (`SetupProgress.Plain`: a restart, Docker did not answer, a program that is not available for download, no internet, a busy download service, which port of
   this computer is taken, it did not start in time; the free address has its own words); the technical rest is in the details. *Try again* queues the line
   once more (`SetupService.RetryAsync`, an install the way the store's *Try again* does it) and keeps the line.
 - **It goes on by itself.** The *Setup* widget of the home screen (an administrator's, a plain link: the first start takes the whole tab) leads to the choices
-  before *Set up MatOS*, back to the progress screen while it works or a line failed, and goes once all is done. A restart of MatOS in the middle (the worker
+  until the way to the apps is confirmed, back to the progress screen while it works or a line failed, and goes once all is done. A restart of MatOS in the middle (the worker
   marks waiting and running jobs failed) queues the interrupted lines again in the order of the plan (`SetupService.ResumeAsync`, from `JobRunnerService`).
 - **The same sign-in afterwards.** MatIdentity seeds only its own `admin` with a generated password, and once it is connected MatOS's sign-in page goes
   there: the person who created the account would stand before a sign-in without an account. So the first start keeps the e-mail and the password (protected,

@@ -94,7 +94,8 @@ public static partial class SetupPlan
 
     /// <summary>
     /// The lines a line runs on, by key: an engine other than MatDock and an app need MatDock; connecting needs every engine; the sign-in needs MatIdentity;
-    /// the records need Matddns; the free address, the check of the reachability and the self check need Matcad, and the self check also the connection.
+    /// the records need Matddns; the free address, the check of the reachability and the self check need Matcad, and the self check also the connection, the
+    /// free address and the records (it can pass only once they are there, and "Try again" of one of them puts it behind).
     /// The caller keeps only the keys that are part of the run.
     /// </summary>
     public static IReadOnlyList<string> NeedsOf(string key, string kind)
@@ -109,10 +110,16 @@ public static partial class SetupPlan
             SignInKind => [EngineKey(EngineIds.MatIdentity)],
             DnsKind => [EngineKey(EngineIds.Matddns)],
             AddressKind or ReachKind => [matcad],
-            SelfCheckKind => [matcad, ConnectKey],
+            SelfCheckKind => [matcad, ConnectKey, AddressKey, DnsKey],
             _ => [],
         };
     }
+
+    /// <summary>
+    /// The way to the apps is confirmed and the whole run is queued (phase 2, or a run stored before the phases existed). A run in phase 1 (only the first
+    /// engines; also after a problem with the answers, such as a name that was taken) leaves the person on the screen of the choices.
+    /// </summary>
+    public static bool Continued(SetupRun? run) => run is { Phase: >= 2 };
 
     /// <summary>
     /// The first lines, queued when the person leaves the screen of the engines (before the way to the apps is chosen): MatDock, then MatSMTP (unless

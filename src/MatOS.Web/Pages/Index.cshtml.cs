@@ -70,8 +70,9 @@ public class IndexModel : PageModel
     public bool Busy => Tiles.Any(t => t.App.Lifecycle is AppLifecycle.Installing or AppLifecycle.Removing);
 
     /// <summary>
-    /// The first start, for the widget Setup (an administrator's): null before "Set up MatOS" (the widget leads to the choices while the setup is not done),
-    /// else its progress; the widget leads back to the progress screen while it works or a line failed, and goes once all is done.
+    /// The first start, for the widget Setup (an administrator's): null until the way to the apps is confirmed (also while only the first engines run, phase
+    /// 1: the widget leads to the choices while the setup is not done), else its progress; the widget leads back to the progress screen while it works or a
+    /// line failed, and goes once all is done.
     /// </summary>
     public MatOS.Core.Setup.SetupProgressView? SetupProgress { get; private set; }
 
@@ -208,7 +209,7 @@ public class IndexModel : PageModel
         {
             ActiveJobs = await _jobs.CountActiveAsync(ct);
             LastBackup = await LastBackupAsync(ct);
-            SetupProgress = Config.Setup is null ? null : await _setup.ProgressAsync(ct);
+            SetupProgress = MatOS.Core.Setup.SetupPlan.Continued(Config.Setup) ? await _setup.ProgressAsync(ct) : null;
         }
 
         if (isAdmin)

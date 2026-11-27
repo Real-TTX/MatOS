@@ -14,8 +14,9 @@ namespace MatOS.Web.Pages.Setup;
 /// <summary>
 /// The first start, steps 3 to 5 (docs/ARCHITECTURE.md "The first start"): how the person reaches their apps (a free address, an own domain, or only at home;
 /// the engines and the address of this machine under Advanced), the first apps, and the one button "Set up MatOS" (<see cref="SetupService.StartAsync"/>). A
-/// problem (a name that was taken meanwhile, an address service that cannot be reached) keeps the person on the step of the address with the message.
-/// Once it ran, the page is the progress screen; later changes are the setup wizard's (<c>/Wizard</c>).
+/// problem (a name that was taken meanwhile, an address service that cannot be reached) keeps the person on the step of the address with the message; the
+/// first engines it queued before (phase 1) go on meanwhile, and the page stays until the way to the apps is confirmed (<see cref="SetupPlan.Continued"/>).
+/// Then the page is the progress screen; later changes are the setup wizard's (<c>/Wizard</c>).
 /// </summary>
 public class ChooseModel : PageModel
 {
@@ -90,7 +91,7 @@ public class ChooseModel : PageModel
     public async Task<IActionResult> OnGetAsync()
     {
         var config = await _config.GetAsync(HttpContext.RequestAborted);
-        if (config.Setup is not null)
+        if (SetupPlan.Continued(config.Setup))
         {
             return RedirectToPage("/Setup/Progress");
         }
@@ -109,9 +110,14 @@ public class ChooseModel : PageModel
     {
         var ct = HttpContext.RequestAborted;
         var config = await _config.GetAsync(ct);
-        if (config.Setup is not null)
+        if (SetupPlan.Continued(config.Setup))
         {
             return RedirectToPage("/Setup/Progress");
+        }
+
+        if (config.WizardCompleted)
+        {
+            return RedirectToPage("/Wizard/Index");
         }
 
         // An engine that is there already has its box ticked and fixed, and a fixed box is not sent: it counts as chosen.

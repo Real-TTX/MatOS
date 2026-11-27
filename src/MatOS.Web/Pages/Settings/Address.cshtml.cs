@@ -154,6 +154,13 @@ public class AddressModel : PageModel
             return RedirectToPage();
         }
 
+        if (mode == HostedAddress.Direct && !DirectAvailable)
+        {
+            // The switch is not offered yet; a job would only fail with the same words.
+            StatusMessage = HostedAddressService.DirectNotAvailableMessage;
+            return RedirectToPage();
+        }
+
         var title = mode == HostedAddress.Direct ? $"Reach {hosted.Address} directly" : $"Reach {hosted.Address} through the tunnel";
         var jobId = await _jobs.EnqueueAsync(JobKind.Provision, title, null, AppJobs.SetAddressMode(mode), ct);
         return RedirectToPage("/Jobs/Details", new { id = jobId });

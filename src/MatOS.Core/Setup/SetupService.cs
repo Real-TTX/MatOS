@@ -99,7 +99,8 @@ public sealed class SetupService
 
     /// <summary>
     /// Both phases at once (the screen of the choices that asks for the engines and the way together): the first engines the person chose
-    /// (<see cref="BeginAsync"/>), then the rest (<see cref="ContinueAsync"/>).
+    /// (<see cref="BeginAsync"/>), then the rest (<see cref="ContinueAsync"/>). A problem with the answers leaves the run in phase 1 (the first engines go on), and
+    /// the screen of the choices stays until a later call confirms the way (<see cref="SetupPlan.Continued"/>).
     /// </summary>
     public async Task<SetupStart> StartAsync(SetupChoices choices, SetupDns dns, CancellationToken ct = default)
     {
@@ -133,15 +134,28 @@ public sealed class SetupService
             var installed = await InstalledAsync(installedApps, ct);
             var run = new SetupRun { StartedAt = DateTime.UtcNow, Phase = 1 };
             var ids = new Dictionary<string, long>(StringComparer.Ordinal);
-            foreach (var step in SetupPlan.FirstSteps(installed, chosen))
+            var queuedAll = false;
+            try
             {
-                var needs = SetupPlan.NeedsOf(step.Key, step.Kind).Where(ids.ContainsKey).ToList();
-                var (jobId, appId) = await QueueAsync(step.Kind, step.CatalogId, installedApps, needs.Select(k => ids[k]).ToList(), ct);
-                ids[step.Key] = jobId;
-                run.Steps.Add(new SetupRunStep { Key = step.Key, Kind = step.Kind, Label = step.Label, JobId = jobId, AppId = appId, Needs = needs });
+                foreach (var step in SetupPlan.FirstSteps(installed, chosen))
+                {
+                    var needs = SetupPlan.NeedsOf(step.Key, step.Kind).Where(ids.ContainsKey).ToList();
+                    var (jobId, appId) = await QueueAsync(step.Kind, step.CatalogId, installedApps, needs.Select(k => ids[k]).ToList(), ct);
+                    ids[step.Key] = jobId;
+                    run.Steps.Add(new SetupRunStep { Key = step.Key, Kind = step.Kind, Label = step.Label, JobId = jobId, AppId = appId, Needs = needs });
+                }
+
+                queuedAll = true;
+            }
+            finally
+            {
+                // Also when a line could not be queued: what was queued is part of the run, so the second phase finds it (and does not queue it twice).
+                if (queuedAll || run.Steps.Count > 0)
+                {
+                    await _config.UpdateAsync(c => c.Setup ??= run, CancellationToken.None);
+                }
             }
 
-            await _config.UpdateAsync(c => c.Setup = run, CancellationToken.None);
             return run;
         }
         finally

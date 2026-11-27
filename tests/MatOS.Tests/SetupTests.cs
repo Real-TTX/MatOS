@@ -348,8 +348,39 @@ public class SetupTests
         Assert.Equal(["engine:matddns"], SetupPlan.NeedsOf(SetupPlan.DnsKey, SetupPlan.DnsKind));
         Assert.Equal(["engine:matcad"], SetupPlan.NeedsOf(SetupPlan.ReachKey, SetupPlan.ReachKind));
         Assert.Equal(["engine:matcad"], SetupPlan.NeedsOf(SetupPlan.AddressKey, SetupPlan.AddressKind));
-        Assert.Equal(["engine:matcad", "connect"], SetupPlan.NeedsOf(SetupPlan.SelfCheckKey, SetupPlan.SelfCheckKind));
+        Assert.Equal(["engine:matcad", "connect", "address", "dns"], SetupPlan.NeedsOf(SetupPlan.SelfCheckKey, SetupPlan.SelfCheckKind));
         Assert.Equal(EngineIds.All.Select(e => "engine:" + e), SetupPlan.NeedsOf(SetupPlan.ConnectKey, SetupPlan.ConnectKind));
+    }
+
+    [Fact]
+    public void Try_again_of_the_address_or_the_records_puts_the_self_check_behind_it()
+    {
+        var free = Planned(BothPhases(Choices(Reach.Free, "anna")));
+        Assert.Equal(["engine:matcad", "connect", "address"], free.Single(s => s.Key == SetupPlan.SelfCheckKey).Needs);
+        Assert.Contains(SetupPlan.Dependents(free, SetupPlan.AddressKey), s => s.Key == SetupPlan.SelfCheckKey);
+
+        var domain = Planned(BothPhases(Choices(Reach.Domain, domain: "example.com") with { Ip = DnsIp.Default }));
+        Assert.Contains(SetupPlan.DnsKey, domain.Single(s => s.Key == SetupPlan.SelfCheckKey).Needs);
+        Assert.Contains(SetupPlan.Dependents(domain, SetupPlan.DnsKey), s => s.Key == SetupPlan.SelfCheckKey);
+    }
+
+    [Fact]
+    public void A_problem_after_the_first_phase_keeps_the_person_on_the_choices()
+    {
+        // StartAsync queues MatDock and MatSMTP (phase 1, stored) before the answers are checked; a name taken meanwhile returns a problem. The run stays in
+        // phase 1 and WizardCompleted false: /Setup/Choose and the Setup widget stay on the choices, so the person can correct the answer.
+        var config = new SystemConfig
+        {
+            Setup = new SetupRun { Phase = 1, Steps = Planned(SetupPlan.FirstSteps(new HashSet<string>())) },
+        };
+        Assert.False(SetupPlan.Continued(config.Setup));
+        Assert.False(config.WizardCompleted);
+        Assert.Equal(["engine:matdock", "engine:matsmtp"], config.Setup.Steps.Select(s => s.Key));
+
+        // Once the way is confirmed (phase 2), and for a run stored before the phases existed (its Phase defaults to 2), the progress screen takes over.
+        Assert.True(SetupPlan.Continued(new SetupRun { Phase = 2 }));
+        Assert.True(SetupPlan.Continued(System.Text.Json.JsonSerializer.Deserialize<SetupRun>("""{"Steps":[]}""")));
+        Assert.False(SetupPlan.Continued(null));
     }
 
     /// <summary>A run of the first start whose lines carry their needs, as the service stores them (only the keys of the run).</summary>
