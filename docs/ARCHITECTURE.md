@@ -539,6 +539,22 @@ MatIdentity; MatOS administers them in its area **People** (below) and MatIdenti
   has no token and MatIdentity asks once. **The apps are unchanged:** their sign-in is MatIdentity's own look ("Sign in with MatIdentity"), and an app opened from
   MatOS starts at its `ui.signIn` (`AppService.StartPathAsync`), finds MatIdentity's session and lets the person in without a click. An administrator still sees
   MatIdentity as an engine in *System* and the settings.
+- **The second step** (the owner, 2026-11-27: a person sets up their own second step from MatOS). It lives in MatIdentity and only there: MatOS builds no TOTP,
+  recovery codes or passkeys of its own, and without MatIdentity there is none. The account has the tab *Security* (`/Account/Profile?tab=security`, also *Second
+  step* in the menu of the person on the home screen and in the shell); `Core/Users/AccountSecurity` decides what it says. A person who signs in through MatIdentity
+  (`User.ExternalSubject`, MatOS connected: `SystemConfig.Identity`) gets what a second step is and *Set up or change the second step*, MatIdentity's own
+  `/Account/Security` below its public address. A local account beside the single sign-on is told that the second step comes only with an account there; without
+  MatIdentity the tab says MatOS has no single sign-on yet (an administrator gets a way to the engine). No button leads nowhere. Whether the step is on is not shown:
+  MatIdentity does not say (neither SCIM nor `/api/v1`), and its page does. **Always a new tab, never the window of the home screen:** the window is an iframe without
+  `allow="publickey-credentials-create/get"`, so a passkey cannot be made or used in it (and a cross-origin frame needs a recent browser even with it), and the
+  person sees the address of the page they confirm with their password. **The tab Password** says which password it is: for a person of MatIdentity, *Change your
+  sign-in password* links MatIdentity's `/Account/Profile?tab=password` (the password they sign in with), and the form below is MatOS's own password, which only works
+  while MatIdentity does not answer (the local form) and leaves the sign-in password alone; a person who came through MatIdentity has no password of MatOS
+  (`FindOrCreateExternalAsync`) and gets no form (a post of it goes back to the tab). A local account keeps the form as before (the person who set MatOS up and waits
+  for MatIdentity: it gets the new password too, `OwnerHandover`). **Not in MatOS's look:** those two pages are MatIdentity's account pages in its own shell, which its
+  branded sign-in does not cover (MatIdentity docs/ARCHITECTURE.md "Branded sign-in": "Not branded: the account pages"). Dressing them up would take a branded
+  variant of its account layout (its menu, the tabs Profile, Devices, the links home), not a small change, and docs/INTEGRATION.md names no branch of MatIdentity for
+  MatOS's changes, so it was left for the owner to decide (docs/INTEGRATION.md "MatIdentity").
 
 ## MatSMTP, the mail relay
 

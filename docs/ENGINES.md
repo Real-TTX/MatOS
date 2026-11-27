@@ -197,6 +197,12 @@ background: img/wallpapers/orbit-light.jpg }` with `managedBy: "matos"` and noth
 sends `id_token_hint`, so MatIdentity's `/connect/logout` ends the session without asking and returns to `/signout-callback-oidc`. MatOS keeps the id token in
 its session cookie whenever it writes the cookie again (theme, wallpaper, password: `SessionCookie.RefreshAsync`); without a hint the question is asked in MatOS's look.
 
+**A person's own second step and password** (docs/ARCHITECTURE.md "The second step"). MatOS has no API call for them: the account tabs Security and Password link
+two pages of MatIdentity below its public address (the `authority` of the sign-in), `/Account/Security` (authenticator app, recovery codes, passkeys) and
+`/Account/Profile?tab=password`, opened in a new tab (`Core/Users/AccountSecurity`). They are MatIdentity's own account pages: its session lets the person in, and
+they are not branded (MatIdentity's "Branded sign-in" covers the pages of a sign-in only). MatIdentity says nothing about whether a person's second step is on
+(neither SCIM nor `/api/v1`), so MatOS does not show it; an administrator resets it with the action `resetSecondStep`.
+
 ## MatSMTP (`ghcr.io/real-ttx/matsmtp`)
 
 The mail relay of the family (MatDesign docs/PLATFORM.md, "Mail through MatSMTP"). Image tags `latest` and `release` from `main`, `nightly` from `dev`. In the container: web **2525**,

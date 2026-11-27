@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using MatOS.Core.Configuration;
 using MatOS.Core.Entities;
 using MatOS.Core.Security;
 using MatOS.Core.Users;
@@ -15,12 +16,14 @@ public class ProfileModel : PageModel
     private readonly UserService _userService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly MatOS.Core.Integrations.OwnerHandover _owner;
+    private readonly SystemConfigService _config;
 
-    public ProfileModel(UserService userService, IPasswordHasher passwordHasher, MatOS.Core.Integrations.OwnerHandover owner)
+    public ProfileModel(UserService userService, IPasswordHasher passwordHasher, MatOS.Core.Integrations.OwnerHandover owner, SystemConfigService config)
     {
         _userService = userService;
         _passwordHasher = passwordHasher;
         _owner = owner;
+        _config = config;
     }
 
     [BindProperty]
@@ -41,6 +44,12 @@ public class ProfileModel : PageModel
     /// <summary>The tab of the home screen: the wallpaper.</summary>
     public bool HomeTab => !PasswordTab && Tab == "home";
 
+    /// <summary>The tab of the second step (it lives in MatIdentity: <see cref="AccountSecurity"/>).</summary>
+    public bool SecurityTab => !PasswordTab && Tab == "security";
+
+    /// <summary>How the person signs in: the second step, and which password the tab Password changes.</summary>
+    public AccountSecurity Security { get; private set; } = new(AccountSignIn.NoSingleSignOn, null, null, false);
+
     /// <summary>The wallpaper of the account (an id of <see cref="Wallpapers.All"/>).</summary>
     public string Wallpaper { get; private set; } = Wallpapers.Default;
 
@@ -48,9 +57,10 @@ public class ProfileModel : PageModel
     {
         Tabs =
         [
-            new TabItem { Title = "General", Href = "/Account/Profile", Icon = "user", Active = !PasswordTab && !HomeTab },
+            new TabItem { Title = "General", Href = "/Account/Profile", Icon = "user", Active = !PasswordTab && !HomeTab && !SecurityTab },
             new TabItem { Title = "Home screen", Href = "/Account/Profile?tab=home", Icon = "image", Active = HomeTab },
             new TabItem { Title = "Password", Href = "/Account/Profile?tab=password", Icon = "key", Active = PasswordTab },
+            new TabItem { Title = "Security", Href = "/Account/Profile?tab=security", Icon = "shield", Active = SecurityTab },
         ],
     };
 
@@ -78,6 +88,12 @@ public class ProfileModel : PageModel
         if (!await LoadAsync())
         {
             return Forbid();
+        }
+
+        // A person who signs in through MatIdentity and has no password of MatOS: nothing to change here (the tab links MatIdentity's page).
+        if (!Security.OffersLocalPassword)
+        {
+            return RedirectToPage(new { tab = "password" });
         }
 
         if (!ModelState.IsValid)
@@ -166,6 +182,7 @@ public class ProfileModel : PageModel
         Role = user.Role;
         MustChange = user.MustChangePassword;
         Wallpaper = Wallpapers.Normalize(user.Wallpaper);
+        Security = AccountSecurity.Of((await _config.GetAsync(HttpContext.RequestAborted)).Identity, user);
         return true;
     }
 }

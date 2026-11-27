@@ -203,6 +203,7 @@
         </div>
         <a class="mat-menu__item" role="menuitem" href="/Account/Profile">@Ui.Icon("user")<span>Show account</span></a>
         <a class="mat-menu__item" role="menuitem" href="/Account/Profile?tab=password">@Ui.Icon("key")<span>Change password</span></a>
+        <a class="mat-menu__item" role="menuitem" href="/Account/Profile?tab=security">@Ui.Icon("shield")<span>Second step</span></a>
         <div class="mat-menu__sep" role="separator"></div>
         <form method="post" action="/Account/Logout">
             @Html.AntiForgeryToken()

@@ -3,7 +3,7 @@
 @using MatOS.Core.Users
 @{
     ViewData["Title"] = "Account";
-    ViewData["PageSub"] = "Who you are in MatOS, your home screen and your password.";
+    ViewData["PageSub"] = "Who you are in MatOS, your home screen, your password and the second step.";
     ViewData["Crumbs"] = Crumbs.Of(("Account", null));
     ViewData["Width"] = "narrow";
 }
@@ -54,6 +54,39 @@
         </div>
     </form>
 }
+else if (Model.SecurityTab)
+{
+    @* The second step lives in the single sign-on (MatIdentity) and only there: MatOS links its page, it never builds one (docs/ARCHITECTURE.md "The second step"). *@
+    var security = Model.Security;
+    <div class="mat-card" role="group" aria-label="Second step">
+        <div class="mat-card__head"><icon name="shield" /><span class="mat-card__title">Second step</span></div>
+        <div class="mat-card__body mat-stack">
+            <p>A second step makes your sign-in safer: after your password you also confirm with a code from an app on your phone (an authenticator app) or with a passkey of your device. Somebody who learns your password still cannot get in.</p>
+            @if (security.SignIn == AccountSignIn.SingleSignOn)
+            {
+                <p>You sign in once for MatOS and all your apps, so the second step is set up there, where you sign in: an authenticator app, recovery codes for a lost phone, and passkeys. That page shows whether it is on.</p>
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <a class="mat-btn mat-btn--primary" href="@security.SecurityUrl" target="_blank" rel="noopener"><icon name="external" /><span>Set up or change the second step</span></a>
+                </div>
+                <p class="mat-hint">It opens in a new tab: a passkey cannot be made inside a window of MatOS, and you see the address of the page you confirm with your password. Lost your phone and your recovery codes? An administrator can reset the second step for you.</p>
+            }
+            else if (security.SignIn == AccountSignIn.LocalAccount)
+            {
+                <div class="mat-alert mat-alert--info" role="status"><icon name="info" /><div class="mat-alert__body">You sign in with an account of MatOS itself, not with the single sign-on of your apps. A second step comes only with the single sign-on: ask an administrator for an account there.</div></div>
+            }
+            else
+            {
+                <div class="mat-alert mat-alert--info" role="status"><icon name="info" /><div class="mat-alert__body">MatOS has no single sign-on yet, and the second step comes with it. Until then your password alone signs you in.</div></div>
+                @if (User.IsAdmin())
+                {
+                    <div class="mat-btn-row mat-btn-row--plain">
+                        <a class="mat-btn mat-btn--secondary" href="/Engines?id=@MatOS.Core.Engines.EngineIds.MatIdentity"><icon name="shield" /><span>Single sign-on</span></a>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
 else if (!Model.PasswordTab)
 {
     @* No heading over it: the window, the tab and the head of the sidebar already say whose account this is. *@
@@ -67,27 +100,50 @@ else if (!Model.PasswordTab)
 }
 else
 {
-    <form method="post" class="mat-form" novalidate>
-        <partial name="_ValidationSummary" />
-
-        @* The fields on one surface, without a title of their own: the tab says what this is (as the other settings). *@
-        <div class="mat-card" role="group" aria-label="Change password">
+    @* Which password: a person who signs in through the single sign-on (MatIdentity) changes their sign-in password there; MatOS's own one is only the way in while it does not answer. *@
+    @if (Model.Security.SignIn == AccountSignIn.SingleSignOn)
+    {
+        <div class="mat-card" role="group" aria-label="Sign-in password">
+            <div class="mat-card__head"><icon name="key" /><span class="mat-card__title">Your sign-in password</span></div>
             <div class="mat-card__body mat-stack">
-                <mat-field label="Current password" asp-for="Input.CurrentPassword" required="true">
-                    <input asp-for="Input.CurrentPassword" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your current password." />
-                </mat-field>
-                <mat-field label="New password" asp-for="Input.NewPassword" required="true" hint="At least 8 characters.">
-                    <input asp-for="Input.NewPassword" type="password" class="mat-input" autocomplete="new-password" required minlength="8" data-msg-required="Please enter a new password." data-msg-range="Use at least 8 characters." />
-                </mat-field>
-                <mat-field label="Confirm new password" asp-for="Input.ConfirmPassword" required="true">
-                    <input asp-for="Input.ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" required data-msg-required="Please repeat the new password." />
-                </mat-field>
+                <p>You sign in once for MatOS and all your apps. That password is changed where you sign in.</p>
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <a class="mat-btn mat-btn--primary" href="@Model.Security.PasswordUrl" target="_blank" rel="noopener"><icon name="external" /><span>Change your sign-in password</span></a>
+                </div>
+                <p class="mat-hint">It opens in a new tab.</p>
             </div>
         </div>
+    }
 
-        <div class="mat-btn-row">
-            <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
-            <a href="/Account/Profile" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
-        </div>
-    </form>
+    @if (Model.Security.OffersLocalPassword)
+    {
+        <form method="post" class="mat-form" novalidate>
+            <partial name="_ValidationSummary" />
+
+            @if (Model.Security.SignIn == AccountSignIn.SingleSignOn)
+            {
+                <p class="mat-hint">Below is the password of MatOS itself. It is used only when the sign-in for all your apps does not answer, and changing it leaves your sign-in password as it is.</p>
+            }
+
+            @* The fields on one surface, without a title of their own: the tab says what this is (as the other settings). *@
+            <div class="mat-card" role="group" aria-label="@(Model.Security.SignIn == AccountSignIn.SingleSignOn ? "Change the password of MatOS itself" : "Change password")">
+                <div class="mat-card__body mat-stack">
+                    <mat-field label="Current password" asp-for="Input.CurrentPassword" required="true">
+                        <input asp-for="Input.CurrentPassword" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your current password." />
+                    </mat-field>
+                    <mat-field label="New password" asp-for="Input.NewPassword" required="true" hint="At least 8 characters.">
+                        <input asp-for="Input.NewPassword" type="password" class="mat-input" autocomplete="new-password" required minlength="8" data-msg-required="Please enter a new password." data-msg-range="Use at least 8 characters." />
+                    </mat-field>
+                    <mat-field label="Confirm new password" asp-for="Input.ConfirmPassword" required="true">
+                        <input asp-for="Input.ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" required data-msg-required="Please repeat the new password." />
+                    </mat-field>
+                </div>
+            </div>
+
+            <div class="mat-btn-row">
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+                <a href="/Account/Profile" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+            </div>
+        </form>
+    }
 }

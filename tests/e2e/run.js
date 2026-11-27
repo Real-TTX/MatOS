@@ -42,7 +42,7 @@ function expectEqual(actual, expected, what) {
 
 const pages = [
   '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
-  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password',
+  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
   '/Start',
 ];
 
@@ -506,6 +506,21 @@ const pages = [
     await page.waitForLoadState('networkidle');
     expectTrue(await page.locator('[data-validation-summary]:not([hidden]) li').count() >= 1, 'a message in the summary');
     expectEqual(await page.locator('.mat-field.is-invalid').count(), 1, 'the field is marked');
+  });
+  await check('the tab Security explains the second step and links it only where it lives, in a new tab', async () => {
+    await page.goto(BASE + '/Account/Profile?tab=security');
+    expectEqual(await page.locator('.mat-tabs [aria-current="page"]').filter({ hasText: 'Security' }).count(), 1, 'the tab is active');
+    expectEqual(await page.locator('[aria-label="Second step"]').count(), 1, 'the card of the second step');
+    const links = page.locator('[aria-label="Second step"] a.mat-btn');
+    for (let i = 0; i < await links.count(); i++) {
+      const href = await links.nth(i).getAttribute('href');
+      expectTrue(!!href && href !== '#', 'a button goes somewhere');
+      if (/^https?:/.test(href)) {
+        expectEqual(await links.nth(i).getAttribute('target'), '_blank', 'the page of the second step opens in a new tab');
+        expectTrue(/\/Account\/Security$/.test(href), 'it is the page of the second step');
+      }
+    }
+    expectEqual(/MatIdentity/.test(await page.locator('[aria-label="Second step"]').innerText()), false, 'the tab does not name the engine');
   });
   await check('a saved schedule is a toast once, and deleting it asks first', async () => {
     await page.goto(BASE + '/Backups/ScheduleEdit');

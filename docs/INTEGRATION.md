@@ -46,6 +46,13 @@ contract, [ENGINES.md](ENGINES.md) has been updated to what was built (schedule 
   guessed as the last two labels (wrong for `example.co.uk`; MatOS always sends it).
 - Dynamic (pattern) rules are not part of the API. There is no `arm64` image yet.
 
+**MatIdentity** (no branch of its own for MatOS: its changes for MatOS went to its `dev`)
+- Its account pages (`/Account/Profile`, `/Account/Security`) are not branded: a person of MatOS who opens *Set up or change the second step* or *Change your sign-in
+  password* from MatOS's account sees MatIdentity's own shell and name. Its branded sign-in covers the pages of a sign-in only (`SignInBranding.Pages`); a branded
+  variant of the account layout (without its menu, the tabs and links of MatIdentity) would be needed. Not changed: no branch is named for it here, and it is more than a
+  small change. Decide whether it should be done (docs/ARCHITECTURE.md "The second step").
+- Nothing tells a broker whether a person's second step is on (SCIM and `/api/v1` have no field for it), so MatOS's tab *Security* cannot show it.
+
 ## What MatOS does about the engines
 
 The engine layer, its fallbacks and the clean-up MatOS does are in [ARCHITECTURE.md](ARCHITECTURE.md). In short: it only writes objects marked `managedBy: matos`, only deletes what it created,
