@@ -1,13 +1,188 @@
 @page
+@model MatOS.Services.Pages.Admin.StatisticsModel
 @{
     ViewData["Title"] = "Statistics";
-    ViewData["PageSub"] = "Who uses the tunnel, the DNS and the API, and how much.";
+    ViewData["PageSub"] = "Who uses the tunnel, the DNS and the API, what and how much. Times in UTC; the counts are written every minute.";
     ViewData["Crumbs"] = Crumbs.Of(("Statistics", null));
+    ViewData["Width"] = "wide";
+    var p = Model.Period;
+    var t = Model.Totals;
+    var tiles = new (string Label, string Value)[]
+    {
+        ("Traffic", AdminFormat.Bytes(t.Bytes)),
+        ("Connections", AdminFormat.Number(t.Connections)),
+        ("Visitors (counted per hour)", AdminFormat.Number(t.Visitors)),
+        ("Refused connections", AdminFormat.Number(t.Refused)),
+        ("DNS answers", AdminFormat.Number(Model.DnsTotals.Queries)),
+        ("Registrations", AdminFormat.Number(Model.ApiTotals.Registrations)),
+    };
+    string Details(string name) => $"/admin/Installations/Details?name={Uri.EscapeDataString(name)}&period={p.Key}";
+    var periodNav = new PeriodNav(p, "/admin/Statistics");
+    var byInstance = new UsageTable($"By installation, {p.Label}", "Installation", Model.ByInstance) { Link = Details, Mono = true };
+    var byHost = new UsageTable($"By app, {p.Label}", "App", Model.ByHost) { Text = AdminFormat.Host, Mono = true };
+    var byWay = new UsageTable($"By way, {p.Label}", "Way", Model.ByWay) { Text = MatOS.Services.Usage.UsageStats.WayText };
 }
 
-<div class="mat-empty">
-    <span class="mat-empty__icon"><icon name="bar-chart" /></span>
-    <div class="mat-empty__title">No statistics yet</div>
-    <p>The service does not collect usage numbers yet. Until it does, the overview and the tunnels show what happens right now.</p>
-    <a class="mat-btn mat-btn--secondary" href="/admin/Tunnels">Show the tunnels</a>
+<div class="mat-stack mat-stack--lg">
+    <div class="msv-section-head">
+        <p class="mat-muted">Everything below is of @p.Label.</p>
+        <partial name="_Period" model="periodNav" />
+    </div>
+
+    <section class="mat-grid mat-grid--3" aria-label="Totals of @p.Label">
+        @foreach (var tile in tiles)
+        {
+            <div class="mat-card">
+                <div class="mat-card__body mat-stat">
+                    <span class="mat-stat__label">@tile.Label</span>
+                    <span class="mat-stat__value">@tile.Value</span>
+                </div>
+            </div>
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="traffic-title">
+        <h2 class="mat-itemlist__header" id="traffic-title">Traffic through the tunnels</h2>
+        <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Traffic" /></div></div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="visitors-title">
+        <h2 class="mat-itemlist__header" id="visitors-title">Visitors</h2>
+        <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Visitors" /></div></div>
+        <p class="mat-small mat-muted">A visitor is a distinct address in one hour, counted as a number only: the address is never stored, and the next hour counts afresh.</p>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="by-instance-title">
+        <h2 class="mat-itemlist__header" id="by-instance-title">By installation</h2>
+        @if (Model.ByInstance.Count == 0)
+        {
+            <p class="mat-muted">No installation had traffic in this period.</p>
+        }
+        else
+        {
+            <partial name="_UsageTable" model="byInstance" />
+            @if (Model.InstancesWithUsage > Model.ByInstance.Count)
+            {
+                <p class="mat-small mat-muted">The @Model.ByInstance.Count with the most traffic of @AdminFormat.Number(Model.InstancesWithUsage).</p>
+            }
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="by-app-title">
+        <h2 class="mat-itemlist__header" id="by-app-title">By app</h2>
+        <p class="mat-small mat-muted">The host a visitor asked for, below any installation: the installation itself, an app (<span class="mat-mono">app.name.zone</span>) or an own domain.</p>
+        @if (Model.ByHost.Count == 0)
+        {
+            <p class="mat-muted">No app had traffic in this period.</p>
+        }
+        else
+        {
+            <partial name="_UsageTable" model="byHost" />
+            @if (Model.HostsWithUsage > Model.ByHost.Count)
+            {
+                <p class="mat-small mat-muted">The @Model.ByHost.Count with the most traffic of @AdminFormat.Number(Model.HostsWithUsage).</p>
+            }
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="by-way-title">
+        <h2 class="mat-itemlist__header" id="by-way-title">By way</h2>
+        <partial name="_UsageTable" model="byWay" />
+
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Tunnel or direct, @p.Label</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Mode</th>
+                        <th scope="col" class="mat-num">Names</th>
+                        <th scope="col" class="mat-num">Traffic at the edge</th>
+                        <th scope="col" class="mat-num">DNS answers</th>
+                        <th scope="col" class="mat-num mat-hide-sm">DynDNS updates</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in Model.ByMode)
+                    {
+                        <tr>
+                            <td data-label="Mode">@m.Mode</td>
+                            <td data-label="Names" class="mat-num">@AdminFormat.Number(m.Installations)</td>
+                            <td data-label="Traffic at the edge" class="mat-num">@AdminFormat.Bytes(m.Edge.Bytes)</td>
+                            <td data-label="DNS answers" class="mat-num">@AdminFormat.Number(m.Dns.Queries)</td>
+                            <td data-label="DynDNS updates" class="mat-num mat-hide-sm">@AdminFormat.Number(m.Dns.Updates)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="mat-small mat-muted">A name in direct mode is reached at its own address: only its DNS answers pass this service. The mode is the one each name has now.</p>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="refusals-title">
+        <h2 class="mat-itemlist__header" id="refusals-title">Refused connections by reason</h2>
+        <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Refusals" /></div></div>
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Refused connections by reason, @p.Label</caption>
+                <thead><tr><th scope="col">Reason</th><th scope="col" class="mat-num">Refused</th></tr></thead>
+                <tbody>
+                    <tr><td data-label="Reason">No tunnel: the installation was offline, or its tunnel went while the visitor waited</td><td data-label="Refused" class="mat-num">@AdminFormat.Number(t.RefusedNoTunnel)</td></tr>
+                    <tr><td data-label="Reason">A limit of the edge (all connections, the streams of one installation)</td><td data-label="Refused" class="mat-num">@AdminFormat.Number(t.RefusedLimit)</td></tr>
+                    <tr><td data-label="Reason">Not picked up in time by the installation</td><td data-label="Refused" class="mat-num">@AdminFormat.Number(t.RefusedTimeout)</td></tr>
+                    <tr><td data-label="Reason">The name is blocked</td><td data-label="Refused" class="mat-num">@AdminFormat.Number(t.RefusedBlocked)</td></tr>
+                </tbody>
+            </table>
+        </div>
+        @if (Model.MostRefused.Count > 0)
+        {
+            <h3 class="mat-itemlist__header">Refused the most</h3>
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">The installations whose visitors were refused the most, @p.Label</caption>
+                    <thead><tr><th scope="col">Installation</th><th scope="col" class="mat-num">Refused</th><th scope="col" class="mat-num mat-hide-sm">No tunnel</th><th scope="col" class="mat-num mat-hide-sm">Limit</th><th scope="col" class="mat-num mat-hide-sm">Timeout</th><th scope="col" class="mat-num mat-hide-sm">Blocked</th></tr></thead>
+                    <tbody>
+                        @foreach (var u in Model.MostRefused)
+                        {
+                            <tr>
+                                <td data-label="Installation"><div class="mat-table__name mat-mono"><a href="@Details(u.Key)">@u.Key</a></div></td>
+                                <td data-label="Refused" class="mat-num">@AdminFormat.Number(u.Totals.Refused)</td>
+                                <td data-label="No tunnel" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.RefusedNoTunnel)</td>
+                                <td data-label="Limit" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.RefusedLimit)</td>
+                                <td data-label="Timeout" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.RefusedTimeout)</td>
+                                <td data-label="Blocked" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.RefusedBlocked)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="dns-title">
+        <h2 class="mat-itemlist__header" id="dns-title">DNS and DynDNS</h2>
+        <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Dns" /></div></div>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Answers</dt><dd>@AdminFormat.Number(Model.DnsTotals.Queries)</dd>
+                <dt>For the zone itself</dt><dd>@AdminFormat.Number(Model.DnsZone.QueriesA + Model.DnsZone.QueriesAaaa + Model.DnsZone.QueriesOther)</dd>
+                <dt>Unknown names (NXDOMAIN)</dt><dd>@AdminFormat.Number(Model.DnsTotals.NxDomain)</dd>
+                <dt>DynDNS updates</dt><dd>@AdminFormat.Number(Model.DnsTotals.Updates)</dd>
+                <dt>Of them a new address</dt><dd>@AdminFormat.Number(Model.DnsTotals.AddressChanges)</dd>
+            </dl>
+        </div></div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="api-title">
+        <h2 class="mat-itemlist__header" id="api-title">The API per day</h2>
+        <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Api" /></div></div>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Name checks</dt><dd>@AdminFormat.Number(Model.ApiTotals.NameChecks)</dd>
+                <dt>Port checks</dt><dd>@AdminFormat.Number(Model.ApiTotals.PortChecks)</dd>
+                <dt>Registrations</dt><dd>@AdminFormat.Number(Model.ApiTotals.Registrations)</dd>
+                <dt>Give-backs by the installations</dt><dd>@AdminFormat.Number(Model.ApiTotals.GiveBacks)</dd>
+                <dt>Refused by a rate limit</dt><dd>@AdminFormat.Number(Model.ApiTotals.RateLimited)</dd>
+            </dl>
+        </div></div>
+    </section>
 </div>

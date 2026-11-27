@@ -1,0 +1,40 @@
+@model SessionList
+@* Tunnels that ended: when, how long, why, from where, and what they carried (secondary columns hidden on a phone). *@
+<div class="mat-table-wrap">
+    <table class="mat-table">
+        <caption class="mat-sr-only">@Model.Caption</caption>
+        <thead>
+            <tr>
+                @if (Model.WithName)
+                {
+                    <th scope="col">Name</th>
+                }
+                <th scope="col">Ended</th>
+                <th scope="col">Lasted</th>
+                <th scope="col">Why</th>
+                <th scope="col" class="mat-hide-sm">From</th>
+                <th scope="col" class="mat-hide-sm">Version</th>
+                <th scope="col" class="mat-num mat-hide-sm">Streams</th>
+                <th scope="col" class="mat-num mat-hide-sm">Traffic</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in Model.Rows)
+            {
+                <tr>
+                    @if (Model.WithName)
+                    {
+                        <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@s.InstanceName">@s.InstanceName</a></div></td>
+                    }
+                    <td data-label="Ended" class="mat-nowrap">@AdminFormat.Time(s.DisconnectedAt)</td>
+                    <td data-label="Lasted" class="mat-nowrap">@AdminFormat.Duration(s.DisconnectedAt - s.ConnectedAt)</td>
+                    <td data-label="Why">@AdminFormat.Reason(s.Reason)</td>
+                    <td data-label="From" class="mat-hide-sm mat-mono">@AdminFormat.Text(s.RemoteAddress)</td>
+                    <td data-label="Version" class="mat-hide-sm">@AdminFormat.Text(s.Version)</td>
+                    <td data-label="Streams" class="mat-num mat-hide-sm">@AdminFormat.Number(s.StreamsServed)</td>
+                    <td data-label="Traffic" class="mat-num mat-hide-sm">@AdminFormat.Bytes(s.BytesToInstance + s.BytesToVisitor)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

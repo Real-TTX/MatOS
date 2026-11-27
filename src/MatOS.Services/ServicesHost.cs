@@ -118,6 +118,7 @@ public static class ServicesHost
         app.MapTunnel();
         app.MapRazorPages();
         app.MapAdminApi();
+        app.MapLiveTunnels();
         return app;
     }
 
@@ -138,6 +139,7 @@ public static class ServicesHost
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<AdminAccounts>();
         services.AddScoped<InstanceAdmin>();
+        services.AddScoped<UsageStats>();
         services.AddAdminAuth();
         services.AddRazorPages(o =>
         {

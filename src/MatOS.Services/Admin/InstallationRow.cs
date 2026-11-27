@@ -53,4 +53,49 @@ public static class AdminFormat
         : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min"
         : span.TotalDays < 2 ? $"{(int)span.TotalHours} h"
         : $"{(int)span.TotalDays} days";
+
+    /// <summary>A count with the thousands apart: "12,345".</summary>
+    public static string Number(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>An amount of data in the units of 1000 (as a network counts): "0 B", "950 B", "1.2 kB", "3.4 GB".</summary>
+    public static string Bytes(long value)
+    {
+        string[] units = ["B", "kB", "MB", "GB", "TB", "PB"];
+        double size = Math.Max(0, value);
+        var unit = 0;
+        while (size >= 1000 && unit < units.Length - 1)
+        {
+            size /= 1000;
+            unit++;
+        }
+
+        return unit == 0
+            ? $"{(long)size} B"
+            : size.ToString(size < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " " + units[unit];
+    }
+
+    /// <summary>Seconds as a duration: "45 s", "12 min", "3.5 h".</summary>
+    public static string Seconds(long seconds) => seconds < 60 ? $"{seconds} s"
+        : seconds < 3600 ? $"{seconds / 60} min"
+        : (seconds / 3600.0).ToString("0.#", CultureInfo.InvariantCulture) + " h";
+
+    /// <summary>Why a tunnel ended, in words.</summary>
+    public static string Reason(TunnelCloseReason reason) => reason switch
+    {
+        TunnelCloseReason.Replaced => "Replaced by a new connection",
+        TunnelCloseReason.Silent => "Silent (no pong)",
+        TunnelCloseReason.GivenBack => "Name given back",
+        TunnelCloseReason.Blocked => "Name blocked",
+        TunnelCloseReason.Disconnected => "Disconnected by an administrator",
+        TunnelCloseReason.ServiceStopped => "Service stopped",
+        _ => "Closed by MatOS or the network",
+    };
+
+    /// <summary>A host of an installation in words: the installation itself, an app below it, its own domain, the rest.</summary>
+    public static string Host(string host) => host switch
+    {
+        "" => "The installation itself",
+        Usage.UsageRecorder.OtherHosts => "Other hosts (beyond 32 an hour)",
+        _ => host,
+    };
 }

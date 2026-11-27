@@ -2,16 +2,17 @@
 @model MatOS.Services.Pages.Admin.IndexModel
 @{
     ViewData["Title"] = "Overview";
-    ViewData["PageSub"] = "MatOS Services right now: the names, the tunnels and the visitors at the edge.";
-    var tiles = new (string Label, int Value, string Href)[]
+    ViewData["PageSub"] = "MatOS Services right now: the names, the tunnels, the visitors at the edge and the traffic (written every minute, times in UTC).";
+    var tiles = new (string Label, string Value, string? Note, string Href)[]
     {
-        ("MatOS installations", Model.Installations, "/admin/Installations?kind=matos"),
-        ("DynDNS names", Model.DynDnsNames, "/admin/Installations?kind=dyndns"),
-        ("Tunnels connected now", Model.Tunnels, "/admin/Tunnels"),
-        ("Visitors at the edge now", Model.Visitors, "/admin/Tunnels"),
-        ("Registrations this week", Model.RegisteredThisWeek, "/admin/Installations?sort=created&dir=desc"),
-        ("Blocked names", Model.Blocked, "/admin/Installations?blocked=yes"),
+        ("MatOS installations", AdminFormat.Number(Model.Installations), $"{AdminFormat.Number(Model.DynDnsNames)} DynDNS names · {AdminFormat.Number(Model.Blocked)} blocked", "/admin/Installations"),
+        ("Tunnels connected now", AdminFormat.Number(Model.Tunnels), null, "/admin/Tunnels"),
+        ("Visitors at the edge now", AdminFormat.Number(Model.Visitors), "Open connections", "/admin/Tunnels"),
+        ("Traffic today", AdminFormat.Bytes(Model.Today.Bytes), $"{AdminFormat.Number(Model.Today.Connections)} connections", "/admin/Statistics"),
+        ("Registrations this week", AdminFormat.Number(Model.RegisteredThisWeek), "Names still registered", "/admin/Installations?sort=created&dir=desc"),
+        ("DNS answers today", AdminFormat.Number(Model.DnsToday.Queries), $"{AdminFormat.Number(Model.DnsToday.Updates)} DynDNS updates", "/admin/Statistics#dns-title"),
     };
+    var periodNav = new PeriodNav(Model.Period, "/admin", "traffic");
 }
 
 <div class="mat-stack mat-stack--lg">
@@ -22,8 +23,109 @@
                 <div class="mat-card__body mat-stat">
                     <span class="mat-stat__label">@tile.Label</span>
                     <span class="mat-stat__value">@tile.Value</span>
+                    @if (tile.Note is not null)
+                    {
+                        <span class="mat-small mat-muted">@tile.Note</span>
+                    }
                 </div>
             </a>
+        }
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="traffic-title" id="traffic">
+        <div class="msv-section-head">
+            <h2 class="mat-itemlist__header" id="traffic-title">Traffic</h2>
+            <partial name="_Period" model="periodNav" />
+        </div>
+        <div class="mat-card"><div class="mat-card__body">
+            <partial name="_Chart" model="Model.Traffic" />
+        </div></div>
+    </section>
+
+    <div class="mat-grid mat-grid--2">
+        <section class="mat-stack mat-stack--sm" aria-labelledby="top-traffic-title">
+            <h2 class="mat-itemlist__header" id="top-traffic-title">Most traffic, @Model.Period.Label</h2>
+            @if (Model.TopByTraffic.Count == 0)
+            {
+                <p class="mat-muted">No installation had traffic in this period.</p>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table">
+                        <caption class="mat-sr-only">The installations with the most traffic, @Model.Period.Label</caption>
+                        <thead><tr><th scope="col">Name</th><th scope="col" class="mat-num">Traffic</th><th scope="col" class="mat-num mat-hide-sm">Connections</th></tr></thead>
+                        <tbody>
+                            @foreach (var u in Model.TopByTraffic)
+                            {
+                                <tr>
+                                    <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@u.Key&period=@Model.Period.Key">@u.Key</a></div></td>
+                                    <td data-label="Traffic" class="mat-num">@AdminFormat.Bytes(u.Totals.Bytes)</td>
+                                    <td data-label="Connections" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.Connections)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="mat-stack mat-stack--sm" aria-labelledby="top-visitors-title">
+            <h2 class="mat-itemlist__header" id="top-visitors-title">Most visitors, @Model.Period.Label</h2>
+            @if (Model.TopByVisitors.Count == 0)
+            {
+                <p class="mat-muted">No installation had visitors in this period.</p>
+            }
+            else
+            {
+                <div class="mat-table-wrap">
+                    <table class="mat-table">
+                        <caption class="mat-sr-only">The installations with the most visitors, @Model.Period.Label</caption>
+                        <thead><tr><th scope="col">Name</th><th scope="col" class="mat-num">Visitors</th><th scope="col" class="mat-num mat-hide-sm">Connections</th></tr></thead>
+                        <tbody>
+                            @foreach (var u in Model.TopByVisitors)
+                            {
+                                <tr>
+                                    <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@u.Key&period=@Model.Period.Key">@u.Key</a></div></td>
+                                    <td data-label="Visitors" class="mat-num">@AdminFormat.Number(u.Totals.Visitors)</td>
+                                    <td data-label="Connections" class="mat-num mat-hide-sm">@AdminFormat.Number(u.Totals.Connections)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (Model.Period.Size != MatOS.Services.Usage.BucketSize.Hour)
+                {
+                    <p class="mat-small mat-muted">Visitors are counted per hour and added up: the same visitor in two hours counts twice.</p>
+                }
+            }
+        </section>
+    </div>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="dropped-title">
+        <h2 class="mat-itemlist__header" id="dropped-title">Tunnels that dropped often, last 24 hours</h2>
+        @if (Model.Dropped.Count == 0)
+        {
+            <p class="mat-muted">No tunnel ended @IndexModel.DroppedAtLeast times or more in the last 24 hours.</p>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Tunnels that ended @IndexModel.DroppedAtLeast times or more in the last 24 hours</caption>
+                    <thead><tr><th scope="col">Name</th><th scope="col" class="mat-num">Ended</th><th scope="col" class="mat-hide-sm">Last</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in Model.Dropped)
+                        {
+                            <tr>
+                                <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@d.Name#sessions-title">@d.Name</a></div></td>
+                                <td data-label="Ended" class="mat-num">@d.Sessions times</td>
+                                <td data-label="Last" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(d.Last)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </section>
 

@@ -1,0 +1,45 @@
+@model UsageTable
+@* Usage by a key: the traffic both ways, the connections, the visitors and the refusals (secondary columns hidden on a phone). *@
+<div class="mat-table-wrap">
+    <table class="mat-table">
+        <caption class="mat-sr-only">@Model.Caption</caption>
+        <thead>
+            <tr>
+                <th scope="col">@Model.KeyHeader</th>
+                <th scope="col" class="mat-num">Traffic</th>
+                <th scope="col" class="mat-num">Connections</th>
+                <th scope="col" class="mat-num mat-hide-sm">Visitors</th>
+                <th scope="col" class="mat-num mat-hide-sm">To the visitors</th>
+                <th scope="col" class="mat-num mat-hide-sm">To the installation</th>
+                <th scope="col" class="mat-num mat-hide-sm">Refused</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model.Rows)
+            {
+                var t = row.Totals;
+                var link = Model.Link(row.Key);
+                <tr>
+                    <td data-label="@Model.KeyHeader">
+                        <div class="mat-table__name @(Model.Mono ? "mat-mono" : "")">
+                            @if (link is null)
+                            {
+                                @Model.Text(row.Key)
+                            }
+                            else
+                            {
+                                <a href="@link">@Model.Text(row.Key)</a>
+                            }
+                        </div>
+                    </td>
+                    <td data-label="Traffic" class="mat-num">@AdminFormat.Bytes(t.Bytes)</td>
+                    <td data-label="Connections" class="mat-num">@AdminFormat.Number(t.Connections)</td>
+                    <td data-label="Visitors" class="mat-num mat-hide-sm">@AdminFormat.Number(t.Visitors)</td>
+                    <td data-label="To the visitors" class="mat-num mat-hide-sm">@AdminFormat.Bytes(t.BytesToVisitor)</td>
+                    <td data-label="To the installation" class="mat-num mat-hide-sm">@AdminFormat.Bytes(t.BytesToInstance)</td>
+                    <td data-label="Refused" class="mat-num mat-hide-sm">@AdminFormat.Number(t.Refused)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

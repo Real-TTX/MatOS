@@ -2,36 +2,72 @@
 @model MatOS.Services.Pages.Admin.TunnelsModel
 @{
     ViewData["Title"] = "Tunnels";
-    ViewData["PageSub"] = "The installations whose tunnel is connected right now.";
+    ViewData["PageSub"] = "The installations whose tunnel is connected right now, and the tunnels that ended last.";
     ViewData["Crumbs"] = Crumbs.Of(("Tunnels", null));
+    ViewData["Width"] = "wide";
+    var ended = new SessionList("The tunnels that ended last", Model.Ended, WithName: true);
 }
 
-@if (Model.Sessions.Count == 0)
-{
-    <div class="mat-empty">
-        <span class="mat-empty__icon"><icon name="route" /></span>
-        <div class="mat-empty__title">No tunnel is connected</div>
-        <p>A MatOS installation in tunnel mode connects its tunnel by itself.</p>
-    </div>
-}
-else
-{
-    <div class="mat-table-wrap">
-        <table class="mat-table">
-            <caption class="mat-sr-only">Connected tunnels</caption>
-            <thead><tr><th scope="col">Name</th><th scope="col">Connected for</th><th scope="col">Streams</th><th scope="col" class="mat-hide-sm">Since</th><th scope="col" class="mat-hide-sm">From</th></tr></thead>
-            <tbody>
-                @foreach (var s in Model.Sessions)
-                {
+<div class="mat-stack mat-stack--lg">
+    <section class="mat-stack mat-stack--sm" aria-labelledby="live-title" data-live-tunnels data-src="/admin/api/tunnels" data-every="@TunnelsModel.RefreshSeconds">
+        <div class="msv-section-head">
+            <h2 class="mat-itemlist__header" id="live-title">Connected now</h2>
+            <span class="mat-small mat-muted" aria-live="polite">As of <span data-live-at>@AdminFormat.Time(Model.Now)</span></span>
+        </div>
+
+        <div class="mat-empty" data-live-empty hidden="@(Model.Live.Count > 0)">
+            <span class="mat-empty__icon"><icon name="route" /></span>
+            <div class="mat-empty__title">No tunnel is connected</div>
+            <p>A MatOS installation in tunnel mode connects its tunnel by itself.</p>
+        </div>
+
+        <div class="mat-table-wrap" data-live-table hidden="@(Model.Live.Count == 0)">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Connected tunnels</caption>
+                <thead>
                     <tr>
-                        <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@s.Name">@s.Name</a></div></td>
-                        <td data-label="Connected for">@AdminFormat.Duration(Model.Now - s.ConnectedAt)</td>
-                        <td data-label="Streams">@s.ActiveStreams</td>
-                        <td data-label="Since" class="mat-hide-sm mat-muted mat-nowrap">@AdminFormat.Time(s.ConnectedAt)</td>
-                        <td data-label="From" class="mat-hide-sm mat-mono">@AdminFormat.Text(s.RemoteAddress)</td>
+                        <th scope="col">Name</th>
+                        <th scope="col">Connected for</th>
+                        <th scope="col" class="mat-num">Streams now</th>
+                        <th scope="col" class="mat-num">This session</th>
+                        <th scope="col" class="mat-hide-sm">Since</th>
+                        <th scope="col" class="mat-hide-sm">From</th>
+                        <th scope="col" class="mat-hide-sm">Version</th>
+                        <th scope="col" class="mat-num mat-hide-sm">Streams served</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody data-live-rows>
+                    @foreach (var t in Model.Live)
+                    {
+                        <tr>
+                            <td data-label="Name"><div class="mat-table__name"><a href="/admin/Installations/Details?name=@t.Name">@t.Name</a></div></td>
+                            <td data-label="Connected for">@t.ConnectedFor</td>
+                            <td data-label="Streams now" class="mat-num">@t.Streams</td>
+                            <td data-label="This session" class="mat-num" title="To the visitors @t.BytesToVisitor, to the installation @t.BytesToInstance">@t.Bytes</td>
+                            <td data-label="Since" class="mat-hide-sm mat-muted mat-nowrap">@t.ConnectedAt</td>
+                            <td data-label="From" class="mat-hide-sm mat-mono">@t.From</td>
+                            <td data-label="Version" class="mat-hide-sm">@t.Version</td>
+                            <td data-label="Streams served" class="mat-num mat-hide-sm">@t.Served</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="ended-title">
+        <h2 class="mat-itemlist__header" id="ended-title">Ended last</h2>
+        @if (Model.Ended.Count == 0)
+        {
+            <p class="mat-muted">No tunnel has ended yet.</p>
+        }
+        else
+        {
+            <partial name="_Sessions" model="ended" />
+        }
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/services.js" asp-append-version="true"></script>
 }

@@ -5,17 +5,29 @@ using MatOS.Services.Configuration;
 using MatOS.Services.Data;
 using MatOS.Services.Instances;
 using MatOS.Services.Tunnel;
+using MatOS.Services.Usage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatOS.Services.Pages.Admin.Installations;
 
-/// <summary>One installation: its facts, its live tunnel, its domains, what administrators did to it, and the actions.</summary>
-public sealed class DetailsModel(ServicesDbContext db, TunnelRegistry registry, InstanceAdmin admin, ServicesOptions options, TimeProvider time) : PageModel
+/// <summary>
+/// One installation: its facts, its live tunnel, its traffic and visitors per app, its tunnel sessions, its DNS answers and DynDNS updates, its
+/// domains, what administrators did to it, and the actions.
+/// </summary>
+public sealed class DetailsModel(
+    ServicesDbContext db, TunnelRegistry registry, InstanceAdmin admin, UsageStats stats, ServicesOptions options, TimeProvider time) : PageModel
 {
+    /// <summary>How many ended tunnels the page lists.</summary>
+    public const int SessionRows = 20;
+
     [BindProperty(SupportsGet = true)]
     public string? Name { get; set; }
+
+    /// <summary>The period of its statistics (<c>24h</c>, <c>7d</c>, <c>30d</c>, <c>12m</c>).</summary>
+    [BindProperty(SupportsGet = true, Name = "period")]
+    public string? PeriodKey { get; set; }
 
     /// <summary>The reason of a block (the form Block).</summary>
     [BindProperty]
@@ -41,6 +53,22 @@ public sealed class DetailsModel(ServicesDbContext db, TunnelRegistry registry, 
 
     public DateTimeOffset Now => time.GetUtcNow();
 
+    public StatsPeriod Period { get; private set; } = default!;
+
+    public UsageTotals Usage { get; private set; } = new();
+
+    public Chart Traffic { get; private set; } = default!;
+
+    public Chart Visitors { get; private set; } = default!;
+
+    public IReadOnlyList<KeyedUsage> ByHost { get; private set; } = [];
+
+    public DnsTotals Dns { get; private set; } = new();
+
+    public Chart DnsChart { get; private set; } = default!;
+
+    public IReadOnlyList<TunnelSessionEntry> Sessions { get; private set; } = [];
+
     public async Task<IActionResult> OnGetAsync()
     {
         if (!await LoadAsync())
@@ -48,9 +76,23 @@ public sealed class DetailsModel(ServicesDbContext db, TunnelRegistry registry, 
             return NotFound();
         }
 
+        var ct = HttpContext.RequestAborted;
         Domains = Instance.Domains.OrderBy(d => d.Domain, StringComparer.Ordinal).ToList();
-        History = await admin.HistoryAsync(Instance.Name, HttpContext.RequestAborted);
+        History = await admin.HistoryAsync(Instance.Name, ct);
         PortCheck = ReadPortCheck(Instance.LastPortCheck);
+
+        // Its statistics, from its registration on (an earlier holder of the name is not this installation: InstanceUsage).
+        Period = StatsPeriod.Of(PeriodKey, Now);
+        var series = await stats.SeriesAsync(Period, Instance, ct);
+        Usage = UsageTotals.Sum(series);
+        Traffic = StatsCharts.Traffic("traffic", Period, series);
+        Visitors = StatsCharts.Visitors("visitors", Period, series);
+        ByHost = (await stats.ByHostAsync(Period, Instance, ct)).Where(u => !u.Totals.IsEmpty)
+            .OrderByDescending(u => u.Totals.Bytes).ThenByDescending(u => u.Totals.Connections).ThenBy(u => u.Key, StringComparer.Ordinal).ToList();
+        var dns = await stats.DnsSeriesAsync(Period, Instance, ct);
+        Dns = DnsTotals.Sum(dns);
+        DnsChart = StatsCharts.Dns("dns", Period, dns, zone: false);
+        Sessions = await stats.SessionsAsync(Instance, SessionRows, ct);
         return Page();
     }
 

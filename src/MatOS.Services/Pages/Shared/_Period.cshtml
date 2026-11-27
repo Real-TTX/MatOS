@@ -1,0 +1,9 @@
+@model PeriodNav
+@* The period of the statistics: a segmented control of links (the current one marked), MatUi's mat-seg. *@
+<nav class="mat-seg" aria-label="Period">
+    @foreach (var (key, text) in MatOS.Services.Usage.StatsPeriod.All)
+    {
+        var active = key == Model.Current.Key;
+        <a class="mat-seg__btn @(active ? "is-active" : "")" href="@Model.Href(key)" aria-current="@(active ? "true" : null)">@text</a>
+    }
+</nav>

@@ -1,0 +1,48 @@
+/* =====================================================================
+   MatOS Services: the few things only the admin area has.
+   Everything else (the shell, lists, tables, stats, the segmented control, colours, dark mode) comes from MatUi (the copy in MatOS.Web, linked).
+   The classes here start with msv-, the colours are tokens of the toolkit (rules CODE-02, CODE-04, COLOR-01).
+   MatUi has no chart yet: msv-chart is a candidate for MatDesign.
+   ===================================================================== */
+
+/* ---- A chart: server-rendered SVG (Admin/Charts.cs); geometry in attributes, every colour here ---- */
+.msv-chart { margin: 0; display: flex; flex-direction: column; gap: var(--mat-space-2); min-width: 0; }
+
+.msv-chart__head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--mat-space-2) var(--mat-space-4);
+  font-size: var(--mat-fs-xs); color: var(--mat-text-muted);
+}
+.msv-chart__legend { display: flex; flex-wrap: wrap; gap: var(--mat-space-2) var(--mat-space-4); margin: 0; padding: 0; list-style: none; }
+.msv-chart__legend li { display: inline-flex; align-items: center; gap: var(--mat-space-2); }
+.msv-chart__key { flex: none; width: 10px; height: 10px; border-radius: var(--mat-radius-xs); background: var(--mat-accent); }
+.msv-chart__max { font-variant-numeric: tabular-nums; }
+
+/* The drawing stretches to the width; its strokes keep their width (vector-effect), so it reads the same at 390 px and on a wide screen. */
+.msv-chart__plot { display: block; width: 100%; height: 160px; overflow: visible; }
+.msv-chart__grid { stroke: var(--mat-border); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.msv-chart__base { stroke: var(--mat-border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+.msv-chart__s1, .msv-chart__key--1 { fill: var(--mat-accent); background: var(--mat-accent); }
+.msv-chart__s2, .msv-chart__key--2 { fill: var(--mat-info); background: var(--mat-info); }
+.msv-chart__s3, .msv-chart__key--3 { fill: var(--mat-warning); background: var(--mat-warning); }
+.msv-chart__s4, .msv-chart__key--4 { fill: var(--mat-danger); background: var(--mat-danger); }
+
+.msv-chart__hit, .msv-chart__hits rect { fill: transparent; }
+.msv-chart__bars g:hover .msv-chart__hit, .msv-chart__hits rect:hover { fill: var(--mat-accent-soft); }
+
+.msv-chart__line { fill: none; stroke: var(--mat-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.msv-chart__area { fill: var(--mat-accent-soft); stroke: none; }
+
+.msv-chart__axis {
+  display: flex; justify-content: space-between; gap: var(--mat-space-2);
+  font-size: var(--mat-fs-xs); color: var(--mat-text-muted); font-variant-numeric: tabular-nums;
+}
+
+/* ---- The head of a section with a control at its end (the period) ---- */
+.msv-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--mat-space-3); }
+.msv-section-head .mat-itemlist__header { margin: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .msv-chart__hit, .msv-chart__hits rect { transition: fill var(--mat-dur-fast) var(--mat-ease); }
+}

@@ -116,6 +116,12 @@ random salt per hour, kept in memory for that hour only and dropped (never writt
 same visitor in two hours counts twice in a day's total. The addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address) are the
 operator's evidence and are stored. Retention (`Services__Usage__HourlyDays`, `DailyDays`, `TunnelSessionDays`): hourly rows 35 days, then rolled up into
 `UsageDay` and `DnsDay`, which are kept 400 days like `ApiDay`; tunnel sessions 180 days. A daily job rolls up and removes them for real.
+The admin area shows them for a period of 24 hours, 7 days, 30 days or 12 months (`?period=24h|7d|30d|12m`, UTC, up to a minute behind): the overview
+(the numbers of now and today, the traffic, the installations with the most traffic and visitors, the latest registrations, the tunnels that ended three
+times or more in 24 hours), Statistics (the traffic and visitors over time, by installation, by app, by way and by mode, the refusals by reason, the DNS and
+the API per day), an installation's own page (its traffic and visitors per app, its tunnel sessions, its DNS answers and DynDNS updates) and Tunnels (the
+connected ones, refreshed every 5 seconds from `GET /admin/api/tunnels`, signed in only, and the ones that ended last). The charts are SVG drawn on the
+server (`Admin/Charts.cs`, the colours in `wwwroot/css/services.css`), each with the table of its numbers.
 
 **Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
 `ns`, `ns1`, `ns2`, `dns`, `api`, `admin`, `root`, `services`, `service`, `matos`, `my`, `mattiverse`, `status`, `support`, `help`, `test`, `demo`, `app`, `apps`,

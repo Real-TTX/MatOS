@@ -8,6 +8,10 @@
     ViewData["PageSub"] = $"{i.Name}.{Model.Zone} · {row.Kind} · {row.Mode} mode";
     ViewData["Crumbs"] = Crumbs.Of(("Installations", "/admin/Installations"), (i.Name, null));
     var portCheck = Model.PortCheck;
+    var periodNav = new PeriodNav(Model.Period, $"/admin/Installations/Details?name={Uri.EscapeDataString(i.Name)}", "usage");
+    var byHost = new UsageTable($"Usage of {i.Name} per app, {Model.Period.Label}", "App", Model.ByHost) { Text = AdminFormat.Host, Mono = true };
+    var sessions = new SessionList($"The tunnel sessions of {i.Name}", Model.Sessions, WithName: false);
+    ViewData["Width"] = "wide";
 }
 
 @if (i.Blocked)
@@ -80,6 +84,65 @@
                 }
             </div>
         </div>
+    </section>
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="usage-title" id="usage">
+        <div class="msv-section-head">
+            <h2 class="mat-itemlist__header" id="usage-title">Usage, @Model.Period.Label</h2>
+            <partial name="_Period" model="periodNav" />
+        </div>
+        @if (i.DynDnsOnly)
+        {
+            <p class="mat-muted">A DynDNS name is reached at its own address: no visitor passes the edge, only its DNS answers and updates are counted (below).</p>
+        }
+        else
+        {
+            <div class="mat-grid mat-grid--4">
+                <div class="mat-card"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Traffic</span><span class="mat-stat__value">@AdminFormat.Bytes(Model.Usage.Bytes)</span></div></div>
+                <div class="mat-card"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Connections</span><span class="mat-stat__value">@AdminFormat.Number(Model.Usage.Connections)</span></div></div>
+                <div class="mat-card"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Visitors (counted per hour)</span><span class="mat-stat__value">@AdminFormat.Number(Model.Usage.Visitors)</span></div></div>
+                <div class="mat-card"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Refused</span><span class="mat-stat__value">@AdminFormat.Number(Model.Usage.Refused)</span></div></div>
+            </div>
+            <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Traffic" /></div></div>
+            <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.Visitors" /></div></div>
+
+            <h3 class="mat-itemlist__header">Per app</h3>
+            @if (Model.ByHost.Count == 0)
+            {
+                <p class="mat-muted">No visitor came through the edge in this period.</p>
+            }
+            else
+            {
+                <partial name="_UsageTable" model="byHost" />
+            }
+        }
+    </section>
+
+    @if (!i.DynDnsOnly)
+    {
+        <section class="mat-stack mat-stack--sm" aria-labelledby="sessions-title">
+            <h2 class="mat-itemlist__header" id="sessions-title">Tunnel sessions</h2>
+            @if (Model.Sessions.Count == 0)
+            {
+                <p class="mat-muted">No tunnel of this installation has ended yet.</p>
+            }
+            else
+            {
+                <partial name="_Sessions" model="sessions" />
+            }
+        </section>
+    }
+
+    <section class="mat-stack mat-stack--sm" aria-labelledby="dns-title">
+        <h2 class="mat-itemlist__header" id="dns-title">DNS and DynDNS, @Model.Period.Label</h2>
+        <div class="mat-card"><div class="mat-card__body"><partial name="_Chart" model="Model.DnsChart" /></div></div>
+        <div class="mat-card"><div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>DNS answers</dt><dd>@AdminFormat.Number(Model.Dns.Queries)</dd>
+                <dt>DynDNS updates</dt><dd>@AdminFormat.Number(Model.Dns.Updates)</dd>
+                <dt>Of them a new address</dt><dd>@AdminFormat.Number(Model.Dns.AddressChanges)</dd>
+            </dl>
+        </div></div>
     </section>
 
     <section class="mat-stack mat-stack--sm" aria-labelledby="domains-title">

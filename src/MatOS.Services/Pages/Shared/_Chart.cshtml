@@ -1,0 +1,39 @@
+@model Chart
+@*
+    A chart of the statistics and, under it, the table of its numbers (folded, so a page of several charts stays short): the drawing is never the
+    only place a number is. The drawing is server-rendered SVG (Admin/Charts.cs, the colours in css/services.css).
+*@
+<div class="mat-stack mat-stack--sm">
+    @Model.Svg()
+    <details class="mat-collapse">
+        <summary><span>The numbers</span><span class="mat-accordion__chev" aria-hidden="true">@Ui.Icon("chevron-down")</span></summary>
+        <div class="mat-accordion__body">
+            <div class="mat-table-wrap">
+                <table class="mat-table mat-table--compact">
+                    <caption class="mat-sr-only">@Model.Title</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">@Model.BucketName</th>
+                            @foreach (var s in Model.Series)
+                            {
+                                <th scope="col" class="mat-num @(s.Secondary ? "mat-hide-sm" : "")">@s.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = Model.RowLabels.Count - 1; i >= 0; i--)
+                        {
+                            <tr>
+                                <td data-label="@Model.BucketName" class="mat-nowrap">@Model.RowLabels[i]</td>
+                                @foreach (var s in Model.Series)
+                                {
+                                    <td data-label="@s.Name" class="mat-num @(s.Secondary ? "mat-hide-sm" : "")">@s.Format(s.Values[i])</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </details>
+</div>
