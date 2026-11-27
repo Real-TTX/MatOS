@@ -1,159 +1,107 @@
-using MatOS.Core.Docker;
-using MatOS.Core.Engines;
-using MatOS.Web.Controls;
+using MatOS.Core.Apps;
+using MatOS.Core.Entities;
+using MatOS.Core.Jobs;
+using MatOS.Core.Tasks;
+using MatOS.Web.Support;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace MatOS.Web.Pages.Tasks;
 
 /// <summary>
-/// The Task Manager: every container of the host with what it uses right now, and the load of the host. All of it is MatDock's answer
-/// (<see cref="RuntimeReader"/>), and starting, stopping and restarting a container is MatDock's doing too: MatOS only asks.
+/// The Task Manager: the host (processor, memory, network, disk) with small live charts, and what runs on it grouped by app, with what each uses. All of
+/// it is MatDock's answer (<see cref="TaskManagerService"/>); js/tasks.js asks <c>?handler=Live</c> every few seconds and puts the numbers in place.
+/// Restarting, stopping and starting is a job that asks MatDock: an app as an app (its stack), a container on its own; only what MatOS runs, never
+/// MatOS itself or MatDock, and engines only restart. The folder is for administrators only (Program.cs).
 /// </summary>
 public class IndexModel : PageModel
 {
-    private const int PageSize = 25;
+    private static readonly string[] Verbs = ["start", "stop", "restart"];
 
-    private static readonly string[] Actions = ["start", "stop", "restart"];
+    private readonly TaskManagerService _tasks;
+    private readonly AppService _apps;
+    private readonly JobService _jobs;
 
-    private readonly RuntimeReader _runtime;
-    private readonly MatDockClient _matDock;
-    private readonly DockerService _docker;
-
-    public IndexModel(RuntimeReader runtime, MatDockClient matDock, DockerService docker)
+    public IndexModel(TaskManagerService tasks, AppService apps, JobService jobs)
     {
-        _runtime = runtime;
-        _matDock = matDock;
-        _docker = docker;
+        _tasks = tasks;
+        _apps = apps;
+        _jobs = jobs;
     }
 
-    public ListView<ContainerTask> List { get; private set; } = default!;
+    public TaskView View { get; private set; } = default!;
 
-    /// <summary>The host: its load is known when MatDock measured it.</summary>
-    public DockerEngineInfo Engine { get; private set; } = default!;
-
-    /// <summary>MatDock answered: the list is the whole host and has the usage. Without it only the own containers are listed, and nothing can be done to them.</summary>
-    public bool Measured { get; private set; }
-
-    public int Total { get; private set; }
-
-    public int Running { get; private set; }
-
-    /// <summary>The container MatOS itself runs in: it does not stop itself.</summary>
-    public string? Self { get; private set; }
-
-    /// <summary>A container of this MatOS can be restarted and stopped here, except MatOS itself and MatDock (the one that would do it).</summary>
-    public bool CanAct(ContainerTask task) => Measured && task.Own && task.Container.Name != Self && task.Container.Instance != EngineIds.MatDock;
+    /// <summary>The query of the list, kept through an action (the forms send it back).</summary>
+    public string Back => Request.QueryString.HasValue ? Request.QueryString.Value! : string.Empty;
 
     public async Task OnGetAsync()
+        => View = TaskView.From(Request, await _tasks.ReadAsync(HttpContext.RequestAborted));
+
+    /// <summary>The numbers of the page for js/tasks.js (the same query as the page).</summary>
+    public async Task<IActionResult> OnGetLiveAsync()
     {
-        var ct = HttpContext.RequestAborted;
-        var q = ListQuery.Text(Request, "q");
-        var part = ListQuery.Text(Request, "part") is "own" or "other" ? ListQuery.Text(Request, "part") : null;
-        var state = ListQuery.Text(Request, "state") is "running" or "stopped" ? ListQuery.Text(Request, "state") : null;
-        var sort = ListQuery.Text(Request, "sort") is "memory" or "name" ? ListQuery.Text(Request, "sort")! : "cpu";
-        var descending = ListQuery.Descending(Request, defaultDescending: true);
-
-        var (tasks, measured) = await _runtime.ListTasksAsync(ct);
-        Measured = measured;
-        Engine = await _runtime.GetEngineInfoAsync(ct);
-        Self = await _docker.GetSelfContainerNameAsync(ct);
-        Total = tasks.Count;
-        Running = tasks.Count(t => t.Container.IsRunning);
-
-        IEnumerable<ContainerTask> query = tasks;
-        if (part is not null)
-        {
-            query = query.Where(t => t.Own == (part == "own"));
-        }
-
-        if (state is not null)
-        {
-            query = query.Where(t => t.Container.IsRunning == (state == "running"));
-        }
-
-        if (q is not null)
-        {
-            query = query.Where(t => Has(t.Container.Name, q) || Has(t.Container.Project, q) || Has(t.Container.Image, q));
-        }
-
-        // A container nobody measured (a stopped one) is always below the measured ones, whichever way the list is turned.
-        query = sort switch
-        {
-            "name" => descending ? query.OrderByDescending(t => t.Container.Name, StringComparer.OrdinalIgnoreCase) : query.OrderBy(t => t.Container.Name, StringComparer.OrdinalIgnoreCase),
-            "memory" => Ordered(query, t => t.MemoryBytes, descending),
-            _ => Ordered(query, t => t.CpuPercent, descending),
-        };
-
-        var matching = query.ToList();
-        var toolbar = new ToolbarModel
-        {
-            Id = "tasks",
-            Action = "/Tasks",
-            Label = "Task Manager",
-            Search = q,
-            SearchPlaceholder = "Search what runs",
-            SearchField = true,
-            Filters =
-            [
-                new FilterField("part", "Part of", [new("own", "MatOS"), new("other", "Something else on this host")], part),
-                new FilterField("state", "State", [new("running", "Running"), new("stopped", "Stopped")], state),
-            ],
-            SortOptions = [new("cpu", "Processor"), new("memory", "Memory"), new("name", "Name")],
-            Sort = sort,
-            Descending = descending,
-            DefaultSort = "cpu",
-            DefaultDescending = true,
-            Total = Total,
-            Matching = matching.Count,
-            Noun = Total == 1 ? "program" : "programs",
-        };
-
-        var pages = Math.Max(1, (int)Math.Ceiling(matching.Count / (double)PageSize));
-        var page = Math.Clamp(ListQuery.Page(Request), 1, pages);
-        List = new ListView<ContainerTask>
-        {
-            Items = matching.Skip((page - 1) * PageSize).Take(PageSize).ToList(),
-            Toolbar = toolbar,
-            Pager = new PagerModel { Page = page, PageSize = PageSize, Total = matching.Count, Url = toolbar.UrlWithPage },
-        };
+        var view = TaskView.From(Request, await _tasks.ReadAsync(HttpContext.RequestAborted));
+        Response.Headers.CacheControl = "no-store";
+        return new JsonResult(view.ToJson());
     }
 
-    /// <summary>Starts, stops or restarts a container of this MatOS: MatDock does it.</summary>
-    public async Task<IActionResult> OnPostActionAsync(string name, string verb)
+    /// <summary>Restarts, stops or starts an app (its whole stack): the job of the app, as on its own page.</summary>
+    public async Task<IActionResult> OnPostGroupAsync(string key, string verb, string? back)
     {
         var ct = HttpContext.RequestAborted;
-        var (tasks, measured) = await _runtime.ListTasksAsync(ct);
-        Measured = measured;
-        Self = await _docker.GetSelfContainerNameAsync(ct);
-        var task = tasks.FirstOrDefault(t => t.Container.Name == name);
-        if (task is null || !Actions.Contains(verb) || !CanAct(task))
+        var snapshot = await _tasks.ReadAsync(ct);
+        var group = snapshot.Groups.FirstOrDefault(g => g.Key == key);
+        if (group?.App is not { } target || !Allowed(group.Actions, verb, group.Running > 0) || await _apps.GetAsync(target.Id, ct) is not { } app)
         {
-            TempData["StatusMessage"] = measured ? "This container cannot be changed here." : "MatDock does not answer, so nothing can be changed right now.";
-            TempData["IsError"] = true;
-            return Redirect("/Tasks");
+            return Refused(snapshot, back);
         }
 
-        try
-        {
-            await _matDock.ContainerActionAsync(name, verb, ct);
-            TempData["StatusMessage"] = verb switch { "start" => $"{name} is started.", "stop" => $"{name} is stopped.", _ => $"{name} is restarted." };
-        }
-        catch (InvalidOperationException ex)
-        {
-            TempData["StatusMessage"] = ex.Message;
-            TempData["IsError"] = true;
-        }
-
-        return Redirect("/Tasks");
+        var kind = Kind(verb);
+        await _jobs.EnqueueAsync(kind, $"{kind} {app.Name}", app, AppJobs.Lifecycle(app.Id, verb), ct);
+        TempData["StatusMessage"] = $"{Doing(verb)} {app.Name}. Activity shows how it goes.";
+        return Redirect(BackTo(back));
     }
 
-    private static bool Has(string text, string q) => text.Contains(q, StringComparison.OrdinalIgnoreCase);
+    /// <summary>Restarts, stops or starts one container of an app: MatDock does it, in a job.</summary>
+    public async Task<IActionResult> OnPostContainerAsync(string key, string verb, string? back)
+    {
+        var ct = HttpContext.RequestAborted;
+        var snapshot = await _tasks.ReadAsync(ct);
+        var (group, row) = snapshot.Groups.SelectMany(g => g.Rows.Select(r => (g, r))).FirstOrDefault(p => p.r.Key == key);
+        if (row is null || !Allowed(row.Actions, verb, row.IsRunning))
+        {
+            return Refused(snapshot, back);
+        }
 
-    private static IEnumerable<ContainerTask> Ordered<T>(IEnumerable<ContainerTask> query, Func<ContainerTask, T?> key, bool descending)
-        where T : struct
-        => (descending
-                ? query.OrderBy(t => key(t) is null).ThenByDescending(t => key(t))
-                : query.OrderBy(t => key(t) is null).ThenBy(t => key(t)))
-            .ThenBy(t => t.Container.Name, StringComparer.OrdinalIgnoreCase);
+        var app = group.App is { } owner ? await _apps.GetAsync(owner.Id, ct) : null;
+        var kind = Kind(verb);
+        var name = row.Container.Name;
+        await _jobs.EnqueueAsync(kind, $"{kind} {name}", app, AppJobs.ContainerAction(name, verb), ct);
+        TempData["StatusMessage"] = $"{Doing(verb)} {name}. Activity shows how it goes.";
+        return Redirect(BackTo(back));
+    }
+
+    /// <summary>Restart and stop for what runs, start for what does not; and only what the Task Manager offers for it.</summary>
+    private static bool Allowed(TaskActions actions, string verb, bool running)
+        => Verbs.Contains(verb) && verb switch
+        {
+            "restart" => actions.HasFlag(TaskActions.Restart) && running,
+            "stop" => actions.HasFlag(TaskActions.StopStart) && running,
+            _ => actions.HasFlag(TaskActions.StopStart),
+        };
+
+    private IActionResult Refused(TaskSnapshot snapshot, string? back)
+    {
+        TempData["StatusMessage"] = snapshot.Measured ? "This cannot be changed here." : "MatDock does not answer, so nothing can be changed right now.";
+        TempData["IsError"] = true;
+        return Redirect(BackTo(back));
+    }
+
+    private static JobKind Kind(string verb) => verb switch { "start" => JobKind.Start, "stop" => JobKind.Stop, _ => JobKind.Restart };
+
+    private static string Doing(string verb) => verb switch { "start" => "Starting", "stop" => "Stopping", _ => "Restarting" };
+
+    /// <summary>Back to the list as it was: only a query string of this page, never another address.</summary>
+    private static string BackTo(string? back)
+        => back is { Length: > 1 } q && q[0] == '?' && !q.Contains('\\') && !q.Contains('\n') && !q.Contains('\r') ? "/Tasks" + q : "/Tasks";
 }

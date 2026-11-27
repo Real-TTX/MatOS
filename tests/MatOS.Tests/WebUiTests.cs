@@ -172,6 +172,24 @@ public partial class WebUiTests
         Assert.All(selectors, c => Assert.True(c.StartsWith("mv-") || c.StartsWith("mat-") || c is "is-active" or "is-invalid", $".{c} is neither of the app nor of the toolkit"));
     }
 
+    /// <summary>The Task Manager (css/tasks.css): the toolkit's tokens only, its own classes start with mv-tm, and its page loads it and its script.</summary>
+    [Fact]
+    public void The_stylesheet_of_the_Task_Manager_uses_tokens_and_its_own_classes()
+    {
+        var css = Regex.Replace(Read("wwwroot", "css", "tasks.css"), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        Assert.DoesNotMatch(@"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(", css);
+        Assert.DoesNotMatch(@":\s*(white|black|red|green|blue|gray|grey)\b", css);
+        Assert.Contains("prefers-reduced-motion", css, StringComparison.Ordinal);
+        var selectors = Regex.Matches(css, @"(?<![\w-])\.([a-z][a-z0-9_-]*)").Select(m => m.Groups[1].Value).Distinct().ToList();
+        Assert.Contains("mv-tm-card", selectors);
+        Assert.All(selectors, c => Assert.True(c.StartsWith("mv-tm") || c.StartsWith("mat-") || c is "mv-progress", $".{c} is neither of the Task Manager nor of the toolkit"));
+
+        var page = Read("Pages", "Tasks", "Index.cshtml");
+        Assert.Contains("ViewData[\"Tasks\"] = true", page, StringComparison.Ordinal);
+        Assert.Contains("~/js/tasks.js", page, StringComparison.Ordinal);
+        Assert.Matches(@"ViewData\[""Tasks""\] is true\)\s*\{[^}]*css/tasks\.css", Read("Pages", "Shared", "_Head.cshtml"));
+    }
+
     /// <summary>The look of the store (css/store.css) is made of the toolkit's tokens, and it moves only when motion is welcome.</summary>
     [Fact]
     public void The_stylesheet_of_the_store_uses_tokens_and_no_literal_colours()

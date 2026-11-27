@@ -48,6 +48,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EngineLocator>();
         services.AddScoped<MatDockClient>();
         services.AddScoped<RuntimeReader>();
+        services.AddSingleton<MatOS.Core.Tasks.TaskMonitor>();
+        services.AddScoped<MatOS.Core.Tasks.TaskManagerService>();
         services.AddScoped<LocalComposeEngine>();
         services.AddScoped<MatDockEngine>();
         services.AddScoped<StackEngines>();
@@ -59,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBackupProvider, LocalBackupProvider>();
         services.AddScoped<IBackupProvider, MatDockBackupProvider>();
         services.AddScoped<BackupHub>();
+        services.AddScoped<BackupTargetService>();
 
         services.AddScoped<JobService>();
 

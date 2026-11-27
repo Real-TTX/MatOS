@@ -54,6 +54,24 @@
                     <input asp-for="Input.Retention" type="number" min="1" max="365" class="mat-input" data-msg-range="Keep between 1 and 365 backups." />
                 </mat-field>
 
+                @if (Model.Targets.Count > 0)
+                {
+                    <mat-field label="Keep them at" asp-for="Input.Target" hint="Apps that MatOS runs itself keep their backups on this machine.">
+                        <select asp-for="Input.Target" class="mat-select">
+                            <option value="0">This machine</option>
+                            @foreach (var target in Model.Targets)
+                            {
+                                <option value="@target.Id">@target.Name (@target.KindLabel)</option>
+                            }
+                        </select>
+                    </mat-field>
+                }
+                else
+                {
+                    @* The targets cannot be listed now: the schedule keeps where it writes to. *@
+                    <input type="hidden" asp-for="Input.Target" />
+                }
+
                 <div class="mat-field mat-field--full">
                     <label class="mat-check">
                         <input asp-for="Input.StopContainers" type="checkbox" />

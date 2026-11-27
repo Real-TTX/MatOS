@@ -41,7 +41,7 @@ function expectEqual(actual, expected, what) {
 }
 
 const pages = [
-  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
+  '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Backups/Targets', '/Backups/TargetEdit', '/Jobs', '/Tasks',
   '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
   '/Start',
 ];
@@ -117,6 +117,66 @@ const pages = [
     }
     expectTrue(new Set(seen.slice(0, 3)).size === 3 && seen[3] === seen[0], 'system, light and dark, then the first again: ' + seen.join(' > '));
   });
+  console.log('The Task Manager');
+  await check('the Task Manager: the host in five cards, the list in parts, an app opens to its containers', async () => {
+    await page.goto(BASE + '/Tasks');
+    expectEqual(await page.locator('.mv-tm-card').count(), 5, 'processor, memory, network, disk activity, storage');
+    expectTrue(await page.locator('tbody.mv-tm-section').count() >= 1, 'at least one part (Apps, System, Something else)');
+    const group = page.locator('tbody.mv-tm-group:has([data-group-toggle])').first();
+    const toggle = group.locator('[data-group-toggle]');
+    if ((await toggle.getAttribute('aria-expanded')) === 'true') { await toggle.click(); }
+    expectTrue(!(await group.locator('tr.mv-tm-row').first().isVisible()), 'an app starts closed');
+    await toggle.click();
+    expectEqual(await toggle.getAttribute('aria-expanded'), 'true', 'the toggle says it is open');
+    expectTrue(await group.locator('tr.mv-tm-row').first().isVisible(), 'its containers show');
+    await toggle.click();
+  });
+  await check('the Task Manager is live: its numbers come as JSON and the charts fill', async () => {
+    await page.goto(BASE + '/Tasks');
+    const response = await page.waitForResponse(r => r.url().includes('handler=Live'), { timeout: 10000 });
+    expectEqual(response.status(), 200, 'the numbers answer');
+    const data = await response.json();
+    expectEqual(data.cards.length, 5, 'five cards in the answer');
+    expectTrue(Array.isArray(data.groups) && data.groups.length > 0, 'the groups in the answer');
+    expectEqual(data.signature, await page.locator('#tm-list').getAttribute('data-signature'), 'the rows are those the page drew');
+    if (data.measured) {
+      await page.waitForFunction(() => (document.querySelector('[data-card="cpu"] [data-f="line"]').getAttribute('d') || '').startsWith('M'), null, { timeout: 15000 });
+      expectTrue(await page.locator('[data-card="cpu"] svg.mv-tm-chart').isVisible(), 'the chart of the processor shows');
+    }
+  });
+  await check('the Task Manager sorts by a column, finds a container, and acts only on what MatOS runs', async () => {
+    await page.goto(BASE + '/Tasks');
+    await page.click('th a.mat-table__sort[href*="sort=memory"]');
+    await page.waitForURL(u => u.search.includes('sort=memory'));
+    expectEqual(await page.locator('th[aria-sort="descending"]').innerText(), 'Memory', 'sorted by memory, most first');
+    expectEqual(await page.locator('tbody[data-key="matos"] form').count(), 0, 'MatOS does not stop itself');
+    expectEqual(await page.locator('tbody.mv-tm-group[data-section="other"] form').count(), 0, 'nothing else on the host is changed');
+    expectEqual(await page.locator('tbody[data-key="app:matdock"] form').count(), 0, 'MatDock is not restarted from here');
+    const name = await page.locator('tr.mv-tm-row a[href^="/Tasks/Log"]').first().innerText();
+    await page.goto(BASE + '/Tasks?q=' + encodeURIComponent(name));
+    expectTrue(await page.locator(`tr.mv-tm-row a:text-is("${name}"), .mv-tm-lone a:text-is("${name}")`).first().isVisible(), 'the search shows the container, its app open');
+    await page.goto(BASE + '/Tasks?q=no-such-thing-anywhere');
+    expectEqual(await page.locator('#tm-list .mat-empty').count(), 1, 'nothing matches says so');
+  });
+  await check('the log of a container opens in a window of the home screen', async () => {
+    // a context of its own: the windows it opens stay out of the checks of the home screen below
+    const own = await signedIn({ viewport: { width: 1360, height: 900 } });
+    const page = own.page;
+    await page.goto(BASE + '/');
+    await page.click('.os-grid .os-app[data-window="/Tasks"]');
+    await page.waitForFunction(() => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === 'Task Manager'; });
+    const frame = page.frameLocator('.os-window.is-active .os-window__frame');
+    const group = frame.locator('tbody.mv-tm-group:has([data-group-toggle])').first();
+    if ((await group.locator('[data-group-toggle]').getAttribute('aria-expanded')) !== 'true') { await group.locator('[data-group-toggle]').click(); }
+    const link = group.locator('tr.mv-tm-row a[href^="/Tasks/Log"]').first();
+    const name = await link.innerText();
+    await link.click();
+    await page.waitForFunction(n => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === n; }, name);
+    await page.frameLocator('.os-window.is-active .os-window__frame').locator('pre.mv-log').waitFor({ timeout: 15000 });
+    expectEqual(await page.locator('.os-window').count(), 2, 'the log in a window of its own, beside the Task Manager');
+    await own.ctx.close();
+  });
+
   console.log('The home screen (MatOS)');
   const win = () => page.frameLocator('.os-window.is-active .os-window__frame');
   const winTitle = () => page.locator('.os-window.is-active [data-win-title]').innerText();
@@ -580,6 +640,67 @@ const pages = [
     await page.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
     await page.waitForURL(/tab=schedules/);
     expectEqual(await page.locator('table.mat-table tbody tr', { hasText: 'E2E schedule' }).count(), 0, 'the schedule is gone');
+  });
+  await check('backup targets: a third tab, a form per kind, a test, a password never shown again, deleting asks first', async () => {
+    await page.goto(BASE + '/Backups/Targets');
+    expectEqual(await page.locator('.mat-tabs [aria-current="page"]').filter({ hasText: 'Targets' }).count(), 1, 'the tab Targets is active');
+    expectEqual(/MatDock/.test(await page.locator('main').innerText()), false, 'the page does not name the engine');
+    if (await page.locator('a[href="/Backups/TargetEdit"]').count() === 0) {
+      // An engine without the targets API: the page says so and offers nothing it cannot do.
+      expectEqual(await page.locator('.mat-empty').count(), 1, 'the empty state says targets cannot be used now');
+      return;
+    }
+
+    await page.goto(BASE + '/Backups/TargetEdit');
+    const visible = name => page.locator(`[data-show-value="${name}"]`).isVisible();
+    expectTrue(await visible('Sftp') && !(await visible('WebDav')) && !(await visible('Smb')), 'SFTP is the first kind, the others are hidden');
+    await page.selectOption('#Input_Kind', 'WebDav');
+    expectTrue(await visible('WebDav') && !(await visible('Sftp')), 'choosing WebDAV shows its fields');
+    expectTrue(await page.locator('[data-show-value="Sftp"] input').first().isDisabled(), 'the hidden fields post nothing');
+    await page.fill('#Input_Name', 'E2E target');
+    await page.fill('#Input_Url', 'ftp://not-webdav');
+    await page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])');
+    await page.waitForLoadState('networkidle');
+    expectTrue(/WebDAV folder/.test(await page.locator('[data-validation-summary]').innerText()), 'the server says what is wrong');
+
+    // An SFTP target on a server that is not there: saved, the test says why it fails, the password is not rendered back.
+    const sftp = (process.env.MATOS_E2E_SFTP || '127.0.0.1:9:keeper:e2e-secret-Pass1:upload/e2e').split(':');
+    await page.goto(BASE + '/Backups/TargetEdit');
+    await page.fill('#Input_Name', 'E2E target');
+    await page.fill('#Input_Host', sftp[0]);
+    await page.fill('#Input_Port', sftp[1]);
+    await page.fill('#Input_Username', sftp[2]);
+    await page.fill('#Input_Password', sftp[3]);
+    await page.fill('#Input_Folder', sftp[4]);
+    await Promise.all([page.waitForURL(/handler=Test/), page.click('button[formaction*="Test"]')]);
+    expectEqual(await page.locator('[data-target-test]').count(), 1, 'the test answers');
+    if (process.env.MATOS_E2E_SFTP) { expectEqual(await page.locator('[data-target-test].mat-alert--success').count(), 1, 'the connection works: ' + await page.locator('[data-target-test]').innerText()); }
+    expectEqual(await page.locator('#Input_Password').inputValue(), '', 'the typed password is not sent back by the test');
+    await page.fill('#Input_Password', sftp[3]);
+    await Promise.all([page.waitForURL(u => u.pathname === '/Backups/Targets' || /id=\d+/.test(u.search)), page.click('form.mat-form button[type=submit]:not([formnovalidate]):not([formaction*="Test"])')]);
+    if (!/TargetEdit\?id=/.test(page.url())) {
+      const row = page.locator('table.mat-table tbody tr', { hasText: 'E2E target' });
+      expectEqual(await row.count(), 1, 'the target is listed');
+      await row.locator('a[href*="TargetEdit"]').first().click();
+    }
+    expectTrue(!(await page.content()).includes(sftp[3]), 'the stored password is not in the page');
+    expectEqual(await page.locator('#Input_Password').getAttribute('placeholder'), 'Stored', 'the field says a password is stored');
+    expectEqual(await page.locator('#Input_Kind').getAttribute('type'), 'hidden', 'the kind stays');
+
+    await page.goto(BASE + '/Backups/ScheduleEdit');
+    expectTrue(await page.locator('#Input_Target option', { hasText: 'E2E target' }).count() === 1, 'a schedule can keep its backups at the target');
+    await page.goto(BASE + '/Backups/Create');
+    if (await page.locator('#Destination').count() === 1) {
+      expectTrue(await page.locator('#Destination option', { hasText: 'E2E target' }).count() === 1, 'a backup by hand can go to the target');
+    }
+
+    await page.goto(BASE + '/Backups/Targets');
+    await page.locator('table.mat-table tbody tr', { hasText: 'E2E target' }).locator('a[href*="TargetEdit"]').first().click();
+    await page.click('form.mat-form button.mat-btn--danger');
+    expectEqual(await page.locator('dialog.mat-dialog[open]').count(), 1, 'a dialog asks');
+    await page.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
+    await page.waitForURL(/\/Backups\/Targets/);
+    expectEqual(await page.locator('table.mat-table tbody tr', { hasText: 'E2E target' }).count(), 0, 'the target is gone');
   });
   await check('the wizard (to change the setup later) walks through four steps, the engines under Advanced', async () => {
     await page.goto(BASE + '/Wizard');
