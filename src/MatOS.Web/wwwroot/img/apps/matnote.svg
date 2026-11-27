@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MatNotes">
+  <rect width="64" height="64" rx="14" fill="#c34f00"/>
+  <path d="M19 12h17l11 11v27a2 2 0 0 1-2 2H19a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2z" fill="#fff"/>
+  <path d="M36 12v9a2 2 0 0 0 2 2h9z" fill="#f4c7a1"/>
+  <path d="M23.500 43V31.500l8.500 8.500 8.500-8.500V43" fill="none" stroke="#c34f00" stroke-width="3.400" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

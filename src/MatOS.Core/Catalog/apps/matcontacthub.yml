@@ -1,0 +1,97 @@
+# MatContactHub – a contact directory of your own: contacts from REST, SQL Server and CSV, address books, duplicates and an LDAP server for phones.
+x-matos:
+  id: matcontacthub
+  name: MatContactHub
+  tagline: One contact directory for everything
+  description: Collects contacts from your systems (REST, SQL Server, CSV), keeps them in sync in address books with roles, finds duplicates and serves them to telephone systems, IP phones and mail clients through its own LDAP server and to other apps through a directory API.
+  category: Business
+  role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
+  icon: matcontacthub.svg
+  homepage: https://github.com/Real-TTX/MatContactHub
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matcontacthub/contacts.webp
+      caption: Contacts
+    - src: matcontacthub/contact.webp
+      caption: A contact
+    - src: matcontacthub/sources.webp
+      caption: Sources
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed and passes the variables
+  # of the binding to the web service by itself. MatContactHub says the same in its /api (and that it provides contacts.directory).
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  ui:
+    service: web
+    port: 7087
+    hostPort: 7087
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: LDAP_PORT
+      label: LDAP port (plain and StartTLS)
+      type: number
+      default: "389"
+      advanced: true
+      help: The port of the host for LDAP; choose another (e.g. 7389) when another LDAP server holds 389.
+    - key: LDAPS_PORT
+      label: LDAPS port
+      type: number
+      default: "636"
+      advanced: true
+      help: The port of the host for LDAPS; choose another (e.g. 7636) when another LDAP server holds 636.
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first account that signs in is the administrator (with MatIdentity the first person who opens MatContactHub, without it the first who registers).
+    - The LDAP server for phones and STARFACE listens on the ports 389 (plain, StartTLS) and 636 (LDAPS) of the host; LDAPS uses a self-signed certificate until you upload a PFX under Administration → LDAP.
+    - Back up the database volume matcontacthub-db together with matcontacthub-data (the keys and the LDAP certificate).
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matcontacthub
+      POSTGRES_USER: matcontacthub
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matcontacthub-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matcontacthub -d matcontacthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matcontacthub:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # LDAP is not HTTP: these ports are fixed on purpose (the UI port is published by MatOS).
+    ports:
+      - "${LDAP_PORT:-389}:10389"
+      - "${LDAPS_PORT:-636}:10636"
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matcontacthub;Username=matcontacthub;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+    volumes:
+      - matcontacthub-data:/data
+
+volumes:
+  matcontacthub-db:
+  matcontacthub-data:

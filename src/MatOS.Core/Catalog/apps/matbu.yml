@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matbu.svg
   homepage: https://github.com/Real-TTX/MatBu
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matbu/dashboard.webp
+      caption: Overview
+    - src: matbu/jobs.webp
+      caption: The jobs
+    - src: matbu/restore.webp
+      caption: A restore
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -20,6 +28,8 @@ x-matos:
     service: matbu
     port: 9293
     hostPort: 9293
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Login
   variables:
     # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
     - key: MATBU_ADMIN_PASSWORD
@@ -45,6 +55,7 @@ services:
       MATBU_DATA_PATH: /data
       MATBU_TRUST_FORWARD_HEADERS: "true"
       MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
       MATBU_ADMIN_PASSWORD: ${MATBU_ADMIN_PASSWORD}
       MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
       MATIDENTITY_INTERNAL_URL: ${MATIDENTITY_INTERNAL_URL:-}

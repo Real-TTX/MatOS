@@ -43,6 +43,19 @@ else
                     <span class="mat-hint">The app is down for the duration of the copy and started again afterwards. Without it, the copy is taken from the running app.</span>
                 </div>
 
+                @if (Model.Targets.Count > 0)
+                {
+                    <mat-field label="Keep it at" asp-for="Destination" hint="Apps that MatOS runs itself keep their backups on this machine.">
+                        <select asp-for="Destination" class="mat-select">
+                            <option value="0">This machine</option>
+                            @foreach (var target in Model.Targets)
+                            {
+                                <option value="@target.Id">@target.Name (@target.KindLabel)</option>
+                            }
+                        </select>
+                    </mat-field>
+                }
+
                 <mat-field label="Note" asp-for="Note" hint="Optional, shown in the list.">
                     <input asp-for="Note" class="mat-input" maxlength="500" />
                 </mat-field>

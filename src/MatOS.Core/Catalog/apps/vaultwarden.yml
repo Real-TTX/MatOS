@@ -6,7 +6,7 @@ x-matos:
   description: >-
     Vaultwarden keeps passwords, passkeys, cards and notes encrypted with a master password that only you know. The Bitwarden apps and browser
     extensions fill them in on your phone and computer; share a collection with the family.
-  category: Security
+  category: Tools
   role: app
   state: third-party
   stateNote: Signs in through MatIdentity and sends its mail through MatSMTP; the vault itself still opens with each person's master password, as Bitwarden's design asks.

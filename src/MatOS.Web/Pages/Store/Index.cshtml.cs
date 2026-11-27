@@ -9,12 +9,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MatOS.Web.Pages.Store;
 
+/// <summary>
+/// The store. The plain first look (no search, no filter, no sort of one's own) is an app store: a spotlight on one Mat app with a picture, the row
+/// "Made for MatOS" and a shelf per category. A search, a filter or a sort shows the gallery of what matches, with the pager.
+/// </summary>
 public class IndexModel : PageModel
 {
     private const int PageSize = 12;
 
-    /// <summary>How many apps "Start here" shows.</summary>
-    private const int FeaturedCount = 4;
+    /// <summary>How many apps "Made for MatOS" picks: one for the spotlight, the others for the row under it.</summary>
+    private const int FeaturedCount = 9;
+
+    /// <summary>How many apps a shelf of a category shows before "See all".</summary>
+    public const int ShelfSize = 4;
+
+    /// <summary>The category of the parts MatOS runs on and of the apps of others that do the same: its shelf comes last.</summary>
+    private const string SystemCategory = "System";
 
     private static readonly StringComparison Ic = StringComparison.OrdinalIgnoreCase;
     private static readonly string[] SortKeys = ["name", "category", "state"];
@@ -33,10 +43,19 @@ public class IndexModel : PageModel
     /// <summary>What is installed of each catalog entry (an app can be installed more than once), oldest first.</summary>
     public Dictionary<string, List<StoreInstall>> Installed { get; private set; } = new();
 
-    /// <summary>"Start here": a few Mat apps that work together with MatOS, shown on the plain first page only.</summary>
+    /// <summary>"Made for MatOS": the Mat apps that sign in through MatOS, shown on the plain first look only.</summary>
     public IReadOnlyList<CatalogApp> Featured { get; private set; } = [];
 
-    /// <summary>The categories of the catalog: a row of links over the gallery.</summary>
+    /// <summary>The big card on top of the plain first look: one Mat app with a picture, another one each day.</summary>
+    public CatalogApp? Spotlight { get; private set; }
+
+    /// <summary>The plain first look: the apps on shelves, one per category, instead of one long gallery.</summary>
+    public bool Plain { get; private set; }
+
+    /// <summary>The shelves of the plain first look: a category and its apps (the first <see cref="ShelfSize"/> are shown).</summary>
+    public IReadOnlyList<StoreShelf> Shelves { get; private set; } = [];
+
+    /// <summary>The categories of the catalog: a row of links over the apps.</summary>
     public IReadOnlyList<string> Categories { get; private set; } = [];
 
     /// <summary>The category the gallery shows; null = all.</summary>
@@ -77,10 +96,9 @@ public class IndexModel : PageModel
             query = query.Where(a => a.Name.Contains(q, Ic) || a.Tagline.Contains(q, Ic) || a.Description.Contains(q, Ic) || a.Category.Contains(q, Ic) || AppStates.Label(a.State).Contains(q, Ic));
         }
 
-        // "Start here" is for the plain look (no search, no filter); its apps then come last in the gallery, so the first screen does not show them twice.
-        var plain = q is null && category is null && state is null;
-        var featured = plain ? PickFeatured(all) : [];
-        var featuredIds = featured.Select(a => a.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // The plain look (no search, no filter, no sort of one's own): the spotlight, the Mat apps, then a shelf per category.
+        var plain = q is null && category is null && state is null && chosenSort is null;
+        Plain = plain;
 
         Func<CatalogApp, string> key = sort switch
         {
@@ -88,8 +106,7 @@ public class IndexModel : PageModel
             "state" => a => AppStates.Rank(a.State).ToString("D2", CultureInfo.InvariantCulture),
             _ => a => a.Name.ToLowerInvariant(),
         };
-        var ordered = query.OrderBy(a => chosenSort is null && featuredIds.Contains(a.Id));
-        var list = (descending ? ordered.ThenByDescending(key) : ordered.ThenBy(key)).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var list = (descending ? query.OrderByDescending(key) : query.OrderBy(key)).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
         var toolbar = new ToolbarModel
         {
@@ -116,19 +133,62 @@ public class IndexModel : PageModel
         var (items, pager) = ListQuery.Slice(list, Request, PageSize, toolbar.UrlWithPage);
         List = new ListView<CatalogApp> { Items = items, Toolbar = toolbar, Pager = pager };
 
-        // A search, a filter or another page is about what the person looks for: "Start here" is for the plain first look.
-        if (ListQuery.Page(Request) <= 1)
+        if (plain)
         {
-            Featured = featured;
+            var featured = PickFeatured(all);
+            Spotlight = PickSpotlight(featured, DateOnly.FromDateTime(DateTime.Today));
+            // The app of the spotlight is said once: not again in the row under it.
+            Featured = featured.Where(a => a != Spotlight).ToList();
+            Shelves = Shelve(list);
         }
     }
 
-    /// <summary>"Start here": the Mat apps that do the most with MatOS, those not installed yet first.</summary>
+    /// <summary>
+    /// The shelves: one per category, the categories with the most apps first and System (the parts MatOS runs on, the apps of others that do the same) last;
+    /// on a shelf the apps that are furthest along first.
+    /// </summary>
+    public static IReadOnlyList<StoreShelf> Shelve(IEnumerable<CatalogApp> apps) => apps
+        .GroupBy(a => a.Category, StringComparer.OrdinalIgnoreCase)
+        .OrderBy(g => g.Key.Equals(SystemCategory, Ic))
+        .ThenByDescending(g => g.Count())
+        .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(g => new StoreShelf(g.Key, g.OrderBy(a => AppStates.Rank(a.State)).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList()))
+        .ToList();
+
+    /// <summary>
+    /// The app of the spotlight: one of "Made for MatOS" that has a picture, another one each day (by the day of the year), so the first look changes and still is
+    /// the same all day. The row puts the apps not installed yet first, and so does the spotlight.
+    /// </summary>
+    public static CatalogApp? PickSpotlight(IReadOnlyList<CatalogApp> featured, DateOnly day)
+    {
+        var candidates = featured.Where(a => a.Screenshots.Count > 0).ToList();
+        return candidates.Count == 0 ? featured.FirstOrDefault() : candidates[day.DayOfYear % candidates.Count];
+    }
+
+    /// <summary>What an app does with MatOS, as small marks on its card: the one sign-in and the mail.</summary>
+    public static IReadOnlyList<StoreMark> MarksFor(CatalogApp app)
+    {
+        var marks = new List<StoreMark>(2);
+        if (app.Uses(Capabilities.IdentityOidc))
+        {
+            marks.Add(new StoreMark("key", "One sign-in with MatOS"));
+        }
+
+        if (app.Uses(Capabilities.MailSmtp))
+        {
+            marks.Add(new StoreMark("mail", "Sends its mail through MatOS"));
+        }
+
+        return marks;
+    }
+
+    /// <summary>"Made for MatOS": the apps that sign in through MatOS and do the most with it, those not installed yet first.</summary>
     private List<CatalogApp> PickFeatured(IEnumerable<CatalogApp> apps) => apps
-        .Where(a => a.Role == AppRoles.App && a.State is AppStates.Integrated or AppStates.Beta)
+        .Where(a => a.Role == AppRoles.App && a.State is AppStates.Integrated or AppStates.Beta && a.Uses(Capabilities.IdentityOidc))
         .OrderBy(a => Installed.ContainsKey(a.Id))
         .ThenBy(a => AppStates.Rank(a.State))
         .ThenByDescending(a => a.Consumes.Count)
+        .ThenByDescending(a => a.Screenshots.Count > 0)
         .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
         .Take(FeaturedCount)
         .ToList();
@@ -162,7 +222,7 @@ public class IndexModel : PageModel
         }
 
         return AppStates.CanInstall(app.State)
-            ? new StoreAction(StoreActionKind.Install, "Install", $"/Store/Install?id={app.Id}", $"Install {app.Name}")
+            ? new StoreAction(StoreActionKind.Install, "Get", $"/Store/Install?id={app.Id}", $"Install {app.Name}")
             : new StoreAction(StoreActionKind.Soon, "Soon", $"/Store/Install?id={app.Id}", $"{app.Name}: coming soon");
     }
 
@@ -174,6 +234,12 @@ public class IndexModel : PageModel
         return RedirectToPage();
     }
 }
+
+/// <summary>A shelf of the plain first look: a category and its apps, in the order of the shelf.</summary>
+public sealed record StoreShelf(string Category, IReadOnlyList<CatalogApp> Apps);
+
+/// <summary>A small mark on the card of an app: an icon of the sprite and what it means (its tip and its words for a screen reader).</summary>
+public sealed record StoreMark(string Icon, string Label);
 
 /// <summary>One installed copy of a catalog entry, as far as the store needs it.</summary>
 public sealed record StoreInstall(long Id, string CatalogId, AppLifecycle Lifecycle, bool HasUi);

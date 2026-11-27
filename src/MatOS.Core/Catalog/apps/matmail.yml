@@ -12,6 +12,14 @@ x-matos:
   stateNote: Not shown in the MatOS window yet.
   icon: matmail.svg
   homepage: https://github.com/Real-TTX/MatMail
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matmail/mail-inbox.webp
+      caption: The inbox
+    - src: matmail/mail-reading-pane.webp
+      caption: Reading
+    - src: matmail/mail-compose.webp
+      caption: Writing
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -21,6 +29,8 @@ x-matos:
     service: matmail
     port: 9933
     hostPort: 9933
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
   notes:
     - Publishes the standard mail ports (25, 587, 465, 143, 993) on the host. Change them below Advanced if another mail server uses them.
   variables:

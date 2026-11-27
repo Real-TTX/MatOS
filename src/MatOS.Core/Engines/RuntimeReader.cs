@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using MatOS.Core.Configuration;
 using MatOS.Core.Docker;
+using MatOS.Core.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -65,7 +66,7 @@ public sealed class RuntimeReader
     /// </summary>
     public async Task<(List<ContainerTask> Tasks, bool Measured)> ListTasksAsync(CancellationToken ct = default)
     {
-        var containers = await AskAsync(() => _matDock.ListContainersAsync(ct), ct);
+        var containers = await AskAsync(() => _matDock.ListContainersAsync(ct, maxAgeSeconds: 3), ct);
         return containers is null
             ? ((await _docker.ListContainersAsync(ct: ct)).Select(c => new ContainerTask(c, true)).ToList(), false)
             : (FromContainers(containers, _options.ProjectPrefix), true);
@@ -78,10 +79,48 @@ public sealed class RuntimeReader
             var stack = Text(c, "stack");
             var own = stack.StartsWith(prefix + "-", StringComparison.Ordinal);
             var info = new ContainerInfo(Text(c, "id"), Text(c, "name"), Text(c, "image"), Text(c, "state"), Text(c, "status"), own ? stack[(prefix.Length + 1)..] : string.Empty, Text(c, "service"), Text(c, "ports"), stack);
-            return info.IsRunning
-                ? new ContainerTask(info, own, Number(c, "cpuPercent"), Number(c, "memoryPercent"), (long)Number(c, "memoryBytes"))
-                : new ContainerTask(info, own);
+            if (!info.IsRunning)
+            {
+                return new ContainerTask(info, own);
+            }
+
+            // cpuOfHostPercent (MatDock with apiVersion 5) is the share of the host; an older MatDock says cpuPercent only, the share of one core.
+            var cpu = Maybe(c, "cpuOfHostPercent") ?? Number(c, "cpuPercent");
+            var io = new ContainerIo(Bytes(c, "netRxBytes"), Bytes(c, "netTxBytes"), Bytes(c, "blockReadBytes"), Bytes(c, "blockWriteBytes"));
+            return new ContainerTask(info, own, cpu, Number(c, "memoryPercent"), (long)Number(c, "memoryBytes"), io is { Net: null, Disk: null } ? null : io);
         }).ToList();
+
+    /// <summary>
+    /// The host as the Task Manager shows it: live from MatDock (<c>/host</c>, apiVersion 5), else the last reading of its environment (percent only, up to
+    /// five minutes old), else nothing.
+    /// </summary>
+    public async Task<HostReading?> GetHostAsync(CancellationToken ct = default)
+    {
+        if (await AskAsync(() => _matDock.GetHostAsync(ct), ct) is { } live && FromHost(live) is { } reading)
+        {
+            return reading;
+        }
+
+        var engine = FromEnvironment(await AskAsync(() => _matDock.GetLocalEnvironmentAsync(ct), ct));
+        return engine?.Load is { } load
+            ? new HostReading(null, load.CpuPercent, null, null, load.MemoryPercent, null, null, load.DiskPercent, null, engine.ContainersRunning, engine.Version, false)
+            : null;
+    }
+
+    /// <summary>The answer of MatDock's <c>GET /api/v1/host</c>; <c>null</c> while it has no reading yet.</summary>
+    public static HostReading? FromHost(JsonObject host)
+    {
+        var cpu = Maybe(host, "cpuPercent");
+        var memory = Maybe(host, "memoryPercent");
+        if (cpu is null && memory is null)
+        {
+            return null;
+        }
+
+        return new HostReading((int?)Maybe(host, "cores"), cpu, Bytes(host, "memoryTotalBytes"), Bytes(host, "memoryUsedBytes"), memory,
+            Bytes(host, "diskTotalBytes"), Bytes(host, "diskUsedBytes"), Maybe(host, "diskPercent"), Bytes(host, "uptimeSeconds"),
+            (int?)Maybe(host, "containersRunning"), Text(host, "dockerVersion"), true);
+    }
 
     /// <summary>The last lines of the log of a container.</summary>
     public async Task<string> GetLogsAsync(string container, int tail = 300, CancellationToken ct = default)
@@ -129,5 +168,9 @@ public sealed class RuntimeReader
 
     private static string Text(JsonObject node, string key) => node[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
 
-    private static double Number(JsonObject node, string key) => node[key] is JsonValue value && value.TryGetValue<double>(out var number) ? number : 0;
+    private static double Number(JsonObject node, string key) => Maybe(node, key) ?? 0;
+
+    private static double? Maybe(JsonObject node, string key) => node[key] is JsonValue value && value.TryGetValue<double>(out var number) ? number : null;
+
+    private static long? Bytes(JsonObject node, string key) => Maybe(node, key) is { } number and >= 0 ? (long)number : null;
 }

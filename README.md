@@ -61,9 +61,13 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - Everything the wizard created carries a **Managed by matos** badge in the engine
 
 **Store**
-- Catalog of the Mat apps (MatMail, MatFile, MatDrive, MatOffice, MatPaper, MatPlay, MatSplit, MatTrakr, Matmon, MatCMS, MatDo, MatBoard, MatShape, MatBu),
+- Like an app store: the **app of the day** with a picture, **Made for MatOS** (the Mat apps that sign in with your MatOS account), a **shelf per category**
+  with See all, a search, filters and sorting; every app a card with its icon, its line, marks for **the one sign-in** and **mail through MatOS**, and Get or Open
+- The page of an app: its **pictures**, what it gets from MatOS, its facts, Open and **Update** when it is installed, and more apps of its category
+- Catalog of the Mat apps (MatBoard, MatBu, MatCloud, MatContactHub, MatDo, MatDown, MatDrive, MatFile, MatGame, MatMail, MatOffice, MatPaper, MatPhoto, MatPlay,
+  MatRegistry, MatShape, MatSplit, MatTrakr, and as first versions MatBill, MatCan, MatCMS, Matmon, MatNotes, MatPhone, MatTicket),
   [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all of them) and a few infrastructure apps
-- Every app shows its **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state))
+- Every app has a **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state)); the store shows it where it tells something
 - **Passwords are generated** and shown (hidden until you ask) on the app's page
 - Add your **own apps** by dropping a compose file into `/data/catalog` (see [docs/CATALOG.md](docs/CATALOG.md))
 
@@ -72,7 +76,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - **Update** pulls newer images, re-creates only what changed, and backs up first if you want; **automatic updates** do it at night (off, apps and engines, or MatOS too)
 - **MatOS updates itself**: it shows a new version, and one click (or the night) restarts it on it, with the old version put back if the new one does not start
 - **Backups** are MatDock's: compose + `.env` + all volumes, optionally with the app stopped (consistent databases),
-  **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too
+  **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too.
+  **Kept on another machine too**: an SFTP folder, a WebDAV folder (Nextcloud) or a network share (SMB), tested when it is saved, chosen per backup and per schedule
 - If you **change a stack in MatDock**, the next update keeps your version
 - The **Task Manager** (`/Tasks`) lists every container with its CPU and memory, as MatDock reports them
 - **Shared links** let someone without an account open one app
@@ -333,7 +338,7 @@ per hour. Setup on a server: [deploy/services/README.md](deploy/services/README.
 
 ## Apps and their state
 
-Every app of the store has a state: how far it is along in MatOS. The store shows it on every app and filters by it; an alpha says so
+Every app of the store has a state: how far it is along in MatOS. The store shows it on every app that is not yet a beta and filters by it; an alpha says so
 before you install it, and a preview cannot be installed yet. Your own apps in `/data/catalog` are a beta unless their entry says otherwise
 (`state` in the `x-matos` block, see [docs/CATALOG.md](docs/CATALOG.md)). The note says what is missing for the next state.
 
@@ -344,7 +349,7 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | **Beta** | Works with MatOS and its one sign-in, but is not yet tested from start to end through MatOS. |
 | **Alpha** | Installs and runs, but is not yet tied into MatOS: expect rough edges, and do not keep anything important only in it yet. |
 | **Preview** | Announced, not ready to install yet. |
-| **Third-party** | Not a Mat app: it runs as it is, without the one sign-in or the other parts of MatOS. |
+| **Third-party** | Not a Mat app: it runs as its maker built it. Where it can, MatOS connects it to the one sign-in and the mail; the note says what it has. |
 
 | App | State | Note |
 |---|---|---|
@@ -355,21 +360,32 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | [MatBoard](https://github.com/Real-TTX/MatBoard) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatBu](https://github.com/Real-TTX/MatBu) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatCloud](https://github.com/Real-TTX/MatCloud) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatContactHub](https://github.com/Real-TTX/MatContactHub) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [Matddns](https://github.com/Real-TTX/Matddns) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatDo](https://github.com/Real-TTX/MatDo) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatDown](https://github.com/Real-TTX/MatDown) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatDrive](https://github.com/Real-TTX/MatDrive) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatFile](https://github.com/Real-TTX/MatFile) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatGame](https://github.com/Real-TTX/MatGame) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatMail](https://github.com/Real-TTX/MatMail) | Beta | Not shown in the MatOS window yet. |
 | [MatOffice](https://github.com/Real-TTX/MatOffice) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatPaper](https://github.com/Real-TTX/MatPaper) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatPhoto](https://github.com/Real-TTX/MatPhoto) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatPlay](https://github.com/Real-TTX/MatPlay) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatRegistry](https://github.com/Real-TTX/MatRegistry) | Beta | Works with one sign-in; not yet tested end to end through MatOS (docker push through Matcad). |
 | [MatShape](https://github.com/Real-TTX/MatShape) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatSplit](https://github.com/Real-TTX/MatSplit) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatTrakr](https://github.com/Real-TTX/MatTrakr) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
+| [MatBill](https://github.com/Real-TTX/MatBill) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
+| [MatCan](https://github.com/Real-TTX/MatCan) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
 | [MatCMS](https://github.com/Real-TTX/MatCMS) | Alpha | Installs, no MatOS integration yet. |
 | [MatDesign](https://github.com/Real-TTX/MatDesign) | Alpha | Installs, no MatOS integration yet. |
 | [Matmon](https://github.com/Real-TTX/Matmon) | Alpha | Installs, no MatOS integration yet. |
+| [MatNotes](https://github.com/Real-TTX/MatNote) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
+| [MatPhone](https://github.com/Real-TTX/MatPhone) | Alpha | Installs and runs; no sign-in through MatIdentity and no platform contract yet. |
+| [MatTicket](https://github.com/Real-TTX/MatTicket) | Alpha | Installs and runs; no sign-in through MatIdentity (only Microsoft Entra) and no platform contract yet. |
 | [MatAi](https://github.com/Real-TTX/MatAi) | Preview | The image is not published yet. |
+| [MatBiz](https://github.com/Real-TTX/MatBiz) | Preview | Its image is not published yet; the sign-in through MatIdentity and the platform contract are in the code. |
 | [Home Assistant](https://www.home-assistant.io) | Third-party | Runs in a network of its own like every app, so devices it would find by itself on the home network (mDNS, Bluetooth, USB) are added by their address. |
 | [Immich](https://immich.app) | Third-party | Its single sign-on and mail are set in its own administration (or a config file that locks every setting), so MatOS does not connect them yet. |
 | [Jellyfin](https://jellyfin.org) | Third-party | Has its own accounts; the one sign-in only through a plugin of Jellyfin, which MatOS does not set up. |
@@ -445,7 +461,7 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | A home screen you arrange yourself (pages, dragging, sizes of widgets, kept with your account) | ✅ |
 | Widgets with the data of the person who is looking | planned |
 | Microsoft Entra ID sign-in | planned (the login is already behind `AuthService` / `SessionService`) |
-| Remote backup targets (SMB, off-site) | MatDock's backup targets |
+| Backup targets: SFTP, WebDAV, SMB (create, test, choose per backup and schedule, restore from them) | ✅ with MatDock's `feature/backup-targets-api` (apiVersion 5) |
 
 ## License
 

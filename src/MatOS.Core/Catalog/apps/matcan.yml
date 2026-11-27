@@ -1,0 +1,70 @@
+# MatCan – the offline Canva for labels, cards, flyers, posters and social media posts.
+x-matos:
+  id: matcan
+  name: MatCan
+  tagline: Design labels, cards and posters
+  description: An offline Canva - pick a format or one of 333 templates, design in the browser, download as PNG, JPG, SVG or PDF or print, and fill one design from a data list for many labels.
+  category: Productivity
+  role: app
+  state: alpha
+  stateNote: Installs and runs; no sign-in through MatIdentity and no platform contract yet.
+  icon: matcan.svg
+  homepage: https://github.com/Real-TTX/MatCan
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matcan/editor.webp
+      caption: The editor
+    - src: matcan/templates.webp
+      caption: Templates
+    - src: matcan/output.webp
+      caption: Printing
+  ui:
+    service: web
+    port: 3043
+    hostPort: 3043
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first visit creates the administrator (there is no default password); open the app right after the install.
+    - Back up the volume matcan-data together with the database volume matcan-db.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matcan
+      POSTGRES_USER: matcan
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matcan-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matcan -d matcan"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matcan:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MATCAN__Database__Host: db
+      MATCAN__Database__Password: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matcan-data:/data
+
+volumes:
+  matcan-db:
+  matcan-data:

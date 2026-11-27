@@ -18,12 +18,14 @@ public sealed class MatDockBackupProvider : IBackupProvider
     private readonly MatDockEngine _engine;
     private readonly MatOSDbContext _db;
     private readonly string _projectPrefix;
+    private readonly BackupTargetService _targets;
 
-    public MatDockBackupProvider(MatDockClient client, MatDockEngine engine, MatOSDbContext db, IOptions<MatOSOptions> options)
+    public MatDockBackupProvider(MatDockClient client, MatDockEngine engine, MatOSDbContext db, IOptions<MatOSOptions> options, BackupTargetService targets)
     {
         _client = client;
         _engine = engine;
         _db = db;
+        _targets = targets;
         _projectPrefix = options.Value.ProjectPrefix + "-";
     }
 
@@ -45,9 +47,16 @@ public sealed class MatDockBackupProvider : IBackupProvider
     public async Task<BackupItem?> GetAsync(string id, CancellationToken ct = default)
         => (await ListAsync(ct)).FirstOrDefault(i => i.Id == $"matdock:{id}");
 
-    public async Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, Action<string> log, CancellationToken ct = default)
+    public async Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, BackupDestination destination, Action<string> log, CancellationToken ct = default)
     {
-        var operation = await _client.StartBackupAsync(app.ProjectName, stopContainers, note, ct);
+        var targetId = destination.TargetId;
+        if (destination.UseDefault && await _targets.DefaultAsync(ct) is { } fallback)
+        {
+            targetId = fallback.Id;
+            log($"The backup is kept at the default target {fallback.Name}.");
+        }
+
+        var operation = await _client.StartBackupAsync(app.ProjectName, stopContainers, note, targetId, ct);
         log("MatDock is making the backup ...");
         await _client.WaitOperationAsync(operation, log, ct);
 
@@ -96,6 +105,7 @@ public sealed class MatDockBackupProvider : IBackupProvider
             ["retention"] = input.Retention,
             ["stopContainers"] = input.StopContainers,
             ["enabled"] = input.Enabled,
+            ["targetId"] = input.TargetId,
         };
         await _client.PutScheduleAsync(name, body, ct);
 
@@ -143,7 +153,8 @@ public sealed class MatDockBackupProvider : IBackupProvider
             b["volumeCount"]?.GetValue<int>() ?? 0,
             b["consistent"]?.GetValue<bool>() ?? false,
             b["note"]?.GetValue<string>(),
-            null);
+            b["message"]?.GetValue<string>() is { Length: > 0 } message && !string.Equals(b["status"]?.GetValue<string>(), "succeeded", StringComparison.OrdinalIgnoreCase) ? message : null,
+            b["targetId"] is null ? null : b["targetName"]?.GetValue<string>() ?? "a target that was removed");
     }
 
     private ScheduleItem ToSchedule(JsonObject s)
@@ -162,6 +173,7 @@ public sealed class MatDockBackupProvider : IBackupProvider
             s["retention"]?.GetValue<int>() ?? 7,
             s["stopContainers"]?.GetValue<bool>() ?? true,
             s["enabled"]?.GetValue<bool>() ?? true,
-            null);
+            null,
+            s["targetId"]?.GetValue<long>());
     }
 }

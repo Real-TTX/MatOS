@@ -3,8 +3,10 @@
 @using MatOS.Core.Catalog
 @using MatOS.Web.Pages.Store
 @*
-    The store (css/store.css): the toolbar of a list on top, then "Start here" (a few Mat apps that work together with MatOS, on the plain first page only),
-    the categories as a row of links, and the gallery: each app a card with its icon, its line, its state and one button (Install, or Open when it is installed).
+    The store (css/store.css), an app store in the look of MatOS. The toolbar of a list on top and the categories as a row of links; then, on the plain first look,
+    the spotlight (one Mat app with a picture), the row "Made for MatOS" and a shelf per category with "See all"; a search, a filter or a sort shows the gallery
+    of what matches with the pager. Every app is a card: its icon, its name and line, what it does with MatOS (the one sign-in, the mail), and one button
+    (Get, or Open when it is installed).
 *@
 @{
     ViewData["Title"] = "Store";
@@ -31,52 +33,152 @@
                 break;
         }
     }
+
+    async Task Marks(CatalogApp app)
+    {
+        var marks = IndexModel.MarksFor(app);
+        if (marks.Count == 0)
+        {
+            return;
+        }
+
+        <span class="mv-store-marks">
+            @foreach (var mark in marks)
+            {
+                <span class="mv-store-mark" data-tip="@mark.Label"><icon name="@mark.Icon" /><span class="mat-sr-only">@mark.Label</span></span>
+            }
+        </span>
+    }
+
+    async Task Card(CatalogApp app)
+    {
+        var installed = Model.Installed.GetValueOrDefault(app.Id)?.Count ?? 0;
+        // A state is shown where it tells something: an app that is new or made by others, not on every card.
+        var showState = app.State is not (AppStates.Integrated or AppStates.Beta);
+        <article class="mat-card mv-store-app">
+            <a class="mv-store-app__main" href="/Store/Install?id=@app.Id">
+                <app-icon name="@app.Name" icon="@app.Icon" size="lg" />
+                <span class="mv-store-app__text">
+                    <span class="mv-store-app__name">@app.Name</span>
+                    <span class="mv-store-app__tagline">@app.Tagline</span>
+                    <span class="mv-store-app__meta">
+                        @if (showState)
+                        {
+                            <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@StoreWords.State(app.State)">@AppStates.Label(app.State)</span>
+                        }
+                        @if (app.Recommended && installed == 0)
+                        {
+                            <span class="mat-pill mat-pill--accent mat-pill--plain">Recommended</span>
+                        }
+                        @if (!app.BuiltIn)
+                        {
+                            <span class="mat-pill mat-pill--plain">Your own</span>
+                        }
+                        @{ await Marks(app); }
+                        @if (Model.Category is null && !Model.Plain)
+                        {
+                            <span class="mv-store-app__category">@app.Category</span>
+                        }
+                        @if (installed > 1)
+                        {
+                            <span class="mv-store-app__category">Installed ×@installed</span>
+                        }
+                    </span>
+                </span>
+            </a>
+            @{ StoreButton(app, "mv-store-app__action"); }
+        </article>
+    }
 }
 
 <div class="mat-list mv-store">
     <partial name="_Toolbar" model="list.Toolbar" />
 
-    @if (Model.Featured.Count > 0)
-    {
-        <section class="mv-store-hero" aria-labelledby="store-start">
-            <div class="mv-store-hero__head">
-                <h2 class="mv-store-hero__title" id="store-start">Start here</h2>
-                <p class="mv-store-hero__lead">Made for MatOS: one sign-in for all of them, and backups with one click.</p>
-            </div>
-            <ul class="mv-store-hero__apps">
-                @foreach (var app in Model.Featured)
-                {
-                    <li class="mv-store-tile">
-                        <a class="mv-store-tile__main" href="/Store/Install?id=@app.Id">
-                            <app-icon name="@app.Name" icon="@app.Icon" size="xl" />
-                            <span class="mv-store-tile__name">@app.Name</span>
-                            <span class="mv-store-tile__tagline">@app.Tagline</span>
-                        </a>
-                        <span class="mv-store-tile__foot">
-                            <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@StoreWords.State(app.State)">@AppStates.Label(app.State)</span>
-                            @{ StoreButton(app, string.Empty); }
-                        </span>
-                    </li>
-                }
-            </ul>
-        </section>
-    }
+    <nav class="mv-store-cats" aria-label="Categories">
+        <a class="mv-store-cat" href="@Model.CategoryUrl(null)" aria-current="@(Model.Category is null ? "page" : null)">All</a>
+        @foreach (var category in Model.Categories)
+        {
+            <a class="mv-store-cat" href="@Model.CategoryUrl(category)" aria-current="@(category == Model.Category ? "page" : null)">@category</a>
+        }
+    </nav>
 
-    <div class="mv-store-browse">
+    @if (Model.Plain)
+    {
+        @if (Model.Spotlight is { } spot)
+        {
+            var shot = spot.Screenshots.FirstOrDefault();
+            <section class="mv-store-spot" aria-labelledby="store-spot">
+                <div class="mv-store-spot__text">
+                    <span class="mv-store-spot__eyebrow"><icon name="sparkles" /> App of the day</span>
+                    <a class="mv-store-spot__app" href="/Store/Install?id=@spot.Id">
+                        <app-icon name="@spot.Name" icon="@spot.Icon" size="xl" />
+                        <span class="mv-store-spot__names">
+                            <span class="mv-store-spot__name" id="store-spot">@spot.Name</span>
+                            <span class="mv-store-spot__tagline">@spot.Tagline</span>
+                        </span>
+                    </a>
+                    <p class="mv-store-spot__lead">@spot.Description</p>
+                    <span class="mv-store-spot__foot">
+                        @{ StoreButton(spot, string.Empty); }
+                        @{ await Marks(spot); }
+                    </span>
+                </div>
+                @if (shot is not null)
+                {
+                    <a class="mv-store-spot__shot" href="/Store/Install?id=@spot.Id" tabindex="-1" aria-hidden="true">
+                        <img src="@StoreImages.Url(shot)" alt="" loading="lazy" decoding="async" />
+                    </a>
+                }
+            </section>
+        }
+
         @if (Model.Featured.Count > 0)
         {
-            <h2 class="mv-store-browse__title">All apps</h2>
+            <section class="mv-store-hero" aria-labelledby="store-start">
+                <div class="mv-store-hero__head">
+                    <h2 class="mv-store-hero__title" id="store-start">Made for MatOS</h2>
+                    <p class="mv-store-hero__lead">One sign-in for all of them, their mail without setting anything up, and backups with one click.</p>
+                </div>
+                <ul class="mv-store-hero__apps">
+                    @foreach (var app in Model.Featured)
+                    {
+                        <li class="mv-store-tile">
+                            <a class="mv-store-tile__main" href="/Store/Install?id=@app.Id">
+                                <app-icon name="@app.Name" icon="@app.Icon" size="xl" />
+                                <span class="mv-store-tile__name">@app.Name</span>
+                                <span class="mv-store-tile__tagline">@app.Tagline</span>
+                            </a>
+                            <span class="mv-store-tile__foot">
+                                @{ await Marks(app); }
+                                @{ StoreButton(app, string.Empty); }
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </section>
         }
-        <nav class="mv-store-cats" aria-label="Categories">
-            <a class="mv-store-cat" href="@Model.CategoryUrl(null)" aria-current="@(Model.Category is null ? "page" : null)">All</a>
-            @foreach (var category in Model.Categories)
-            {
-                <a class="mv-store-cat" href="@Model.CategoryUrl(category)" aria-current="@(category == Model.Category ? "page" : null)">@category</a>
-            }
-        </nav>
-    </div>
 
-    @if (list.Items.Count == 0)
+        @foreach (var shelf in Model.Shelves)
+        {
+            var id = "shelf-" + shelf.Category.ToLowerInvariant().Replace(' ', '-');
+            <section class="mv-store-shelf" aria-labelledby="@id">
+                <div class="mv-store-shelf__head">
+                    <h2 class="mv-store-shelf__title" id="@id">@shelf.Category</h2>
+                    @if (shelf.Apps.Count > IndexModel.ShelfSize)
+                    {
+                        <a class="mv-store-shelf__all" href="@Model.CategoryUrl(shelf.Category)" aria-label="See all @shelf.Apps.Count apps of @shelf.Category">See all <span class="mv-store-shelf__count">@shelf.Apps.Count</span><icon name="chevron-right" /></a>
+                    }
+                </div>
+                <div class="mat-gallery mv-store-gallery">
+                    @foreach (var app in shelf.Apps.Take(IndexModel.ShelfSize))
+                    {
+                        await Card(app);
+                    }
+                </div>
+            </section>
+        }
+    }
+    else if (list.Items.Count == 0)
     {
         <div class="mat-empty">
             <span class="mat-empty__icon"><icon name="store" /></span>
@@ -87,44 +189,14 @@
     }
     else
     {
-        <div class="mat-gallery mv-store-gallery">
+        <div class="mat-gallery mv-store-gallery mv-store-results">
             @foreach (var app in list.Items)
             {
-                var installed = Model.Installed.GetValueOrDefault(app.Id)?.Count ?? 0;
-                <article class="mat-card mv-store-app">
-                    <a class="mv-store-app__main" href="/Store/Install?id=@app.Id">
-                        <app-icon name="@app.Name" icon="@app.Icon" size="lg" />
-                        <span class="mv-store-app__text">
-                            <span class="mv-store-app__name">@app.Name</span>
-                            <span class="mv-store-app__tagline">@app.Tagline</span>
-                            <span class="mv-store-app__meta">
-                                <span class="mat-pill @AppStatePill.Css(app.State)" data-tip="@StoreWords.State(app.State)">@AppStates.Label(app.State)</span>
-                                @if (app.Recommended && installed == 0)
-                                {
-                                    <span class="mat-pill mat-pill--accent mat-pill--plain">Recommended</span>
-                                }
-                                @if (!app.BuiltIn)
-                                {
-                                    <span class="mat-pill mat-pill--plain">Your own</span>
-                                }
-                                @if (Model.Category is null)
-                                {
-                                    <span class="mv-store-app__category">@app.Category</span>
-                                }
-                                @if (installed > 1)
-                                {
-                                    <span class="mv-store-app__category">Installed ×@installed</span>
-                                }
-                            </span>
-                        </span>
-                    </a>
-                    @{ StoreButton(app, "mv-store-app__action"); }
-                </article>
+                await Card(app);
             }
         </div>
+        <partial name="_Pager" model="list.Pager" />
     }
-
-    <partial name="_Pager" model="list.Pager" />
 </div>
 
 <details class="mat-collapse mv-store-own">

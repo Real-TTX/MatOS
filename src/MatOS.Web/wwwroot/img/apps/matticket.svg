@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>MatTicket</title>
+  <rect width="64" height="64" rx="14" fill="#a15c07"/>
+  <path fill="#ffffff" d="M12 18h40a4 4 0 0 1 4 4v4a6 6 0 0 0 0 12v4a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4v-4a6 6 0 0 0 0-12v-4a4 4 0 0 1 4-4z"/>
+</svg>

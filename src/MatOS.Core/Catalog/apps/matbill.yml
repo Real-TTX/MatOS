@@ -1,0 +1,70 @@
+# MatBill – invoices and finances for small companies.
+x-matos:
+  id: matbill
+  name: MatBill
+  tagline: Invoices and finances for small companies
+  description: Write invoices right on the A4 page, recurring invoices, quotes, expenses with receipts, banking with automatic matching, e-invoices (ZUGFeRD/XRechnung) and an export for the tax office.
+  category: Finance
+  role: app
+  state: alpha
+  stateNote: Installs and runs; no sign-in through MatIdentity and no platform contract yet.
+  icon: matbill.svg
+  homepage: https://github.com/Real-TTX/MatBill
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matbill/en-dashboard.webp
+      caption: Overview
+    - src: matbill/en-invoice.webp
+      caption: An invoice
+    - src: matbill/en-banking.webp
+      caption: Banking
+  ui:
+    service: web
+    port: 2505
+    hostPort: 2505
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first visit creates the administrator; open the app right after the install.
+    - Its mail (invoices, reminders) is set up in the app under Settings → Mail; MatSMTP is not connected by itself yet.
+    - Back up the volume matbill-data together with the database volume matbill-db (the app backs up itself under Settings → Backup, also to a NAS over SMB).
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matbill
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matbill-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d matbill"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matbill:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MATBILL__Database__Host: db
+      MATBILL__Database__Password: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matbill-data:/data
+
+volumes:
+  matbill-db:
+  matbill-data:

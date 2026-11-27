@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MatBu">
-  <rect width="64" height="64" rx="14" fill="#0b7f8a"/>
-  <path d="M12 48V15L32 32L52 15V48" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M12 42h15v-6l11 10-11 10v-6H12z" fill="#fff"/>
-  <path d="M52 50H37v6L26 46l11-10v6h15z" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MatBu">
+  <!-- MatBu mark, detailed (64 px and up). Glyph 336 x 336 (x 88..424, y 84..420: 4 above
+       centre for optical balance), strokes 48, diagonals and arrowhead edges share the slope
+       5:6; the left leg sends an arrow right, the right leg bends into an arrow pointing left. -->
+  <rect width="512" height="512" rx="112" fill="#0b7f8a"/>
+  <path fill="#fff" d="M88 84L256 224L424 84V356A32 32 0 0 1 392 388H311.2V420L244 364L311.2 308V340H364A12 12 0 0 0 376 328V192L256 292L136 192V292H188.8V260L256 316L188.8 372V340H148A12 12 0 0 0 136 352V416A4 4 0 0 1 132 420H92A4 4 0 0 1 88 416Z"/>
 </svg>

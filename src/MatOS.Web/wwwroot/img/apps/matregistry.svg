@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MatRegistry">
+  <rect width="64" height="64" rx="14" fill="#4D7C0F"/>
+  <rect x="21.5" y="13" width="21" height="18" rx="2.5" fill="#DCEBC0"/><path d="M26.75 17.5v9M32 17.5v9M37.25 17.5v9" stroke="#365A08" stroke-width="2" stroke-linecap="round"/><rect x="10" y="33" width="21" height="18" rx="2.5" fill="#fff"/><path d="M15.25 37.5v9M20.5 37.5v9M25.75 37.5v9" stroke="#4D7C0F" stroke-width="2" stroke-linecap="round"/><rect x="33" y="33" width="21" height="18" rx="2.5" fill="#fff"/><path d="M38.25 37.5v9M43.5 37.5v9M48.75 37.5v9" stroke="#4D7C0F" stroke-width="2" stroke-linecap="round"/>
+</svg>

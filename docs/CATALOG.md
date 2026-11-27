@@ -19,6 +19,9 @@ x-matos:
   role: app                   # app | proxy | ddns | docker | identity | mail  (the role of an engine: Matcad, Matddns, MatDock, MatIdentity, MatSMTP)
   icon: wiki.svg              # a file below wwwroot/img/apps/, an https URL, or leave out for a generated tile
   homepage: https://example.com/wiki
+  screenshots:                # optional: the pictures of its page in the store (a file below wwwroot/img/store, or an https URL in an entry of your own)
+    - src: wiki/home.webp
+      caption: The start page   # what it shows, in a few words: its alt text and the line under it
   recommended: false          # offered first in the store (infrastructure roles only)
   core: false                 # true for the five engines: installed by the wizard, cannot be uninstalled
   state: beta                 # integrated | beta | alpha | preview | third-party: how far the app is along in MatOS (see "App states")
@@ -87,6 +90,17 @@ volumes:
   implementing `IAppProvisioner`. An engine also needs its API key as a generated, hidden variable (`MATCAD_API_KEY`, `MATDDNS_API_KEY`,
   `MATDOCK_API_KEY`, `MATSMTP_API_KEY`; MatIdentity uses `MAT_API_KEY`) that the compose file passes to the container the way the engine expects it (see [ENGINES.md](ENGINES.md)).
   The five engines are `core: true` (the wizard installs them, the app list cannot remove them); `EngineIds.All` names them in the order they are installed.
+
+## The store
+
+The plain first look of the store is an app store: the **app of the day** (one app of *Made for MatOS* with a picture, another one each day), the row **Made for MatOS**
+(every `app` that is integrated or a beta and consumes `identity.oidc`) and a **shelf per category** (`category`; *System* last) with *See all*. A card shows the icon,
+the `tagline`, the state when it is not yet a beta, and marks for `identity.oidc` (the one sign-in) and `mail.smtp` (mail through MatOS). The page of an app shows the
+`screenshots` in a row that scrolls sideways, the `description`, what the app gets from MatOS, its facts and more apps of its category.
+
+Pictures of a built-in entry are WebP files, at most 1280 px wide, in `src/MatOS.Web/wwwroot/img/store/<id>/` (taken from `docs/images` of the app's repository);
+`CatalogTests` checks that every icon and picture is there and that every Mat app has one to six. Categories in use: Productivity, Files, Media, Communication,
+Business, Finance, Developer, Fun, Monitoring, Tools, Websites, System.
 
 ## App states
 

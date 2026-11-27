@@ -42,12 +42,12 @@ public class AppStateTests
         }
     }
 
-    /// <summary>The table the owner approved on 2026-11-26.</summary>
+    /// <summary>The table the owner approved on 2026-11-26, with the Mat apps added to the store on 2026-11-27 (beta with the one sign-in, alpha without it).</summary>
     [Theory]
     [InlineData(AppStates.Integrated, "matcad matdock matidentity matsmtp")]
-    [InlineData(AppStates.Beta, "matboard matbu matcloud matddns matdo matdrive matfile matmail matoffice matpaper matplay matshape matsplit mattrakr")]
-    [InlineData(AppStates.Alpha, "matcms matdesign matmon")]
-    [InlineData(AppStates.Preview, "matai")]
+    [InlineData(AppStates.Beta, "matboard matbu matcloud matcontacthub matddns matdo matdown matdrive matfile matgame matmail matoffice matpaper matphoto matplay matregistry matshape matsplit mattrakr")]
+    [InlineData(AppStates.Alpha, "matbill matcan matcms matdesign matmon matnote matphone matticket")]
+    [InlineData(AppStates.Preview, "matai matbiz")]
     [InlineData(AppStates.ThirdParty, "home-assistant immich jellyfin nextcloud nginx-proxy-manager paperless-ngx portainer uptime-kuma vaultwarden")]
     public void BuiltInCatalog_HasTheApprovedStates(string state, string ids)
     {

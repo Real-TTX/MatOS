@@ -133,7 +133,9 @@ public class CatalogTests
 
         // With MatIdentity MatOS opens them at their sign-in (AppService.StartPathAsync), so nobody clicks "Sign in" first.
         Assert.All(new[] { "matdo", "matdrive", "matoffice", "matboard", "matshape", "matcloud" }, id => Assert.Equal("/Account/Login", catalog.Get(id)!.Ui!.SignIn));
+        // MatFile opens its sign-in by itself (its start page sends a stranger there): it needs none.
         Assert.Null(catalog.Get("matfile")!.Ui!.SignIn);
+        Assert.All(new[] { "matphoto", "matcontacthub", "matdown", "matregistry", "matgame", "matsplit", "mattrakr", "matmail", "matpaper" }, id => Assert.Equal("/Account/Login", catalog.Get(id)!.Ui!.SignIn));
     }
 
     [Fact]
@@ -191,5 +193,85 @@ public class CatalogTests
         var matmail = CreateCatalog().Get("matmail")!;
 
         Assert.Equal(new[] { 25, 587, 465, 143, 993 }, matmail.FixedPorts.Select(p => p.HostPort).ToArray());
+    }
+
+    private static string WebRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "MatOS.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(dir?.FullName ?? throw new InvalidOperationException("MatOS.slnx was not found"), "src", "MatOS.Web", "wwwroot");
+    }
+
+    [Fact]
+    public void Every_icon_and_picture_of_the_store_is_there()
+    {
+        var web = WebRoot();
+        foreach (var app in CreateCatalog().GetAll())
+        {
+            if (app.Icon is { } icon && !icon.StartsWith("https://", StringComparison.Ordinal))
+            {
+                Assert.True(File.Exists(Path.Combine(web, "img", "apps", icon)), $"{app.Id}: the icon {icon} is missing");
+            }
+
+            foreach (var shot in app.Screenshots)
+            {
+                Assert.False(shot.IsUrl, $"{app.Id}: a built-in entry ships its pictures");
+                Assert.True(File.Exists(Path.Combine(web, "img", "store", shot.Src)), $"{app.Id}: the picture {shot.Src} is missing");
+                Assert.False(string.IsNullOrWhiteSpace(shot.Caption));
+            }
+        }
+    }
+
+    [Fact]
+    public void Every_Mat_app_shows_pictures_in_the_store()
+        => Assert.All(CreateCatalog().GetAll().Where(a => a.Role == AppRoles.App && a.Id.StartsWith("mat", StringComparison.Ordinal) && a.Id != "matgame"), // MatGame's repository has no pictures yet
+            app => Assert.InRange(app.Screenshots.Count, 1, 6));
+
+    [Theory]
+    [InlineData("../secret.png", "Caption")]
+    [InlineData("/etc/passwd.png", "Caption")]
+    [InlineData("http://example.com/a.png", "Caption")]
+    [InlineData("app/home.exe", "Caption")]
+    [InlineData("app/home.webp", "")]
+    public void A_picture_is_a_file_of_the_store_or_an_https_address_with_a_caption(string src, string caption)
+    {
+        var yaml = $"""
+            x-matos:
+              id: mine
+              name: Mine
+              screenshots:
+                - src: "{src}"
+                  caption: "{caption}"
+            services:
+              web:
+                image: nginx
+            """;
+
+        Assert.Throws<FormatException>(() => CatalogParser.Parse(yaml, "mine.yml"));
+    }
+
+    [Fact]
+    public void A_picture_may_be_an_https_address()
+    {
+        var app = CatalogParser.Parse("""
+            x-matos:
+              id: mine
+              name: Mine
+              screenshots:
+                - src: https://example.com/a.png
+                  caption: Home
+                - src: mine/b.webp
+                  caption: More
+            services:
+              web:
+                image: nginx
+            """, "mine.yml");
+
+        Assert.True(app.Screenshots[0].IsUrl);
+        Assert.Equal("mine/b.webp", app.Screenshots[1].Src);
     }
 }

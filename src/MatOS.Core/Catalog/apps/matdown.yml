@@ -1,0 +1,81 @@
+# MatDown – a downloader with a library: Usenet, Anna's Archive, archive.org and YouTube.
+x-matos:
+  id: matdown
+  name: MatDown
+  tagline: A downloader with a library
+  description: One app instead of Sonarr, Radarr, Readarr, Prowlarr and SABnzbd - a download queue, the search over all your indexers with release ranking, a library that searches by itself, subscriptions to channels, naming schemes and your NAS as storage (Usenet, Anna's Archive, archive.org, YouTube).
+  category: Media
+  role: app
+  state: beta
+  stateNote: Works with one sign-in; not yet tested end to end through MatOS.
+  icon: matdown.svg
+  homepage: https://github.com/Real-TTX/MatDown
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matdown/dashboard.webp
+      caption: Overview
+    - src: matdown/queue.webp
+      caption: The queue
+    - src: matdown/library.webp
+      caption: The library
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed and passes the variables
+  # of the binding to the web service by itself. MatDown says the same in its /api.
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*)
+    - capability: mail.smtp       # its mail (done or failed downloads) through MatSMTP (MATSMTP_*)
+  ui:
+    service: web
+    port: 7671
+    hostPort: 7671
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app, so nobody meets the start page with its buttons.
+    signIn: /Account/Login
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first account that signs in is the administrator (with MatIdentity the first person who opens MatDown, without it the first who registers).
+    - Add your NAS under Administration → Storages (SMB, SFTP, FTP, WebDAV); until then the downloads stay in the volume matdown-data.
+    - Back up the database volume matdown-db together with matdown-data.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matdown
+      POSTGRES_USER: matdown
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matdown-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matdown -d matdown"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matdown:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=matdown;Username=matdown;Password=${DB_PASSWORD}"
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+      MAT_FRAME_ANCESTORS: ${MAT_FRAME_ANCESTORS:-}
+    volumes:
+      - matdown-data:/data
+
+volumes:
+  matdown-db:
+  matdown-data:

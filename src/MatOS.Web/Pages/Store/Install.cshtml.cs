@@ -17,6 +17,9 @@ namespace MatOS.Web.Pages.Store;
 /// </summary>
 public class InstallModel : PageModel
 {
+    /// <summary>How many other apps of the category the end of the page shows.</summary>
+    private const int MoreCount = 4;
+
     private readonly CatalogService _catalog;
     private readonly AppService _apps;
     private readonly JobService _jobs;
@@ -63,6 +66,9 @@ public class InstallModel : PageModel
 
     /// <summary>What the app gets from MatOS, in plain words.</summary>
     public List<StoreConnection> Connections { get; private set; } = new();
+
+    /// <summary>Other apps of the same category (not the engines), for the row at the end of the page.</summary>
+    public List<CatalogApp> More { get; private set; } = new();
 
     /// <summary>A second copy of an app (another instance) is fine; an engine is one part of MatOS and is installed once.</summary>
     public bool CanInstallAnother => App is { Core: false } && Installed.Count > 0;
@@ -115,6 +121,12 @@ public class InstallModel : PageModel
         // The defaults are enough to find the fixed ports (80/443, the mail ports ...).
         var defaults = app.Variables.Where(v => v.Default is not null).ToDictionary(v => v.Key, v => v.Default!);
         PortConflicts = await _ports.FindConflictsAsync(app, defaults, ownProject: "\0", ct);
+
+        More = _catalog.GetAll()
+            .Where(a => !a.Core && a.Id != app.Id && a.Category.Equals(app.Category, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => AppStates.Rank(a.State)).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(MoreCount)
+            .ToList();
 
         var config = await _config.GetAsync(ct);
         Connections = await ConnectionsAsync(app, config, ct);
@@ -189,6 +201,12 @@ public static class StoreWords
         AppStates.Preview => "Announced: it cannot be installed yet.",
         _ => AppStates.Meaning(state),
     };
+}
+
+/// <summary>Where the pictures of the store are: a file below <c>wwwroot/img/store/</c>, or the https address an entry of one's own names.</summary>
+public static class StoreImages
+{
+    public static string Url(CatalogScreenshot shot) => shot.IsUrl ? shot.Src : "/img/store/" + shot.Src;
 }
 
 /// <summary>One thing an app gets from MatOS, for the store page: an icon of the sprite, a title and a line.</summary>

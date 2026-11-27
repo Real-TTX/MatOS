@@ -10,9 +10,14 @@ x-matos:
   stateNote: Installs, no MatOS integration yet.
   icon: matcms.svg
   homepage: https://github.com/Real-TTX/MatCMS
-  # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
-  consumes:
-    - capability: mail.smtp       # its mail through MatSMTP (MATSMTP_*)
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matcms/home.webp
+      caption: A website
+    - src: matcms/page-editor.webp
+      caption: The page editor
+    - src: matcms/dashboard.webp
+      caption: Overview
   ui:
     service: matcms
     port: 8080
@@ -30,12 +35,6 @@ services:
     image: ghcr.io/real-ttx/matcms:latest
     restart: unless-stopped
     environment:
-      MATSMTP_HOST: ${MATSMTP_HOST:-}
-      MATSMTP_PORT: ${MATSMTP_PORT:-}
-      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
-      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
-      MATSMTP_FROM: ${MATSMTP_FROM:-}
-      MATSMTP_TLS: ${MATSMTP_TLS:-}
     volumes:
       # Database, keys, uploads and backups: everything lives here.
       - matcms-data:/app/appdata

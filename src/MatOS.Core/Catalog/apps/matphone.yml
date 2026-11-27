@@ -1,0 +1,76 @@
+# MatPhone – the phone system for small companies.
+x-matos:
+  id: matphone
+  name: MatPhone
+  tagline: The phone system in your browser
+  description: A small PBX in pure C# - users, ring groups, numbers, desk phones (SIP), voicemail, trunks to Telekom, peoplefone, Vodafone and others, rules by time and number, function keys and a phone in the browser (WebRTC).
+  category: Communication
+  role: app
+  state: alpha
+  stateNote: Installs and runs; no sign-in through MatIdentity and no platform contract yet.
+  icon: matphone.svg
+  homepage: https://github.com/Real-TTX/MatPhone
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matphone/phone.webp
+      caption: The phone
+    - src: matphone/dashboard.webp
+      caption: Overview
+    - src: matphone/rules.webp
+      caption: Call rules
+  ui:
+    service: web
+    port: 6050
+    hostPort: 6050
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first visit creates the administrator; open the app right after the install.
+    - SIP (5060 UDP/TCP) and the audio ports (6100-6199 UDP) are published on this machine on purpose; phones and providers reach them there. Nothing else may hold them.
+    - Set the address phones and providers reach this server at under Administration → Telephony settings → Address of this server. The phone in the browser needs HTTPS for the microphone.
+    - Back up the volume matphone-data together with the database volume matphone-db.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matphone
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matphone-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d matphone"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matphone:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Fixed on purpose: SIP for phones and providers, and the audio (RTP, WebRTC).
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "6100-6199:6100-6199/udp"
+    environment:
+      MATPHONE__Database__Host: db
+      MATPHONE__Database__Password: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matphone-data:/data
+
+volumes:
+  matphone-db:
+  matphone-data:

@@ -6,7 +6,7 @@ x-matos:
   description: >-
     Home Assistant brings lights, heating, plugs, sensors and thousands of other devices into one place, with dashboards and automations
     that run in your home, without a cloud.
-  category: Home
+  category: Tools
   role: app
   state: third-party
   stateNote: Runs in a network of its own like every app, so devices it would find by itself on the home network (mDNS, Bluetooth, USB) are added by their address.

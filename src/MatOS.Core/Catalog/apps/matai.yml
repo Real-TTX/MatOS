@@ -10,6 +10,14 @@ x-matos:
   stateNote: The image is not published yet.
   icon: matai.svg
   homepage: https://github.com/Real-TTX/MatAi
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matai/chat.webp
+      caption: A chat
+    - src: matai/assistants.webp
+      caption: Assistants
+    - src: matai/models.webp
+      caption: Models
   # The platform contract (/api): MatOS fills MAT_API_KEY. MatAi sends no mail, so there is no mail.smtp.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -19,6 +27,8 @@ x-matos:
     service: matai
     port: 2301
     hostPort: 2301
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
   variables:
     # The key of MatAi's own API /api/v1 (clients, settings): generated, nobody types it.
     - key: MATAI_API_KEY

@@ -1,13 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="mmg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b9bff"/>
-      <stop offset="1" stop-color="#1a56db"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#mmg)"/>
-  <rect x="12.5" y="18.5" width="39" height="27" rx="5.5" fill="none" stroke="#fff" stroke-width="3.5"/>
-  <path d="M15 22.5 32 35l17-12.5" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="49" cy="46" r="7.5" fill="#fff"/>
-  <path d="M45.5 46h7M50 43l3 3-3 3" fill="none" stroke="#1a56db" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <title>MatMail</title>
+  <rect class="bg" width="64" height="64" rx="14" fill="#475569"/>
+  <g id="art">
+    <path d="M13 49V17l19 19 19-19v32" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

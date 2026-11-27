@@ -13,13 +13,18 @@ public class ScheduleEditModel : PageModel
     private readonly BackupHub _backups;
     private readonly AppService _apps;
     private readonly SystemConfigService _config;
+    private readonly BackupTargetService _targets;
 
-    public ScheduleEditModel(BackupHub backups, AppService apps, SystemConfigService config)
+    public ScheduleEditModel(BackupHub backups, AppService apps, SystemConfigService config, BackupTargetService targets)
     {
         _backups = backups;
         _apps = apps;
         _config = config;
+        _targets = targets;
     }
+
+    /// <summary>The targets the backups can be kept at besides this machine (empty: the choice is not shown).</summary>
+    public List<BackupTarget> Targets { get; private set; } = new();
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -58,6 +63,9 @@ public class ScheduleEditModel : PageModel
         public bool StopContainers { get; set; } = true;
 
         public bool Enabled { get; set; } = true;
+
+        /// <summary>Where the backups are kept: "0" this machine, else a target's id.</summary>
+        public string? Target { get; set; } = "0";
     }
 
     public async Task<IActionResult> OnGetAsync(string? id)
@@ -83,6 +91,7 @@ public class ScheduleEditModel : PageModel
                 Retention = schedule.Retention,
                 StopContainers = schedule.StopContainers,
                 Enabled = schedule.Enabled,
+                Target = TargetValue(schedule.TargetId),
             };
         }
         else
@@ -90,6 +99,7 @@ public class ScheduleEditModel : PageModel
             var defaults = (await _config.GetAsync(HttpContext.RequestAborted)).Backups;
             Input.Retention = defaults.Retention;
             Input.StopContainers = defaults.StopContainers;
+            Input.Target = TargetValue(Targets.FirstOrDefault(t => t.IsDefault)?.Id);
         }
 
         return Page();
@@ -124,6 +134,7 @@ public class ScheduleEditModel : PageModel
                     Retention = Input.Retention,
                     StopContainers = Input.StopContainers,
                     Enabled = Input.Enabled,
+                    TargetId = BackupDestination.Parse(Input.Target).TargetId,
                 },
                 app?.Engine,
                 HttpContext.RequestAborted);
@@ -153,5 +164,10 @@ public class ScheduleEditModel : PageModel
     }
 
     private async Task LoadAppsAsync()
-        => Apps = (await _apps.ListAsync(HttpContext.RequestAborted)).Where(a => a.Lifecycle == AppLifecycle.Installed).ToList();
+    {
+        Apps = (await _apps.ListAsync(HttpContext.RequestAborted)).Where(a => a.Lifecycle == AppLifecycle.Installed).ToList();
+        Targets = await _targets.ListAsync(HttpContext.RequestAborted);
+    }
+
+    private static string TargetValue(long? id) => id?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0";
 }

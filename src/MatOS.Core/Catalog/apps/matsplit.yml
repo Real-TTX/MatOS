@@ -10,6 +10,14 @@ x-matos:
   stateNote: Works with one sign-in; not yet tested end to end through MatOS.
   icon: matsplit.svg
   homepage: https://github.com/Real-TTX/MatSplit
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matsplit/group-hub.webp
+      caption: A group
+    - src: matsplit/balance.webp
+      caption: Who owes whom
+    - src: matsplit/new-expense.webp
+      caption: A new expense
   # The platform contract (/api): MatOS fills MAT_API_KEY.
   platform: true
   # What the app uses of the engines (MatDesign docs/PLATFORM.md "Capabilities"): MatOS binds each when its engine is installed.
@@ -19,6 +27,8 @@ x-matos:
     service: matsplit
     port: 8080
     hostPort: 4774
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
   variables:
     # Seeds the administrator, so nothing is set up after the install: with MatIdentity nobody needs it, without it is the first sign-in.
     - key: MATSPLIT_ADMIN_PASSWORD

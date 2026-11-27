@@ -110,6 +110,9 @@ public sealed class CatalogApp
 
     public string? Homepage { get; set; }
 
+    /// <summary>Pictures of the app for its page in the store: a file below <c>wwwroot/img/store/</c> or an https URL, each with a caption.</summary>
+    public List<CatalogScreenshot> Screenshots { get; set; } = new();
+
     /// <summary>Offered first in the setup wizard.</summary>
     public bool Recommended { get; set; }
 
@@ -185,6 +188,20 @@ public sealed class CatalogApp
 
     [YamlIgnore]
     public string Source { get; set; } = "built-in";
+}
+
+/// <summary>One picture of an app on its page in the store.</summary>
+public sealed class CatalogScreenshot
+{
+    /// <summary>A path below <c>wwwroot/img/store/</c> (<c>matphoto/photos.webp</c>) or an https URL.</summary>
+    public string Src { get; set; } = string.Empty;
+
+    /// <summary>What it shows, in a few words: the alt text and the line under it.</summary>
+    public string Caption { get; set; } = string.Empty;
+
+    /// <summary>True when <see cref="Src"/> is an address of its own, not a file of MatOS.</summary>
+    [YamlIgnore]
+    public bool IsUrl => Src.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class CatalogUi

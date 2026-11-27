@@ -1,0 +1,70 @@
+# MatTicket – tickets, form designer, a small CRM and an AI assistant.
+x-matos:
+  id: matticket
+  name: MatTicket
+  tagline: Tickets, forms and help desk
+  description: A help desk with a WYSIWYG and flow designer for forms and assistants, self-help with AI, tickets routed to departments and teams, a status page per ticket and a small CRM synced from SQL databases.
+  category: Business
+  role: app
+  state: alpha
+  stateNote: Installs and runs; no sign-in through MatIdentity (only Microsoft Entra) and no platform contract yet.
+  icon: matticket.svg
+  homepage: https://github.com/Real-TTX/MatTicket
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matticket/dashboard.webp
+      caption: Overview
+    - src: matticket/tickets.webp
+      caption: Tickets
+    - src: matticket/designer.webp
+      caption: The form designer
+  ui:
+    service: web
+    port: 2740
+    hostPort: 2740
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first visit creates the administrator (there is no default password); open the app right after the install.
+    - Back up the volume matticket-data together with the database volume matticket-db.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matticket
+      POSTGRES_USER: matticket
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matticket-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matticket -d matticket"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matticket:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MATTICKET__Database__Host: db
+      MATTICKET__Database__Password: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matticket-data:/data
+
+volumes:
+  matticket-db:
+  matticket-data:

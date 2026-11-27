@@ -1,0 +1,77 @@
+# MatBiz – the modular ERP of the Mat family.
+x-matos:
+  id: matbiz
+  name: MatBiz
+  tagline: The modular ERP for small companies
+  description: Customers, sales, purchasing, stock, invoices, accounting, projects, staff and service in one interface, with a REST API for everything and plugins.
+  category: Business
+  role: app
+  # ghcr.io/real-ttx/matbiz:latest is still the old Matbiz (June 2026, port 8080): the new MatBiz is only on the branch dev and has no published image yet.
+  state: preview
+  stateNote: Its image is not published yet; the sign-in through MatIdentity and the platform contract are in the code.
+  icon: matbiz.svg
+  homepage: https://github.com/Real-TTX/MatBiz
+  # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
+  screenshots:
+    - src: matbiz/dashboard.webp
+      caption: Overview
+    - src: matbiz/sales-order.webp
+      caption: A sales order
+    - src: matbiz/invoice.webp
+      caption: An invoice
+  # The platform contract (/api): MatOS fills MAT_API_KEY.
+  platform: true
+  consumes:
+    - capability: identity.oidc   # the sign-in through MatIdentity (MATIDENTITY_*); the local form stays at /Account/Login?local=1
+  ui:
+    service: web
+    port: 2501
+    hostPort: 2501
+    # With MatIdentity the app is opened here: its sign-in goes straight on to MatIdentity and back into the app.
+    signIn: /Account/Login
+  variables:
+    - key: DB_PASSWORD
+      label: Database password
+      type: secret
+      generate: true
+      hidden: true
+    - key: TIMEZONE
+      label: Time zone
+      default: Europe/Berlin
+      advanced: true
+  notes:
+    - The first visit creates the first tenant and the administrator; open the app right after the install.
+    - Back up the volume matbiz-data together with the database volume matbiz-db (the app backs up itself under Administration → Backup, also to a NAS over SMB).
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matbiz
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+    volumes:
+      - matbiz-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d matbiz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    image: ghcr.io/real-ttx/matbiz:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MATBIZ__Database__Host: db
+      MATBIZ__Database__Password: ${DB_PASSWORD}
+      TZ: ${TIMEZONE:-Europe/Berlin}
+      MAT_API_KEY: ${MAT_API_KEY}
+    volumes:
+      - matbiz-data:/data
+
+volumes:
+  matbiz-db:
+  matbiz-data:

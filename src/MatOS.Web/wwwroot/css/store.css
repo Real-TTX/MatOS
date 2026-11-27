@@ -1,11 +1,51 @@
 /* =====================================================================
    MatOS: the store (Pages/Store). An app store a newcomer enjoys, made of the toolkit's tokens only (rules CODE-02, CODE-04, COLOR-01):
-   "Start here" with a few Mat apps, the categories as a row of links, the apps as cards with one button each, and the page of an app.
+   the categories as a row of links, the spotlight (the app of the day, with a picture), "Made for MatOS" with the Mat apps, a shelf per category, the apps as
+   cards with one button each and the marks of what they do with MatOS; and the page of an app with its pictures.
    Loaded by _Head on the store's pages only (ViewData["Store"]). Classes: mv-store-* and mv-storepage-*.
    ===================================================================== */
 
-/* ---- The order in the list block: the toolbar and its chips first, then "Start here" and the categories, then the gallery (the toolkit orders the rest) ---- */
-.mat-list > .mv-store-hero, .mat-list > .mv-store-browse { order: 1; }
+/* ---- The order in the list block: the toolbar and its chips first, then the categories, the spotlight, the Mat apps and the shelves, then the gallery (the toolkit orders the rest) ---- */
+.mat-list > .mv-store-cats, .mat-list > .mv-store-spot, .mat-list > .mv-store-hero, .mat-list > .mv-store-shelf { order: 1; }
+.mat-list.mv-store { gap: var(--mat-space-6); }
+
+/* ---- The spotlight: one app, big, its words on the left and its first picture on the right, on a tint of the accent ---- */
+.mv-store-spot {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: center; gap: var(--mat-space-6);
+  padding: var(--mat-space-6);
+  border: 1px solid var(--mat-border);
+  border-radius: var(--mat-radius-xl);
+  background: linear-gradient(135deg, var(--mat-accent-soft-strong), var(--mat-surface) 70%);
+  overflow: hidden;
+}
+.mv-store-spot__text { display: flex; flex-direction: column; gap: var(--mat-space-4); min-width: 0; }
+.mv-store-spot__eyebrow { display: inline-flex; align-items: center; gap: var(--mat-space-2); color: var(--mat-accent-text); font-size: var(--mat-fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.mv-store-spot__app { display: flex; align-items: center; gap: var(--mat-space-4); min-width: 0; color: inherit; text-decoration: none; border-radius: var(--mat-radius); }
+.mv-store-spot__app:hover { text-decoration: none; }
+.mv-store-spot__app:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); }
+.mv-store-spot__app .mv-appicon { flex: none; width: 88px; height: 88px; box-shadow: var(--mat-shadow-2); }
+.mv-store-spot__names { display: flex; flex-direction: column; gap: var(--mat-space-1); min-width: 0; }
+.mv-store-spot__name { font-size: var(--mat-fs-2xl); font-weight: 700; overflow-wrap: anywhere; }
+.mv-store-spot__tagline { color: var(--mat-text-muted); font-size: var(--mat-fs-md); }
+.mv-store-spot__lead { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; margin: 0; max-width: 60ch; color: var(--mat-text-muted); line-height: var(--mat-lh); }
+.mv-store-spot__foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--mat-space-3); }
+.mv-store-spot__shot { display: block; min-width: 0; border-radius: var(--mat-radius-lg); box-shadow: var(--mat-shadow-2); overflow: hidden; }
+.mv-store-spot__shot img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; border: 1px solid var(--mat-border); border-radius: inherit; }
+
+/* ---- What an app does with MatOS: small round marks (the one sign-in, the mail), the tip says it in words ---- */
+.mv-store-marks { display: inline-flex; align-items: center; gap: var(--mat-space-1); }
+.mv-store-mark {
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: var(--mat-radius-pill); background: var(--mat-accent-soft); color: var(--mat-accent-text); font-size: .8rem;
+}
+
+/* ---- A shelf: the category as a heading with "See all", and the first cards of it ---- */
+.mv-store-shelf { display: flex; flex-direction: column; gap: var(--mat-space-3); min-width: 0; }
+.mv-store-shelf__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--mat-space-3); }
+.mv-store-shelf__title { font-size: var(--mat-fs-lg); }
+.mv-store-shelf__all { display: inline-flex; align-items: center; gap: var(--mat-space-1); font-size: var(--mat-fs-sm); font-weight: 600; white-space: nowrap; }
+.mv-store-shelf__count { color: var(--mat-text-muted); font-weight: 400; }
+.mv-store-shelf__all > .mat-icon { font-size: 1rem; }
 
 /* ---- Start here: a calm, tinted panel with a few big tiles ---- */
 .mv-store-hero {
@@ -39,8 +79,6 @@
 .mv-store-tile__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--mat-space-2); margin-top: auto; }
 
 /* ---- The categories: a row of links; the current one is a tint behind the whole item ---- */
-.mv-store-browse { display: flex; flex-direction: column; gap: var(--mat-space-3); min-width: 0; }
-.mv-store-browse__title { font-size: var(--mat-fs-lg); }
 .mv-store-cats { display: flex; gap: var(--mat-space-2); min-width: 0; overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
 .mv-store-cats::-webkit-scrollbar { display: none; }
 .mv-store-cat {
@@ -58,7 +96,7 @@
 @media (pointer: coarse) { .mv-store-cat { min-height: 40px; } }
 
 /* ---- The gallery: a card per app, the icon, the name and the line, the state, and one button at the end ---- */
-.mv-store .mat-gallery.mv-store-gallery { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
+.mv-store .mat-gallery.mv-store-gallery { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
 .mat-card.mv-store-app {
   display: flex; align-items: center; gap: var(--mat-space-3);
   padding: var(--mat-space-3) var(--mat-space-4) var(--mat-space-3) var(--mat-space-3);
@@ -119,8 +157,46 @@
 .mv-storepage__optnames { color: var(--mat-text-muted); font-size: var(--mat-fs-sm); font-weight: 400; }
 .mv-storepage__options > .mat-accordion__body { display: flex; flex-direction: column; gap: var(--mat-space-4); }
 
+/* The pictures of an app: a row that scrolls sideways and snaps to each, a bit of the next one in view. */
+.mv-storepage__shots {
+  display: grid; grid-auto-flow: column; grid-auto-columns: min(78%, 520px); gap: var(--mat-gap);
+  margin: 0; padding: 2px 2px var(--mat-space-2); list-style: none;
+  overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+}
+.mv-storepage__shot { scroll-snap-align: start; min-width: 0; }
+.mv-storepage__shot figure { display: flex; flex-direction: column; gap: var(--mat-space-2); margin: 0; }
+.mv-storepage__shot a { display: block; border-radius: var(--mat-radius-lg); }
+.mv-storepage__shot a:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); }
+.mv-storepage__shot img {
+  display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left;
+  border: 1px solid var(--mat-border); border-radius: var(--mat-radius-lg); background: var(--mat-surface-2); box-shadow: var(--mat-shadow-1);
+}
+.mv-storepage__shot figcaption { color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+
+/* The facts of the app, and more apps of its category at the end. */
+.mv-storepage__info { max-width: 640px; }
+.mv-storepage__more { margin-top: var(--mat-space-6); padding-top: var(--mat-space-5); border-top: 1px solid var(--mat-border); }
+.mv-storepage__moreapps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: var(--mat-gap); margin: 0; padding: 0; list-style: none; }
+.mv-storepage__moreapp { display: flex; flex-direction: column; align-items: flex-start; gap: var(--mat-space-1); padding: var(--mat-space-2); border-radius: var(--mat-radius-lg); color: inherit; text-decoration: none; }
+.mv-storepage__moreapp:hover { background: var(--mat-surface-2); text-decoration: none; }
+.mv-storepage__moreapp:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); }
+.mv-storepage__moreapp .mv-appicon { margin-bottom: var(--mat-space-1); }
+.mv-storepage__morename { font-weight: 650; }
+.mv-storepage__moreline { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); }
+
+/* ---- A narrower screen: the picture of the spotlight goes under its words ---- */
+@media (max-width: 900px) {
+  .mv-store-spot { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ---- A phone: the icon a little smaller, the button the width of the page ---- */
 @media (max-width: 600px) {
+  .mat-list.mv-store { gap: var(--mat-space-5); }
+  .mv-store-spot { padding: var(--mat-space-4); gap: var(--mat-space-4); }
+  .mv-store-spot__app .mv-appicon { width: 64px; height: 64px; }
+  .mv-store-spot__name { font-size: var(--mat-fs-xl); }
+  .mv-store-spot__lead { -webkit-line-clamp: 2; line-clamp: 2; }
+  .mv-storepage__shots { grid-auto-columns: 86%; margin-inline: calc(-1 * var(--mat-content-pad)); padding-inline: var(--mat-content-pad); scroll-padding-inline: var(--mat-content-pad); }
   .mv-store-hero { padding: var(--mat-space-4); }
   /* The count of the apps would stand alone on a row under the search field: kept for a screen reader only (the gallery shows what was found). */
   .mv-store .mat-toolbar__info { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -149,5 +225,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mv-store-tile, .mv-store-cat, .mat-card.mv-store-app { transition: none; }
-  .mv-store-hero__apps { scroll-behavior: auto; }
+  .mv-store-hero__apps, .mv-storepage__shots { scroll-behavior: auto; }
 }
