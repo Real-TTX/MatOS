@@ -92,6 +92,41 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # MatOS Services (services.mattiverse.de, docs/SERVICES.md): its own image from the same build, the same channels.
+      - name: Services image tags
+        id: stags
+        shell: bash
+        run: |
+          image="ghcr.io/real-ttx/matos-services"
+          version="${{ steps.appver.outputs.version }}"
+          case "${{ steps.ver.outputs.channel }}" in
+            release) tags="$image:$version"$'\n'"$image:latest"$'\n'"$image:release" ;;
+            nightly) tags="$image:$version"$'\n'"$image:nightly" ;;
+            *)       tags="$image:$version" ;;
+          esac
+          {
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the services image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.services
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            Channel=${{ steps.ver.outputs.channel }}
+            BuildNumber=${{ steps.ver.outputs.build }}
+            BuildDate=${{ steps.ver.outputs.date }}
+          tags: ${{ steps.stags.outputs.tags }}
+          cache-from: type=gha,scope=services
+          cache-to: type=gha,mode=max,scope=services
+
+      # The image of MatOS itself after the services image: a refused push here (the package belongs to another repository) does not keep the
+      # services image from being published.
       # release: <version>, latest, release   |   nightly: <version>, nightly   |   pull requests: build only.
       - name: Image tags
         id: tags
@@ -127,36 +162,3 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # MatOS Services (services.mattiverse.de, docs/SERVICES.md): its own image from the same build, the same channels.
-      - name: Services image tags
-        id: stags
-        shell: bash
-        run: |
-          image="ghcr.io/real-ttx/matos-services"
-          version="${{ steps.appver.outputs.version }}"
-          case "${{ steps.ver.outputs.channel }}" in
-            release) tags="$image:$version"$'\n'"$image:latest"$'\n'"$image:release" ;;
-            nightly) tags="$image:$version"$'\n'"$image:nightly" ;;
-            *)       tags="$image:$version" ;;
-          esac
-          {
-            echo "tags<<EOF"
-            echo "$tags"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Build and push the services image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile.services
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          build-args: |
-            Channel=${{ steps.ver.outputs.channel }}
-            BuildNumber=${{ steps.ver.outputs.build }}
-            BuildDate=${{ steps.ver.outputs.date }}
-          tags: ${{ steps.stags.outputs.tags }}
-          cache-from: type=gha,scope=services
-          cache-to: type=gha,mode=max,scope=services
