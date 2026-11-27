@@ -45,12 +45,13 @@ internal sealed class HourCounters(UsageKey key) : CounterSet(Fields)
     public const int ToInstance = 5;
     public const int ToVisitor = 6;
     public const int ConnectionMs = 7;
-    private const int Fields = 8;
 
-    private readonly HashSet<ulong> _visitors = [];
+    /// <summary>The visitors new to the installation in this hour that came through this row (see <see cref="UsageRecorder.Connect"/>).</summary>
+    public const int Visitors = 8;
+    private const int Fields = 9;
+
     private int _open;
     private int _peak;
-    private int _flushedVisitors;
 
     public UsageKey Key { get; } = key;
 
@@ -61,42 +62,19 @@ internal sealed class HourCounters(UsageKey key) : CounterSet(Fields)
 
     public void Closed() => Interlocked.Decrement(ref _open);
 
-    /// <summary>Counts a visitor once per row; beyond <see cref="UsageRecorder.MaxVisitorsPerRow"/> the number stays there (memory is bounded).</summary>
-    public void AddVisitor(ulong hash)
-    {
-        lock (_visitors)
-        {
-            if (_visitors.Count < UsageRecorder.MaxVisitorsPerRow)
-            {
-                _visitors.Add(hash);
-            }
-        }
-    }
-
-    /// <summary>The counters since the last take, the new distinct visitors and the peak of open connections in that time.</summary>
+    /// <summary>The counters since the last take (the new distinct visitors among them) and the peak of open connections in that time.</summary>
     public HourTake TakeAll()
     {
         var values = Take();
-        int visitors;
-        lock (_visitors)
-        {
-            visitors = _visitors.Count - _flushedVisitors;
-            _flushedVisitors = _visitors.Count;
-        }
 
         // The next window starts at the connections open now, not at zero: they are still there.
         var peak = Interlocked.Exchange(ref _peak, Open);
-        return new HourTake(this, values, visitors, peak);
+        return new HourTake(this, values, peak);
     }
 
     public void RestoreAll(HourTake take)
     {
         Restore(take.Values);
-        lock (_visitors)
-        {
-            _flushedVisitors -= take.Visitors;
-        }
-
         RaisePeak(take.Peak);
     }
 
@@ -110,9 +88,11 @@ internal sealed class HourCounters(UsageKey key) : CounterSet(Fields)
 }
 
 /// <summary>What a flush took of one <see cref="HourCounters"/>.</summary>
-internal sealed record HourTake(HourCounters Counters, long[] Values, int Visitors, int Peak)
+internal sealed record HourTake(HourCounters Counters, long[] Values, int Peak)
 {
-    public bool IsEmpty => CounterSet.IsZero(Values) && Visitors == 0 && Peak == 0;
+    public long Visitors => Values[HourCounters.Visitors];
+
+    public bool IsEmpty => CounterSet.IsZero(Values) && Peak == 0;
 }
 
 /// <summary>The row an edge connection counts in.</summary>

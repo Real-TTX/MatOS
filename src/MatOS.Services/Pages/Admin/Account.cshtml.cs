@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using MatOS.Services.Admin;
+using MatOS.Services.Configuration;
 using MatOS.Services.Data;
 using MatOS.Web.Controls;
 using Microsoft.AspNetCore.Mvc;
@@ -66,7 +67,7 @@ public sealed class AccountModel(AdminAccounts accounts) : PageModel
             return Page();
         }
 
-        if (accounts.CheckCurrentPassword(Account, Input.CurrentPassword) is { } error)
+        if (accounts.CheckCurrentPassword(Account, Input.CurrentPassword, HttpContext.ClientIp()) is { } error)
         {
             ModelState.AddModelError("Input.CurrentPassword", error);
             return Page();

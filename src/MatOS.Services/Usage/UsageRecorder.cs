@@ -37,8 +37,8 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
 
     public const string OtherHosts = "*";
 
-    /// <summary>Distinct visitors one row remembers in its hour; the memory a flood of addresses can take is bounded.</summary>
-    public const int MaxVisitorsPerRow = 50_000;
+    /// <summary>Distinct visitors one installation remembers in its hour; the memory a flood of addresses can take is bounded.</summary>
+    public const int MaxVisitorsPerHour = 50_000;
 
     /// <summary>The fallback's rows: the names outside the zone that go on to the existing proxy.</summary>
     public const string Fallback = "";
@@ -50,6 +50,9 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
 
     private readonly ConcurrentDictionary<UsageKey, HourCounters> _usage = new();
     private readonly ConcurrentDictionary<(string Instance, DateTime Hour), ConcurrentDictionary<string, byte>> _hosts = new();
+
+    /// <summary>The visitors of an installation in an hour, across its hosts and ways: one visitor is one visitor of the hour.</summary>
+    private readonly ConcurrentDictionary<(string Instance, DateTime Hour), HashSet<ulong>> _visitors = new();
     private readonly ConcurrentDictionary<UsageConnection, byte> _open = new();
     private readonly ConcurrentDictionary<(string Name, DateTime Hour), DnsCounters> _dns = new();
     private readonly ConcurrentDictionary<DateTime, ApiCounters> _api = new();
@@ -70,13 +73,21 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
 
     public static string WayOf(bool tls) => tls ? "tls" : "http";
 
-    /// <summary>A visitor's connection passed on to <paramref name="instance"/> (or the <see cref="Fallback"/>); dispose it when it ends.</summary>
+    /// <summary>
+    /// A visitor's connection passed on to <paramref name="instance"/> (or the <see cref="Fallback"/>); dispose it when it ends. A visitor is
+    /// counted once per installation and hour, in the row of the host and way it came through first (http, then https, then an app: one visitor).
+    /// </summary>
     public UsageConnection Connect(string instance, string host, bool tls, IPAddress visitor, TunnelSession? session = null)
     {
         var now = time.GetUtcNow();
-        var counters = Row(instance, HourOf(now), host, tls);
+        var hour = HourOf(now);
+        var counters = Row(instance, hour, host, tls);
         counters.Add(HourCounters.Connections);
-        counters.AddVisitor(VisitorHash(visitor, counters.Key.Hour));
+        if (IsNewVisitor(instance, hour, VisitorHash(visitor, hour)))
+        {
+            counters.Add(HourCounters.Visitors);
+        }
+
         counters.Opened();
         session?.StreamServed();
         var connection = new UsageConnection(this, counters, session, now);
@@ -255,12 +266,23 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
         }
 
         var hosts = _hosts.GetOrAdd((instance, hour), _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
-        if (!hosts.ContainsKey(host) && (hosts.Count >= MaxHostsPerHour || !hosts.TryAdd(host, 0)))
+        // Two first connections to a new host at once: the one whose TryAdd lost finds the host there all the same.
+        if (!hosts.ContainsKey(host) && (hosts.Count >= MaxHostsPerHour || (!hosts.TryAdd(host, 0) && !hosts.ContainsKey(host))))
         {
             key = key with { Host = OtherHosts };
         }
 
         return _usage.GetOrAdd(key, k => new HourCounters(k));
+    }
+
+    /// <summary>Whether this is the visitor's first connection to the installation in the hour; beyond <see cref="MaxVisitorsPerHour"/> nobody is new.</summary>
+    private bool IsNewVisitor(string instance, DateTime hour, ulong hash)
+    {
+        var visitors = _visitors.GetOrAdd((instance, hour), _ => []);
+        lock (visitors)
+        {
+            return visitors.Count < MaxVisitorsPerHour && visitors.Add(hash);
+        }
     }
 
     private DnsCounters Dns(string name) => _dns.GetOrAdd((name, HourOf(time.GetUtcNow())), _ => new DnsCounters());
@@ -315,6 +337,11 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
         foreach (var key in _hosts.Keys.Where(k => k.Hour < before))
         {
             _hosts.TryRemove(key, out _);
+        }
+
+        foreach (var key in _visitors.Keys.Where(k => k.Hour < before))
+        {
+            _visitors.TryRemove(key, out _);
         }
 
         lock (_saltLock)

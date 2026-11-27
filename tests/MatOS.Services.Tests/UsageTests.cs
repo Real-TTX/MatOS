@@ -87,6 +87,49 @@ public class UsageTests
     }
 
     [Fact]
+    public async Task A_visitor_is_one_visitor_of_the_installation_in_an_hour_across_its_hosts_and_ways()
+    {
+        await using var usage = await UsageDatabase.CreateAsync();
+
+        // http, the redirect to https, then an app: three rows, one visitor.
+        usage.Recorder.Connect("anna", "", tls: false, Visitor1).Dispose();
+        usage.Recorder.Connect("anna", "", tls: true, Visitor1).Dispose();
+        usage.Recorder.Connect("anna", "app", tls: true, Visitor1).Dispose();
+        usage.Recorder.Connect("anna", "app", tls: true, Visitor2).Dispose();
+        usage.Recorder.Connect("bert", "", tls: true, Visitor1).Dispose();
+        await usage.Recorder.FlushAsync(CancellationToken.None);
+
+        var rows = await usage.ReadAsync(db => db.UsageHours.ToListAsync());
+        Assert.Equal(3, rows.Count(r => r.InstanceName == "anna"));
+        Assert.Equal(2, rows.Where(r => r.InstanceName == "anna").Sum(r => r.Visitors));
+        Assert.Equal(1, rows.Single(r => r.InstanceName == "anna" && r.Way == "http").Visitors);
+        Assert.Equal(1, rows.Single(r => r.InstanceName == "bert").Visitors);
+    }
+
+    [Fact]
+    public async Task First_connections_to_a_new_host_at_once_all_count_under_that_host()
+    {
+        await using var usage = await UsageDatabase.CreateAsync();
+        for (var round = 0; round < 50; round++)
+        {
+            usage.Clock.Advance(TimeSpan.FromHours(1));
+            using var start = new ManualResetEventSlim();
+            var tasks = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+            {
+                start.Wait();
+                usage.Recorder.Connect("anna", "app", tls: true, Visitor1).Dispose();
+            })).ToList();
+            start.Set();
+            await Task.WhenAll(tasks);
+        }
+
+        await usage.Recorder.FlushAsync(CancellationToken.None);
+        var rows = await usage.ReadAsync(db => db.UsageHours.ToListAsync());
+        Assert.DoesNotContain(rows, r => r.Host == UsageRecorder.OtherHosts);
+        Assert.All(rows, r => Assert.Equal(("app", 8L), (r.Host, r.Connections)));
+    }
+
+    [Fact]
     public async Task At_an_hour_boundary_each_hour_keeps_its_own_salt()
     {
         await using var usage = await UsageDatabase.CreateAsync();

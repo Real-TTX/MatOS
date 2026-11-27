@@ -43,7 +43,7 @@ public sealed class SignInModel(AdminAccounts accounts) : PageModel
             return Page();
         }
 
-        var result = await accounts.SignInAsync(Input.Email, Input.Password, HttpContext.RequestAborted);
+        var result = await accounts.SignInAsync(Input.Email, Input.Password, HttpContext.ClientIp(), HttpContext.RequestAborted);
         if (result.User is not { } user)
         {
             ErrorMessage = result.Error;

@@ -162,6 +162,42 @@ public partial class DynDnsPageTests
     }
 
     [Fact]
+    public async Task A_blocked_name_can_neither_be_managed_nor_given_back_on_the_page()
+    {
+        await using var service = await RunningService.StartAsync();
+        using var client = service.Client();
+        var key = await RegisterOnPageAsync(client, "phish");
+        using (var scope = service.App.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ServicesDbContext>();
+            var row = await db.Instances.SingleAsync(i => i.Name == "phish");
+            await scope.ServiceProvider.GetRequiredService<Admin.InstanceAdmin>().BlockAsync(row, "phishing", "ops@example.org", CancellationToken.None);
+        }
+
+        Dictionary<string, string> Fields() => new() { ["name"] = "phish", ["key"] = key, ["confirm"] = "yes" };
+        foreach (var path in new[] { "/dyndns/manage", "/dyndns/manage/update", "/dyndns/manage/ports", "/dyndns/manage/release" })
+        {
+            var answer = await PostFormAsync(client, path, Fields(), "203.0.113.31");
+            Assert.True(answer.StatusCode == HttpStatusCode.Forbidden, $"{path}: {answer.StatusCode}");
+            Assert.Contains("blocked by the operator", await answer.Content.ReadAsStringAsync());
+        }
+
+        // Still there and still blocked: nobody can take the name, and its address did not change.
+        var name = await client.GetFromJsonAsync<NameAvailability>("/api/v1/names/phish");
+        Assert.Equal((false, "blocked"), (name!.Available, name.Reason));
+        using (var scope = service.App.Services.CreateScope())
+        {
+            var row = await scope.ServiceProvider.GetRequiredService<ServicesDbContext>().Instances.SingleAsync(i => i.Name == "phish");
+            Assert.Null(row.PublicIpv4);
+
+            // The last line: the registrar never gives a blocked name back, whoever asks.
+            var registrar = scope.ServiceProvider.GetRequiredService<Registrar>();
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                registrar.ReleaseAsync(scope.ServiceProvider.GetRequiredService<ServicesDbContext>(), row, CancellationToken.None));
+        }
+    }
+
+    [Fact]
     public async Task The_ip_endpoint_names_the_caller()
     {
         await using var service = await RunningService.StartAsync();

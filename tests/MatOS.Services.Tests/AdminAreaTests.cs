@@ -41,43 +41,158 @@ public partial class AdminAreaTests
         Assert.Empty(Problems(Email, Password));
         Assert.Contains(Problems(null, Password), p => p.Contains("AdminEmail"));
         Assert.Contains(Problems(Email, null), p => p.Contains("AdminEmail"));
-        Assert.Contains(Problems("not-an-address", Password), p => p.Contains("e-mail address"));
-        Assert.Contains(Problems(Email, "short"), p => p.Contains("8 characters"));
+
+        // The form of the values stops only the creation of the first account, never the start (an older .env may have a short password).
+        Assert.Empty(Problems("not-an-address", Password));
+        Assert.Empty(Problems(Email, "short"));
+        Assert.Contains("e-mail address", new ServicesOptions { AdminEmail = "not-an-address", AdminPassword = Password }.FirstAdminProblem());
+        Assert.Contains("8 characters", new ServicesOptions { AdminEmail = Email, AdminPassword = "short" }.FirstAdminProblem());
+        Assert.Null(new ServicesOptions { AdminEmail = Email, AdminPassword = Password }.FirstAdminProblem());
 
         var below = new ServicesOptions { PublicUrl = "https://admin.my.mattiverse.de" };
         below.Normalize();
         Assert.Contains(below.Problems(), p => p.Contains("PublicUrl"));
     }
 
+    private static readonly IPAddress Attacker = IPAddress.Parse("203.0.113.66");
+    private static readonly IPAddress Owner = IPAddress.Parse("198.51.100.10");
+
+    private static void Fail(AdminGuard guard, string email, IPAddress client)
+    {
+        using var attempt = guard.Begin(email, client);
+        Assert.False(attempt.Refused);
+        attempt.Failed();
+    }
+
     [Fact]
     public void Wrong_passwords_lock_an_address_for_a_while_whether_it_has_an_account_or_not()
     {
         var clock = new ManualClock();
-        using var guard = new AdminGuard(clock);
+        var guard = new AdminGuard(clock);
         for (var i = 0; i < AdminGuard.MaxFailures - 1; i++)
         {
-            guard.Failed("Somebody@Example.org");
+            Fail(guard, "Somebody@Example.org", Attacker);
         }
 
-        Assert.Null(guard.LockedUntil("somebody@example.org"));
-        guard.Failed("somebody@example.org");
-        Assert.Equal(clock.GetUtcNow() + AdminGuard.LockFor, guard.LockedUntil(" SOMEBODY@example.org "));
-        Assert.Null(guard.LockedUntil("other@example.org"));
+        Assert.Null(guard.LockedUntil("somebody@example.org", Attacker));
+        Fail(guard, "somebody@example.org", Attacker);
+        Assert.Equal(clock.GetUtcNow() + AdminGuard.LockFor, guard.LockedUntil(" SOMEBODY@example.org ", Attacker));
+        Assert.True(guard.Begin("somebody@example.org", Attacker).Refused);
+        Assert.Null(guard.LockedUntil("other@example.org", Attacker));
+
+        // The lock is the attacker's network's: the owner signs in from elsewhere (an IPv6 /48 is one network).
+        Assert.Null(guard.LockedUntil("somebody@example.org", Owner));
+        using (var owner = guard.Begin("somebody@example.org", Owner))
+        {
+            Assert.False(owner.Refused);
+            owner.Succeeded();
+        }
 
         clock.Advance(AdminGuard.LockFor);
-        Assert.Null(guard.LockedUntil("somebody@example.org"));
+        Assert.Null(guard.LockedUntil("somebody@example.org", Attacker));
 
         // Failures long apart never add up to a lock.
-        guard.Failed("slow@example.org");
+        Fail(guard, "slow@example.org", Attacker);
         clock.Advance(AdminGuard.LockFor + TimeSpan.FromMinutes(1));
         for (var i = 0; i < AdminGuard.MaxFailures - 1; i++)
         {
-            guard.Failed("slow@example.org");
+            Fail(guard, "slow@example.org", Attacker);
         }
 
-        Assert.Null(guard.LockedUntil("slow@example.org"));
-        guard.Succeeded("slow@example.org");
-        Assert.Null(guard.LockedUntil("slow@example.org"));
+        Assert.Null(guard.LockedUntil("slow@example.org", Attacker));
+        using (var right = guard.Begin("slow@example.org", Attacker))
+        {
+            right.Succeeded();
+        }
+
+        Assert.Null(guard.LockedUntil("slow@example.org", Attacker));
+
+        var six = IPAddress.Parse("2001:db8:1:2::1");
+        for (var i = 0; i < AdminGuard.MaxFailures; i++)
+        {
+            Fail(guard, "v6@example.org", IPAddress.Parse($"2001:db8:1:{i + 10}::{i + 1}"));
+        }
+
+        Assert.NotNull(guard.LockedUntil("v6@example.org", six));
+    }
+
+    [Fact]
+    public void Guesses_sent_at_once_are_counted_before_their_passwords_are_checked()
+    {
+        var guard = new AdminGuard(new ManualClock());
+
+        // Five guesses on their way, none checked yet: the sixth must wait, it cannot slip past the lock they may cause.
+        var attempts = Enumerable.Range(0, AdminGuard.MaxFailures).Select(_ => guard.Begin(Email, Attacker)).ToList();
+        Assert.All(attempts, a => Assert.False(a.Refused));
+        Assert.True(guard.Begin(Email, Attacker).Refused);
+        attempts.ForEach(a => a.Failed());
+        Assert.NotNull(guard.LockedUntil(Email, Attacker));
+
+        // A guess given back without an outcome (the request went away before the check) counts nothing.
+        var other = new AdminGuard(new ManualClock());
+        for (var i = 0; i < 10; i++)
+        {
+            other.Begin(Email, Attacker).Dispose();
+        }
+
+        Assert.Null(other.LockedUntil(Email, Attacker));
+
+        // The same for everybody's limit: guesses in flight from many networks count against it before they are checked.
+        var flood = new AdminGuard(new ManualClock());
+        var many = Enumerable.Range(0, AdminGuard.MaxFailuresPerMinute)
+            .Select(i => flood.Begin($"guess{i}@example.org", IPAddress.Parse($"203.0.113.{i + 1}"))).ToList();
+        Assert.All(many, a => Assert.False(a.Refused));
+        Assert.True(flood.Begin(Email, IPAddress.Parse("192.0.2.200")).Refused);
+        many.ForEach(a => a.Dispose());
+        Assert.False(flood.Begin(Email, IPAddress.Parse("192.0.2.200")).Refused);
+    }
+
+    [Fact]
+    public void A_flood_of_wrong_passwords_keeps_out_unknown_networks_but_not_the_administrators()
+    {
+        var clock = new ManualClock();
+        var guard = new AdminGuard(clock);
+
+        // An administrator signed in from Owner once (or a session in the database says so at the start).
+        using (var first = guard.Begin(Email, Owner))
+        {
+            first.Succeeded();
+        }
+
+        for (var i = 0; i < AdminGuard.MaxFailuresPerMinute; i++)
+        {
+            Fail(guard, $"guess{i}@example.org", IPAddress.Parse($"203.0.113.{i + 1}"));
+        }
+
+        var stranger = guard.Begin(Email, IPAddress.Parse("192.0.2.200"));
+        Assert.True(stranger.Refused);
+        Assert.Null(stranger.Until);
+        using (var owner = guard.Begin(Email, Owner))
+        {
+            Assert.False(owner.Refused);
+        }
+
+        var remembered = IPAddress.Parse("192.0.2.77");
+        guard.Remember(remembered, clock.GetUtcNow());
+        using (var known = guard.Begin(Email, remembered))
+        {
+            Assert.False(known.Refused);
+        }
+
+        // The next minute lets everybody try again; a network not used for KnownFor is a stranger again.
+        clock.Advance(TimeSpan.FromMinutes(1));
+        using (var later = guard.Begin(Email, IPAddress.Parse("192.0.2.200")))
+        {
+            Assert.False(later.Refused);
+        }
+
+        clock.Advance(AdminGuard.KnownFor);
+        for (var i = 0; i < AdminGuard.MaxFailuresPerMinute; i++)
+        {
+            Fail(guard, $"again{i}@example.org", IPAddress.Parse($"203.0.113.{i + 1}"));
+        }
+
+        Assert.True(guard.Begin(Email, remembered).Refused);
     }
 
     [Fact]
@@ -157,6 +272,61 @@ public partial class AdminAreaTests
         }
 
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/admin/api/tunnels")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Every_address_the_pages_make_is_lowercase_so_the_cookies_go_with_it()
+    {
+        await using var service = await StartAsync();
+        await service.RegisterAsync("dora");
+        var admin = new Browser(service);
+        Assert.True(await admin.SignInAsync(Email, Password));
+
+        // The cookies are scoped to /admin, and a browser matches that path by case: an address of /Admin/... would go without them.
+        foreach (var page in new[] { "/admin", "/admin/Account", "/admin/Installations/Details?name=dora", "/admin/Users", "/admin/Users/Edit?id=1" })
+        {
+            var html = await admin.GetStringAsync(page);
+            foreach (Match link in AddressRegex().Matches(html))
+            {
+                var address = WebUtility.HtmlDecode(link.Groups[1].Value);
+                if (address.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    Assert.True(address.StartsWith("/admin", StringComparison.Ordinal), $"{page}: {address}");
+                }
+            }
+        }
+
+        // A form as the page renders it runs its handler, and its redirect lands on a page of the session, with the flash.
+        var account = await admin.GetStringAsync("/admin/Account");
+        var action = WebUtility.HtmlDecode(AddressRegex().Matches(account).Select(m => m.Groups[1].Value).First(a => a.Contains("handler=SignOutOthers", StringComparison.Ordinal)));
+        var posted = await admin.PostFormAsync("/admin/Account", action, []);
+        Assert.Equal(HttpStatusCode.Redirect, posted.StatusCode);
+        var location = posted.Headers.Location!.OriginalString;
+        Assert.StartsWith("/admin/", location);
+        var landed = await admin.GetAsync(location);
+        Assert.Equal(HttpStatusCode.OK, landed.StatusCode);
+        Assert.Contains("No other session was signed in.", await landed.Content.ReadAsStringAsync());
+
+        var details = await admin.GetStringAsync("/admin/Installations/Details?name=dora");
+        var block = WebUtility.HtmlDecode(AddressRegex().Matches(details).Select(m => m.Groups[1].Value).First(a => a.Contains("handler=Block", StringComparison.Ordinal)));
+        Assert.Contains("name=dora", block);
+        var blocked = await admin.PostFormAsync("/admin/Installations/Details?name=dora", block, new() { ["Reason"] = "spam" });
+        Assert.StartsWith("/admin/", blocked.Headers.Location!.OriginalString);
+        Assert.Contains("spam", await admin.GetStringAsync(blocked.Headers.Location!.OriginalString));
+    }
+
+    [Fact]
+    public async Task A_short_password_of_an_older_version_stops_only_the_first_account()
+    {
+        await using var service = await RunningService.StartAsync(
+            "--Services:PublicUrl=http://127.0.0.1", $"--Services:AdminEmail={Email}", "--Services:AdminPassword=short");
+
+        // The service runs (the API answers), without an account and so without an admin area.
+        using var client = service.Client();
+        Assert.True((await client.GetFromJsonAsync<NameAvailability>("/api/v1/names/freename"))!.Available);
+        using var scope = service.App.Services.CreateScope();
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<ServicesDbContext>().Users.CountAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/admin")).StatusCode);
     }
 
     [Fact]
@@ -307,6 +477,9 @@ public partial class AdminAreaTests
 
     [GeneratedRegex("name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"")]
     private static partial Regex TokenRegex();
+
+    [GeneratedRegex("(?:action|href|formaction)=\"(/[^\"]*)\"")]
+    private static partial Regex AddressRegex();
 
     /// <summary>A browser of the tests: keeps cookies, follows no redirect, and fills in the antiforgery token of the page it posts from.</summary>
     private sealed class Browser

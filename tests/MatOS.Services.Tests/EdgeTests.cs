@@ -51,6 +51,43 @@ public class EdgeTests
     }
 
     [Fact]
+    public async Task Blocking_a_name_ends_the_visitors_connections_that_are_already_open()
+    {
+        await using var server = LocalServer.KeepAliveHttp("phish says");
+        await using var service = await RunningService.StartAsync();
+        var key = await service.RegisterAsync("phish");
+        await using var tunnel = await FakeTunnelClient.ConnectAsync(service.BaseUri, key, _ => server.EndPoint);
+        await service.WaitForTunnelAsync("phish");
+
+        // A visitor on a kept-alive connection, piped before the block.
+        using var client = new TcpClient();
+        await client.ConnectAsync(service.Http);
+        var stream = client.GetStream();
+        await stream.WriteAsync("GET / HTTP/1.1\r\nHost: phish.my.mattiverse.de\r\n\r\n"u8.ToArray());
+        Assert.Equal("phish says phish.my.mattiverse.de", await ReadResponseBodyAsync(stream));
+
+        using (var scope = service.App.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ServicesDbContext>();
+            var row = await db.Instances.SingleAsync(i => i.Name == "phish");
+            await scope.ServiceProvider.GetRequiredService<Admin.InstanceAdmin>().BlockAsync(row, "phishing", "ops@example.org", CancellationToken.None);
+        }
+
+        // The connection ends with the block (not after the idle time): the next request gets nothing of the blocked site.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            await stream.WriteAsync("GET /next HTTP/1.1\r\nHost: phish.my.mattiverse.de\r\n\r\n"u8.ToArray(), timeout.Token);
+        }
+        catch (IOException)
+        {
+        }
+
+        Assert.DoesNotContain("phish says", await ReadToEndOrResetAsync(stream, timeout.Token));
+        Assert.False(timeout.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task A_quiet_connection_is_closed_after_the_idle_time()
     {
         var first = new TaskCompletionSource<byte[]>();

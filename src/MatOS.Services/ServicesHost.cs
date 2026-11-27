@@ -97,6 +97,7 @@ public static class ServicesHost
         app.Services.GetRequiredService<CustomDomains>().ReloadAsync().GetAwaiter().GetResult();
 
         AdminAccounts.EnsureFirstAsync(app.Services, app.Logger).GetAwaiter().GetResult();
+        AdminAccounts.RememberNetworksAsync(app.Services).GetAwaiter().GetResult();
 
         app.UseForwardedHeaders();
         var area = app.Services.GetRequiredService<AdminArea>();
@@ -141,6 +142,11 @@ public static class ServicesHost
         services.AddScoped<InstanceAdmin>();
         services.AddScoped<UsageStats>();
         services.AddAdminAuth();
+
+        // The pages are in Pages/Admin, but the cookies are scoped to the path /admin and browsers match a cookie's path by case: every address
+        // the pages make (forms, redirects) is lowercase, or a form would post to /Admin/... without the session and land at the sign-in.
+        // The values of the query keep their case.
+        services.Configure<Microsoft.AspNetCore.Routing.RouteOptions>(o => o.LowercaseUrls = true);
         services.AddRazorPages(o =>
         {
             o.Conventions.AuthorizeFolder("/Admin", AdminAuth.Policy);

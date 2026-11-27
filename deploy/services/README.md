@@ -75,7 +75,9 @@ curl -s http://127.0.0.1:8080/healthz    # ok
 `main`, copy the file instead.)
 
 The admin area is `https://services.mattiverse.de/admin`. `MATOS_SERVICES_ADMIN_EMAIL` and `MATOS_SERVICES_ADMIN_PASSWORD` go together (set both
-or neither; the service does not start with only one): they create the first administrator once, on the first start without any account. After
+or neither; the service does not start with only one): they create the first administrator once, on the first start without any account. The
+e-mail must be an address and the password at least 8 characters long; otherwise no administrator is created (the log says why, the rest of the
+service runs) until the values are fixed and the service is restarted. After
 that, change the password and add or remove administrators in the admin area itself (Account, Users); changing the two variables changes
 nothing. The old Basic auth of `/admin` is gone.
 
@@ -344,5 +346,7 @@ addresses, not `127.0.0.1` or a `172.x` address. Give the test names back afterw
 `MATOS_SERVICES_ADMIN_PASSWORD`. The new one refuses to start when only one of `MATOS_SERVICES_ADMIN_EMAIL` and
 `MATOS_SERVICES_ADMIN_PASSWORD` is set, and with it the tunnel, the edge, the DNS and the API stay down. So **before** `docker compose pull`,
 add `MATOS_SERVICES_ADMIN_EMAIL=<your e-mail address>` to the `.env` (it and the password become the first administrator on the first start),
-or remove `MATOS_SERVICES_ADMIN_PASSWORD` (then no administrator is created, and `/admin` cannot be used until one is). Check with
+or remove `MATOS_SERVICES_ADMIN_PASSWORD` (then no administrator is created, and `/admin` cannot be used until one is). The password must have
+at least 8 characters for the account: a shorter one of the Basic auth does not stop the start, but no administrator is created (`docker compose logs`
+says "The first administrator of the admin area was not created"); set a longer one in the `.env` and run `docker compose up -d` again. Check with
 `docker compose logs matos-services` after `up -d` that it started.

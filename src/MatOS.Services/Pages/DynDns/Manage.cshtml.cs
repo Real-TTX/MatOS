@@ -156,6 +156,12 @@ public sealed class ManageModel(ServicesOptions options, ServicesDbContext db, P
             return SignInAgain("This name belongs to a MatOS installation. Manage it in MatOS, under Settings > Address.", StatusCodes.Status409Conflict);
         }
 
+        if (instance.Blocked)
+        {
+            // As the API and /nic/update: a blocked name is neither updated, checked nor given back (giving it back would free it of the block).
+            return SignInAgain("This name is blocked by the operator of MatOS Services.", StatusCodes.Status403Forbidden);
+        }
+
         Instance = instance;
         Key = key;
         return null;

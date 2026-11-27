@@ -330,6 +330,9 @@ public sealed class EdgeService(
     private async Task StreamAsync(
         Socket client, bool tls, string name, string label, IPAddress visitor, ReadOnlyMemory<byte> peeked, CancellationToken stoppingToken)
     {
+        // Taken before the check of the block: a block that comes after the check ends this stream through the lease (InstanceAdmin.BlockAsync),
+        // one that came before it is seen by the check.
+        using var lease = registry.LeaseStream(name);
         if (await directory.FindAsync(name, stoppingToken) is { Blocked: true })
         {
             // Blocked by an administrator: never passed on, also not by a tunnel that is still on its way out.
@@ -393,7 +396,8 @@ public sealed class EdgeService(
             }
 
             using var meter = usage.Connect(name, label, tls, visitor, session);
-            await Pipes.RunAsync(client, stream, peeked, stoppingToken, Pipe(tls, name, meter));
+            using var piped = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, lease.Ended);
+            await Pipes.RunAsync(client, stream, peeked, piped.Token, Pipe(tls, name, meter));
         }
         finally
         {

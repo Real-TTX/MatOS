@@ -53,6 +53,13 @@ public sealed class AdminAccounts(ServicesDbContext db, IPasswordHasher hasher, 
         }
         else if (!string.IsNullOrWhiteSpace(options.AdminEmail) && !string.IsNullOrEmpty(options.AdminPassword))
         {
+            if (options.FirstAdminProblem() is { } problem)
+            {
+                // The rest of the service runs on: the admin area waits for values that can become an account (and a restart).
+                logger.LogError("The first administrator of the admin area was not created: {Problem}", problem);
+                return;
+            }
+
             (email, password) = (options.AdminEmail, options.AdminPassword);
         }
         else
@@ -74,30 +81,50 @@ public sealed class AdminAccounts(ServicesDbContext db, IPasswordHasher hasher, 
         return db.Users.AnyAsync(u => u.Email == normalized && u.Id != except, ct);
     }
 
-    /// <summary>Checks the password. Locked addresses and a flood of wrong passwords are refused before it is looked at.</summary>
-    public async Task<SignInResult> SignInAsync(string email, string password, CancellationToken ct)
+    /// <summary>
+    /// The networks the administrators signed in from in the last <see cref="AdminGuard.KnownFor"/> (their sessions, ended ones too): the
+    /// limit of everybody does not keep them out after a restart either. Once, at the start.
+    /// </summary>
+    public static async Task RememberNetworksAsync(IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var provider = scope.ServiceProvider;
+        var guard = provider.GetRequiredService<AdminGuard>();
+        var since = provider.GetRequiredService<TimeProvider>().GetUtcNow() - AdminGuard.KnownFor;
+        var sessions = await provider.GetRequiredService<ServicesDbContext>().UserSessions.IgnoreQueryFilters()
+            .Where(s => s.IpAddress != null && s.LastSeenAt > since.UtcDateTime)
+            .Select(s => new { s.IpAddress, s.LastSeenAt }).ToListAsync();
+        foreach (var session in sessions)
+        {
+            if (System.Net.IPAddress.TryParse(session.IpAddress, out var address))
+            {
+                guard.Remember(address, new DateTimeOffset(DateTime.SpecifyKind(session.LastSeenAt, DateTimeKind.Utc)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks the password of <paramref name="email"/> from <paramref name="client"/>. Locked addresses and a flood of wrong passwords are refused
+    /// before it is looked at; the guess is counted before it is checked (<see cref="AdminGuard.Begin"/>).
+    /// </summary>
+    public async Task<SignInResult> SignInAsync(string email, string password, System.Net.IPAddress client, CancellationToken ct)
     {
         var normalized = NormalizeEmail(email);
-        if (guard.IsBlocked)
+        using var attempt = guard.Begin(normalized, client);
+        if (attempt.Refused)
         {
-            return new SignInResult(null, "Too many wrong passwords. Please try again in a minute.");
-        }
-
-        if (guard.LockedUntil(normalized) is { } until)
-        {
-            var minutes = Math.Max(1, (int)Math.Ceiling((until - time.GetUtcNow()).TotalMinutes));
-            return new SignInResult(null, $"Too many wrong passwords for this address. Please try again in {minutes} minutes.");
+            return new SignInResult(null, Refusal(attempt, "Too many wrong passwords for this address. Please try again in {0}."));
         }
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == normalized, ct);
         var valid = hasher.Verify(password, user?.PasswordHash ?? DummyHash);
         if (user is null || !valid)
         {
-            guard.Failed(normalized);
+            attempt.Failed();
             return new SignInResult(null, "The e-mail address or the password is not right.");
         }
 
-        guard.Succeeded(normalized);
+        attempt.Succeeded();
         user.LastSignIn = time.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(ct);
         return new SignInResult(user, null);
@@ -211,27 +238,34 @@ public sealed class AdminAccounts(ServicesDbContext db, IPasswordHasher hasher, 
     /// Checks the current password of a signed-in account (changing the password): counted by the same <see cref="AdminGuard"/> as the
     /// sign-in, so a stolen session cookie cannot guess the password faster than the sign-in could. Null when it is right, else the error.
     /// </summary>
-    public string? CheckCurrentPassword(User user, string password)
+    public string? CheckCurrentPassword(User user, string password, System.Net.IPAddress client)
     {
-        if (guard.IsBlocked)
+        using var attempt = guard.Begin(user.Email, client);
+        if (attempt.Refused)
         {
-            return "Too many wrong passwords. Please try again in a minute.";
-        }
-
-        if (guard.LockedUntil(user.Email) is { } until)
-        {
-            var minutes = Math.Max(1, (int)Math.Ceiling((until - time.GetUtcNow()).TotalMinutes));
-            return $"Too many wrong passwords. Please try again in {minutes} minutes.";
+            return Refusal(attempt, "Too many wrong passwords. Please try again in {0}.");
         }
 
         if (!hasher.Verify(password, user.PasswordHash))
         {
-            guard.Failed(user.Email);
+            attempt.Failed();
             return "The current password is not right.";
         }
 
-        guard.Succeeded(user.Email);
+        attempt.Succeeded();
         return null;
+    }
+
+    /// <summary>The words of a refused guess: the lock of the account with its minutes, or the limit of everybody.</summary>
+    private string Refusal(AdminAttempt attempt, string locked)
+    {
+        if (attempt.Until is not { } until)
+        {
+            return "Too many wrong passwords. Please try again in a minute.";
+        }
+
+        var minutes = Math.Max(1, (int)Math.Ceiling((until - time.GetUtcNow()).TotalMinutes));
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, locked, minutes == 1 ? "a minute" : $"{minutes} minutes");
     }
 
     public async Task SetThemeAsync(User user, string theme, CancellationToken ct)

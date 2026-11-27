@@ -42,6 +42,9 @@ public sealed class InstanceAdmin(
         await db.SaveChangesAsync(ct);
         await directory.RefreshAsync(instance.Name, ct);
         await registry.CloseAsync(instance.Name, TunnelCloseReason.Blocked);
+
+        // The visitors' connections already piped end too (keep-alive, WebSockets, downloads): the edge checks the block per connection only.
+        registry.EndStreams(instance.Name);
         await AuditAsync(by, AdminActions.Block, instance.Name, instance.BlockedReason, ct);
         logger.LogWarning("{Name} was blocked by {By}: {Reason}", instance.Name, by, instance.BlockedReason);
     }

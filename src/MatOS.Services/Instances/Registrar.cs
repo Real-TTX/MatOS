@@ -103,10 +103,16 @@ public sealed class Registrar(
 
     /// <summary>
     /// Gives a name back: the row, the records and a tunnel go. Not counted here: the installation's own ways count it (ApiDay.GiveBacks), an
-    /// administrator's give-back is in AdminAction.
+    /// administrator's give-back is in AdminAction. Never a blocked name: the block would go with the row and the name would be free for anybody
+    /// (every way refuses it before; this is the last line).
     /// </summary>
     public async Task ReleaseAsync(ServicesDbContext db, Instance instance, CancellationToken ct)
     {
+        if (instance.Blocked)
+        {
+            throw new InvalidOperationException($"{instance.Name} is blocked and cannot be given back until it is unblocked.");
+        }
+
         db.Instances.Remove(instance);
         await db.SaveChangesAsync(ct);
         await directory.RefreshAsync(instance.Name, CancellationToken.None);

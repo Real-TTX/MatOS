@@ -29,6 +29,24 @@ public sealed class ServicesOptions
     /// <summary>The password of that first administrator (see <see cref="AdminEmail"/>); changing it later changes nothing.</summary>
     public string? AdminPassword { get; set; }
 
+    /// <summary>
+    /// What keeps <see cref="AdminEmail"/> and <see cref="AdminPassword"/> from becoming the first administrator; null when they can. Asked only
+    /// when that account is about to be created (no account yet): the values are not used after that, so they must not stop a start then, and a
+    /// short password of an older version stops nothing but the creation (the tunnel, the edge, the DNS and the API run on).
+    /// </summary>
+    public string? FirstAdminProblem()
+    {
+        var email = AdminEmail?.Trim() ?? "";
+        if (!email.Contains('@') || email.Length > 256 || email.Any(char.IsWhiteSpace))
+        {
+            return "Services:AdminEmail must be an e-mail address.";
+        }
+
+        return (AdminPassword ?? "").Length < Admin.AdminAccounts.MinPasswordLength
+            ? $"Services:AdminPassword must have at least {Admin.AdminAccounts.MinPasswordLength} characters."
+            : null;
+    }
+
     /// <summary>The host of <see cref="PublicUrl"/> (<c>services.mattiverse.de</c>): the only host the admin area answers on.</summary>
     public string? PublicHost() => Uri.TryCreate(PublicUrl, UriKind.Absolute, out var uri) ? uri.Host.TrimEnd('.').ToLowerInvariant() : null;
 
@@ -134,14 +152,6 @@ public sealed class ServicesOptions
         {
             // No default address: the first administrator is a real person's account, so a password alone is a mistake, not a choice.
             problems.Add("Services:AdminEmail and Services:AdminPassword go together: set both (the first administrator of /admin) or neither.");
-        }
-        else if (email is not null && (!email.Contains('@') || email.Length > 256 || email.Any(char.IsWhiteSpace)))
-        {
-            problems.Add("Services:AdminEmail must be an e-mail address.");
-        }
-        else if (password is not null && password.Length < 8)
-        {
-            problems.Add("Services:AdminPassword must have at least 8 characters.");
         }
 
         if (PublicHost() is not { } publicHost)

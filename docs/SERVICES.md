@@ -47,7 +47,7 @@ Configuration (environment, section `Services`):
 | `Services__Edge__PublicIpv4` / `PublicIpv6` | – | server1's address: the answer for installations in tunnel mode and for the zone itself |
 | `Services__Edge__FallbackHttps` / `FallbackHttp` | – | where other host names go (so the edge can sit in front of an existing proxy) |
 | `Services__Dns__NameServers` | `services.mattiverse.de` | the NS names the zone answers with |
-| `Services__AdminEmail` / `AdminPassword` | – | the first administrator of the admin area (`/admin`), both or neither: created once, on a start without any account (in `Development` the test account `admin@example.com` / `Start12345` instead); after that the accounts live on the page Users. Without an account there is no admin area (`404`) |
+| `Services__AdminEmail` / `AdminPassword` | – | the first administrator of the admin area (`/admin`), both or neither (else no start): created once, on a start without any account, when the address is an e-mail address and the password has at least 8 characters (else an error in the log and no account) (in `Development` the test account `admin@example.com` / `Start12345` instead); after that the accounts live on the page Users. Without an account there is no admin area (`404`) |
 | `Services__RegistrationsPerIpPerDay` | `5` | successful registrations in the last 24 h per IPv4 address, or per /48 of an IPv6 address (a home or a server usually holds a whole /56 or /48) |
 | `Services__RegistrationsPerHour` | `60` | successful registrations of everybody in the last hour: the ceiling for somebody with very many addresses |
 | `Services__ExpireUnusedAfterDays` | `7` | a name that was never used (no tunnel ever connected, no address ever came through `/nic/update`) is given back this many days after its registration; `0` keeps every name. Names in use never expire |
@@ -93,8 +93,8 @@ without a valid key the answer is `401`. Errors are `{error}` with the code name
 | `GET /ip` | anonymous: the caller's address as plain text (for ddclient's `use=web` and scripts) |
 
 Rate limits per client address (an IPv6 address counts as its /64) and minute: 120 for the name check, 60 for the rest of the API and
-`/nic/update`; beyond that `429`. The sign-in of `/admin` allows 20 requests per minute per IPv4 address or IPv6 /48 (the rest of the admin area 300), 5 wrong passwords per e-mail address in 15 minutes (then that address is locked for 15 minutes, whether an account has it or not; a wrong current password on Change password counts the same), and 30 wrong passwords per minute of everybody
-together (then `429` without looking at the password). The tunnel endpoints have no limit per request (every visitor is a stream request), but
+`/nic/update`; beyond that `429`. The sign-in of `/admin` allows 20 requests per minute per IPv4 address or IPv6 /48 (the rest of the admin area 300), 5 wrong passwords per e-mail address and network in 15 minutes (then that address is locked for 15 minutes from that network, whether an account has it or not; a wrong current password on Change password counts the same), and 30 wrong passwords per minute of everybody
+together (then refused without looking at the password, except from a network an administrator signed in from in the last 30 days); see "The admin area". The tunnel endpoints have no limit per request (every visitor is a stream request), but
 12 control connections per installation and minute, and 30 failed sign-ins (a key that does not exist) per address and minute, after which that
 address gets `429` on both tunnel endpoints for the rest of the minute. The client address is the one the trusted proxy names; see
 `Services__TrustedProxies` and "Setting it up" for how it must reach the service.
@@ -137,26 +137,36 @@ the account and the sign-out at its foot.
 
 - **Accounts** like every Mat app: the tables `User` (the e-mail address is the user name, a PBKDF2 hash like MatOS's, the role, the theme) and
   `UserSession` (a `Token` per browser, checked on every request, so a sign-out ends it on the server). The first administrator comes once from
-  `Services__AdminEmail` + `Services__AdminPassword` (both or neither, no default address), on a start without any account; in `Development` the
+  `Services__AdminEmail` + `Services__AdminPassword` (both or neither, no default address, else the service does not start), on a start without any
+  account; the address must be an e-mail address and the password at least 8 characters long, or no account is created (an error in the log; the
+  rest of the service runs on). Once an account exists the two values are not looked at again. In `Development` the
   test account `admin@example.com` / `Start12345`. After that the accounts live on the page Users (a list and a page to edit, the last one cannot
   be deleted); Account changes the own password and signs out the other sessions. The Basic auth of before is gone.
 - **Protection**: the sign-in is limited to 20 requests per minute per address (an IPv6 address counts as its /48), an e-mail address is
-  locked for 15 minutes after 5 wrong passwords in 15 minutes (whether an account has it or not; a wrong current password on Change password
-  counts the same), and 30 wrong passwords per minute of everybody together stop the sign-in for the rest of the minute; the cookie is `HttpOnly`, `SameSite=Strict`, `Secure` behind https and only for `/admin`; an
-  antiforgery token on every form; the strict policy above with `no-referrer`, `noindex, nofollow` and no secret on any page (keys are hashes, the
+  locked for 15 minutes from a network (an IPv4 address, an IPv6 /48) after 5 wrong passwords from it in 15 minutes (whether an account has it or not;
+  a wrong current password on Change password counts the same), so somebody who knows an administrator's address locks it only for themselves; and
+  30 wrong passwords per minute of everybody together stop the sign-in for the rest of the minute (a warning in the log), except from a network an
+  administrator signed in from in the last 30 days (kept in memory, and read from the sessions at the start), so a flood cannot keep the administrators
+  out. Every guess is counted before its password is checked (`AdminGuard.Begin`): guesses sent at once cannot slip past the limits. The cookie is
+  `HttpOnly`, `SameSite=Strict`, `Secure` behind https and only for the path `/admin`, which browsers match by case: every address the pages make
+  (forms, redirects) is lowercase (`RouteOptions.LowercaseUrls`; the values of the query keep theirs); an antiforgery token on every form; the strict policy above with `no-referrer`, `noindex, nofollow` and no secret on any page (keys are hashes, the
   admin password is never shown).
 - **Installations**: a list (search, filters for the kind, the mode, the tunnel and blocked, sort, pages) and a page per name with its facts,
   live tunnel, own domains, last port check, statistics and history, and the actions disconnect, back to tunnel mode, block/unblock and give back,
   each written to the table `AdminAction` (who, what, which name, when). A blocked name is refused by the API (`409 blocked` on registration,
-  `403 blocked` on a change or a give-back), the tunnel (`403`), the edge (`403` over HTTP, closed over TLS), the DNS (`NXDOMAIN`) and
-  `/nic/update` (`abuse`), it never expires and cannot be given back until it is unblocked.
+  `403 blocked` on a change or a give-back), the tunnel (`403`), the edge (`403` over HTTP, closed over TLS), the DNS (`NXDOMAIN`),
+  `/nic/update` (`abuse`) and the DynDNS page Manage (`403`: no update, no port check, no give-back), it never expires and cannot be given back
+  until it is unblocked (`Registrar.ReleaseAsync` refuses it whoever asks). The block also ends the visitors' connections that are already
+  piped (kept alive, WebSockets, downloads), not only the tunnel: the edge leases every stream by name (`TunnelRegistry.LeaseStream`), and
+  the block cancels them (`EndStreams`).
 
 ## The statistics
 
 Counted in memory and written every minute and when the service stops. Per installation, hour, host
 (the installation itself, `<app>`, its own domain; more than 32 hosts of one installation in an hour count together as `*`) and way (TLS, HTTP), the table
 `UsageHour` holds the connections, the refusals by reason (no tunnel, a limit, the stream not picked up in time, blocked), the bytes each way, the connection
-seconds, the peak of open connections and the distinct visitors; the fallback to server1's proxy has rows of its own (an empty name). `TunnelSession` holds every
+seconds, the peak of open connections and the distinct visitors (a visitor counts once per installation and hour, in the row of the host and way it came
+through first: http, the redirect to https and an app are one visitor; so the visitors of an app or a way are those that came there first); the fallback to server1's proxy has rows of its own (an empty name). `TunnelSession` holds every
 tunnel that ended (connected, disconnected, why, the address it came from, the MatOS version, streams and bytes), `DnsHour` the answers of the DNS per name
 (A, AAAA, other) and the accepted `/nic/update` calls and address changes, with the NXDOMAIN answers of the zone only as a total, and `ApiDay` the
 registrations, give-backs, port checks, name checks and rate-limit refusals per day (the API and the DynDNS page of the installations: a registration
@@ -170,8 +180,8 @@ start at midnight), and the page says so.
 **What is stored, and what never is.** The visitors of an installation are other people, so:
 
 - **Never stored**: a visitor's address, or a path or URL a visitor opens (the edge does not decrypt TLS and reads nothing of HTTP but the host).
-- **Visitors** are counted as HMAC-SHA256 hashes of the address with a random salt per hour, kept in memory for that hour only and dropped (never
-  written) with the hour's counters; only their number is stored, so the same visitor in two hours counts twice in a day's total.
+- **Visitors** are counted as HMAC-SHA256 hashes of the address with a random salt per hour, kept in memory per installation for that hour only
+  (up to 50,000) and dropped (never written) with the hour's counters; only their number is stored, so the same visitor in two hours counts twice in a day's total.
 - **Stored**: the addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address), the operator's evidence, as before; the
   counts above; the administrators' actions (`AdminAction`) and sessions (`UserSession`: the browser and the address of a sign-in).
 
