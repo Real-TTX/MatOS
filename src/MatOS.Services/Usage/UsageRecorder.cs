@@ -25,7 +25,7 @@ public enum UsageRefusal
 /// (<see cref="TunnelSessionEntry"/>), the DNS answers and DynDNS updates (<see cref="DnsHour"/>) and the API's day (<see cref="ApiDay"/>).
 /// <para>
 /// The hot paths only count with <c>Interlocked</c>; a connection also hashes its visitor's address once. Privacy: a visitor's address is never
-/// stored. It is hashed with a salt that lives in memory for the current hour only, the hashes are kept in memory for that hour only, and only
+/// stored. It is hashed with a salt of its hour that lives in memory for that hour only, the hashes are kept in memory for that hour only, and only
 /// their number is written. The edge never sees a path or a URL of an encrypted connection, and nothing here keeps one of a plain one.
 /// </para>
 /// </summary>
@@ -56,8 +56,9 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
     private readonly ConcurrentQueue<TunnelSessionEntry> _sessions = new();
     private readonly SemaphoreSlim _flush = new(1, 1);
     private readonly Lock _saltLock = new();
-    private byte[] _salt = [];
-    private DateTime _saltHour;
+
+    /// <summary>The salt of each hour that still takes connections (at a boundary two: a late connection of H must not replace the salt of H+1).</summary>
+    private readonly Dictionary<DateTime, byte[]> _salts = [];
 
     /// <summary>The visitors' connections open right now (all installations and the fallback).</summary>
     public int OpenConnections => _open.Count;
@@ -268,20 +269,18 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
 
     /// <summary>
     /// A number for the visitor that is the same within the hour and means nothing outside it: HMAC-SHA256 with a random salt of the hour, which
-    /// is replaced (never stored) when the hour changes.
+    /// is made once per hour (never stored) and dropped with the hour's counters.
     /// </summary>
-    private ulong VisitorHash(IPAddress address, DateTime hour)
+    internal ulong VisitorHash(IPAddress address, DateTime hour)
     {
         byte[] salt;
         lock (_saltLock)
         {
-            if (_saltHour != hour || _salt.Length == 0)
+            if (!_salts.TryGetValue(hour, out salt!))
             {
-                _salt = RandomNumberGenerator.GetBytes(32);
-                _saltHour = hour;
+                salt = RandomNumberGenerator.GetBytes(32);
+                _salts[hour] = salt;
             }
-
-            salt = _salt;
         }
 
         Span<byte> bytes = stackalloc byte[16];
@@ -316,6 +315,14 @@ public sealed class UsageRecorder(IServiceScopeFactory scopes, TunnelRegistry re
         foreach (var key in _hosts.Keys.Where(k => k.Hour < before))
         {
             _hosts.TryRemove(key, out _);
+        }
+
+        lock (_saltLock)
+        {
+            foreach (var old in _salts.Keys.Where(h => h < before).ToList())
+            {
+                _salts.Remove(old);
+            }
         }
 
         foreach (var (key, counters) in _dns)

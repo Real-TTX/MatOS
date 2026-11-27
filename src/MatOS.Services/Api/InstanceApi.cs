@@ -136,7 +136,7 @@ public static class InstanceApi
         return Results.Ok(View(instance, options, registry));
     }
 
-    private static async Task<IResult> DeleteAsync(HttpContext context, ServicesDbContext db, Registrar registrar)
+    private static async Task<IResult> DeleteAsync(HttpContext context, ServicesDbContext db, Registrar registrar, Usage.UsageRecorder usage)
     {
         var instance = await InstanceAuth.AuthenticateAsync(context, db);
         if (instance is null)
@@ -151,6 +151,7 @@ public static class InstanceApi
         }
 
         await registrar.ReleaseAsync(db, instance, context.RequestAborted);
+        usage.GaveBack();
         return Results.NoContent();
     }
 

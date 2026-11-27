@@ -107,9 +107,12 @@ address gets `429` on both tunnel endpoints for the rest of the minute. The clie
 seconds, the peak of open connections and the distinct visitors; the fallback to server1's proxy has rows of its own (an empty name). `TunnelSession` holds every
 tunnel that ended (connected, disconnected, why, the address it came from, the MatOS version, streams and bytes), `DnsHour` the answers of the DNS per name
 (A, AAAA, other) and the accepted `/nic/update` calls and address changes, with the NXDOMAIN answers of the zone only as a total, and `ApiDay` the
-registrations, give-backs, port checks, name checks and rate-limit refusals per day. **What is never stored**: a visitor's address, or a path or URL a
+registrations, give-backs, port checks, name checks and rate-limit refusals per day (the API and the DynDNS page of the installations: a registration
+refused by its limit counts as a rate-limit refusal; an administrator's give-back is in `AdminAction`, not here). The rows are keyed by the name; a name
+given back and registered again by somebody else keeps the earlier holder's rows for the totals, and the views of one installation read only the rows
+from its registration on (`Usage/InstanceUsage.cs`). **What is never stored**: a visitor's address, or a path or URL a
 visitor opens (the edge does not decrypt TLS and reads nothing of HTTP but the host). Visitors are counted as HMAC-SHA256 hashes of the address with a
-random salt of the current hour, kept in memory for that hour only and replaced (never written) when the hour changes; only their number is stored, so the
+random salt per hour, kept in memory for that hour only and dropped (never written) with the hour's counters; only their number is stored, so the
 same visitor in two hours counts twice in a day's total. The addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address) are the
 operator's evidence and are stored. Retention (`Services__Usage__HourlyDays`, `DailyDays`, `TunnelSessionDays`): hourly rows 35 days, then rolled up into
 `UsageDay` and `DnsDay`, which are kept 400 days like `ApiDay`; tunnel sessions 180 days. A daily job rolls up and removes them for real.

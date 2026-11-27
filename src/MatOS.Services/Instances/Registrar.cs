@@ -58,6 +58,7 @@ public sealed class Registrar(
             var everybody = await db.Registrations.CountAsync(r => r.CreateDate > lastHour, ct);
             if (fromHere >= options.RegistrationsPerIpPerDay || everybody >= options.RegistrationsPerHour)
             {
+                usage.RateLimited();
                 return new RegistrationResult(RegistrationStatus.TooMany, name);
             }
 
@@ -100,7 +101,10 @@ public sealed class Registrar(
         return new RegistrationResult(RegistrationStatus.Created, name, key);
     }
 
-    /// <summary>Gives a name back: the row, the records and a tunnel go.</summary>
+    /// <summary>
+    /// Gives a name back: the row, the records and a tunnel go. Not counted here: the installation's own ways count it (ApiDay.GiveBacks), an
+    /// administrator's give-back is in AdminAction.
+    /// </summary>
     public async Task ReleaseAsync(ServicesDbContext db, Instance instance, CancellationToken ct)
     {
         db.Instances.Remove(instance);
@@ -109,7 +113,6 @@ public sealed class Registrar(
         activity.Forget(instance.Name);
         await registry.CloseAsync(instance.Name);
         await domains.ReloadAsync(CancellationToken.None);
-        usage.GaveBack();
         logger.LogInformation("{Name} was given back", instance.Name);
     }
 

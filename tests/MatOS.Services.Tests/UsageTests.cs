@@ -87,6 +87,50 @@ public class UsageTests
     }
 
     [Fact]
+    public async Task At_an_hour_boundary_each_hour_keeps_its_own_salt()
+    {
+        await using var usage = await UsageDatabase.CreateAsync();
+        var hour = UsageRecorder.HourOf(usage.Clock.GetUtcNow());
+        var next = hour.AddHours(1);
+
+        // Connections of both hours arrive interleaved: a late one of the hour must not make a new salt for the next one, or back.
+        var first = usage.Recorder.VisitorHash(Visitor1, next);
+        Assert.Equal(usage.Recorder.VisitorHash(Visitor1, hour), usage.Recorder.VisitorHash(Visitor1, hour));
+        Assert.Equal(first, usage.Recorder.VisitorHash(Visitor1, next));
+        Assert.NotEqual(first, usage.Recorder.VisitorHash(Visitor1, hour));
+    }
+
+    [Fact]
+    public async Task A_name_registered_again_sees_only_its_own_statistics()
+    {
+        await using var usage = await UsageDatabase.CreateAsync();
+        var registered = new DateTime(2026, 11, 26, 12, 20, 0, DateTimeKind.Utc);
+        var hour = UsageRecorder.HourOf(registered);
+        var day = UsageRecorder.DayOf(registered);
+        await usage.WriteAsync(db =>
+        {
+            // The earlier holder of "anna" (given back the day before), and the new one.
+            db.UsageHours.AddRange(Hour(hour.AddHours(-20), 9, 9, 9, 9), Hour(hour, 1, 2, 1, 1), Hour(hour.AddHours(1), 1, 2, 1, 1));
+            db.UsageHours.Add(new UsageHour { Hour = hour, InstanceName = "bert", Way = "tls", Connections = 5 });
+            db.UsageDays.AddRange(
+                new UsageDay { Day = day.AddDays(-1), InstanceName = "anna", Way = "tls", Connections = 9 },
+                new UsageDay { Day = day, InstanceName = "anna", Way = "tls", Connections = 1 });
+            db.DnsHours.AddRange(new DnsHour { Name = "anna", Hour = hour.AddHours(-20), QueriesA = 9 }, new DnsHour { Name = "anna", Hour = hour, QueriesA = 1 });
+            db.DnsDays.AddRange(new DnsDay { Name = "anna", Day = day.AddDays(-1), QueriesA = 9 }, new DnsDay { Name = "anna", Day = day, QueriesA = 1 });
+            db.TunnelSessions.AddRange(
+                new TunnelSessionEntry { InstanceName = "anna", ConnectedAt = registered.AddHours(-30), DisconnectedAt = registered.AddHours(-21) },
+                new TunnelSessionEntry { InstanceName = "anna", ConnectedAt = registered.AddMinutes(2), DisconnectedAt = registered.AddMinutes(9) });
+        });
+
+        var anna = new Instance { Name = "anna", CreateDate = registered };
+        Assert.Equal(2, await usage.ReadAsync(db => db.UsageHours.Of(anna).SumAsync(h => h.Connections)));
+        Assert.Equal(1, await usage.ReadAsync(db => db.UsageDays.Of(anna).SumAsync(d => d.Connections)));
+        Assert.Equal(1, await usage.ReadAsync(db => db.DnsHours.Of(anna).SumAsync(h => h.QueriesA)));
+        Assert.Equal(1, await usage.ReadAsync(db => db.DnsDays.Of(anna).SumAsync(d => d.QueriesA)));
+        Assert.Equal(registered.AddMinutes(2), Assert.Single(await usage.ReadAsync(db => db.TunnelSessions.Of(anna).ToListAsync())).ConnectedAt);
+    }
+
+    [Fact]
     public async Task Refusals_count_by_reason_and_made_up_hosts_are_capped()
     {
         await using var usage = await UsageDatabase.CreateAsync();

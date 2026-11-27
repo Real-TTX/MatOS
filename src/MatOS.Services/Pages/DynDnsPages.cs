@@ -290,7 +290,8 @@ public static class DynDnsPages
         return WithStatus(Manage(context, options, instance!, Key(context), null, false, html), status);
     }
 
-    private static async Task<IResult> ReleaseAsync(HttpContext context, ServicesOptions options, ServicesDbContext db, Registrar registrar)
+    private static async Task<IResult> ReleaseAsync(
+        HttpContext context, ServicesOptions options, ServicesDbContext db, Registrar registrar, Usage.UsageRecorder usage)
     {
         var (instance, failure) = await SignedInAsync(context, options, db);
         if (failure is not null)
@@ -305,6 +306,7 @@ public static class DynDnsPages
         }
 
         await registrar.ReleaseAsync(db, instance!, context.RequestAborted);
+        usage.GaveBack();
         var body = $"""
             <h1>{E(instance!.Name)}.{E(options.Zone)} is free again</h1>
             <p class="sub">The name no longer points anywhere, and anybody may register it now. Remove the settings from your router.</p>

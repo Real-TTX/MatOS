@@ -9,6 +9,7 @@ using MatOS.Services.Api;
 using MatOS.Services.Configuration;
 using MatOS.Services.Data;
 using MatOS.Services.Dns;
+using MatOS.Services.Usage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -242,6 +243,10 @@ public partial class AdminAreaTests
         Assert.Equal([AdminActions.Block, AdminActions.Unblock, AdminActions.GiveBack], actions);
         Assert.All(await db.AdminActions.ToListAsync(), a => Assert.Equal(Email, a.UserEmail));
         Assert.All(await db.AdminActions.ToListAsync(), a => Assert.NotNull(a.CreateUserId));
+
+        // An administrator's give-back is in the audit, not in the API's statistics.
+        await service.App.Services.GetRequiredService<UsageRecorder>().FlushAsync(CancellationToken.None);
+        Assert.Equal(0, (await db.ApiDays.SingleAsync()).GiveBacks);
     }
 
     [Fact]

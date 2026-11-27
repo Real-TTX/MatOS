@@ -7,6 +7,7 @@ using System.Text;
 using MatOS.Services.Api;
 using MatOS.Services.Data;
 using MatOS.Services.Dns;
+using MatOS.Services.Usage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -206,6 +207,17 @@ public class EndToEndTests
         using var scope = service.App.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServicesDbContext>();
         Assert.Equal("203.0.113.50", (await db.Instances.SingleAsync(i => i.Name == "fritz")).CreatedFromIp);
+
+        // The refused registration counts as a rate-limit refusal; the installation's own give-back counts as one.
+        var key = await service.RegisterAsync("ilse");
+        using (var owner = service.Client(key))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync("/api/v1/instance")).StatusCode);
+        }
+
+        await service.App.Services.GetRequiredService<UsageRecorder>().FlushAsync(CancellationToken.None);
+        var api = await db.ApiDays.SingleAsync();
+        Assert.Equal((4L, 1L, 1L), (api.Registrations, api.RateLimited, api.GiveBacks));
     }
 
     [Fact]
