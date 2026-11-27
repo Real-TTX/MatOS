@@ -23,6 +23,14 @@ public static class Wallpapers
         new("jungle", "Jungle", "A river through the rainforest, from above", Dark: true),
         new("lagoon", "Lagoon", "An island with a reef, from above", Dark: true),
         new("mountains", "Mountains", "Peaks with snow and lakes, from above", Dark: true),
+        new("dawn", "Dawn", "Ridges and forest in the morning mist", Dark: true),
+        new("coast", "Coast", "The sea at sunset, a beach in front", Dark: true),
+        new("dunes", "Dunes", "A desert under the midday sun", Dark: false),
+        new("city", "City", "A skyline at night over the river", Dark: true),
+        new("forest", "Forest", "Pines in the fog, the sun behind them", Dark: false),
+        new("aurora", "Aurora", "Northern lights over a frozen lake", Dark: true),
+        new("nebula", "Nebula", "A cloud of gas and stars", Dark: true),
+        new("marble", "Marble", "Poured paint in soft colours", Dark: false),
         new(None, "None", "The plain background of the theme", Dark: false),
     ];
 

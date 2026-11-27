@@ -363,7 +363,8 @@ The home screen is a **small operating system** (the owner's choice of 2026-11-0
 - **Widgets** are cards in the grid of the apps (two cells, or two by two): today (the time, the greeting: the page's h1), the engines, apps running, the last backup
   (amber after seven days or with none), the activity, Docker. The search above the dock narrows the apps (key `/`, Enter opens the first); the widgets step aside.
 - **The wallpaper** is a picture of the account (`User.Wallpaper`, the claim `matos:wallpaper`, `Core/Users/Wallpapers.cs`, the tab *Home screen* of the account).
-  The default is *Orbit*, the planet of the logo, light or dark with the theme; Earth, Jungle, Lagoon and Mountains are views from above; *None* is the plain background.
+  The default is *Orbit*, the planet of the logo, light or dark with the theme; Earth, Jungle, Lagoon and Mountains are views from above; Dawn, Coast, Dunes, City, Forest and Aurora are scenes at eye level,
+  Nebula and Marble the sky and an abstract one (the motifs of the first MatOS, drawn again: `scripts/wallpapers/scenes.js`); *None* is the plain background.
   The pictures are drawn, not downloaded: `scripts/wallpapers` (SVG with noise filters, rendered to JPEG with Edge; `node scripts/wallpapers/render.js`).
 - **What the apps add** (contract 2, `contributes` of their `/api`; `Support/HomeContributions.cs`, `Core/Integrations/ShellRules.cs`): an app with launchers gets
   one icon per launcher instead of its own (its picture at the app, `/Apps/Open?id=&path=` in the window, its address in a tab; a badge from a key of its state), its quick
