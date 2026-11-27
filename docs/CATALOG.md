@@ -151,8 +151,8 @@ so the entry translates; no code of MatOS knows the app:
 - **A first start that takes long** (Nextcloud installs itself for a minute or two): MatOS deploys the stack again a few seconds after the install, once the
   bindings are there, and that recreates the web service. `stop_grace_period` long enough for the first start lets it finish (the start script runs as process 1,
   which ignores the stop signal until the app's own server takes over).
-- **What the test showed** (a second MatOS, 2026-11-27): MatIdentity names its issuer with a slash at the end, the binding's `MATIDENTITY_AUTHORITY` without it, so an app
-  that compares the two (Vaultwarden) gets `${MATIDENTITY_AUTHORITY%/}/`; Vaultwarden lets in only a person whose e-mail is confirmed in MatIdentity; Nextcloud's
+- **What the test showed** (a second MatOS, 2026-11-27): MatIdentity names its issuer with a slash at the end, and before its branch `fix/issuer-slash` the binding's
+  `MATIDENTITY_AUTHORITY` came without it, so an app that compares the two (Vaultwarden) gets `${MATIDENTITY_AUTHORITY%/}/` (right with either); Vaultwarden lets in only a person whose e-mail is confirmed in MatIdentity; Nextcloud's
   user_oidc and the Bitwarden web vault need https; Home Assistant (2026.8 and later) keeps its proxy settings in `.storage/http`, and undoes a change no administrator
   confirms, so its entry writes that store on the first start.
 

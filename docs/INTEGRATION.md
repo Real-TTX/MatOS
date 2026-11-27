@@ -54,6 +54,10 @@ contract, [ENGINES.md](ENGINES.md) has been updated to what was built (schedule 
   only the link names it (`SignInBranding.AccountBrandAsync`), never the cookie of a sign-in, so MatIdentity's own account is unchanged. Tests: `BrandingTests`
   (the account opened from a link of the app), all 175 green. Its docs/ARCHITECTURE.md "Branded sign-in" and CLAUDE.md say so. Review and publish its image; until then
   the dev stack's MatIdentity (`ghcr.io/real-ttx/matidentity:latest`) ignores `brand` and shows its own shell (docs/ARCHITECTURE.md "The second step").
+- **Branch `fix/issuer-slash` (2026-11-27, pushed, off `dev`, not merged): the authority of a binding is the issuer.** `identity.oidc` hands out
+  `MATIDENTITY_AUTHORITY` exactly as the discovery document names the issuer, with the slash at the end (`Authority.IssuerOf`); before, a strict client (Vaultwarden)
+  refused it. The values of an app connected by hand and Settings show it the same way. Tests: 176 green, one compares the binding with the discovery document.
+  After the update every bound app gets the new value once (MatOS deploys it again at the next connect); MatPlatform reads it with or without the slash.
 - Nothing tells a broker whether a person's second step is on (SCIM and `/api/v1` have no field for it), so MatOS's tab *Security* cannot show it.
 
 ## What MatOS does about the engines

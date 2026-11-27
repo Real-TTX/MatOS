@@ -56,7 +56,8 @@ services:
       - -c
       - |
         if [ -n "$$MAT_PUBLIC_URL" ]; then export DOMAIN="$$MAT_PUBLIC_URL"; fi
-        # The authority exactly as MatIdentity's discovery names its issuer (with the slash at the end): Vaultwarden compares the two.
+        # The authority exactly as MatIdentity's discovery names its issuer (with the slash at the end): Vaultwarden compares the two. MatIdentity hands it out
+        # that way since its branch fix/issuer-slash; an older one leaves the slash off, so the start adds it either way.
         if [ -n "$$MATIDENTITY_CLIENT_ID" ] && [ -n "$$MAT_PUBLIC_URL" ]; then
           export SSO_ENABLED=true SSO_PKCE=true SSO_AUTHORITY="$${MATIDENTITY_AUTHORITY%/}/" \
             SSO_CLIENT_ID="$$MATIDENTITY_CLIENT_ID" SSO_CLIENT_SECRET="$$MATIDENTITY_CLIENT_SECRET" SSO_SCOPES="email profile"
