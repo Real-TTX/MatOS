@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using MatOS.Services.Configuration;
 using MatOS.Services.Data;
 using MatOS.Services.Instances;
+using MatOS.Services.Usage;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatOS.Services.Tunnel;
@@ -17,7 +18,7 @@ public static class TunnelEndpoints
 
     private static async Task ControlAsync(
         HttpContext context, ServicesDbContext db, TunnelRegistry registry, InstanceActivity activity, TunnelLimits limits,
-        ServicesOptions options, TimeProvider time, ILogger<TunnelRegistry> logger)
+        ServicesOptions options, UsageRecorder usage, IHostApplicationLifetime lifetime, TimeProvider time, ILogger<TunnelRegistry> logger)
     {
         if (!context.WebSockets.IsWebSocketRequest)
         {
@@ -25,7 +26,7 @@ public static class TunnelEndpoints
             return;
         }
 
-        var instance = await AuthenticateAsync(context, db, limits);
+        var instance = await AuthenticateAsync(context, db, limits, usage);
         if (instance is null)
         {
             return;
@@ -49,6 +50,7 @@ public static class TunnelEndpoints
         var name = instance.Name;
         if (!limits.TryConnect(name))
         {
+            usage.RateLimited();
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             return;
         }
@@ -61,7 +63,8 @@ public static class TunnelEndpoints
         }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
-        var session = registry.Connect(name, socket, context.ClientIp().ToString());
+        var session = registry.Connect(
+            name, socket, context.ClientIp().ToString(), Version(context.Request.Headers.UserAgent.ToString()) ?? instance.Version);
         logger.LogInformation("Tunnel of {Name} connected from {Ip}", name, context.ClientIp());
         await activity.TouchAsync(name);
         try
@@ -71,11 +74,32 @@ public static class TunnelEndpoints
         finally
         {
             registry.Disconnect(session);
-            logger.LogInformation("Tunnel of {Name} disconnected", name);
+            if (lifetime.ApplicationStopping.IsCancellationRequested)
+            {
+                session.SetCloseReason(TunnelCloseReason.ServiceStopped);
+            }
+
+            usage.TunnelEnded(session);
+            logger.LogInformation("Tunnel of {Name} disconnected ({Reason})", name, session.CloseReason);
         }
     }
 
-    private static async Task StreamAsync(HttpContext context, Guid id, ServicesDbContext db, TunnelRegistry registry, TunnelLimits limits)
+    /// <summary>The version in MatOS's User-Agent (<c>MatOS/1.4.0-20261127</c>); null for anything else.</summary>
+    internal static string? Version(string userAgent)
+    {
+        const string prefix = "MatOS/";
+        if (!userAgent.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        // Whatever the client says: only the characters of a version, and not too long.
+        var version = userAgent[prefix.Length..].Split(' ', 2)[0];
+        return version.Length is 0 or > 64 || !version.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '+' or '_') ? null : version;
+    }
+
+    private static async Task StreamAsync(
+        HttpContext context, Guid id, ServicesDbContext db, TunnelRegistry registry, TunnelLimits limits, UsageRecorder usage)
     {
         if (!context.WebSockets.IsWebSocketRequest)
         {
@@ -83,7 +107,7 @@ public static class TunnelEndpoints
             return;
         }
 
-        var instance = await AuthenticateAsync(context, db, limits);
+        var instance = await AuthenticateAsync(context, db, limits, usage);
         if (instance is null)
         {
             return;
@@ -123,11 +147,12 @@ public static class TunnelEndpoints
     }
 
     /// <summary>The installation of the request's key; null after the answer (401, or 429 for an address with too many failures) is set.</summary>
-    private static async Task<Instance?> AuthenticateAsync(HttpContext context, ServicesDbContext db, TunnelLimits limits)
+    private static async Task<Instance?> AuthenticateAsync(HttpContext context, ServicesDbContext db, TunnelLimits limits, UsageRecorder usage)
     {
         var address = Networks.LimitKey(context.ClientIp());
         if (limits.IsBlocked(address))
         {
+            usage.RateLimited();
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             return null;
         }

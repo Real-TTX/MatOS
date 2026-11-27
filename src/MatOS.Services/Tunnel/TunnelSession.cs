@@ -69,6 +69,11 @@ public sealed class TunnelSession(string name, WebSocket control, TimeProvider t
     private readonly CancellationTokenSource _closed = new();
     private int _activeStreams;
     private long _lastPongTicks = time.GetUtcNow().UtcTicks;
+    private long _streamsServed;
+    private long _bytesToInstance;
+    private long _bytesToVisitor;
+    private int _reason = -1;
+    private int _recorded;
 
     public string Name { get; } = name;
 
@@ -77,7 +82,38 @@ public sealed class TunnelSession(string name, WebSocket control, TimeProvider t
     /// <summary>The address the installation connected from: the operator's evidence, as <c>Instance.CreatedFromIp</c>.</summary>
     public string? RemoteAddress { get; init; }
 
+    /// <summary>The MatOS version it named when it connected (see <see cref="TunnelEndpoints"/>).</summary>
+    public string? Version { get; init; }
+
     public int ActiveStreams => Volatile.Read(ref _activeStreams);
+
+    /// <summary>The visitors' connections this tunnel has carried so far (the statistics).</summary>
+    public long StreamsServed => Interlocked.Read(ref _streamsServed);
+
+    public long BytesToInstance => Interlocked.Read(ref _bytesToInstance);
+
+    public long BytesToVisitor => Interlocked.Read(ref _bytesToVisitor);
+
+    /// <summary>Why it ended: the first reason given wins (an administrator's close before the broken connection it causes).</summary>
+    public Data.TunnelCloseReason CloseReason
+    {
+        get
+        {
+            var reason = Volatile.Read(ref _reason);
+            return reason < 0 ? Data.TunnelCloseReason.Closed : (Data.TunnelCloseReason)reason;
+        }
+    }
+
+    public void SetCloseReason(Data.TunnelCloseReason reason) => Interlocked.CompareExchange(ref _reason, (int)reason, -1);
+
+    /// <summary>True once only: the session's row is written by whoever comes first (its endpoint, or the service when it stops).</summary>
+    internal bool TryMarkRecorded() => Interlocked.Exchange(ref _recorded, 1) == 0;
+
+    internal void StreamServed() => Interlocked.Increment(ref _streamsServed);
+
+    internal void AddToInstance(long bytes) => Interlocked.Add(ref _bytesToInstance, bytes);
+
+    internal void AddToVisitor(long bytes) => Interlocked.Add(ref _bytesToVisitor, bytes);
 
     /// <summary>Cancelled when the control connection ends; the edge stops waiting for streams of a session that is gone.</summary>
     public CancellationToken Closed => _closed.Token;
@@ -197,9 +233,18 @@ public sealed class TunnelSession(string name, WebSocket control, TimeProvider t
         }
     }
 
-    /// <summary>Ends the session (replaced by a new connection, or the name was given back).</summary>
-    public async Task CloseAsync(string reason)
+    /// <summary>Ends the session (replaced by a new connection, the name was given back or blocked, an administrator ended it).</summary>
+    public async Task CloseAsync(Data.TunnelCloseReason why)
     {
+        SetCloseReason(why);
+        var reason = why switch
+        {
+            Data.TunnelCloseReason.Replaced => "replaced by a new connection",
+            Data.TunnelCloseReason.Blocked => "the name was blocked",
+            Data.TunnelCloseReason.Disconnected => "disconnected by an administrator",
+            Data.TunnelCloseReason.ServiceStopped => "the service stopped",
+            _ => "the name was given back",
+        };
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
@@ -236,6 +281,7 @@ public sealed class TunnelSession(string name, WebSocket control, TimeProvider t
                 var lastPong = new DateTimeOffset(Interlocked.Read(ref _lastPongTicks), TimeSpan.Zero);
                 if (IsSilent(time.GetUtcNow() - lastPong, interval, deadline))
                 {
+                    SetCloseReason(Data.TunnelCloseReason.Silent);
                     control.Abort();
                     return;
                 }

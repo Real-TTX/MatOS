@@ -89,6 +89,8 @@ public sealed class ServicesOptions
 
     public TunnelOptions Tunnel { get; set; } = new();
 
+    public UsageOptions Usage { get; set; } = new();
+
     /// <summary>Host names compare lower case and without a trailing dot everywhere, so the zone is brought into that form once.</summary>
     public void Normalize()
     {
@@ -174,6 +176,11 @@ public sealed class ServicesOptions
         if (Edge.IdleTimeoutSeconds < 1)
         {
             problems.Add("Services:Edge:IdleTimeoutSeconds must be at least 1.");
+        }
+
+        if (Usage.HourlyDays < 1 || Usage.DailyDays < Usage.HourlyDays || Usage.TunnelSessionDays < 1)
+        {
+            problems.Add("Services:Usage:HourlyDays and TunnelSessionDays must be at least 1, and DailyDays at least HourlyDays.");
         }
 
         return problems;
@@ -313,4 +320,17 @@ public sealed class TunnelOptions
 
     /// <summary>How long a visitor waits for the installation to pick up its stream.</summary>
     public int StreamTimeoutSeconds { get; set; } = 10;
+}
+
+/// <summary>
+/// How long the statistics of the admin area are kept (docs/SERVICES.md "The statistics"): the hourly rows, then the daily rows they are rolled up
+/// into, and the tunnel sessions. A daily job (<c>UsageRetention</c>) applies it.
+/// </summary>
+public sealed class UsageOptions
+{
+    public int HourlyDays { get; set; } = 35;
+
+    public int DailyDays { get; set; } = 400;
+
+    public int TunnelSessionDays { get; set; } = 180;
 }

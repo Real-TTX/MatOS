@@ -100,7 +100,9 @@ src/MatOS.Web         Razor Pages, controls, JS/CSS, Program.cs
 src/MatOS.Services         MatOS Services: names and keys (Instances/), the tunnel (Tunnel/), the edge that passes TLS by SNI and HTTP by Host without decrypting (Edge/),
                              the DNS of the zone (Dns/), DynDNS2 for Matddns, the public pages (Pages/*.cs);
                              the admin area /admin (Admin/: AdminArea the gate (API host only, 404 without an account, the headers), AdminAccounts + AdminAuth (User, UserSession, the cookie), AdminGuard (the lockout),
-                             InstanceAdmin (block, give back, AdminAction); Pages/Admin: Razor Pages with MatOS.Web's toolkit, controls and partials linked in the csproj, never copied)
+                             InstanceAdmin (block, give back, AdminAction); Pages/Admin: Razor Pages with MatOS.Web's toolkit, controls and partials linked in the csproj, never copied);
+                             the statistics (Usage/: UsageRecorder counts in memory with Interlocked and writes UsageHour, TunnelSession, DnsHour and ApiDay every minute and on stop,
+                             UsageConnection the meter of one edge connection, UsageRetention the daily roll-up into UsageDay/DnsDay and the removal; never a visitor's address or path)
 tests/MatOS.Tests       unit tests + WebUiTests (they read the source of the pages)
 tests/MatOS.Services.Tests its unit tests and in-process end-to-end tests (free ports; the DNS binds TCP first, then UDP on the same number)
 tests/e2e                    run.js: the pages in a real browser against the running dev stack; run.js --first-start: the first start on a MatOS without an account

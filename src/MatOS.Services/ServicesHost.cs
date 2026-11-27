@@ -13,6 +13,7 @@ using MatOS.Services.Edge;
 using MatOS.Services.Instances;
 using MatOS.Services.Pages;
 using MatOS.Services.Tunnel;
+using MatOS.Services.Usage;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
@@ -65,10 +66,16 @@ public static class ServicesHost
         builder.Services.AddSingleton<InstanceActivity>();
         builder.Services.AddSingleton<RegistrationLock>();
         builder.Services.AddSingleton<TunnelLimits>(_ => new TunnelLimits());
+        builder.Services.AddSingleton<TunnelRegistry>();
+
+        // Before the edge and the DNS: hosted services stop in reverse order, so the last flush of the statistics comes after they have stopped.
+        builder.Services.AddSingleton<UsageRecorder>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageRecorder>());
+        builder.Services.AddSingleton<UsageRetention>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageRetention>());
         AddAdminArea(builder.Services, options);
         builder.Services.AddSingleton<InstanceExpiry>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<InstanceExpiry>());
-        builder.Services.AddSingleton<TunnelRegistry>();
         builder.Services.AddSingleton<ReachabilityCheck>();
         builder.Services.AddSingleton<EdgeService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<EdgeService>());
@@ -207,6 +214,16 @@ public static class ServicesHost
         services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.OnRejected = (context, _) =>
+            {
+                // The statistics of the API; the admin area's own limits are not its usage.
+                if (!context.HttpContext.Request.Path.StartsWithSegments(AdminArea.Path))
+                {
+                    context.HttpContext.RequestServices.GetRequiredService<UsageRecorder>().RateLimited();
+                }
+
+                return ValueTask.CompletedTask;
+            };
             o.AddPolicy(InstanceApi.NamesPolicy, context => Window(context, 120));
             o.AddPolicy(InstanceApi.ApiPolicy, context => Window(context, 60));
             o.AddPolicy(AdminArea.SignInPolicy, context => Window(context, 20, Registrar.RegistrationPrefix));

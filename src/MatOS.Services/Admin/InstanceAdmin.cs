@@ -17,7 +17,7 @@ public sealed class InstanceAdmin(
     /// <summary>Ends the tunnel; MatOS connects again by itself (it is not blocked). False when none was connected.</summary>
     public async Task<bool> DisconnectAsync(Instance instance, string by, CancellationToken ct)
     {
-        var closed = await registry.CloseAsync(instance.Name, "disconnected by an administrator");
+        var closed = await registry.CloseAsync(instance.Name, TunnelCloseReason.Disconnected);
         await AuditAsync(by, AdminActions.Disconnect, instance.Name, null, ct);
         return closed;
     }
@@ -41,7 +41,7 @@ public sealed class InstanceAdmin(
         instance.BlockedAt = time.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(ct);
         await directory.RefreshAsync(instance.Name, ct);
-        await registry.CloseAsync(instance.Name, "the name was blocked");
+        await registry.CloseAsync(instance.Name, TunnelCloseReason.Blocked);
         await AuditAsync(by, AdminActions.Block, instance.Name, instance.BlockedReason, ct);
         logger.LogWarning("{Name} was blocked by {By}: {Reason}", instance.Name, by, instance.BlockedReason);
     }

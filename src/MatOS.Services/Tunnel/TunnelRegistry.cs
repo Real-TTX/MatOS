@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using MatOS.Services.Data;
 
 namespace MatOS.Services.Tunnel;
 
@@ -14,9 +15,10 @@ public sealed class TunnelRegistry(TimeProvider time, ILogger<TunnelRegistry> lo
     public int Count => _sessions.Count;
 
     /// <param name="remote">The address the installation connected from (shown in the admin area).</param>
-    public TunnelSession Connect(string name, WebSocket control, string? remote = null)
+    /// <param name="version">The MatOS version it named (the statistics of its sessions).</param>
+    public TunnelSession Connect(string name, WebSocket control, string? remote = null, string? version = null)
     {
-        var session = new TunnelSession(name, control, time) { RemoteAddress = remote };
+        var session = new TunnelSession(name, control, time) { RemoteAddress = remote, Version = version };
         TunnelSession? replaced = null;
         _sessions.AddOrUpdate(name, session, (_, old) =>
         {
@@ -27,7 +29,7 @@ public sealed class TunnelRegistry(TimeProvider time, ILogger<TunnelRegistry> lo
         if (replaced is not null)
         {
             logger.LogInformation("Tunnel of {Name} replaced by a new connection", name);
-            _ = replaced.CloseAsync("replaced by a new connection");
+            _ = replaced.CloseAsync(TunnelCloseReason.Replaced);
         }
 
         return session;
@@ -39,7 +41,7 @@ public sealed class TunnelRegistry(TimeProvider time, ILogger<TunnelRegistry> lo
     public void Disconnect(TunnelSession session) => _sessions.TryRemove(new KeyValuePair<string, TunnelSession>(session.Name, session));
 
     /// <summary>Closes the tunnel of a name (given back, blocked, ended by an administrator); false when none was connected.</summary>
-    public async Task<bool> CloseAsync(string name, string reason = "the name was given back")
+    public async Task<bool> CloseAsync(string name, TunnelCloseReason reason = TunnelCloseReason.GivenBack)
     {
         if (!_sessions.TryRemove(name, out var session))
         {

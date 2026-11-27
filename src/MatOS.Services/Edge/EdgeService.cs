@@ -4,6 +4,7 @@ using System.Text;
 using MatOS.Services.Configuration;
 using MatOS.Services.Instances;
 using MatOS.Services.Tunnel;
+using MatOS.Services.Usage;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace MatOS.Services.Edge;
@@ -19,7 +20,8 @@ namespace MatOS.Services.Edge;
 /// </para>
 /// </summary>
 public sealed class EdgeService(
-    ServicesOptions options, TunnelRegistry registry, InstanceDirectory directory, CustomDomains domains, ILogger<EdgeService> logger)
+    ServicesOptions options, TunnelRegistry registry, InstanceDirectory directory, CustomDomains domains, UsageRecorder usage,
+    ILogger<EdgeService> logger)
     : BackgroundService
 {
     /// <summary>How long a visitor may take to send the ClientHello or the request head: a slow client must not hold a slot.</summary>
@@ -158,7 +160,7 @@ public sealed class EdgeService(
                 return;
             }
 
-            await TunnelAsync(client, tls, route, peek.Peeked, stoppingToken);
+            await TunnelAsync(client, tls, route, HostLabel(peek.Host!, route), visitor.Address, peek.Peeked, stoppingToken);
         }
         catch (Exception ex) when (ex is SocketException or IOException or OperationCanceledException or ObjectDisposedException)
         {
@@ -212,6 +214,21 @@ public sealed class EdgeService(
         }
 
         return HostNames.InstanceName(host, options.Zone) is { } name ? name : NowhereRoute;
+    }
+
+    /// <summary>
+    /// Which of an installation's hosts a connection is for, as the statistics count it: empty for the installation itself, <c>app</c> for
+    /// <c>app.anna.zone</c>, the domain for its own domain or a name below it. On a plain HTTP connection the first request decides.
+    /// </summary>
+    private string HostLabel(string host, string name)
+    {
+        if (!HostNames.InZone(host, options.Zone))
+        {
+            return domains.FindDomain(host) ?? "";
+        }
+
+        var rest = host[..^(options.Zone.Length + 1)];
+        return rest == name ? "" : rest[..rest.IndexOf('.')];
     }
 
     private sealed record Peek(PeekResult Result, string? Host, ReadOnlyMemory<byte> Peeked, IPEndPoint? Visitor);
@@ -277,14 +294,21 @@ public sealed class EdgeService(
     }
 
     /// <summary>The settings of a pipe; plain HTTP gets the gate that keeps every request on the connection's destination.</summary>
-    private PipeSettings Pipe(bool tls, string route) =>
-        new(TimeSpan.FromSeconds(options.Edge.IdleTimeoutSeconds), tls ? null : new HttpRequestGate(route, Route));
+    private PipeSettings Pipe(bool tls, string route, IPipeMeter meter) =>
+        new(TimeSpan.FromSeconds(options.Edge.IdleTimeoutSeconds), tls ? null : new HttpRequestGate(route, Route), meter);
 
-    private async Task TunnelAsync(Socket client, bool tls, string name, ReadOnlyMemory<byte> peeked, CancellationToken stoppingToken)
+    private async Task TunnelAsync(
+        Socket client, bool tls, string name, string label, IPAddress visitor, ReadOnlyMemory<byte> peeked, CancellationToken stoppingToken)
     {
         if (Interlocked.Increment(ref _tunnels) > options.Edge.MaxConnections)
         {
             Interlocked.Decrement(ref _tunnels);
+            if (await directory.FindAsync(name, stoppingToken) is not null)
+            {
+                // Only a name that exists gets a row: a made-up one is nobody's statistics.
+                usage.Refuse(name, label, tls, UsageRefusal.Limit);
+            }
+
             if (!tls)
             {
                 await TryReplyAsync(client, 503, "Busy", "MatOS Services is busy. Please try again in a moment.");
@@ -295,7 +319,7 @@ public sealed class EdgeService(
 
         try
         {
-            await StreamAsync(client, tls, name, peeked, stoppingToken);
+            await StreamAsync(client, tls, name, label, visitor, peeked, stoppingToken);
         }
         finally
         {
@@ -303,11 +327,13 @@ public sealed class EdgeService(
         }
     }
 
-    private async Task StreamAsync(Socket client, bool tls, string name, ReadOnlyMemory<byte> peeked, CancellationToken stoppingToken)
+    private async Task StreamAsync(
+        Socket client, bool tls, string name, string label, IPAddress visitor, ReadOnlyMemory<byte> peeked, CancellationToken stoppingToken)
     {
         if (await directory.FindAsync(name, stoppingToken) is { Blocked: true })
         {
             // Blocked by an administrator: never passed on, also not by a tunnel that is still on its way out.
+            usage.Refuse(name, label, tls, UsageRefusal.Blocked);
             if (!tls)
             {
                 await TryReplyAsync(client, 403, "This address is blocked", "This address is blocked by the operator of MatOS Services.");
@@ -319,9 +345,14 @@ public sealed class EdgeService(
         var session = registry.Get(name);
         if (session is null)
         {
+            var known = await directory.FindAsync(name, stoppingToken) is not null;
+            if (known)
+            {
+                usage.Refuse(name, label, tls, UsageRefusal.NoTunnel);
+            }
+
             if (!tls)
             {
-                var known = await directory.FindAsync(name, stoppingToken) is not null;
                 await (known
                     ? TryReplyAsync(client, 502, "This MatOS is offline", "This MatOS is offline. It is not connected to MatOS Services right now; please try again later.")
                     : TryReplyAsync(client, 404, "No MatOS here", "There is no MatOS at this address."));
@@ -332,6 +363,7 @@ public sealed class EdgeService(
 
         if (!session.TryReserveStream(options.Edge.MaxStreamsPerInstance))
         {
+            usage.Refuse(name, label, tls, UsageRefusal.Limit);
             if (!tls)
             {
                 await TryReplyAsync(client, 503, "Busy", "This MatOS has too many visitors right now. Please try again in a moment.");
@@ -350,6 +382,8 @@ public sealed class EdgeService(
                 : await pending.WaitAsync(TimeSpan.FromSeconds(options.Tunnel.StreamTimeoutSeconds), linked.Token);
             if (stream is null)
             {
+                // No open message could be sent (the tunnel went away), or the installation did not pick the stream up in time.
+                usage.Refuse(name, label, tls, pending is null || session.Closed.IsCancellationRequested ? UsageRefusal.NoTunnel : UsageRefusal.Timeout);
                 if (!tls)
                 {
                     await TryReplyAsync(client, 502, "This MatOS did not answer", "This MatOS did not answer in time. Please try again later.");
@@ -358,7 +392,8 @@ public sealed class EdgeService(
                 return;
             }
 
-            await Pipes.RunAsync(client, stream, peeked, stoppingToken, Pipe(tls, name));
+            using var meter = usage.Connect(name, label, tls, visitor, session);
+            await Pipes.RunAsync(client, stream, peeked, stoppingToken, Pipe(tls, name, meter));
         }
         finally
         {
@@ -388,6 +423,7 @@ public sealed class EdgeService(
         if (Interlocked.Increment(ref _fallbacks) > options.Edge.MaxFallbackConnections)
         {
             Interlocked.Decrement(ref _fallbacks);
+            usage.Refuse(UsageRecorder.Fallback, "", tls, UsageRefusal.Limit);
             if (!tls)
             {
                 await TryReplyAsync(client, 503, "Busy", "This server is busy. Please try again in a moment.");
@@ -424,7 +460,8 @@ public sealed class EdgeService(
                 await upstream.SendAsync(ProxyProtocol.WriteV2(visitor, (IPEndPoint)client.LocalEndPoint!), SocketFlags.None, stoppingToken);
             }
 
-            await Pipes.RunAsync(client, upstream, peeked, stoppingToken, Pipe(tls, FallbackRoute));
+            using var meter = usage.Connect(UsageRecorder.Fallback, "", tls, visitor.Address);
+            await Pipes.RunAsync(client, upstream, peeked, stoppingToken, Pipe(tls, FallbackRoute, meter));
         }
         finally
         {

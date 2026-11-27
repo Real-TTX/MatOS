@@ -101,6 +101,19 @@ address gets `429` on both tunnel endpoints for the rest of the minute. The clie
 
 `GET /` is a short public page (on the host of the zone itself, `my.mattiverse.de`, the DynDNS page below). `/admin` is the admin area: Razor Pages in the look of every Mat app (MatUi, linked from MatOS.Web), a sign-in with an e-mail address and a password (PBKDF2, a session per browser in the table `UserSession`, the cookie `HttpOnly`, `SameSite=Strict`, `Secure` behind https, an antiforgery token on every form, a strict content security policy, `noindex`); the installations with their facts, tunnel, domains and the actions disconnect, back to tunnel mode, block/unblock and give back, each written to the table `AdminAction`. A blocked name is refused by the API (`409 blocked` on registration, `403 blocked` on a change or a give-back), the tunnel (`403`), the edge (`403` over HTTP, closed over TLS), the DNS (`NXDOMAIN`) and `/nic/update` (`abuse`), and it never expires. The admin area answers only on the host of `Services__PublicUrl`, never on the zone or below it, and is `404` while no account exists (the Basic auth of before is gone).
 
+**The statistics** (for the admin area): counted in memory and written every minute and when the service stops. Per installation, hour, host
+(the installation itself, `<app>`, its own domain; more than 32 hosts of one installation in an hour count together as `*`) and way (TLS, HTTP), the table
+`UsageHour` holds the connections, the refusals by reason (no tunnel, a limit, the stream not picked up in time, blocked), the bytes each way, the connection
+seconds, the peak of open connections and the distinct visitors; the fallback to server1's proxy has rows of its own (an empty name). `TunnelSession` holds every
+tunnel that ended (connected, disconnected, why, the address it came from, the MatOS version, streams and bytes), `DnsHour` the answers of the DNS per name
+(A, AAAA, other) and the accepted `/nic/update` calls and address changes, with the NXDOMAIN answers of the zone only as a total, and `ApiDay` the
+registrations, give-backs, port checks, name checks and rate-limit refusals per day. **What is never stored**: a visitor's address, or a path or URL a
+visitor opens (the edge does not decrypt TLS and reads nothing of HTTP but the host). Visitors are counted as HMAC-SHA256 hashes of the address with a
+random salt of the current hour, kept in memory for that hour only and replaced (never written) when the hour changes; only their number is stored, so the
+same visitor in two hours counts twice in a day's total. The addresses of installations (`CreatedFromIp`, `PublicIpv4/6`, a tunnel's address) are the
+operator's evidence and are stored. Retention (`Services__Usage__HourlyDays`, `DailyDays`, `TunnelSessionDays`): hourly rows 35 days, then rolled up into
+`UsageDay` and `DnsDay`, which are kept 400 days like `ApiDay`; tunnel sessions 180 days. A daily job rolls up and removes them for real.
+
 **Names**: 3 to 32 characters, `a-z`, `0-9` and `-`, not at the start or the end, not `--` in positions 3–4 (punycode). Reserved: `www`, `mail`, `smtp`, `imap`,
 `ns`, `ns1`, `ns2`, `dns`, `api`, `admin`, `root`, `services`, `service`, `matos`, `my`, `mattiverse`, `status`, `support`, `help`, `test`, `demo`, `app`, `apps`,
 `login`, `auth`, `id`, `cdn`, `static`, `assets`, `ftp`, `vpn`, `tunnel`, `edge`, `relay`, `localhost`. Upper case input is lowered.

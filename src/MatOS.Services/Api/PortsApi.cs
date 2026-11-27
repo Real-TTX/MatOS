@@ -48,11 +48,14 @@ public static class PortsApi
         var (key, limit) = instance is null
             ? ("a:" + Networks.LimitKey(address), PortCheckLimits.PerAddress)
             : ("i:" + instance.Name, PortCheckLimits.PerInstance);
+        var usage = context.RequestServices.GetRequiredService<Usage.UsageRecorder>();
         if (!limits.TryTake(key, limit, out var retryAfter))
         {
+            usage.RateLimited();
             return (null, Refusal.TooMany, retryAfter);
         }
 
+        usage.PortChecked();
         var result = await check.CheckAsync(address, port, context.RequestAborted);
         if (instance is not null)
         {

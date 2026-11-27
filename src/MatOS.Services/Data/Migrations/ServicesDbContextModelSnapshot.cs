@@ -64,6 +64,53 @@ namespace MatOS.Services.Data.Migrations
                     b.ToTable("AdminAction", (string)null);
                 });
 
+            modelBuilder.Entity("MatOS.Services.Data.ApiDay", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Day")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GiveBacks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("NameChecks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PortChecks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RateLimited")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Registrations")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Day")
+                        .IsUnique();
+
+                    b.ToTable("ApiDay", (string)null);
+                });
+
             modelBuilder.Entity("MatOS.Services.Data.CustomDomain", b =>
                 {
                     b.Property<long>("Id")
@@ -104,6 +151,120 @@ namespace MatOS.Services.Data.Migrations
                     b.HasIndex("InstanceId");
 
                     b.ToTable("CustomDomain", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.DnsDay", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddressChanges")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Day")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("NxDomain")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("QueriesA")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("QueriesAaaa")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("QueriesOther")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Updates")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Day", "Name")
+                        .IsUnique();
+
+                    b.HasIndex("Name", "Day");
+
+                    b.ToTable("DnsDay", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.DnsHour", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddressChanges")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Hour")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("NxDomain")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("QueriesA")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("QueriesAaaa")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("QueriesOther")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Updates")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Hour", "Name")
+                        .IsUnique();
+
+                    b.HasIndex("Name", "Hour");
+
+                    b.ToTable("DnsHour", (string)null);
                 });
 
             modelBuilder.Entity("MatOS.Services.Data.Instance", b =>
@@ -203,6 +364,227 @@ namespace MatOS.Services.Data.Migrations
                     b.HasIndex("Ip", "CreateDate");
 
                     b.ToTable("Registration", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.TunnelSessionEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BytesToInstance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BytesToVisitor")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ConnectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DisconnectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstanceName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RemoteAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StreamsServed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DisconnectedAt");
+
+                    b.HasIndex("InstanceName", "ConnectedAt");
+
+                    b.ToTable("TunnelSession", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.UsageDay", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BytesToInstance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BytesToVisitor")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ConnectionSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Connections")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Day")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstanceName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PeakStreams")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedBlocked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedNoTunnel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedTimeout")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Visitors")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Way")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstanceName", "Day");
+
+                    b.HasIndex("Day", "InstanceName", "Host", "Way")
+                        .IsUnique();
+
+                    b.ToTable("UsageDay", (string)null);
+                });
+
+            modelBuilder.Entity("MatOS.Services.Data.UsageHour", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BytesToInstance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BytesToVisitor")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ConnectionSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Connections")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Hour")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstanceName")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PeakStreams")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedBlocked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedNoTunnel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefusedTimeout")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Visitors")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Way")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstanceName", "Hour");
+
+                    b.HasIndex("Hour", "InstanceName", "Host", "Way")
+                        .IsUnique();
+
+                    b.ToTable("UsageHour", (string)null);
                 });
 
             modelBuilder.Entity("MatOS.Services.Data.User", b =>

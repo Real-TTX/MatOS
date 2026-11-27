@@ -41,8 +41,10 @@ public static class InstanceApi
     /// <summary>The answer to a blocked installation that wants to change something: 403 and the reason in plain words.</summary>
     public static IResult Blocked() => Results.Json(new ApiError("blocked"), statusCode: StatusCodes.Status403Forbidden);
 
-    private static async Task<IResult> CheckNameAsync(string name, ServicesDbContext db, ServicesOptions options, CancellationToken ct)
+    private static async Task<IResult> CheckNameAsync(
+        string name, ServicesDbContext db, ServicesOptions options, Usage.UsageRecorder usage, CancellationToken ct)
     {
+        usage.NameChecked();
         var normalized = NameRules.Normalize(name);
         var problem = NameRules.Check(normalized);
         if (problem is not null)

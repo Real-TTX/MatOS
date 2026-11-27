@@ -111,6 +111,14 @@ public sealed class CustomDomains(
     public string? Find(string host)
     {
         var map = _verified;
+        return FindDomain(map, host) is { } domain ? map[domain] : null;
+    }
+
+    /// <summary>The verified domain <paramref name="host"/> is or is below; null when there is none.</summary>
+    public string? FindDomain(string host) => FindDomain(_verified, host);
+
+    private static string? FindDomain(FrozenDictionary<string, string> map, string host)
+    {
         if (map.Count == 0)
         {
             return null;
@@ -119,9 +127,9 @@ public sealed class CustomDomains(
         var candidate = host;
         while (true)
         {
-            if (map.TryGetValue(candidate, out var name))
+            if (map.ContainsKey(candidate))
             {
-                return name;
+                return candidate;
             }
 
             var dot = candidate.IndexOf('.');

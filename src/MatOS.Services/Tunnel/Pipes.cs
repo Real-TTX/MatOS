@@ -8,10 +8,21 @@ namespace MatOS.Services.Tunnel;
 /// <summary>How a pipe of the edge behaves beyond copying.</summary>
 /// <param name="Idle">No byte in either direction for this long ends the pipe, so a quiet connection does not hold a slot for ever.</param>
 /// <param name="Gate">Reads the visitor's requests on a plain HTTP connection (see <see cref="HttpRequestGate"/>); null passes bytes unread.</param>
-public sealed record PipeSettings(TimeSpan Idle, HttpRequestGate? Gate = null)
+/// <param name="Meter">Counts the bytes that went through, each way (the statistics); null counts nothing.</param>
+public sealed record PipeSettings(TimeSpan Idle, HttpRequestGate? Gate = null, IPipeMeter? Meter = null)
 {
     /// <summary>For pipes outside the edge (the tests' stand-in for MatOS): no limit.</summary>
     public static readonly PipeSettings Unlimited = new(Timeout.InfiniteTimeSpan);
+}
+
+/// <summary>Told the bytes a pipe has passed on; called on the pipe's own loops, so it must only count (<c>Interlocked</c>).</summary>
+public interface IPipeMeter
+{
+    /// <summary>Bytes sent from the visitor to the other side (the installation, the fallback).</summary>
+    void ToUpstream(int bytes);
+
+    /// <summary>Bytes sent from the other side to the visitor.</summary>
+    void ToClient(int bytes);
 }
 
 /// <summary>
@@ -60,10 +71,11 @@ public static class Pipes
                 }
 
                 await upstream.SendAsync(allowed.Value, cts.Token);
+                settings.Meter?.ToUpstream(allowed.Value.Length);
             }
 
-            var up = ClientToUpstreamAsync(client, upstream, settings.Gate, activity, cts.Token);
-            var down = UpstreamToClientAsync(upstream, client, settings.Gate, activity, cts.Token);
+            var up = ClientToUpstreamAsync(client, upstream, settings.Gate, settings.Meter, activity, cts.Token);
+            var down = UpstreamToClientAsync(upstream, client, settings.Gate, settings.Meter, activity, cts.Token);
             var idle = settings.Idle == Timeout.InfiniteTimeSpan ? null : WatchIdleAsync(activity, settings.Idle, cts);
             await FinishAsync(up, down, cts);
             if (idle is not null)
@@ -90,7 +102,7 @@ public static class Pipes
 
     /// <summary>True when the visitor's side ended normally (a half-close), false when the gate refused its bytes.</summary>
     private static async Task<bool> ClientToUpstreamAsync(
-        SocketEnd client, IEnd upstream, HttpRequestGate? gate, Activity activity, CancellationToken cancellationToken)
+        SocketEnd client, IEnd upstream, HttpRequestGate? gate, IPipeMeter? meter, Activity activity, CancellationToken cancellationToken)
     {
         var buffer = new byte[BufferSize];
         var output = new ArrayBufferWriter<byte>(BufferSize);
@@ -108,6 +120,7 @@ public static class Pipes
                 if (output.WrittenCount > 0)
                 {
                     await upstream.SendAsync(output.WrittenMemory, cancellationToken);
+                    meter?.ToUpstream(output.WrittenCount);
                 }
 
                 continue;
@@ -124,6 +137,7 @@ public static class Pipes
             if (gate is null)
             {
                 await upstream.SendAsync(buffer.AsMemory(0, read), cancellationToken);
+                meter?.ToUpstream(read);
                 continue;
             }
 
@@ -136,12 +150,13 @@ public static class Pipes
             if (output.WrittenCount > 0)
             {
                 await upstream.SendAsync(output.WrittenMemory, cancellationToken);
+                meter?.ToUpstream(output.WrittenCount);
             }
         }
     }
 
     private static async Task UpstreamToClientAsync(
-        IEnd upstream, SocketEnd client, HttpRequestGate? gate, Activity activity, CancellationToken cancellationToken)
+        IEnd upstream, SocketEnd client, HttpRequestGate? gate, IPipeMeter? meter, Activity activity, CancellationToken cancellationToken)
     {
         var buffer = new byte[BufferSize];
         while (true)
@@ -156,6 +171,7 @@ public static class Pipes
             activity.Touch();
             gate?.FromUpstream(buffer.AsSpan(0, read));
             await client.SendAsync(buffer.AsMemory(0, read), cancellationToken);
+            meter?.ToClient(read);
         }
     }
 

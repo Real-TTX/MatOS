@@ -11,7 +11,8 @@ namespace MatOS.Services.Dns;
 /// The authoritative name server of the zone on UDP and TCP (5353 in the container, 53 outside). Only needed for the direct mode, when
 /// the zone is delegated to the service; without delegation nobody asks it and it costs nothing.
 /// </summary>
-public sealed class DnsService(ServicesOptions options, InstanceDirectory directory, ILogger<DnsService> logger) : BackgroundService
+public sealed class DnsService(ServicesOptions options, InstanceDirectory directory, Usage.UsageRecorder usage, ILogger<DnsService> logger)
+    : BackgroundService
 {
     /// <summary>A query is small; anything larger over TCP is not one, and the connection ends.</summary>
     private const int MaxTcpMessage = 4096;
@@ -49,7 +50,8 @@ public sealed class DnsService(ServicesOptions options, InstanceDirectory direct
         _responder = new DnsResponder(
             new DnsZone(
                 options.Zone, options.Dns.NameServerList(), options.Edge.Ipv4(), options.Edge.Ipv6(), (uint)Math.Max(1, options.Dns.Ttl)),
-            directory.FindAsync);
+            directory.FindAsync,
+            usage);
         (_udp, _tcp) = BindPair(options.ListenIp(), options.Dns.Port);
         _tcp.Listen(64);
         logger.LogInformation("DNS for {Zone} listening on {Endpoint} (UDP and TCP)", options.Zone, UdpEndPoint);

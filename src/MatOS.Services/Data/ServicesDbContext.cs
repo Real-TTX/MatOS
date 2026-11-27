@@ -21,6 +21,18 @@ public sealed class ServicesDbContext(DbContextOptions<ServicesDbContext> option
 
     public DbSet<AdminAction> AdminActions => Set<AdminAction>();
 
+    public DbSet<UsageHour> UsageHours => Set<UsageHour>();
+
+    public DbSet<UsageDay> UsageDays => Set<UsageDay>();
+
+    public DbSet<DnsHour> DnsHours => Set<DnsHour>();
+
+    public DbSet<DnsDay> DnsDays => Set<DnsDay>();
+
+    public DbSet<ApiDay> ApiDays => Set<ApiDay>();
+
+    public DbSet<TunnelSessionEntry> TunnelSessions => Set<TunnelSessionEntry>();
+
     /// <summary>
     /// Every time is UTC, but SQLite stores text without a kind and EF Core reads it back as <see cref="DateTimeKind.Unspecified"/>, which
     /// JSON then writes without an offset (a client reads it as its local time). The converter marks what is read as UTC.
@@ -97,6 +109,65 @@ public sealed class ServicesDbContext(DbContextOptions<ServicesDbContext> option
             e.HasIndex(a => new { a.InstanceName, a.CreateDate });
             e.HasQueryFilter(a => a.UpdateState != UpdateState.Deleted);
         });
+
+        // The statistics (docs/SERVICES.md "The statistics"). Their rows are never soft deleted: the retention removes them for real, so the
+        // promise of how long they are kept holds.
+        modelBuilder.Entity<UsageHour>(e =>
+        {
+            e.ToTable("UsageHour");
+            UsageColumns(e);
+            e.HasIndex(u => new { u.Hour, u.InstanceName, u.Host, u.Way }).IsUnique();
+            e.HasIndex(u => new { u.InstanceName, u.Hour });
+        });
+
+        modelBuilder.Entity<UsageDay>(e =>
+        {
+            e.ToTable("UsageDay");
+            UsageColumns(e);
+            e.HasIndex(u => new { u.Day, u.InstanceName, u.Host, u.Way }).IsUnique();
+            e.HasIndex(u => new { u.InstanceName, u.Day });
+        });
+
+        modelBuilder.Entity<DnsHour>(e =>
+        {
+            e.ToTable("DnsHour");
+            e.Property(d => d.Name).HasMaxLength(32).IsRequired();
+            e.HasIndex(d => new { d.Hour, d.Name }).IsUnique();
+            e.HasIndex(d => new { d.Name, d.Hour });
+        });
+
+        modelBuilder.Entity<DnsDay>(e =>
+        {
+            e.ToTable("DnsDay");
+            e.Property(d => d.Name).HasMaxLength(32).IsRequired();
+            e.HasIndex(d => new { d.Day, d.Name }).IsUnique();
+            e.HasIndex(d => new { d.Name, d.Day });
+        });
+
+        modelBuilder.Entity<ApiDay>(e =>
+        {
+            e.ToTable("ApiDay");
+            e.HasIndex(a => a.Day).IsUnique();
+        });
+
+        modelBuilder.Entity<TunnelSessionEntry>(e =>
+        {
+            e.ToTable("TunnelSession");
+            e.Property(t => t.InstanceName).HasMaxLength(32).IsRequired();
+            e.Property(t => t.Reason).HasConversion<string>().HasMaxLength(16);
+            e.Property(t => t.RemoteAddress).HasMaxLength(45);
+            e.Property(t => t.Version).HasMaxLength(64);
+            e.HasIndex(t => new { t.InstanceName, t.ConnectedAt });
+            e.HasIndex(t => t.DisconnectedAt);
+        });
+    }
+
+    private static void UsageColumns<T>(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<T> e)
+        where T : UsageCounts
+    {
+        e.Property(u => u.InstanceName).HasMaxLength(32).IsRequired();
+        e.Property(u => u.Host).HasMaxLength(253).IsRequired();
+        e.Property(u => u.Way).HasMaxLength(8).IsRequired();
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

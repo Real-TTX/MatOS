@@ -26,7 +26,7 @@ public sealed record RegistrationResult(RegistrationStatus Status, string Name, 
 /// </summary>
 public sealed class Registrar(
     ServicesOptions options, InstanceDirectory directory, RegistrationLock registrationLock, InstanceActivity activity, TunnelRegistry registry,
-    CustomDomains domains,
+    CustomDomains domains, Usage.UsageRecorder usage,
     TimeProvider time, ILogger<Registrar> logger)
 {
     /// <summary>Registrations count an IPv6 address as its /48 (see <see cref="ServicesOptions.RegistrationsPerIpPerDay"/>).</summary>
@@ -95,6 +95,7 @@ public sealed class Registrar(
         }
 
         await directory.RefreshAsync(name, ct);
+        usage.Registered();
         logger.LogInformation("Registered {Name} ({Kind}) from {Ip}", name, dynDnsOnly ? "DynDNS" : "MatOS", ip);
         return new RegistrationResult(RegistrationStatus.Created, name, key);
     }
@@ -108,6 +109,7 @@ public sealed class Registrar(
         activity.Forget(instance.Name);
         await registry.CloseAsync(instance.Name);
         await domains.ReloadAsync(CancellationToken.None);
+        usage.GaveBack();
         logger.LogInformation("{Name} was given back", instance.Name);
     }
 

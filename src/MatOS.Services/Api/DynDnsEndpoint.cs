@@ -16,8 +16,8 @@ public static class DynDnsEndpoint
         app.MapGet("/nic/update", UpdateAsync).RequireRateLimiting(InstanceApi.ApiPolicy);
 
     private static async Task<IResult> UpdateAsync(
-        HttpContext context, ServicesDbContext db, ServicesOptions options, InstanceDirectory directory, TimeProvider time,
-        string? hostname, string? myip, string? myipv6)
+        HttpContext context, ServicesDbContext db, ServicesOptions options, InstanceDirectory directory, Usage.UsageRecorder usage,
+        TimeProvider time, string? hostname, string? myip, string? myipv6)
     {
         if (!TryReadBasic(context.Request.Headers.Authorization.ToString(), out var user, out var key))
         {
@@ -63,6 +63,11 @@ public static class DynDnsEndpoint
         if (outcome.Changed)
         {
             await directory.RefreshAsync(instance.Name);
+        }
+
+        if (outcome.Reply.StartsWith("good", StringComparison.Ordinal) || outcome.Reply.StartsWith("nochg", StringComparison.Ordinal))
+        {
+            usage.DynDnsUpdated(instance.Name, outcome.Changed);
         }
 
         return Results.Text(outcome.Reply);

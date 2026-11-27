@@ -13,7 +13,9 @@ public sealed record DnsZone(string Zone, IReadOnlyList<string> NameServers, IPA
 /// (<c>{name}.{zone}</c> and anything below it, the wildcard): its own address in direct mode, the edge in tunnel mode. Unknown and blocked names are
 /// NXDOMAIN, other zones REFUSED (the server is authoritative only, never a resolver).
 /// </summary>
-public sealed class DnsResponder(DnsZone zone, Func<string, CancellationToken, ValueTask<InstanceAddress?>> lookup)
+/// <param name="usage">Counts the answers for the statistics: per installation, and every NXDOMAIN for the zone only.</param>
+public sealed class DnsResponder(
+    DnsZone zone, Func<string, CancellationToken, ValueTask<InstanceAddress?>> lookup, Usage.UsageRecorder? usage = null)
 {
     /// <summary>The classic UDP limit; the answers of this zone never come close, but a query for something odd must not overflow it.</summary>
     public const int UdpLimit = 512;
@@ -56,17 +58,20 @@ public sealed class DnsResponder(DnsZone zone, Func<string, CancellationToken, V
         var soa = new Record[] { new(Owner.Zone, DnsType.Soa, null) };
         IPAddress? ipv4;
         IPAddress? ipv6;
+        var counted = "";
         if (name == zone.Zone)
         {
             ipv4 = zone.EdgeIpv4;
             ipv6 = zone.EdgeIpv6;
             if (query.Type is DnsType.Soa)
             {
+                usage?.DnsAnswered("", query.Type);
                 return Build(packet.Span, query, DnsRcode.NoError, true, [new(Owner.Question, DnsType.Soa, null)], [], maxSize);
             }
 
             if (query.Type is DnsType.Ns)
             {
+                usage?.DnsAnswered("", query.Type);
                 var ns = zone.NameServers.Select(n => new Record(Owner.Question, DnsType.Ns, n)).ToArray();
                 return Build(packet.Span, query, DnsRcode.NoError, true, ns, [], maxSize);
             }
@@ -83,11 +88,15 @@ public sealed class DnsResponder(DnsZone zone, Func<string, CancellationToken, V
             var instance = instanceName is null ? null : await lookup(instanceName, cancellationToken);
             if (instance is null || instance.Blocked)
             {
+                usage?.DnsNxDomain();
                 return Build(packet.Span, query, DnsRcode.NxDomain, true, [], soa, maxSize);
             }
 
             (ipv4, ipv6) = instance.Mode == InstanceMode.Direct ? (instance.Ipv4, instance.Ipv6) : (zone.EdgeIpv4, zone.EdgeIpv6);
+            counted = instance.Name;
         }
+
+        usage?.DnsAnswered(counted, query.Type);
 
         var answers = new List<Record>();
         if (ipv4 is not null && query.Type is DnsType.A or DnsType.Any)

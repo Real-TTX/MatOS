@@ -238,7 +238,7 @@ public static class DynDnsPages
     }
 
     private static async Task<IResult> UpdateAsync(HttpContext context, ServicesOptions options, ServicesDbContext db,
-        InstanceDirectory directory, TimeProvider time)
+        InstanceDirectory directory, Usage.UsageRecorder usage, TimeProvider time)
     {
         var (instance, failure) = await SignedInAsync(context, options, db);
         if (failure is not null)
@@ -266,6 +266,7 @@ public static class DynDnsPages
 
         await db.SaveChangesAsync(context.RequestAborted);
         await directory.RefreshAsync(instance.Name);
+        usage.DynDnsUpdated(instance.Name, outcome.Changed);
         var text = outcome.Changed ? $"Done: the name points to {ip} now." : $"Nothing to change: the name points to {ip} already.";
         return Manage(context, options, instance, Key(context), text, false);
     }
