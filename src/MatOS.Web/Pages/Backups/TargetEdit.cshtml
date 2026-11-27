@@ -1,0 +1,164 @@
+@page
+@model MatOS.Web.Pages.Backups.TargetEditModel
+@using MatOS.Core.Backups
+@{
+    ViewData["Title"] = Model.IsEdit ? "Edit target" : "New target";
+    ViewData["PageSub"] = "A place on another machine where backups are kept.";
+    ViewData["Crumbs"] = Crumbs.Of(("Backups", "/Backups"), ("Targets", "/Backups/Targets"), (Model.IsEdit ? Model.Input.Name : "New target", null));
+    ViewData["Width"] = "narrow";
+    var kind = Model.Input.Kind;
+    var passwordHint = Model.Stored is { HasPassword: true } ? "A password is stored. Leave the field empty to keep it." : null;
+    var keyHint = Model.Stored is { HasPrivateKey: true } ? "A key is stored. Leave the field empty to keep it." : "Instead of a password or as well: OpenSSH or PEM, without a passphrase.";
+}
+
+@if (Model.TestMessage is not null)
+{
+    <div class="mat-alert @(Model.TestOk ? "mat-alert--success" : "mat-alert--danger")" role="status" data-target-test>
+        <icon name="@(Model.TestOk ? "check-circle" : "x-circle")" />
+        <div class="mat-alert__body">@(Model.TestOk ? "The connection works: " : "The connection does not work: ")@Model.TestMessage</div>
+    </div>
+}
+
+<form method="post" asp-page="/Backups/TargetEdit" class="mat-form" novalidate>
+    <input type="hidden" asp-for="Input.Id" />
+    <partial name="_ValidationSummary" />
+
+    <div class="mat-card">
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                <mat-field label="Name" asp-for="Input.Name" required="true" full="true">
+                    <input asp-for="Input.Name" class="mat-input" required maxlength="200" placeholder="e.g. NAS in the cellar" data-msg-required="Please enter a name." />
+                </mat-field>
+
+                @if (Model.IsEdit)
+                {
+                    <input type="hidden" asp-for="Input.Kind" />
+                    <div class="mat-field mat-field--full">
+                        <span class="mat-label">Kind</span>
+                        <span>@BackupTarget.LabelOf(kind)</span>
+                        <span class="mat-hint">The kind stays: the backups there were written that way. For another kind make a new target.</span>
+                    </div>
+                }
+                else
+                {
+                    <mat-field label="Kind" asp-for="Input.Kind" full="true">
+                        <select asp-for="Input.Kind" class="mat-select">
+                            <option value="Sftp">SFTP (an SSH server, a NAS, a Linux machine)</option>
+                            <option value="WebDav">WebDAV (Nextcloud, ownCloud, a NAS)</option>
+                            <option value="Smb">Network share (SMB: a NAS, Windows)</option>
+                        </select>
+                    </mat-field>
+                }
+            </div>
+
+            @* SFTP *@
+            @if (!Model.IsEdit || kind == BackupTargetKind.Sftp)
+            {
+            <div class="mat-form__grid" data-show-if="#Input_Kind" data-show-value="Sftp" hidden="@(kind != BackupTargetKind.Sftp)">
+                <mat-field label="Server" asp-for="Input.Host" required="true">
+                    <input asp-for="Input.Host" class="mat-input" autocomplete="off" spellcheck="false" placeholder="nas.local or 192.168.1.20" />
+                </mat-field>
+                <mat-field label="Port" asp-for="Input.Port" hint="22 when empty.">
+                    <input asp-for="Input.Port" type="number" min="1" max="65535" class="mat-input" placeholder="22" data-msg-range="The port is a number from 1 to 65535." />
+                </mat-field>
+                <mat-field label="Folder" asp-for="Input.Folder" hint="Made when missing. Empty: the user's home folder." full="true">
+                    <input asp-for="Input.Folder" class="mat-input mat-mono" autocomplete="off" spellcheck="false" placeholder="/backups/matos" />
+                </mat-field>
+                <mat-field label="User" asp-for="Input.Username" required="true">
+                    <input asp-for="Input.Username" class="mat-input" autocomplete="off" spellcheck="false" />
+                </mat-field>
+                <mat-field label="Password" asp-for="Input.Password" hint="@(passwordHint ?? "Or a private key below.")">
+                    <input asp-for="Input.Password" type="password" class="mat-input" autocomplete="new-password" placeholder="@(Model.Stored is { HasPassword: true } ? "Stored" : "")" />
+                </mat-field>
+                <mat-field label="Private key" asp-for="Input.PrivateKey" hint="@keyHint" full="true">
+                    <textarea asp-for="Input.PrivateKey" class="mat-textarea mat-mono" rows="4" spellcheck="false" autocomplete="off" placeholder="@(Model.Stored is { HasPrivateKey: true } ? "Stored" : "-----BEGIN OPENSSH PRIVATE KEY-----")"></textarea>
+                </mat-field>
+                @if (Model.Stored is { Kind: BackupTargetKind.Sftp } stored)
+                {
+                    <div class="mat-field mat-field--full">
+                        <span class="mat-label">Key of the server</span>
+                        <span class="mat-mono mat-text-break">@(stored.HostKey ?? "Not known yet: it is remembered on the first connection.")</span>
+                        @if (stored.HostKey is not null)
+                        {
+                            <label class="mat-check">
+                                <input asp-for="Input.ResetHostKey" type="checkbox" />
+                                <span class="mat-check__text">Forget it (only when the server was set up again): the next connection remembers the new one</span>
+                            </label>
+                        }
+                        else
+                        {
+                            <span class="mat-hint">Later connections are refused when the server shows another key, as a forged server would.</span>
+                        }
+                    </div>
+                }
+            </div>
+            }
+
+            @* WebDAV *@
+            @if (!Model.IsEdit || kind == BackupTargetKind.WebDav)
+            {
+            <div class="mat-form__grid" data-show-if="#Input_Kind" data-show-value="WebDav" hidden="@(kind != BackupTargetKind.WebDav)">
+                <mat-field label="Folder address" asp-for="Input.Url" required="true" hint="Made when missing. Nextcloud: https://host/remote.php/dav/files/USER/Backups" full="true">
+                    <input asp-for="Input.Url" type="url" class="mat-input mat-mono" autocomplete="off" spellcheck="false" placeholder="https://cloud.example.com/remote.php/dav/files/me/Backups" />
+                </mat-field>
+                <mat-field label="User" asp-for="Input.Username" for-id="Input_WebDavUsername">
+                    <input asp-for="Input.Username" id="Input_WebDavUsername" class="mat-input" autocomplete="off" spellcheck="false" />
+                </mat-field>
+                <mat-field label="Password" asp-for="Input.Password" hint="@(passwordHint ?? "Nextcloud: better an app password (Settings, Security).")" for-id="Input_WebDavPassword">
+                    <input asp-for="Input.Password" id="Input_WebDavPassword" type="password" class="mat-input" autocomplete="new-password" placeholder="@(Model.Stored is { HasPassword: true } ? "Stored" : "")" />
+                </mat-field>
+            </div>
+            }
+
+            @* SMB *@
+            @if (!Model.IsEdit || kind == BackupTargetKind.Smb)
+            {
+            <div class="mat-form__grid" data-show-if="#Input_Kind" data-show-value="Smb" hidden="@(kind != BackupTargetKind.Smb)">
+                <mat-field label="Server" asp-for="Input.Host" required="true" for-id="Input_SmbHost">
+                    <input asp-for="Input.Host" id="Input_SmbHost" class="mat-input" autocomplete="off" spellcheck="false" placeholder="nas.local or 192.168.1.20" />
+                </mat-field>
+                <mat-field label="Share" asp-for="Input.Share" required="true">
+                    <input asp-for="Input.Share" class="mat-input" autocomplete="off" spellcheck="false" placeholder="backups" />
+                </mat-field>
+                <mat-field label="Folder in the share" asp-for="Input.Folder" hint="Optional." full="true" for-id="Input_SmbFolder">
+                    <input asp-for="Input.Folder" id="Input_SmbFolder" class="mat-input mat-mono" autocomplete="off" spellcheck="false" placeholder="matos" />
+                </mat-field>
+                <mat-field label="User" asp-for="Input.Username" for-id="Input_SmbUsername">
+                    <input asp-for="Input.Username" id="Input_SmbUsername" class="mat-input" autocomplete="off" spellcheck="false" />
+                </mat-field>
+                <mat-field label="Password" asp-for="Input.Password" hint="@passwordHint" for-id="Input_SmbPassword">
+                    <input asp-for="Input.Password" id="Input_SmbPassword" type="password" class="mat-input" autocomplete="new-password" placeholder="@(Model.Stored is { HasPassword: true } ? "Stored" : "")" />
+                </mat-field>
+                <mat-field label="Domain" asp-for="Input.Domain" hint="Optional, for a Windows domain.">
+                    <input asp-for="Input.Domain" class="mat-input" autocomplete="off" spellcheck="false" />
+                </mat-field>
+            </div>
+            }
+
+            <div class="mat-field mat-field--full">
+                <label class="mat-check">
+                    <input asp-for="Input.IsDefault" type="checkbox" />
+                    <span class="mat-check__text">Default target: new backups and schedules go here unless another is chosen</span>
+                </label>
+            </div>
+
+            @if (Model.Stored is { } used && (used.BackupCount > 0 || used.Schedules.Count > 0))
+            {
+                <p class="mat-hint">
+                    Keeps @used.BackupCount backup@(used.BackupCount == 1 ? "" : "s")@if (used.Schedules.Count > 0) {<text>; used by the schedule@(used.Schedules.Count == 1 ? "" : "s") @string.Join(", ", used.Schedules)</text>}.
+                </p>
+            }
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+        <button type="submit" asp-page-handler="Test" class="mat-btn mat-btn--secondary"><icon name="plug" /><span>Test connection</span></button>
+        <a href="/Backups/Targets" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        @if (Model.IsEdit)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" asp-page-handler="Delete" formnovalidate class="mat-btn mat-btn--danger" data-confirm="Delete the target “@Model.Input.Name”? The backups kept there are not deleted, but MatOS no longer lists them." data-confirm-ok="Delete" data-confirm-danger><icon name="trash" /><span>Delete</span></button>
+        }
+    </div>
+</form>

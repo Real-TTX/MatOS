@@ -1,0 +1,115 @@
+@page
+@model MatOS.Web.Pages.Backups.TargetsModel
+@{
+    ViewData["Title"] = "Backups";
+    ViewData["PageSub"] = "Where backups are kept besides this machine: an SFTP folder, a WebDAV folder or a network share.";
+    ViewData["Crumbs"] = Crumbs.Of(("Backups", "/Backups"), ("Targets", null));
+}
+
+<tab-bar model="Model.Tabs" label="Backups" />
+
+@if (Model.Unavailable)
+{
+    <div class="mat-card">
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="hard-drive" /></span>
+            <div class="mat-empty__title">Targets cannot be used right now</div>
+            <p>The backup engine of MatOS does not answer or is not up to date yet. Backups are kept on this machine meanwhile.</p>
+            <a class="mat-btn mat-btn--secondary" href="/Backups"><icon name="back" /><span>Back to the backups</span></a>
+        </div>
+    </div>
+}
+else if (Model.List is { } list)
+{
+    @if (Model.NoAppUsesThem)
+    {
+        <div class="mat-alert mat-alert--info">
+            <icon name="info" />
+            <div class="mat-alert__body">The apps installed so far keep their backups on this machine. A target is used by the apps installed from now on.</div>
+        </div>
+    }
+
+    <div class="mat-list">
+        <partial name="_Toolbar" model="list.Toolbar" />
+
+        @if (list.Items.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon"><icon name="hard-drive" /></span>
+                @if (list.Filtered)
+                {
+                    <div class="mat-empty__title">Nothing matches</div>
+                    <p>Change the search or the filter.</p>
+                    <a class="mat-btn mat-btn--secondary" href="/Backups/Targets">Reset the tools</a>
+                }
+                else
+                {
+                    <div class="mat-empty__title">No targets yet</div>
+                    <p>Backups are kept on this machine. Add a target to keep them on another one too: if this machine breaks, your data is still there.</p>
+                    <a class="mat-btn mat-btn--primary" href="/Backups/TargetEdit"><icon name="plus" /><span>New target</span></a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Backup targets</caption>
+                    <thead><tr><th scope="col">Target</th><th scope="col">Kind</th><th scope="col" class="mat-hide-sm">Address</th><th scope="col" class="mat-hide-sm mat-num">Backups</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var target in list.Items)
+                        {
+                            <tr>
+                                <td data-label="Target">
+                                    <div class="mat-table__name">
+                                        <span>
+                                            @if (target.Ours)
+                                            {
+                                                <a asp-page="/Backups/TargetEdit" asp-route-id="@target.Id">@target.Name</a>
+                                            }
+                                            else
+                                            {
+                                                @target.Name
+                                            }
+                                            @if (target.IsDefault)
+                                            {
+                                                <span class="mat-pill mat-pill--ok">Default</span>
+                                            }
+                                            @if (!target.Ours)
+                                            {
+                                                <small>Set up outside MatOS: it can be chosen, not changed here.</small>
+                                            }
+                                        </span>
+                                    </div>
+                                </td>
+                                <td data-label="Kind">@target.KindLabel</td>
+                                <td data-label="Address" class="mat-hide-sm mat-mono mat-text-break">@target.Address</td>
+                                <td data-label="Backups" class="mat-hide-sm mat-num">@target.BackupCount</td>
+                                <td class="mat-table__cell-actions">
+                                    <div class="mat-table__actions">
+                                        <form method="post" asp-page-handler="Test" asp-route-id="@target.Id">
+                                            <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Test the connection to @target.Name" data-tip="Test the connection"><icon name="plug" /></button>
+                                        </form>
+                                        @if (target.Ours)
+                                        {
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" asp-page="/Backups/TargetEdit" asp-route-id="@target.Id" aria-label="Edit @target.Name" data-tip="Edit"><icon name="edit" /></a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <partial name="_Pager" model="list.Pager" />
+
+        @if (list.Items.Count > 0 || list.Filtered)
+        {
+            <div class="mat-actions">
+                <a href="/Backups/TargetEdit" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New target</span></a>
+            </div>
+        }
+    </div>
+}

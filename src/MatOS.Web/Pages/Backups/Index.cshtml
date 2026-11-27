@@ -123,7 +123,7 @@ else if (Model.History is { } history)
                                     </div>
                                 </td>
                                 <td data-label="Created" class="mat-nowrap"><span class="mv-when"><span>@Format.DateTimeLocal(backup.CreatedUtc)</span>@if (Format.AgoBesideDate(backup.CreatedUtc) is { } ago) {<small>@ago</small>}</span></td>
-                                <td data-label="Kind" class="mat-hide-sm">@backup.Kind<small class="mat-muted mat-d-block">kept by @IndexModel.EngineLabel(backup.Engine)</small></td>
+                                <td data-label="Kind" class="mat-hide-sm">@backup.Kind<small class="mat-muted mat-d-block">@(backup.TargetName is { } kept ? $"kept at {kept}" : $"kept by {IndexModel.EngineLabel(backup.Engine)}")</small></td>
                                 <td data-label="Size" class="mat-hide-sm mat-num">@Format.Size(backup.SizeBytes)<small class="mat-muted mat-d-block">@backup.VolumeCount data folder@(backup.VolumeCount == 1 ? "" : "s")</small></td>
                                 <td data-label="Status">
                                     <span class="mat-pill @(backup.Status == BackupStatus.Succeeded ? "mat-pill--ok" : backup.Status == BackupStatus.Failed ? "mat-pill--error" : "mat-pill--busy")">@backup.Status</span>

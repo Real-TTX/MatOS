@@ -50,7 +50,7 @@ public class BackupHubTests
 
         public Task<BackupItem?> GetAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, Action<string> log, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, BackupDestination destination, Action<string> log, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task RestoreAsync(string id, bool backupCurrentFirst, Action<string> log, CancellationToken ct = default) => throw new NotSupportedException();
 

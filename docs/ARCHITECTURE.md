@@ -333,8 +333,26 @@ in MatDock, a schedule for an app runs where the app runs.
 - **Consistent by default.** Containers are stopped while the volumes are copied and started again afterwards, whatever happens. A live copy is
   possible and marked as such.
 - **Restore** first backs up the current state (switchable) and re-creates the app even when it was uninstalled.
-- **Download** as a `.tar` to copy a backup off the host. Remote targets (SMB, NAS) are MatDock's backup targets.
+- **Download** as a `.tar` to copy a backup off the host.
 - Limits: backups contain secrets (the `.env`), so protect the location like the volumes; no encryption.
+
+### Backup targets
+
+Besides this machine a backup can be kept on another one: an **SFTP** folder (an SSH server, a NAS), a **WebDAV** folder (Nextcloud, ownCloud) or a
+**network share** (SMB). The targets are **MatDock's** (`/api/v1/backup-targets`, docs/ENGINES.md): MatDock writes the bundle there while it is made, lists
+it with its target and reads it back for a restore, so a target needs nothing in MatOS but its settings. MatOS shows them in its own words under
+*Backups, Targets* (`Pages/Backups/Targets`, `TargetEdit`; `Core/Backups/BackupTargets.cs`) and never names the engine there:
+
+- **Create, change, test, delete.** A new target is tested at once (a file is written and deleted); *Test connection* tests the form as it is. A
+  password or key is never sent back to the page (`hasSftpPassword` …): the field says *Stored* and a blank field keeps it. The kind cannot change.
+- **SFTP pins the server's key** on the first connection (as MatDock's SSH environments do) and refuses another one later; *Forget it* is for a
+  server that was set up again. Password or private key (OpenSSH/PEM, no passphrase), both encrypted in MatDock.
+- **Where a backup goes**: *New backup* and a schedule choose *This machine* or a target; the **default target** is preselected and also takes the
+  backups MatOS starts itself (before an update, before an uninstall: `BackupDestination.Default`). Retention is the schedule's.
+- **Only MatOS's own targets** (`managedBy: matos`) are changed or deleted; one set up in MatDock is listed and can be chosen. MatDock refuses to
+  delete a target that still keeps backups or that a schedule writes to, and MatOS shows its reason.
+- The apps MatOS runs itself (the engines) keep their backups on this machine: MatOS's own runner has no targets.
+- A MatDock without the API (older than apiVersion 5) makes the page say that targets cannot be used now; backups stay on this machine.
 
 ## Where are the compose files?
 
@@ -353,6 +371,27 @@ A user file with the same `id` replaces the built-in entry. The three engines ca
 
 All apps and engines share the Docker network `matos` with MatOS itself (it attaches itself on start), so they reach each other by container name
 (`matos-<app>-<service>`). If Docker's address pools are used up, `MatOS__NetworkSubnet` gives the network an explicit subnet.
+
+## The Task Manager
+
+`/Tasks` is a task manager like that of a desktop system, inside MatOS's window. It only **reads** from MatDock (the owner's rule: MatOS asks the engine):
+
+- **The host** in five cards: processor, memory, network, disk activity (each with a small chart) and storage (a meter); under them the uptime, how many
+  containers run and the version of Docker. MatDock's `GET /api/v1/host` is a live reading (at most three seconds old, with the cores, the sizes in bytes and the
+  uptime); an older MatDock answers 404 and the last reading of its environment (percent only, up to five minutes old) stands in.
+- **What runs, by app** (`Core/Tasks/TaskBoard`): an app of MatOS is one group of its containers (its compose project); MatOS itself (its container and the rest
+  of its project) and the engines are *System*; the rest of the host is *Something else on this host*, grouped by compose project or as a lone container. A group
+  is a group of the toolkit's table (LIST-16), closed at first, with the sums of its containers; the list sorts by processor, memory, network, disk or name.
+- **Rates and charts** come from `TaskMonitor` (a singleton, memory only): MatDock says the network and disk I/O of a container as totals since it started, so a
+  rate is the step between two readings; the charts keep the last 60 readings. It only learns while somebody looks, which is all it is for. When nothing moved at
+  all, the reading was MatDock's shared `docker stats` again and the last rates stay.
+- **Live:** `js/tasks.js` asks `/Tasks?handler=Live` (the same query as the list) every three seconds and puts the numbers in place; the server writes the
+  numbers (`Support/TaskView`), so the page and its JSON say the same. When the rows themselves change (`data-signature`: which there are, running or not, what
+  can be done) it fetches the list again. It waits while the tab is hidden or a question is open.
+- **Actions** (administrators only, the folder is AdminOnly; each asks first): an app restarts, stops and starts as an app (its lifecycle job, as on its page), a
+  container on its own (`AppJobs.ContainerAction`, MatDock does it). Only what MatOS runs: never MatOS itself or MatDock, an engine only restarts, and nothing
+  else on the host is touched (its log can be read). Without MatDock nothing can be done and only MatOS's own containers are listed.
+- The log of a container (`/Tasks/Log`) opens in a window of its own and follows by itself.
 
 ## How a long task runs
 

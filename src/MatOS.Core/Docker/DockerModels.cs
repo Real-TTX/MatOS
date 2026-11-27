@@ -17,9 +17,18 @@ public sealed record ContainerInfo(
 
 /// <summary>
 /// A container as the Task Manager lists it: any container of the host, with what it uses right now. <see cref="Own"/> is true for the containers of
-/// this MatOS (its stacks); the usage is <c>null</c> while nobody measured it (a stopped container, or MatDock did not answer).
+/// this MatOS (its stacks); the usage is <c>null</c> while nobody measured it (a stopped container, or MatDock did not answer). <see cref="CpuPercent"/>
+/// is a share of the whole host; <see cref="Io"/> holds the network and disk totals since the container started (an older MatDock does not say them).
 /// </summary>
-public sealed record ContainerTask(ContainerInfo Container, bool Own, double? CpuPercent = null, double? MemoryPercent = null, long? MemoryBytes = null);
+public sealed record ContainerTask(ContainerInfo Container, bool Own, double? CpuPercent = null, double? MemoryPercent = null, long? MemoryBytes = null, ContainerIo? Io = null);
+
+/// <summary>What a container received and sent over the network and read and wrote on disk since it started (bytes; <c>docker stats</c> through MatDock).</summary>
+public sealed record ContainerIo(long? NetRx, long? NetTx, long? BlockRead, long? BlockWrite)
+{
+    public long? Net => NetRx is null && NetTx is null ? null : (NetRx ?? 0) + (NetTx ?? 0);
+
+    public long? Disk => BlockRead is null && BlockWrite is null ? null : (BlockRead ?? 0) + (BlockWrite ?? 0);
+}
 
 /// <summary>How an app looks right now (derived from its containers).</summary>
 public enum RuntimeState

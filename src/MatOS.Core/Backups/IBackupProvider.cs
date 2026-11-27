@@ -16,7 +16,8 @@ public sealed record BackupItem(
     int VolumeCount,
     bool Consistent,
     string? Note,
-    string? Error);
+    string? Error,
+    string? TargetName = null);
 
 /// <summary>A recurring backup, wherever it runs. <see cref="Id"/> is <c>&lt;engine&gt;:&lt;id in that engine&gt;</c>.</summary>
 public sealed record ScheduleItem(
@@ -30,7 +31,8 @@ public sealed record ScheduleItem(
     int Retention,
     bool StopContainers,
     bool Enabled,
-    string? LastStatus);
+    string? LastStatus,
+    long? TargetId = null);
 
 /// <summary>What the schedule form saves. <see cref="Id"/> is empty for a new schedule.</summary>
 public sealed class ScheduleInput
@@ -53,6 +55,23 @@ public sealed class ScheduleInput
     public bool StopContainers { get; set; } = true;
 
     public bool Enabled { get; set; } = true;
+
+    /// <summary>Where the backups are kept (a backup target's id); null = this machine.</summary>
+    public long? TargetId { get; set; }
+}
+
+/// <summary>Where one backup goes: <see cref="Default"/> (the default target, else this machine), <see cref="ThisMachine"/>, or a target's id.</summary>
+public readonly record struct BackupDestination(long? TargetId, bool UseDefault)
+{
+    public static BackupDestination Default => new(null, true);
+
+    public static BackupDestination ThisMachine => new(null, false);
+
+    public static BackupDestination Target(long id) => new(id, false);
+
+    /// <summary>The value of a form's choice: "" = the default, "0" = this machine, else a target's id.</summary>
+    public static BackupDestination Parse(string? value)
+        => string.IsNullOrEmpty(value) ? Default : long.TryParse(value, out var id) && id > 0 ? Target(id) : ThisMachine;
 }
 
 /// <summary>A backup as a download: the file name and a writer that streams it.</summary>
@@ -74,7 +93,8 @@ public interface IBackupProvider
 
     Task<BackupItem?> GetAsync(string id, CancellationToken ct = default);
 
-    Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, Action<string> log, CancellationToken ct = default);
+    /// <summary>Makes a backup; <paramref name="destination"/> is where it is kept (MatOS's own backups always stay on this machine).</summary>
+    Task BackupAsync(InstalledApp app, BackupKind kind, bool stopContainers, string? note, BackupDestination destination, Action<string> log, CancellationToken ct = default);
 
     Task RestoreAsync(string id, bool backupCurrentFirst, Action<string> log, CancellationToken ct = default);
 

@@ -24,12 +24,21 @@ public static class AppJobs
     public static Func<JobContext, Task> Lifecycle(long appId, string command)
         => ctx => ctx.Services.GetRequiredService<AppService>().RunLifecycleAsync(appId, command, ctx.Log, ctx.Cancellation);
 
-    public static Func<JobContext, Task> Backup(long appId, BackupKind kind, bool stopContainers, string? note)
+    /// <summary>Starts, stops or restarts one container of an app (the Task Manager): MatDock does it, MatOS only asks.</summary>
+    public static Func<JobContext, Task> ContainerAction(string container, string verb)
+        => async ctx =>
+        {
+            ctx.Log($"Asking MatDock to {verb} {container} ...");
+            await ctx.Services.GetRequiredService<MatOS.Core.Engines.MatDockClient>().ContainerActionAsync(container, verb, ctx.Cancellation);
+            ctx.Log("Done.");
+        };
+
+    public static Func<JobContext, Task> Backup(long appId, BackupKind kind, bool stopContainers, string? note, BackupDestination? destination = null)
         => async ctx =>
         {
             var app = await ctx.Services.GetRequiredService<AppService>().GetAsync(appId, ctx.Cancellation)
                 ?? throw new InvalidOperationException("The app does not exist (any more).");
-            await ctx.Services.GetRequiredService<BackupHub>().RunAsync(app, kind, stopContainers, note, ctx.Log, ctx.Cancellation);
+            await ctx.Services.GetRequiredService<BackupHub>().RunAsync(app, kind, stopContainers, note, ctx.Log, ctx.Cancellation, destination);
         };
 
     /// <summary>
