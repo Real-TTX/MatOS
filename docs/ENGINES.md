@@ -72,6 +72,20 @@ hosts exist and Caddy uses the HTTP challenge (ports 80 and 443 must reach the h
 
 **Routes of the engines themselves.** Matcad's own UI (role `proxy`) is not published through itself; MatDock and Matddns are.
 
+**Response headers (0.13.0, capability `responseHeaders` in `GET /status`).** `POST /routes` takes `responseHeaders: [{name, value}]` on a route: a value is
+set on every answer and replaces the upstream's header as a whole (Caddy's deferred `set`), an empty value removes the header; the field missing keeps what the
+route has, `[]` clears it. `GET routes/manual` shows them. MatOS uses it for **every app in the window** (docs/ARCHITECTURE.md): on the `web.route` binding of an
+app whose compose file does not name `MAT_FRAME_ANCESTORS` and that sends no content security policy of its own, it writes the route back unchanged
+(`MatcadClient.ResponseHeadersBody`: the fields of `routes/manual`, `managedBy: matos`; Matcad keeps the binding, the access fields and the options) with
+
+```json
+"responseHeaders": [{"name": "X-Frame-Options", "value": ""},
+                    {"name": "Content-Security-Policy", "value": "frame-ancestors 'self' http://localhost:8030 http://127.0.0.1:8030 https://matos.example.com"}]
+```
+
+plus whatever else an administrator set there. Not on an older Matcad (it would ignore the field), not on a route with *Allow embedding*, not when the route has
+a frame header of an administrator.
+
 ## Matddns (`ghcr.io/real-ttx/matddns`)
 
 Matddns has no management API today (only the push endpoints `/api/update`, `/nic/update`, the monitoring `/api/health`, `/api/state`, and the

@@ -32,6 +32,7 @@ public sealed class BindingBroker
     private readonly CatalogService _catalog;
     private readonly SystemConfigService _config;
     private readonly FrameLink _frames;
+    private readonly RouteFrameHeaders _frameHeaders;
 
     public BindingBroker(
         MatOSDbContext db,
@@ -41,7 +42,8 @@ public sealed class BindingBroker
         ISecretProtector protector,
         CatalogService catalog,
         SystemConfigService config,
-        FrameLink frames)
+        FrameLink frames,
+        RouteFrameHeaders frameHeaders)
     {
         _db = db;
         _platform = platform;
@@ -51,6 +53,7 @@ public sealed class BindingBroker
         _catalog = catalog;
         _config = config;
         _frames = frames;
+        _frameHeaders = frameHeaders;
     }
 
     /// <summary>
@@ -456,6 +459,9 @@ public sealed class BindingBroker
         {
             // The route is the public address of the app: its page, the DNS record and the sign-in follow it.
             await SetPublicUrlAsync(consumer.Id, variables.GetValueOrDefault(PublicUrlVariable), ct);
+
+            // Every app in the window: the route of an app that does not take MAT_FRAME_ANCESTORS gets the frame headers (kept in step with every bind).
+            await _frameHeaders.ApplyAsync(consumer, provider, log, ct);
         }
 
         if (sameProvider && Same(stored, variables))

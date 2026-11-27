@@ -29,6 +29,7 @@ public class DetailsModel : PageModel
     private readonly ISecretProtector _protector;
     private readonly AppUrls _urls;
     private readonly SystemConfigService _config;
+    private readonly FrameProbe _frames;
 
     public DetailsModel(
         AppService apps,
@@ -41,7 +42,8 @@ public class DetailsModel : PageModel
         JobService jobs,
         ISecretProtector protector,
         AppUrls urls,
-        SystemConfigService config)
+        SystemConfigService config,
+        FrameProbe frames)
     {
         _apps = apps;
         _catalog = catalog;
@@ -54,6 +56,7 @@ public class DetailsModel : PageModel
         _protector = protector;
         _urls = urls;
         _config = config;
+        _frames = frames;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -72,6 +75,9 @@ public class DetailsModel : PageModel
     public RuntimeInfo Runtime { get; private set; } = new(RuntimeState.Missing, 0, 0, string.Empty);
     public List<ContainerInfo> Containers { get; private set; } = new();
     public string? OpenUrl { get; private set; }
+
+    /// <summary>Whether the window of the home screen may show the app (its frame headers, through the route), for the page of MatOS that asks; null: not asked.</summary>
+    public FrameCheck? Frame { get; private set; }
     public string InternalAddress { get; private set; } = string.Empty;
     public Job? ActiveJob { get; private set; }
 
@@ -234,6 +240,7 @@ public class DetailsModel : PageModel
         Runtime = DockerService.Summarize(Containers);
         Status = AppStatus.Of(app, Runtime);
         OpenUrl = await _urls.OpenUrlAsync(app, Request, ct);
+        Frame = OpenUrl is not null && app.Lifecycle == AppLifecycle.Installed ? await _frames.CheckAsync(app, OpenUrl, $"{Request.Scheme}://{Request.Host}", ct) : null;
         InternalAddress = app.UiService is null ? string.Empty : $"{_names.UiHost(app)}:{app.UiPort}";
         ActiveJob = await _jobs.GetActiveAsync(app.Id, ct);
         if (User.IsAdmin())

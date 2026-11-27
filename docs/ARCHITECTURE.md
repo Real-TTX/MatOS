@@ -345,6 +345,21 @@ The home screen is a **small operating system** (the owner's choice of 2026-11-0
   it deploys an app whose compose file names it (`Core/Integrations/FrameLink.cs`: the route behind the proxy, `localhost`, `127.0.0.1` and the configured address with the port
   MatOS is published on, the addresses people signed in from). `Support/FrameProbe.cs` asks the app first (`FramePolicy`: `frame-ancestors` wins over
   `X-Frame-Options`, judged for the address of the page) and offers a new tab otherwise. Older engine images refuse frames: they show it after an update.
+- **Every app in the window** (the owner's question of 2026-11-27: every app runs through Matcad, so Matcad can set the frame header). An app whose compose file does
+  **not** name `MAT_FRAME_ANCESTORS` (MatMail, Matmon, a third-party app, ...; `FrameHeaders.TakesOrigins`) gets response headers on its Matcad route, host route or
+  port route alike (`Core/Integrations/RouteFrameHeaders.cs`, decision in `FrameHeaders.cs`): `X-Frame-Options` removed and
+  `Content-Security-Policy: frame-ancestors 'self' <the origins of FrameLink>`, so MatOS (and the app itself) may frame it and no other site. **Only when the app
+  sends no content security policy of its own**, asked at its address inside Docker (the sign-in page a redirect leads to counts). The decision: Matcad sets a
+  header of the route as a whole (Caddy's deferred `set`) and cannot add a directive to the app's policy, so writing ours would drop the app's other directives
+  (scripts, styles, ...), and removing only `X-Frame-Options` would let every site frame it. An app with its own policy therefore keeps both untouched and opens
+  in a new tab when that policy refuses the frame; its page (*About this app*, "Window") says so with the reason. (Accepted: an app that sends a policy only on
+  some pages, not on its start or sign-in page, loses it on those pages.) Written with every binding of `web.route` the broker makes or renews (install, update,
+  redeploy, *Connect the engines*), only on a Matcad with the capability `responseHeaders` (0.13.0), only on routes marked `managedBy: matos`; headers an
+  administrator set on the route stay, and a frame header of their own (an `X-Frame-Options` with a value, a policy that is more than `frame-ancestors`) wins:
+  MatOS leaves the route alone. They come off when the app takes `MAT_FRAME_ANCESTORS` or sends a policy, or when Matcad's own *Allow embedding* is on, and go
+  with the route when the app is removed. While the app does not answer (three tries) the route keeps what it has until the next connect. `FrameProbe` judges
+  the answer the browser gets: the app's own headers with those of the route applied (`FrameHeaders.Through`, also *Allow embedding*), because the route's
+  public address cannot be reached from inside Docker.
 - **Widgets** are cards in the grid of the apps (two cells, or two by two): today (the time, the greeting: the page's h1), the engines, apps running, the last backup
   (amber after seven days or with none), the activity, Docker. The search above the dock narrows the apps (key `/`, Enter opens the first); the widgets step aside.
 - **The wallpaper** is a picture of the account (`User.Wallpaper`, the claim `matos:wallpaper`, `Core/Users/Wallpapers.cs`, the tab *Home screen* of the account).

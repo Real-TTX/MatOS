@@ -10,6 +10,9 @@ public sealed record MatcadRoute(long Id, string Host, string? Upstream, bool Wi
 /// <summary>A DNS provider of Matcad (the account its certificates are issued with).</summary>
 public sealed record MatcadProvider(long Id, string Name, string Type, string? ManagedBy);
 
+/// <summary>A response header of a route of Matcad: <see cref="Value"/> is set on every answer, an empty value removes the header.</summary>
+public sealed record RouteHeader(string Name, string Value);
+
 /// <summary>
 /// Client of the Matcad REST API. Matcad owns the routes, the certificates and the DNS providers; everything MatOS writes
 /// there carries <c>managedBy: matos</c> so it shows in Matcad's own UI as coming from MatOS.
@@ -187,6 +190,52 @@ public sealed class MatcadClient : EngineClient
         var redirect = string.IsNullOrEmpty(route["upstream"]?.GetValue<string>()) && !string.IsNullOrEmpty(route["fallbackUrl"]?.GetValue<string>());
         body["target"] = redirect ? "redirect" : "proxy";
         body["managedBy"] = Owner.Name;
+        return body;
+    }
+
+    // ------------------------------------------------------------------ response headers (Matcad 0.13.0, capability "responseHeaders")
+
+    /// <summary>The capability of <c>GET /status</c> that says Matcad takes <c>responseHeaders</c> on a route.</summary>
+    public const string ResponseHeadersCapability = "responseHeaders";
+
+    /// <summary>True when the installed Matcad names <paramref name="capability"/> in <c>GET /status</c> (an older one ignores fields it does not know).</summary>
+    public async Task<bool> HasCapabilityAsync(string capability, CancellationToken ct = default)
+    {
+        try
+        {
+            return (await GetAsync("status", ct))?["capabilities"] is JsonArray capabilities
+                && capabilities.Any(c => c is JsonValue value && value.TryGetValue<string>(out var name) && name == capability);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The route that is the <c>web.route</c> binding of <paramref name="consumer"/> (as <c>GET routes/manual</c> shows it), or <c>null</c>.</summary>
+    public async Task<JsonObject?> RouteOfBindingAsync(string consumer, CancellationToken ct = default)
+        => (await GetAsync("routes/manual", ct) as JsonArray ?? []).OfType<JsonObject>()
+            .FirstOrDefault(r => string.Equals(r["binding"]?.GetValue<string>(), consumer, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The response headers of a route of <c>GET routes/manual</c> (an empty value: the header is removed).</summary>
+    public static List<RouteHeader> ResponseHeadersOf(JsonObject route)
+        => (route["responseHeaders"] as JsonArray ?? []).OfType<JsonObject>()
+            .Select(h => new RouteHeader(h["name"]?.GetValue<string>() ?? string.Empty, h["value"]?.GetValue<string>() ?? string.Empty))
+            .Where(h => h.Name.Length > 0)
+            .ToList();
+
+    /// <summary>
+    /// Writes a route of <c>GET routes/manual</c> back with <paramref name="headers"/> as its response headers (the whole list: Matcad replaces it). Everything
+    /// else stays: the fields of the route are sent as they are, and Matcad keeps what the call does not carry (access fields, options, the binding).
+    /// </summary>
+    public async Task SetResponseHeadersAsync(JsonObject route, IReadOnlyList<RouteHeader> headers, CancellationToken ct = default)
+        => await SendAsync(HttpMethod.Post, "routes", ResponseHeadersBody(route, headers), null, ct);
+
+    /// <summary>The body of <see cref="SetResponseHeadersAsync"/>: the route unchanged, with the mark of MatOS and <c>responseHeaders</c>.</summary>
+    public static JsonObject ResponseHeadersBody(JsonObject route, IReadOnlyList<RouteHeader> headers)
+    {
+        var body = RemarkedRoute(route);
+        body["responseHeaders"] = new JsonArray([.. headers.Select(h => (JsonNode)new JsonObject { ["name"] = h.Name, ["value"] = h.Value })]);
         return body;
     }
 

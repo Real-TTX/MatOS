@@ -72,8 +72,7 @@ builder.Services.AddSingleton(new MatOS.Core.Integrations.SelfBrandAssets(
 builder.Services.AddScoped<MatOS.Web.Support.AppUrls>();
 builder.Services.AddScoped<MatOS.Web.Support.HomeContributions>();
 builder.Services.AddScoped<MatOS.Web.Support.EngineOverview>();
-// The probe of a frame follows no redirect by itself: one to the public address of an app cannot be reached from inside Docker (Support/FrameProbe.cs).
-builder.Services.AddHttpClient(MatOS.Web.Support.FrameProbe.ClientName).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+// The probe of a frame (Support/FrameProbe.cs) reads the answer of the app through Core/Integrations/RouteFrameHeaders.cs.
 builder.Services.AddScoped<MatOS.Web.Support.FrameProbe>();
 builder.Services.AddHostedService<DockerStartupService>();
 

@@ -280,6 +280,10 @@
                     {
                         <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Address</span></span><span class="mat-item__end"><a href="@Model.OpenUrl" target="_blank" rel="noopener">@Bare(Model.OpenUrl)</a></span></div></li>
                     }
+                    @if (Model.Frame is { } frame)
+                    {
+                        <li class="mat-item mat-item--wrap"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Window</span>@if (!frame.Embeddable && frame.Reason is not null) {<span class="mat-item__text">@frame.Reason</span>}</span><span class="mat-item__end"><span>@(frame.Embeddable ? "Opens in the window" : "Opens in a new tab")</span></span></div></li>
+                    }
                     <li class="mat-item"><div class="mat-item__main"><span class="mat-item__body"><span class="mat-item__title">Installed</span></span><span class="mat-item__end"><span>@Format.DateTimeLocal(app.CreateDate)</span></span></div></li>
                     @if (app.LastUpdatedAt is { } updated)
                     {

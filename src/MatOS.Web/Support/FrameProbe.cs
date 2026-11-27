@@ -10,23 +10,22 @@ public sealed record FrameCheck(bool Embeddable, string? Reason);
 /// <summary>
 /// Looks at the response headers of an app to see whether it allows being embedded by the page of MatOS that asks (<c>Content-Security-Policy:
 /// frame-ancestors</c>, which wins, else <c>X-Frame-Options</c>). The engines name MatOS in <c>frame-ancestors</c> when MatOS gave them its addresses
-/// (<c>MAT_FRAME_ANCESTORS</c>, <see cref="FrameLink"/>). Apps that forbid it are opened in a new tab instead of showing a blank frame.
+/// (<c>MAT_FRAME_ANCESTORS</c>, <see cref="FrameLink"/>); the route of any other app carries frame headers of MatOS (<see cref="RouteFrameHeaders"/>). The
+/// answer is the one the browser gets: the app's own (at its address inside Docker; its public address cannot be reached from in here) with what Matcad's
+/// route puts on it (<see cref="FrameHeaders.Through"/>). Apps that forbid it are opened in a new tab instead of showing a blank frame.
 /// </summary>
 public sealed class FrameProbe
 {
-    /// <summary>The name of the HTTP client of the probe: it follows no redirect by itself (one to the public address cannot be reached from inside Docker).</summary>
-    public const string ClientName = "frame-probe";
-
     private static readonly TimeSpan CacheTime = TimeSpan.FromMinutes(5);
 
     private readonly AppUrls _urls;
-    private readonly IHttpClientFactory _http;
+    private readonly RouteFrameHeaders _routes;
     private readonly IMemoryCache _cache;
 
-    public FrameProbe(AppUrls urls, IHttpClientFactory http, IMemoryCache cache)
+    public FrameProbe(AppUrls urls, RouteFrameHeaders routes, IMemoryCache cache)
     {
         _urls = urls;
-        _http = http;
+        _routes = routes;
         _cache = cache;
     }
 
@@ -63,47 +62,17 @@ public sealed class FrameProbe
             return new FrameCheck(false, "The app has no web interface.");
         }
 
-        try
-        {
-            var client = _http.CreateClient(ClientName);
-            client.Timeout = TimeSpan.FromSeconds(4);
-            var target = new Uri(url);
-            HttpResponseMessage? response = null;
-            try
-            {
-                // Follow a redirect only while it stays on the address inside Docker (a sign-in page carries the headers that count).
-                for (var hop = 0; hop < 4; hop++)
-                {
-                    response?.Dispose();
-                    response = await client.GetAsync(target, HttpCompletionOption.ResponseHeadersRead, ct);
-                    var location = response.Headers.Location;
-                    if ((int)response.StatusCode is < 300 or >= 400 || location is null)
-                    {
-                        break;
-                    }
-
-                    var next = location.IsAbsoluteUri ? location : new Uri(target, location);
-                    if (!string.Equals(next.Authority, target.Authority, StringComparison.OrdinalIgnoreCase))
-                    {
-                        break;
-                    }
-
-                    target = next;
-                }
-
-                var xfo = response!.Headers.TryGetValues("X-Frame-Options", out var x) ? x : null;
-                var csp = response.Headers.TryGetValues("Content-Security-Policy", out var c) ? c : null;
-                var (allowed, reason) = FramePolicy.Decide(xfo, csp, pageOrigin, FrameLink.OriginOf(openUrl));
-                return new FrameCheck(allowed, reason);
-            }
-            finally
-            {
-                response?.Dispose();
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        if (await _routes.ReadAnswerAsync(app, attempts: 1, ct, url) is not { } answer)
         {
             return new FrameCheck(false, "The app does not answer right now. Is it running?");
         }
+
+        if (await _routes.RouteOfAsync(app, ct) is { } route)
+        {
+            answer = FrameHeaders.Through(answer, route.Headers, route.AllowEmbedding);
+        }
+
+        var (allowed, reason) = FramePolicy.Decide(answer.XFrameOptions, answer.ContentSecurityPolicies, pageOrigin, FrameLink.OriginOf(openUrl));
+        return new FrameCheck(allowed, reason);
     }
 }

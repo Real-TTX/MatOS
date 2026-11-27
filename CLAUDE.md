@@ -71,7 +71,7 @@ src/MatOS.Core        domain, no web types
   Integrations/              MatcadClient, MatddnsClient, ProxyPublisher (routes, wildcard), DnsPublisher (records; DnsTarget: the public IP, a fixed IP (Configuration/DnsIp,
                              the question "fixed IP?") or the tunnel; switching replaces the source, rules before records), IAppProvisioner (one per engine),
                              MatIdentityClient + IdentityLink (MatOS's own sign-in, the issuer of MatIdentity) + SelfBrand (that sign-in in the look of MatOS, no word of MatIdentity: docs/ARCHITECTURE.md "MatOS's sign-in looks like MatOS"), MatIdentityPeople (SCIM to MatIdentity: the People area) + PersonAccess (what a person may use, kept a minute), MatSmtpClient + MailLink (the setup of MatSMTP), FrameLink (MatOS's
-                             shell.embed: MAT_FRAME_ANCESTORS), PlatformClient (/api of an app, contract 2),
+                             shell.embed: MAT_FRAME_ANCESTORS), RouteFrameHeaders + FrameHeaders (every app in the window: an app without MAT_FRAME_ANCESTORS and without a CSP of its own gets frame-ancestors naming MatOS on its Matcad route, docs/ARCHITECTURE.md "Every app in the window"), PlatformClient (/api of an app, contract 2),
                              BindingBroker (the bindings between the apps and of the engines: identity.oidc, mail.smtp, web.route (a host under the domain, else a port of
                              this machine: every app behind Matcad; PortsAsync); one class for every capability, AppBinding;
                              catalog consumes + /api + implicit web.route; AdoptAsync takes over the variables of an earlier MatOS), AppManifests + ManifestCache (definitions and values, short

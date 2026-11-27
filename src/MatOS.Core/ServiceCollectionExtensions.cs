@@ -86,6 +86,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MatSmtpClient>();
         services.AddScoped<MailLink>();
         services.AddScoped<FrameLink>();
+        // Every app in the window: the frame headers on Matcad's route of an app that does not take MAT_FRAME_ANCESTORS. Its client follows no redirect by
+        // itself (one to the public address of an app cannot be reached from inside Docker).
+        services.AddHttpClient(RouteFrameHeaders.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddScoped<RouteFrameHeaders>();
 
         // The bindings (MatDesign docs/PLATFORM.md "Bindings"): one broker for every capability, no code per app.
         services.AddScoped<AppAddresses>();

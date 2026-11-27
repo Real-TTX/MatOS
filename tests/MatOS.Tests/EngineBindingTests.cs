@@ -100,7 +100,7 @@ public class EngineBindingTests
             await db.SaveChangesAsync();
 
             var config = Config();
-            var broker = new BindingBroker(db, null!, null!, null!, new DataProtectionSecretProtector(new EphemeralDataProtectionProvider()), null!, config, null!);
+            var broker = new BindingBroker(db, null!, null!, null!, new DataProtectionSecretProtector(new EphemeralDataProtectionProvider()), null!, config, null!, null!);
             var withRoutes = new CatalogApp { Id = "matcad", Name = "Matcad", Routes = new CatalogRoutes { Service = "caddy" } };
             var plain = new CatalogApp { Id = "x", Name = "X" };
 
@@ -144,7 +144,7 @@ public class EngineBindingTests
             await db.SaveChangesAsync();
 
             var protector = new DataProtectionSecretProtector(new EphemeralDataProtectionProvider());
-            var broker = new BindingBroker(db, null!, null!, null!, protector, null!, null!, null!);
+            var broker = new BindingBroker(db, null!, null!, null!, protector, null!, null!, null!, null!);
             var stored = new Dictionary<string, string>
             {
                 [ManagedVariables.IdentityAuthority] = "https://id.example.com",
