@@ -80,7 +80,7 @@
                 <input id="@DnsFormModel.FixedIpField" name="@DnsFormModel.FixedIpField" class="mat-input" value="@dns.FixedIp" autocomplete="off" autocapitalize="none" spellcheck="false"
                        placeholder="203.0.113.7" data-ob-fixed-ip />
             </mat-field>
-            <p class="ob-note">@Ui.Icon("info")<span>With a fixed address nothing updates your records: create them at your provider yourself (matos and * of your domain, pointing to this address), and your router must let 80 and 443 in. Behind a shared connection (CGNAT, DS-Lite) this cannot work: choose "I'm not sure", and MatOS takes the tunnel of MatOS Services.</span></p>
+            <p class="ob-note">@Ui.Icon("info")<span>With a fixed address nothing updates your records: create the records below at your provider yourself (matos and * of your domain, pointing to this address), and your router must let 80 and 443 in. Behind a shared connection (CGNAT, DS-Lite) this cannot work: choose "I'm not sure", and MatOS takes the tunnel of MatOS Services.</span></p>
         </div>
     </div>
 </div>

@@ -756,7 +756,11 @@ async function firstStart(browser, errors) {
       expectTrue(!labels.includes('Address updater (Matddns)'), 'no address updater at home');
       expectEqual(await page.locator('[data-ob-task]').last().getAttribute('data-ob-task'), 'selfcheck', 'the self check is the last line');
       expectEqual(await page.locator('[data-ob-countdown]').count(), 0, 'no countdown');
-      expectTrue((await page.locator('[data-ob-next-screen]').innerText()).startsWith('Next:'), 'the next screen, while it works');
+      const next = page.locator('[data-ob-next-screen]');
+      const nextText = await next.innerText();
+      expectTrue(nextText.startsWith('Next:') || nextText.startsWith('Go to my home screen'), 'the next screen, while it works');
+      const nextHref = await next.getAttribute('href');
+      expectEqual((await page.request.get(new URL(nextHref, page.url()).href)).status(), 200, 'the next screen is there');
       await page.waitForFunction(() => document.querySelector('[data-ob-progress]').getAttribute('data-ob-phase') !== 'working', null, { timeout: 15 * 60 * 1000 });
       expectEqual(await page.getAttribute('[data-ob-progress]', 'data-ob-phase'), 'ready', 'all done');
       expectTrue(await page.locator('[data-ob-next-screen]').isVisible(), 'the next screen when it is done');

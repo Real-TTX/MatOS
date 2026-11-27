@@ -427,6 +427,22 @@ public sealed class SetupService
         // Records by hand or a fixed IP: only through the router (nothing points the records at the tunnel).
         choices = SetupPlan.Normalize(choices);
 
+        // A free name the test reserved while the person looked at the free address is given back when they chose another way (it would stay taken, show in
+        // Settings, Address, and become the tunnel name of an own domain). A service that cannot be reached does not keep the person here: MatOS forgets it.
+        if (choices.Reach != Reach.Free && config.Hosted is { ForDomain: false } reservedOnly && !config.UsesHostedAddress && !config.WizardCompleted)
+        {
+            try
+            {
+                await _hosted.ReleaseAsync(_ => { }, ct);
+            }
+            catch (InvalidOperationException)
+            {
+                await _config.UpdateAsync(c => c.Hosted = c.Hosted?.Name == reservedOnly.Name ? null : c.Hosted, ct);
+            }
+
+            config = await _config.GetAsync(ct);
+        }
+
         // 1. The way to the apps. A free address is used now: the test reserved it (HostedAddressService.ReserveAsync), else it is registered here; a name that
         // was taken meanwhile, or a service that cannot be reached, keeps the person here.
         switch (choices.Reach)

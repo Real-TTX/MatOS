@@ -86,16 +86,18 @@
                 </mat-field>
                 <partial name="_DnsProviderChoice" model="Model.Dns" />
 
-                @* Records by hand: what to create at the DNS provider (SetupPlan.RecordsFor). js/onboarding.js writes the domain and the addresses MatOS Services
-                   saw (/api/setup/ip) and shows the rows that apply: A (and AAAA with an IPv6), or CNAME when a host name is given. *@
-                <div class="ob-records mat-stack" data-ob-records="@MatOS.Web.Infrastructure.SetupEndpoints.IpPath" data-show-if="DnsProvider" data-show-value="@SetupPlan.ManualDns"
-                     hidden="@(Model.Dns.Chosen != SetupPlan.ManualDns)">
+                @* What to create at the DNS provider when nothing writes the records (SetupPlan.RecordsFor): records by hand, or a provider with a fixed IP (no
+                   Matddns then). js/onboarding.js shows the card for either answer, writes the domain and the addresses (the fixed IP, else what MatOS Services
+                   saw at /api/setup/ip) and shows the rows that apply: A (and AAAA with an IPv6), or CNAME when a host name is given (by hand only). *@
+                <div class="ob-records mat-stack" data-ob-records="@MatOS.Web.Infrastructure.SetupEndpoints.IpPath" data-ob-records-manual="@SetupPlan.ManualDns"
+                     data-ob-records-providers="@providers" data-ob-records-fixed="@DnsIp.Fixed"
+                     hidden="@(Model.Dns.Chosen != SetupPlan.ManualDns && !(DnsProviders.Find(Model.Dns.Chosen) is not null && Model.Dns.Dns.IpAnswer == DnsIp.Fixed))">
                     <p class="ob-small">Create these entries at your DNS provider. MatOS cannot write them for you.</p>
                     <div class="mat-table-wrap">
                         <table class="mat-table">
                             <caption class="mat-sr-only">The records of your domain</caption>
                             <thead>
-                                <tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Points to</th><th scope="col" class="mat-hide-sm">What to do</th></tr>
+                                <tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Points to</th><th scope="col">What to do</th></tr>
                             </thead>
                             <tbody>
                                 @foreach (var record in Model.Records)
@@ -105,16 +107,18 @@
                                         <td data-label="Name"><code data-ob-record-name="@self">@record.Name</code></td>
                                         <td data-label="Type">@record.Type</td>
                                         <td data-label="Points to"><code data-ob-record-value="@record.Type.ToLowerInvariant()">@record.Value</code></td>
-                                        <td data-label="What to do" class="mat-hide-sm">@record.Sentence</td>
+                                        <td data-label="What to do">@record.Sentence</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
-                    <mat-field label="A host name instead of an IP address (optional)" asp-for="DnsCname" hint="Your router's own DynDNS name, like home.example.net: the entries then point to it (CNAME).">
-                        <input asp-for="DnsCname" class="mat-input" placeholder="home.example.net" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
-                    </mat-field>
-                    <p class="ob-note">@Ui.Icon("info")<span>Records by hand point to one address: your router must let 80 and 443 in. Behind a shared connection (CGNAT, DS-Lite) this cannot work: choose your DNS provider instead and "I'm not sure", and MatOS takes the tunnel of MatOS Services.</span></p>
+                    <div class="mat-stack" data-show-if="DnsProvider" data-show-value="@SetupPlan.ManualDns" hidden="@(Model.Dns.Chosen != SetupPlan.ManualDns)">
+                        <mat-field label="A host name instead of an IP address (optional)" asp-for="DnsCname" hint="Your router's own DynDNS name, like home.example.net: the entries then point to it (CNAME).">
+                            <input asp-for="DnsCname" class="mat-input" placeholder="home.example.net" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" />
+                        </mat-field>
+                        <p class="ob-note">@Ui.Icon("info")<span>Records by hand point to one address: your router must let 80 and 443 in. Behind a shared connection (CGNAT, DS-Lite) this cannot work: choose your DNS provider instead and "I'm not sure", and MatOS takes the tunnel of MatOS Services.</span></p>
+                    </div>
                 </div>
             </div>
         </div>

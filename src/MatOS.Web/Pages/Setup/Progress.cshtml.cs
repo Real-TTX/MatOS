@@ -77,8 +77,17 @@ public class ProgressModel : PageModel
         Reach = config.Setup?.Steps.Any(s => s.Key == SetupPlan.ReachKey) == true ? await ReachView.BuildAsync(config, _db, ct) : null;
         LoopbackUrl = Request.LoopbackOf(SetupFlow.ProgressPage);
         var signIn = config.Setup?.Steps.Any(s => s.Key == SetupPlan.SignInKey) == true;
-        NextUrl = signIn ? AccountPage : MailPage;
-        NextLabel = signIn ? "Next: your sign-in" : "Next: mail";
+        if (Url.Page(signIn ? AccountPage : MailPage) is { } next)
+        {
+            NextUrl = next;
+            NextLabel = signIn ? "Next: your sign-in" : "Next: mail";
+        }
+        else
+        {
+            // A build without the next screens yet: the home screen, never a page that is not there.
+            NextUrl = "/";
+            NextLabel = "Go to my home screen";
+        }
 
         return Page();
     }

@@ -272,11 +272,20 @@
     var recordsForm = records.closest('form') || document;
     var seen = null, asked = false;
     var domainChosen = function () { var r = $('input[name="Reach"]:checked', recordsForm); return !!r && r.value === 'domain'; };
+    var picked = function (name) { var r = $('input[name="' + name + '"]:checked', recordsForm); return r ? r.value : ''; };
     var fillRecords = function () {
+      // The card shows for records by hand, and for a provider with a fixed IP (nothing writes the records then either).
+      var provider = picked('DnsProvider');
+      var manual = provider === records.getAttribute('data-ob-records-manual');
+      var fixedIp = !manual && (records.getAttribute('data-ob-records-providers') || '').split(',').indexOf(provider) !== -1 &&
+        picked('DnsIp') === records.getAttribute('data-ob-records-fixed');
+      records.hidden = !(manual || fixedIp);
       var field = $('[name="BaseDomain"]', recordsForm);
       var domain = (field ? field.value.trim().toLowerCase().replace(/^\.+|\.+$/g, '') : '') || 'example.com';
       var cname = $('[name="DnsCname"]', recordsForm);
-      var host = cname ? cname.value.trim().toLowerCase().replace(/\.+$/, '') : '';
+      var host = manual && cname ? cname.value.trim().toLowerCase().replace(/\.+$/, '') : '';
+      var fixedField = $('[data-ob-fixed-ip]', recordsForm);
+      var fixed = fixedIp && fixedField ? fixedField.value.trim() : '';
       $$('[data-ob-record-name]', records).forEach(function (c) { c.textContent = c.getAttribute('data-ob-record-name') + '.' + domain; });
       $$('tr[data-ob-record]', records).forEach(function (tr) {
         var type = tr.getAttribute('data-ob-record');
@@ -285,7 +294,10 @@
       $$('[data-ob-record-value]', records).forEach(function (c) {
         var type = c.getAttribute('data-ob-record-value');
         if (type === 'cname' && host) { c.textContent = host; }
-        else if (type === 'a' && seen && seen.ipv4) { c.textContent = seen.ipv4; }
+        else if (type === 'a') {
+          if (c.obDefault === undefined) { c.obDefault = c.textContent; }
+          c.textContent = fixed || (seen && seen.ipv4) || c.obDefault;
+        }
         else if (type === 'aaaa' && seen && seen.ipv6) { c.textContent = seen.ipv6; }
       });
     };
