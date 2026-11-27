@@ -119,8 +119,8 @@ MatIdentity unless `?local=1`). **Mail**: really sends mail through `MATSMTP_*` 
 | MatGame | beta (new) | ✅ | – | ✅ | ✅ | pictures (its repository has none) |
 | MatFile, MatPlay, MatSplit, MatTrakr, MatMail | beta | ✅ | – | route headers | ✅ (kit 1.4) | `MAT_FRAME_ANCESTORS` (kit 2.x); MatMail's note "not in the window" may be stale (it sends no CSP of its own) |
 | MatNotes, MatBill, MatTicket, MatPhone, MatCan | alpha (new) | – | – (own settings) | – (`frame-ancestors 'self'`) | – | the MatPlatform kit: the one sign-in, `MAT_API_KEY` and `/api`, `MAT_FRAME_ANCESTORS`, a seeded administrator (today the first visitor becomes it); MatPhone publishes SIP 5060 and RTP 6100-6199/udp |
-| MatCMS Cloud | alpha (new) | ✅ (`/login`) | ✅ | ✅ | ✅ (MatPlatform 2.4.0) | the release of MatCMS `main` (`:latest` of `matcms-cloud` has none of it yet); see "MatCMS Cloud" below |
-| MatCMS | alpha | – | – (own settings) | – | – | the kit; it consumes `cms.cloud` in its entry (no `/api`): a site joins a MatCMS Cloud installed beside it with MatCMS's next release |
+| MatCMS Cloud | beta | ✅ (`/login`) | ✅ | ✅ | ✅ (MatPlatform 2.4.0) | released with MatCMS `main` on 2026-11-27 (`matcms-cloud` 1.14.262); see "MatCMS Cloud" below |
+| MatCMS | beta (the owner's choice, without the one sign-in) | – | – (own settings) | – | – | the kit; it consumes `cms.cloud` in its entry (no `/api`): a site joins a MatCMS Cloud installed beside it (`matcms` 1.13.405) |
 | Matmon | alpha | – | – (own settings) | – | – | the kit; its entry no longer claims `mail.smtp` (the image never read `MATSMTP_*`, the binding only made a relay user) |
 | MatDesign | alpha | – | – | – | – | – |
 | MatAi | preview | ✅ | – | – (own CSP) | ✅ | a remote and a published image |
@@ -139,7 +139,7 @@ instance side, `src/MatCMS`), released as `ghcr.io/real-ttx/matcms-cloud` by Mat
 repository `Real-TTX/MatCMS.Cloud` is an older snapshot (August 2026) of the same app: it is not the source of the image (GHCR refuses its workflows, the package
 belongs to MatCMS) and nothing of the integration is there.
 
-The integration (MatCMS branch `feature/matos-integration`, merged into MatCMS `dev`):
+The integration (MatCMS branch `feature/matos-integration`, merged into MatCMS `dev` and released with `main` on 2026-11-27):
 
 - **The platform contract** in the cloud: MatPlatform 2.4.0 copied to `src/MatCMS.Cloud/MatPlatform`, `/api` (id `matcmscloud`, the roles `admin` and `operator`, tiles
   for the websites), `/api/health`, `/api/bindings`.

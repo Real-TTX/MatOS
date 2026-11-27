@@ -6,8 +6,8 @@ x-matos:
   description: Build and publish websites from blocks, with plugins, multi-site support and built-in backups.
   category: Websites
   role: app
-  state: alpha
-  stateNote: Installs and joins a MatCMS Cloud installed beside it (with MatCMS's next release); no sign-in through MatIdentity yet.
+  state: beta
+  stateNote: Joins a MatCMS Cloud installed beside it by itself; no sign-in through MatIdentity yet (its own accounts).
   icon: matcms.svg
   homepage: https://github.com/Real-TTX/MatCMS
   # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).

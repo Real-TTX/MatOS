@@ -6,8 +6,8 @@ x-matos:
   description: Watches the versions of your MatCMS websites, mails you when one goes offline or has an update, and rolls out settings, users, plugins, components and templates to many sites at once through profiles. MatCMS websites installed by MatOS connect to it by themselves.
   category: Websites
   role: app
-  state: alpha
-  stateNote: The one sign-in, the mail through MatSMTP and the automatic link of MatCMS sites are on MatCMS's dev branch; the image of :latest has them with its next release.
+  state: beta
+  stateNote: Works with one sign-in and mail through MatSMTP and links the MatCMS sites by itself; tested end to end through MatOS.
   icon: matcmscloud.svg
   homepage: https://github.com/Real-TTX/MatCMS
   # Pictures for its page in the store: files below wwwroot/img/store, taken from the running app.

@@ -42,11 +42,11 @@ public class AppStateTests
         }
     }
 
-    /// <summary>The table the owner approved on 2026-11-26, with the Mat apps added to the store on 2026-11-27 (beta with the one sign-in, alpha without it).</summary>
+    /// <summary>The table the owner approved on 2026-11-26, with the Mat apps added to the store on 2026-11-27 (beta with the one sign-in, alpha without it), and MatCMS with MatCMS Cloud raised to beta on 2026-11-28 with MatCMS's release (MatCMS, the kit, still without the one sign-in: the owner's choice).</summary>
     [Theory]
     [InlineData(AppStates.Integrated, "matcad matdock matidentity matsmtp")]
-    [InlineData(AppStates.Beta, "matboard matbu matcloud matcontacthub matddns matdo matdown matdrive matfile matgame matmail matoffice matpaper matphoto matplay matregistry matshape matsplit mattrakr")]
-    [InlineData(AppStates.Alpha, "matbill matcan matcms matcmscloud matdesign matmon matnote matphone matticket")]
+    [InlineData(AppStates.Beta, "matboard matbu matcloud matcms matcmscloud matcontacthub matddns matdo matdown matdrive matfile matgame matmail matoffice matpaper matphoto matplay matregistry matshape matsplit mattrakr")]
+    [InlineData(AppStates.Alpha, "matbill matcan matdesign matmon matnote matphone matticket")]
     [InlineData(AppStates.Preview, "matai matbiz")]
     [InlineData(AppStates.ThirdParty, "nginx-proxy-manager portainer")]
     public void BuiltInCatalog_HasTheApprovedStates(string state, string ids)
