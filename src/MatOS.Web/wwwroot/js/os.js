@@ -614,11 +614,21 @@
     if (w === active()) { minimize(w); } else { show(w); }
   });
 
+  // A path of this MatOS only, never another address (//host, /\host).
+  function ownPath(path) { return typeof path === 'string' && path.charAt(0) === '/' && path.charAt(1) !== '/' && path.charAt(1) !== '\\'; }
+
   // A page in a window asks to go home (a link to /): its window is put away; a page that landed on the home screen closes its window.
+  // A page in a window asks for a window of its own (mv-open, a link with data-window there): it opens beside it. Only from this origin and from a frame
+  // of one of the windows.
   window.addEventListener('message', function (e) {
-    if (e.origin !== location.origin || !e.data || e.data.type !== 'mv-home') { return; }
+    if (e.origin !== location.origin || !e.data || (e.data.type !== 'mv-home' && e.data.type !== 'mv-open')) { return; }
     var w = wins.filter(function (o) { return o.frame.contentWindow === e.source; })[0];
     if (!w) { return; }
+    if (e.data.type === 'mv-open') {
+      if (!ownPath(e.data.url)) { return; }
+      open(e.data.url, { title: typeof e.data.title === 'string' ? e.data.title : '' });
+      return;
+    }
     if (e.data.close) { close(w); } else { minimize(w); }
   });
 
@@ -629,7 +639,7 @@
       var path;
       try { path = decodeURIComponent(h.slice(1)); } catch (e) { return; }
       // a path of this MatOS only, never another address
-      if (path.charAt(1) === '/' || path.charAt(1) === '\\') { return; }
+      if (!ownPath(path)) { return; }
       var w = wins.filter(function (o) { return !o.leaving && (pathOf(o) === path || o.url === path || o.start === path); })[0];
       if (!w) { open(path, { fromAddress: true, title: '' }); } else if (w !== active()) { show(w, { fromAddress: true }); }
     } else if (active()) {
@@ -1738,5 +1748,10 @@
   // The windows of before a reload, then an address with a window in it (last: everything above is ready).
   restoreWindows();
   fromAddress();
+  // The end of the first start (/?start=1): the list "Getting started" in a window. The query goes, so a reload or a refresh does not open it again.
+  if (/(?:^\?|&)start=1(?:&|$)/.test(location.search)) {
+    history.replaceState(history.state, '', location.pathname + location.hash);
+    open('/Start', { title: 'Getting started' });
+  }
   if (pagesEl && parseInt(pagesEl.getAttribute('data-autorefresh'), 10) > 0) { refreshIn(parseInt(pagesEl.getAttribute('data-autorefresh'), 10)); }
 })();

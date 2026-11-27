@@ -525,6 +525,10 @@ public sealed class SetupService
         var ids = run.Steps.ToDictionary(s => s.Key, s => s.JobId, StringComparer.Ordinal);
         var added = new List<SetupRunStep>();
         var completed = false;
+
+        // The baseline of the list "Getting started": a MatOS account more than now is "a person invited". The people of MatIdentity are counted after the
+        // hand-over (OwnerHandover), when MatIdentity is there.
+        var usersNow = await _db.Users.CountAsync(ct);
         try
         {
             foreach (var step in SetupPlan.Steps(choices, installed, handOver, already))
@@ -557,6 +561,8 @@ public sealed class SetupService
                     c.Setup.ContinuedAt = now;
                     c.WizardCompleted = true;
                     c.WizardCompletedAt = now;
+                    c.GettingStarted.StartedAt ??= now;
+                    c.GettingStarted.UsersAtStart ??= usersNow;
                 }
             }, CancellationToken.None);
         }

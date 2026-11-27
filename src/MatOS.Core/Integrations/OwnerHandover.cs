@@ -91,7 +91,8 @@ public sealed class OwnerHandover
                 return false;
             }
 
-            var existing = (await _people.PeopleAsync(ct)).FirstOrDefault(p =>
+            var everyone = await _people.PeopleAsync(ct);
+            var existing = everyone.FirstOrDefault(p =>
                 string.Equals(p.UserName, owner.Username, StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrEmpty(p.Email) && string.Equals(p.Email, owner.Email, StringComparison.OrdinalIgnoreCase)));
             var person = existing ?? await _people.CreatePersonAsync(PersonFor(owner, password), actor: null, ct);
@@ -112,6 +113,10 @@ public sealed class OwnerHandover
             }
 
             await RecordAsync(owner, existing is null ? HandOverOutcome.Created : HandOverOutcome.Linked, ct);
+
+            // The baseline of the list "Getting started": a person more than now in MatIdentity is "a person invited".
+            var peopleNow = everyone.Count + (existing is null ? 1 : 0);
+            await _config.UpdateAsync(c => c.GettingStarted.PeopleAtStart = peopleNow, ct);
             await ForgetAsync(ct);
             log(existing is null
                 ? $"{owner.Email} signs in to MatOS and every app with the same e-mail and password as before."

@@ -43,6 +43,7 @@ function expectEqual(actual, expected, what) {
 const pages = [
   '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Jobs', '/Tasks',
   '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password',
+  '/Start',
 ];
 
 (async () => {
@@ -282,6 +283,20 @@ const pages = [
     expectEqual(await windows(), 2, 'beside the first one');
     await page.click('.os-window.is-active .os-lights [data-win-close]');
     await titled('Engines');
+    await page.click('.os-window.is-active .os-lights [data-win-close]');
+    await noWindows();
+  });
+  await check('a link with data-window inside a window (the list "Getting started") opens a second window', async () => {
+    await page.goto(BASE + '/#/Start');
+    await titled('Getting started');
+    const link = win().locator('a[data-window]').first();
+    await link.waitFor();
+    const title = await link.getAttribute('data-title');
+    await link.click();
+    await titled(title);
+    expectEqual(await windows(), 2, 'beside the list');
+    await page.click('.os-window.is-active .os-lights [data-win-close]');
+    await titled('Getting started');
     await page.click('.os-window.is-active .os-lights [data-win-close]');
     await noWindows();
   });
@@ -820,10 +835,25 @@ async function firstStart(browser, errors) {
       });
       await lookCtx.close();
     }
-    await check('Later leaves the assistant for the home screen', async () => {
+    const startTitle = () => page.waitForFunction(() => { const el = document.querySelector('.os-window.is-active [data-win-title]'); return !!el && el.textContent === 'Getting started'; }, null, { timeout: 15000 });
+    await check('Later leaves the assistant for the home screen, with the list "Getting started" in a window and no tour', async () => {
       await page.goto(origin + '/Setup/Mail');
       await Promise.all([page.waitForURL(u => !new URL(u).pathname.startsWith('/Setup')), page.click('button[formnovalidate]')]);
       expectEqual(new URL(page.url()).pathname, '/', 'on the home screen');
+      expectEqual(new URL(page.url()).origin, origin, 'on the same origin (127.0.0.1 since Welcome)');
+      await startTitle();
+      expectEqual(new URL(page.url()).search, '', 'the query ?start=1 is gone');
+      const list = page.frameLocator('.os-window.is-active .os-window__frame');
+      await list.locator('[data-start-item="mail"]').waitFor();
+      expectEqual(await list.locator('[data-start-item="mail"]').getAttribute('data-done'), 'false', 'Set up mail is not done');
+      expectTrue((await list.locator('[data-start-item="mail"] .mat-item__title').innerText()).includes('Set up mail'), 'the row Set up mail');
+      expectEqual(await page.locator('[data-ob-tour]').count(), 0, 'no tour on this visit');
+    });
+    await check('the widget Setup opens the list again', async () => {
+      await page.click('.os-window.is-active .os-lights [data-win-close]');
+      await page.waitForFunction(() => document.querySelectorAll('.os-window').length === 0);
+      await page.click('.os-widget[data-window="/Start"]');
+      await startTitle();
     });
   }
   await ctx.close();

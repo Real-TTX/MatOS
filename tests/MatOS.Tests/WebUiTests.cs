@@ -257,6 +257,47 @@ public partial class WebUiTests
         Assert.Contains("data-ob-tour", Read("Pages", "Index.cshtml"), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A page in a window opens another window only through the home screen (<c>mv-open</c>): window-mode.js posts it to its own origin, and os.js takes it only
+    /// from that origin, from a frame of one of its windows, and for a path of this MatOS (never <c>//host</c> or <c>/\host</c>).
+    /// </summary>
+    [Fact]
+    public void A_page_in_a_window_opens_another_window_only_through_the_home_screen()
+    {
+        var mode = Read("wwwroot", "js", "window-mode.js");
+        Assert.Contains("window.top.postMessage({ type: 'mv-open', url: own, title: a.getAttribute('data-title') || '' }, location.origin);", mode, StringComparison.Ordinal);
+        Assert.Matches(@"own\.charAt\(0\) === '/' && own\.charAt\(1\) !== '/' && own\.charAt\(1\) !== '\\\\'[^}]*mv-open", mode);
+
+        var os = Read("wwwroot", "js", "os.js");
+        Assert.Contains("function ownPath(path) { return typeof path === 'string' && path.charAt(0) === '/' && path.charAt(1) !== '/' && path.charAt(1) !== '\\\\'; }", os, StringComparison.Ordinal);
+        var listener = Regex.Match(os, @"window\.addEventListener\('message', function \(e\) \{(.*?)\n  \}\);", RegexOptions.Singleline);
+        Assert.True(listener.Success, "the message listener of os.js");
+        var body = listener.Groups[1].Value;
+        var origin = body.IndexOf("e.origin !== location.origin", StringComparison.Ordinal);
+        var frame = body.IndexOf("o.frame.contentWindow === e.source", StringComparison.Ordinal);
+        var path = body.IndexOf("!ownPath(e.data.url)", StringComparison.Ordinal);
+        var opens = body.IndexOf("open(e.data.url", StringComparison.Ordinal);
+        Assert.True(origin >= 0 && frame > origin && path > frame && opens > path, "mv-open is opened only behind the origin, the frame and the path checks");
+
+        // The end of the first start opens the list in a window, once.
+        Assert.Contains("open('/Start', { title: 'Getting started' });", os, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_list_Getting_started_is_a_page_of_the_toolkit()
+    {
+        var page = Read("Pages", "Start", "Index.cshtml");
+        Assert.DoesNotContain("Layout = ", page, StringComparison.Ordinal);
+        Assert.Matches(@"<ul class=""mat-itemlist [^""]*\bmat-itemlist--tasks\b", page);
+        Assert.Contains("\"is-done\"", page, StringComparison.Ordinal);
+        Assert.Contains("data-autorefresh=\"30000\"", page, StringComparison.Ordinal);
+        Assert.Contains("<icon name=\"check-circle\" />", page, StringComparison.Ordinal);
+        Assert.Contains("<icon name=\"circle\" />", page, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"class=""[^""]*\b(ob|os)-", page);
+        Assert.Contains("\"/Start\"", Read("Program.cs"), StringComparison.Ordinal);
+        Assert.Contains("data-window=\"/Start\"", Read("Pages", "Index.cshtml"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Every_form_of_the_toolkit_is_novalidate()
     {

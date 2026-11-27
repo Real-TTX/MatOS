@@ -565,7 +565,7 @@ public class SetupTests
     {
         Assert.Equal("/Setup/Account", SetupFlow.AccountPage);
         Assert.Equal("/Setup/Mail", SetupFlow.MailPage);
-        Assert.Equal("/", SetupFlow.DesktopUrl());
+        Assert.Equal("/?start=1", SetupFlow.DesktopUrl());
     }
 
     [Fact]

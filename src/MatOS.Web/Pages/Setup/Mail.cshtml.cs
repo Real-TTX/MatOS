@@ -79,7 +79,7 @@ public class MailModel : PageModel
         }
 
         await _config.UpdateAsync(c => c.AdminEmail = email, HttpContext.RequestAborted);
-        return Redirect(SetupFlow.DesktopUrl());
+        return LocalRedirect(SetupFlow.DesktopUrl());
     }
 
     /// <summary>Later: the mail stays on the list "Getting started", and the assistant ends on the home screen.</summary>
@@ -93,7 +93,7 @@ public class MailModel : PageModel
         }
 
         await _config.UpdateAsync(c => c.GettingStarted.MailLater = true, HttpContext.RequestAborted);
-        return Redirect(SetupFlow.DesktopUrl());
+        return LocalRedirect(SetupFlow.DesktopUrl());
     }
 
     /// <summary>What the page shows; a redirect while the first start stands before the progress.</summary>

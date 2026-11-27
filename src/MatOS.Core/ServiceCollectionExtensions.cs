@@ -108,6 +108,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MatOS.Core.Setup.SetupService>();
         // The screen "Notifications / mail": MatSMTP's state and the check of its account.
         services.AddScoped<MatOS.Core.Setup.MailSetup>();
+        // The list "Getting started" after the first start (/Start, the widget Setup): what is done, a minute kept for the engines.
+        services.AddScoped<MatOS.Core.Setup.GettingStartedService>();
         // The test of the first start: whether an own domain exists and where its hosts point (three seconds per question).
         services.AddSingleton<DnsCheck>();
         // The self check of the first start: MatOS answers where the person opens it (certificates checked as a browser would).

@@ -162,8 +162,16 @@
 
             case Kind.Setup:
                 @* The first start takes the whole tab (its pages are top-level): a plain link, no window. While it works, or when a line failed, it leads back to
-                   the progress screen and its "Try again". *@
-                if (Model.SetupProgress is { } setup)
+                   the progress screen and its "Try again". Once it is over, it opens the list "Getting started" in a window. *@
+                if (Model.ShowChecklist)
+                {
+                    <a class="os-widget @size" href="/Start" data-window="/Start" data-title="Getting started" data-widget @Home(item)>
+                        <span class="os-widget__head">@Ui.Icon("sparkles")Getting started</span>
+                        <span class="os-widget__value">@Model.ChecklistDone<small> of @Model.ChecklistTotal done</small></span>
+                        <span class="os-widget__note@(Model.ChecklistDone == Model.ChecklistTotal ? " os-widget__note--ok" : string.Empty)">@(Model.ChecklistDone == Model.ChecklistTotal ? "All done" : "A few things to do next")</span>
+                    </a>
+                }
+                else if (Model.SetupProgress is { } setup)
                 {
                     var failed = setup.Steps.Count(s => s.State == "failed");
                     <a class="os-widget @size@(setup.Finished ? " os-widget--warn" : string.Empty)" href="/Setup/Progress" data-widget @Home(item)>

@@ -130,7 +130,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Share/View");
 
     // Roles: Admin manages everything; User opens apps and looks at them; Anonymous only sees a shared link.
-    foreach (var folder in new[] { "/Store", "/Backups", "/Jobs", "/Tasks", "/Users", "/People", "/Settings", "/Wizard", "/Engines", "/Setup" })
+    foreach (var folder in new[] { "/Store", "/Backups", "/Jobs", "/Tasks", "/Users", "/People", "/Settings", "/Wizard", "/Engines", "/Setup", "/Start" })
     {
         options.Conventions.AuthorizeFolder(folder, "AdminOnly");
     }

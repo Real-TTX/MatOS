@@ -1,0 +1,87 @@
+@page
+@model MatOS.Web.Pages.Start.IndexModel
+@{
+    ViewData["Title"] = "Getting started";
+    ViewData["PageSub"] = "A few things to do next";
+    ViewData["Crumbs"] = Crumbs.Of(("Home", "/"), ("Getting started", null));
+    ViewData["Width"] = "narrow";
+}
+
+@* The list ticks itself off: the page looks again every 30 seconds (an app installed in another window, a person who signed up). *@
+<div class="mat-stack" data-autorefresh="30000" data-start>
+    @if (Model.JustHidden)
+    {
+        <div class="mat-alert mat-alert--info" role="status">
+            <icon name="info" />
+            <div class="mat-alert__body">The list is off the home screen now. You find it again on this page: Show it again puts it back in the Setup widget.</div>
+        </div>
+    }
+
+    @if (!Model.Belongs)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="sparkles" /></span>
+            <div class="mat-empty__title">Nothing to do here</div>
+            <p>This MatOS was set up before this list existed. The store has your apps.</p>
+            <a class="mat-btn mat-btn--primary" href="/Store" data-window="/Store" data-title="Store">Open the store</a>
+        </div>
+    }
+    else
+    {
+        <p class="mat-muted" data-start-count>@Model.DoneCount of @Model.Items.Count done</p>
+        <ul class="mat-itemlist mat-itemlist--inset mat-itemlist--tasks" aria-label="Getting started">
+            @foreach (var item in Model.Items)
+            {
+                <li class="mat-item mat-item--wrap @(item.Done ? "is-done" : null)" data-start-item="@item.Key" data-done="@(item.Done ? "true" : "false")">
+                    <div class="mat-item__main">
+                        <span class="mat-item__lead">
+                            @if (item.Done)
+                            {
+                                <icon name="check-circle" />
+                            }
+                            else
+                            {
+                                <icon name="circle" />
+                            }
+                        </span>
+                        <span class="mat-item__body">
+                            <span class="mat-item__title">@item.Title</span>
+                            <span class="mat-item__text">@item.Note</span>
+                        </span>
+                        <span class="mat-sr-only">@(item.Done ? "Done" : "To do")</span>
+                    </div>
+                    @if (!item.Done)
+                    {
+                        <span class="mat-item__aside">
+                            @if (item.Target is null)
+                            {
+                                <a class="mat-btn mat-btn--secondary mat-btn--sm" href="@item.Url" data-window="@item.Url" data-title="@(item.WindowTitle ?? item.Title)">@item.Action</a>
+                            }
+                            else if (item.Target == "_blank")
+                            {
+                                <a class="mat-btn mat-btn--secondary mat-btn--sm" href="@item.Url" target="_blank" rel="noopener">@item.Action</a>
+                            }
+                            else
+                            {
+                                <a class="mat-btn mat-btn--secondary mat-btn--sm" href="@item.Url" target="@item.Target">@item.Action</a>
+                            }
+                        </span>
+                    }
+                </li>
+            }
+        </ul>
+
+        <form method="post" novalidate>
+            <div class="mat-actions">
+                @if (Model.Hidden)
+                {
+                    <button class="mat-btn mat-btn--secondary" type="submit" asp-page-handler="Show">Show it again</button>
+                }
+                else
+                {
+                    <button class="mat-btn mat-btn--ghost" type="submit" asp-page-handler="Hide">Hide this list</button>
+                }
+            </div>
+        </form>
+    }
+</div>

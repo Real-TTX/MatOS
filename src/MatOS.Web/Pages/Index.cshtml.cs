@@ -32,10 +32,12 @@ public class IndexModel : PageModel
     private readonly UserService _users;
     private readonly MatOS.Core.Integrations.PersonAccess _person;
     private readonly MatOS.Core.Setup.SetupService _setup;
+    private readonly MatOS.Core.Setup.GettingStartedService _start;
 
     public IndexModel(AppService apps, SystemConfigService config, JobService jobs, RuntimeReader docker, BackupService backups, BackupHub backupHub, CatalogService catalog, AppUrls urls, EngineOverview engines, HomeContributions home, UserService users,
-        MatOS.Core.Integrations.PersonAccess person, MatOS.Core.Setup.SetupService setup)
+        MatOS.Core.Integrations.PersonAccess person, MatOS.Core.Setup.SetupService setup, MatOS.Core.Setup.GettingStartedService start)
     {
+        _start = start;
         _home = home;
         _users = users;
         _person = person;
@@ -80,7 +82,18 @@ public class IndexModel : PageModel
     /// The widget Setup is on the home screen: nothing chosen yet, the run in phase 1 (the first engines, the way to the apps not confirmed), or the first start
     /// still works or has lines to try again.
     /// </summary>
-    public bool SetupOpen => SetupProgress is { } p ? !p.Finished || p.AnyFailed : !Config.WizardCompleted || (Config.Setup is not null && !MatOS.Core.Setup.SetupPlan.Continued(Config.Setup));
+    public bool SetupOpen => SetupProgress is { } p ? !p.Finished || p.AnyFailed || ShowChecklist : !Config.WizardCompleted || (Config.Setup is not null && !MatOS.Core.Setup.SetupPlan.Continued(Config.Setup));
+
+    /// <summary>
+    /// The widget Setup leads to the list "Getting started" (<c>/Start</c>, in a window): the first start is over without a failed line, it was a run of the
+    /// assistant in two phases, and the list is not hidden (<see cref="MatOS.Core.Setup.GettingStarted.ShowFor"/>).
+    /// </summary>
+    public bool ShowChecklist => SetupProgress is { Finished: true, AnyFailed: false } && MatOS.Core.Setup.GettingStarted.ShowFor(Config);
+
+    /// <summary>How many rows of the list "Getting started" are done, and how many it has (for the widget Setup).</summary>
+    public int ChecklistDone { get; private set; }
+
+    public int ChecklistTotal { get; private set; }
 
     /// <summary>No backup at all, or the newest one is older than <see cref="BackupIsOld"/>; with no app there is nothing to back up yet (no amber for a newcomer).</summary>
     public bool BackupNeedsLook => Tiles.Count > 0 && (LastBackup is not { } last || DateTime.UtcNow - last > BackupIsOld);
@@ -179,8 +192,9 @@ public class IndexModel : PageModel
     {
         await LoadAsync();
         await ArrangeAsync();
+        // The end of the first start (?start=1) opens the list "Getting started" instead: its row, or ?tour=1, starts the tour then.
         ShowTour = Request.Query["tour"] == "1"
-            || (User.GetUserId() is { } userId && Request.Headers["X-Requested-With"] != "fetch" && await _users.TourDueAsync(userId, HttpContext.RequestAborted));
+            || (Request.Query["start"] != "1" && User.GetUserId() is { } userId && Request.Headers["X-Requested-With"] != "fetch" && await _users.TourDueAsync(userId, HttpContext.RequestAborted));
     }
 
     private async Task LoadAsync()
@@ -213,6 +227,12 @@ public class IndexModel : PageModel
             ActiveJobs = await _jobs.CountActiveAsync(ct);
             LastBackup = await LastBackupAsync(ct);
             SetupProgress = MatOS.Core.Setup.SetupPlan.Continued(Config.Setup) ? await _setup.ProgressAsync(ct) : null;
+            if (ShowChecklist)
+            {
+                var items = await _start.ItemsAsync(User.GetUserId(), ct);
+                ChecklistDone = items.Count(i => i.Done);
+                ChecklistTotal = items.Count;
+            }
         }
 
         if (isAdmin)

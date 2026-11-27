@@ -4,6 +4,7 @@
    - A page that belongs to the whole tab (sign-in, a shared link, an error: <html data-top-level>) leaves the window and takes the tab.
    - The home screen itself never draws inside the window: when a page lands on it (a redirect to /), the window closes instead.
    - A link to the home screen inside the window puts the window away (the page stays as it is).
+   - A link with data-window asks the home screen for a window of its own (the message mv-open), beside this one.
    - Tabs that do not fit show the current one and fade out where more of them wait. */
 (function () {
   'use strict';
@@ -23,6 +24,15 @@
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     if (!a || e.defaultPrevented || a.target === '_blank' || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) { return; }
+    // A link that opens a window of its own (data-window, the list "Getting started"): the home screen opens it beside this one. A path of this MatOS only.
+    var own = a.getAttribute('data-window');
+    if (own !== null) {
+      if (own.charAt(0) === '/' && own.charAt(1) !== '/' && own.charAt(1) !== '\\') {
+        e.preventDefault();
+        window.top.postMessage({ type: 'mv-open', url: own, title: a.getAttribute('data-title') || '' }, location.origin);
+      }
+      return;
+    }
     var url = new URL(a.getAttribute('href'), window.location.href);
     if (url.origin === window.location.origin && url.pathname === '/' && !url.search) {
       e.preventDefault();

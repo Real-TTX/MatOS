@@ -23,8 +23,11 @@ public static class SetupFlow
     /// <summary>The screen of the mail (the last one; it waits for MatSMTP).</summary>
     public const string MailPage = "/Setup/Mail";
 
-    /// <summary>Where the assistant ends: the home screen, on the same address (127.0.0.1 since Welcome).</summary>
-    public static string DesktopUrl() => "/";
+    /// <summary>
+    /// Where the assistant ends: the home screen, on the same address (127.0.0.1 since Welcome), which opens the list "Getting started" in a window
+    /// (<c>?start=1</c>, js/os.js). A query and not a hash: it survives the return address of a sign-in.
+    /// </summary>
+    public static string DesktopUrl() => "/?start=1";
 
     /// <summary>
     /// The screen the first start goes on at: the home screen for a MatOS set up before the runs existed (the old wizard, no run), the engines while there is
