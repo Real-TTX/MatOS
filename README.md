@@ -98,6 +98,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - **A second step for the sign-in**: your account has a tab *Security* that opens the page for the authenticator app, the recovery codes and the
   passkeys, in the look of MatOS and in a new tab (passkeys do not work inside a window). The tab *Password* says which password it changes:
   the one of the single sign-on, or MatOS's own, which is only the way in when the single sign-on does not answer
+- **An AI assistant at the controls** (MCP at `/mcp`): Claude Desktop, Claude Code and others install, update, back up and run your apps with an
+  access token of your account (*Account, Access tokens*), with your role; see [Connect an AI assistant](#connect-an-ai-assistant-mcp)
 
 ## Screenshots
 
@@ -384,6 +386,36 @@ browser keeps the places of the windows per address, so at `matos.<domain>` they
 - The design decisions (what the engines own, where the compose files are, the home screen, how this relates to the older matOS desktop) are in
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the contract with the engines is [docs/ENGINES.md](docs/ENGINES.md).
 
+## Connect an AI assistant (MCP)
+
+MatOS speaks the **Model Context Protocol** at `/mcp`, so Claude Desktop, Claude Code and other MCP clients can look at your apps and run them for
+you: list and search the store, install, start, stop, update, back up, restore and remove apps, follow the jobs, read the Task Manager, the volumes,
+the engines and the update state. Make a token under **Account, Access tokens, New token**: it is shown once, acts as you with your role, and is
+revoked there. A user's token can only see the apps they may use. Removing an app or restoring a backup needs the assistant to confirm, and it is told
+to ask you first. The page of a new token shows these lines ready to copy.
+
+Claude Code:
+
+```sh
+claude mcp add --transport http matos https://matos.example.com/mcp --header "Authorization: Bearer mos_..."
+```
+
+Claude Desktop (`claude_desktop_config.json`, through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), which needs Node.js):
+
+```json
+{
+  "mcpServers": {
+    "matos": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://matos.example.com/mcp", "--header", "Authorization:${MATOS_TOKEN}"],
+      "env": { "MATOS_TOKEN": "Bearer mos_..." }
+    }
+  }
+}
+```
+
+How it works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) "MCP".
+
 ## MatOS Services
 
 The free address `<name>.my.mattiverse.de` and the tunnel come from **MatOS Services** (`services.mattiverse.de`, its own project in
@@ -463,7 +495,7 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | Role | Can |
 |---|---|
 | **Admin** | everything: store, installs, updates, backups, users, settings, activity, the engines |
-| **User** | see and open the apps (no credentials, no actions) |
+| **User** | see and open the apps (no credentials, no actions); an access token for an AI assistant sees the same |
 | **Anonymous** | open the one app behind a **shared link** (`/s/<token>`); links expire and can be revoked |
 
 ## Development
