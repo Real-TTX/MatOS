@@ -1,0 +1,45 @@
+# Jellyfin – the free media server (https://jellyfin.org).
+x-matos:
+  id: jellyfin
+  name: Jellyfin
+  tagline: Your films, series and music, streamed
+  description: >-
+    Jellyfin collects your films, series, music and photos into a library with covers and descriptions, and streams them to the browser,
+    the TV, phones and tablets. The media go into the volume "media" (or a share you add to the stack).
+  category: Media
+  role: app
+  state: third-party
+  stateNote: Has its own accounts; the one sign-in only through a plugin of Jellyfin, which MatOS does not set up.
+  icon: jellyfin.svg
+  homepage: https://jellyfin.org
+  screenshots:
+    - src: jellyfin/first-start.webp
+      caption: The first start
+  ui:
+    service: jellyfin
+    port: 8096
+    hostPort: 8096
+  notes:
+    - On the first visit Jellyfin asks for the language, the administrator account and the libraries. The folder /media is the volume of the media.
+    - Transcoding runs on the processor; a graphics card needs a device line in the compose file.
+  credentials:
+    - label: First sign-in
+      value: Jellyfin asks you to create the administrator account.
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:12
+    restart: unless-stopped
+    environment:
+      # The address the apps of Jellyfin find the server at (empty until MatOS knows the public address).
+      JELLYFIN_PublishedServerUrl: ${MAT_PUBLIC_URL:-}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - jellyfin-media:/media
+
+volumes:
+  jellyfin-config:
+  jellyfin-cache:
+  jellyfin-media:

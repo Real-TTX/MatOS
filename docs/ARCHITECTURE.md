@@ -20,7 +20,8 @@ entry an app came from, and where it sits on the home screen. Everything else li
 MatDock and the apps are stacks marked *Managed by matos* (`managedBy: matos`), open Matcad and they are routes, open Matddns and they are records, open MatIdentity and they are apps, open MatSMTP and they are relay users.
 
 The five are **fixed parts** of MatOS (`EngineIds.All`, `core: true`; the wizard installs them in that order, MatDock first because it deploys the others; they cannot be uninstalled from MatOS except a failed install, to start over).
-Other tools in the store (Nginx Proxy Manager, Portainer, ...) are plain apps without deep integration. The contract between MatOS and the
+Other tools in the store (Nextcloud, Immich, Jellyfin, Vaultwarden, Paperless-ngx, Uptime Kuma, Home Assistant, Portainer, ...) are apps of other makers: their entries connect
+the sign-in and the mail where the app reads them from its environment or a command (docs/CATALOG.md "Apps of other makers"), nothing deeper. The contract between MatOS and the
 engines is [ENGINES.md](ENGINES.md).
 
 | | MatOS (this app) | matOS (the older desktop, now Real-TTX/MatOS-legacy, retired) | MatDock |

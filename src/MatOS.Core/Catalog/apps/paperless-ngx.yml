@@ -1,0 +1,140 @@
+# Paperless-ngx – documents scanned, recognised and filed (https://docs.paperless-ngx.com). Its own stack: web server, Valkey, PostgreSQL.
+x-matos:
+  id: paperless-ngx
+  name: Paperless-ngx
+  tagline: Paper scanned, read and filed by itself
+  description: >-
+    Paperless-ngx reads the text of every scan and upload (OCR), sorts the documents by correspondent, type and tags it learns from you,
+    and finds any of them again in seconds. Mail inboxes can be read too.
+  category: Files
+  role: app
+  state: third-party
+  stateNote: Signs in through MatIdentity and sends its mail through MatSMTP; a person who comes through the single sign-on starts without rights until the administrator gives them some.
+  icon: paperless-ngx.svg
+  homepage: https://docs.paperless-ngx.com
+  screenshots:
+    - src: paperless-ngx/dashboard.webp
+      caption: The dashboard
+    - src: paperless-ngx/sign-in.webp
+      caption: The sign-in
+  # Its single sign-on (django-allauth's OpenID Connect) and its mail (PAPERLESS_EMAIL_*) are filled from the bindings when the start below finds them.
+  consumes:
+    - capability: identity.oidc
+      params:
+        callback: /accounts/oidc/matidentity/login/callback/
+        signedOut: /accounts/login/
+        backchannel: ""
+    - capability: mail.smtp
+      params:
+        sender: paperless
+  ui:
+    service: webserver
+    port: 8000
+    hostPort: 8000
+  variables:
+    - key: PAPERLESS_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      help: The password of the account "admin". Leave empty to generate one.
+    - key: PAPERLESS_SECRET_KEY
+      type: secret
+      generate: true
+      hidden: true
+    - key: PAPERLESS_DB_PASSWORD
+      type: secret
+      generate: true
+      hidden: true
+    - key: PAPERLESS_OCR_LANGUAGE
+      label: Languages of the documents
+      default: deu+eng
+      help: The languages the text recognition expects, joined by + (deu, eng, fra, ita, spa, ...).
+      advanced: true
+  notes:
+    - Documents are uploaded in the browser, by mail or through the folder consume in the volume of the same name.
+    - With MatIdentity the sign-in page has "MatIdentity". A person who signs in that way for the first time gets an account without rights; give them a group under Users & Groups.
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${PAPERLESS_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  webserver:
+    # Paperless-ngx publishes no major tag; its own compose file follows latest as well.
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+    # Paperless reads its settings from its own names: the start sets the address and the protocol of its links, the OpenID Connect app (only with a
+    # binding of MatIdentity) and the mail (only with one of MatSMTP), then hands over to its own start. $$ is a $ for the shell.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -n "$$MAT_PUBLIC_URL" ]; then
+          export PAPERLESS_URL="$$MAT_PUBLIC_URL" PAPERLESS_ACCOUNT_DEFAULT_HTTP_PROTOCOL="$${MAT_PUBLIC_URL%%://*}"
+        fi
+        if [ -n "$$MATIDENTITY_CLIENT_ID" ]; then
+          export PAPERLESS_APPS=allauth.socialaccount.providers.openid_connect PAPERLESS_SOCIAL_AUTO_SIGNUP=true \
+            PAPERLESS_SOCIALACCOUNT_PROVIDERS="{\"openid_connect\":{\"OAUTH_PKCE_ENABLED\":true,\"SCOPE\":[\"openid\",\"profile\",\"email\"],\"APPS\":[{\"provider_id\":\"matidentity\",\"name\":\"MatIdentity\",\"client_id\":\"$$MATIDENTITY_CLIENT_ID\",\"secret\":\"$$MATIDENTITY_CLIENT_SECRET\",\"settings\":{\"server_url\":\"$$MATIDENTITY_AUTHORITY\",\"oauth_pkce_enabled\":true}}]}}"
+        fi
+        if [ -n "$$MATSMTP_HOST" ]; then
+          export PAPERLESS_EMAIL_HOST="$$MATSMTP_HOST" PAPERLESS_EMAIL_PORT="$$MATSMTP_PORT" PAPERLESS_EMAIL_HOST_USER="$$MATSMTP_USERNAME" \
+            PAPERLESS_EMAIL_HOST_PASSWORD="$$MATSMTP_PASSWORD" PAPERLESS_EMAIL_FROM="$$MATSMTP_FROM"
+          case "$$MATSMTP_TLS" in tls) export PAPERLESS_EMAIL_USE_SSL=true ;; starttls) export PAPERLESS_EMAIL_USE_TLS=true ;; esac
+        fi
+        exec /init
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_ADMIN_USER: admin
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE:-deu+eng}
+      PAPERLESS_TIME_ZONE: ${TZ:-UTC}
+      # Matcad ends TLS and says so in X-Forwarded-Proto.
+      PAPERLESS_PROXY_SSL_HEADER: '["HTTP_X_FORWARDED_PROTO", "https"]'
+      MAT_PUBLIC_URL: ${MAT_PUBLIC_URL:-}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      - paperless-data:/usr/src/paperless/data
+      - paperless-media:/usr/src/paperless/media
+      - paperless-consume:/usr/src/paperless/consume
+      - paperless-export:/usr/src/paperless/export
+
+  broker:
+    image: docker.io/valkey/valkey:9-alpine
+    restart: unless-stopped
+    volumes:
+      - paperless-redis:/data
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+    volumes:
+      - paperless-db:/var/lib/postgresql
+
+volumes:
+  paperless-data:
+  paperless-media:
+  paperless-consume:
+  paperless-export:
+  paperless-redis:
+  paperless-db:

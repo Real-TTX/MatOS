@@ -203,6 +203,11 @@ public sealed class BindingBroker
 
             variables[ManagedVariables.FrameAncestors] = string.Join(' ', await _frames.OriginsAsync(ct));
         }
+        else if (NamesPublicUrl(_catalog.Get(app.CatalogId)) && await _addresses.KnownPublicUrlAsync(app, ct) is { } publicUrl)
+        {
+            // An app of another maker learns its address only when its entry asks for it (Vaultwarden's DOMAIN: ${MAT_PUBLIC_URL:-}): the others keep their environment.
+            variables[PublicUrlVariable] = publicUrl;
+        }
 
         if (app.Id == 0)
         {
@@ -219,6 +224,10 @@ public sealed class BindingBroker
 
         return variables;
     }
+
+    /// <summary>True when the compose file of an entry names <c>${MAT_PUBLIC_URL}</c>: an app outside the contract that wants its public address.</summary>
+    public static bool NamesPublicUrl(CatalogApp? catalog)
+        => catalog?.ComposeYaml.Contains("${" + PublicUrlVariable, StringComparison.Ordinal) == true;
 
     /// <summary>The bindings an app has as a consumer, with the name of the provider (for its page).</summary>
     public async Task<IReadOnlyList<(string Capability, string Provider)>> ListAsync(InstalledApp app, CancellationToken ct)

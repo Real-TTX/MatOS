@@ -1,0 +1,169 @@
+# Nextcloud – files, calendars and contacts (https://nextcloud.com). Its own stack: Nextcloud (Apache), Valkey, PostgreSQL.
+x-matos:
+  id: nextcloud
+  name: Nextcloud
+  tagline: Files, calendars and contacts, synced everywhere
+  description: >-
+    Nextcloud keeps your files, photos, calendars and contacts in sync on every computer and phone, shares them by link and with others, and grows
+    with hundreds of apps from its own store (office, notes, talk, ...).
+  category: Files
+  role: app
+  state: third-party
+  stateNote: Signs in through MatIdentity (the app user_oidc, set up by MatOS, only under https) and sends its mail through MatSMTP; tested in the browser, not with the desktop and phone apps.
+  icon: nextcloud.svg
+  homepage: https://nextcloud.com
+  screenshots:
+    - src: nextcloud/files.webp
+      caption: Your files
+    - src: nextcloud/sign-in.webp
+      caption: The sign-in
+  # The sign-in through MatIdentity (Nextcloud's app user_oidc) and the mail are set by the hook below at every start, from the bindings.
+  consumes:
+    - capability: identity.oidc
+      params:
+        callback: /apps/user_oidc/code
+        signedOut: /
+        backchannel: ""
+    - capability: mail.smtp
+      params:
+        sender: nextcloud
+  ui:
+    service: app
+    port: 80
+    hostPort: 8080
+    # With MatIdentity the app is opened at the sign-in of its first (and only) provider, so the person lands in it without a click.
+    signIn: /apps/user_oidc/login/1
+  variables:
+    - key: NEXTCLOUD_ADMIN_PASSWORD
+      label: Administrator password
+      type: secret
+      generate: true
+      help: The password of the account "admin". Leave empty to generate one.
+    - key: NEXTCLOUD_DB_PASSWORD
+      type: secret
+      generate: true
+      hidden: true
+  notes:
+    - The first start installs Nextcloud and takes a minute or two; the page answers once it is done.
+    - With MatIdentity the sign-in page has "Log in with MatIdentity" (the app user_oidc, which MatOS installs from Nextcloud's app store); the account "admin" still signs in with its password. Nextcloud allows that sign-in only under https, so reach it under the domain of MatOS.
+    - The desktop and phone apps of Nextcloud sign in through the same page in the browser.
+  credentials:
+    - label: Username
+      value: admin
+    - label: Password
+      value: ${NEXTCLOUD_ADMIN_PASSWORD}
+      secret: true
+
+services:
+  app:
+    image: nextcloud:35-apache
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    # The image runs the scripts in /docker-entrypoint-hooks.d/before-starting at every start, once Nextcloud is installed: the hook of MatOS goes there.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /docker-entrypoint-hooks.d/before-starting
+        install -m 0755 /matos/nextcloud-hook.sh /docker-entrypoint-hooks.d/before-starting/50-matos.sh
+        if [ -n "$$MAT_PUBLIC_URL" ]; then export OVERWRITEPROTOCOL="$${MAT_PUBLIC_URL%%://*}" OVERWRITECLIURL="$$MAT_PUBLIC_URL"; fi
+        exec /entrypoint.sh apache2-foreground
+    # The first start installs Nextcloud (a minute or two), and MatOS deploys the stack again right after it binds the sign-in and the mail. The start
+    # script runs as process 1, which ignores the stop signal: the time to stop lets an install that is under way finish instead of breaking it off.
+    stop_grace_period: 5m
+    configs:
+      - source: matos-hook
+        target: /matos/nextcloud-hook.sh
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      REDIS_HOST: redis
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost ${MV_PUBLIC_HOST}
+      # Matcad reaches it from the private networks of Docker and says the protocol and the address of the visitor.
+      TRUSTED_PROXIES: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      PHP_UPLOAD_LIMIT: 16G
+      MAT_PUBLIC_URL: ${MAT_PUBLIC_URL:-}
+      MATIDENTITY_AUTHORITY: ${MATIDENTITY_AUTHORITY:-}
+      MATIDENTITY_CLIENT_ID: ${MATIDENTITY_CLIENT_ID:-}
+      MATIDENTITY_CLIENT_SECRET: ${MATIDENTITY_CLIENT_SECRET:-}
+      MATSMTP_HOST: ${MATSMTP_HOST:-}
+      MATSMTP_PORT: ${MATSMTP_PORT:-}
+      MATSMTP_USERNAME: ${MATSMTP_USERNAME:-}
+      MATSMTP_PASSWORD: ${MATSMTP_PASSWORD:-}
+      MATSMTP_FROM: ${MATSMTP_FROM:-}
+      MATSMTP_TLS: ${MATSMTP_TLS:-}
+    volumes:
+      - nextcloud-html:/var/www/html
+
+  # The jobs Nextcloud runs every five minutes (its recommended way: cron, not on page loads).
+  cron:
+    image: nextcloud:35-apache
+    restart: unless-stopped
+    depends_on:
+      - app
+    entrypoint: /cron.sh
+    volumes:
+      - nextcloud-html:/var/www/html
+
+  redis:
+    image: docker.io/valkey/valkey:9-alpine
+    restart: unless-stopped
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+    volumes:
+      - nextcloud-db:/var/lib/postgresql/data
+
+# The hook of MatOS (run as www-data at every start, after the install or update): the public address, the sign-in through MatIdentity and the
+# mail through MatSMTP, each only while its binding is there. $$ is a $ for the shell.
+configs:
+  matos-hook:
+    content: |
+      #!/bin/sh
+      occ() { php /var/www/html/occ --no-interaction "$$@"; }
+
+      if [ -n "$$MAT_PUBLIC_URL" ]; then
+        host="$${MAT_PUBLIC_URL#*://}"; host="$${host%%/*}"; host="$${host%%:*}"
+        occ config:system:set trusted_domains 10 --value="$$host"
+      fi
+
+      if [ -n "$$MATIDENTITY_CLIENT_ID" ]; then
+        occ app:getpath user_oidc >/dev/null 2>&1 || occ app:install user_oidc
+        occ app:enable user_oidc
+        # MatIdentity is on this machine or the home network: Nextcloud may call it there. It asks for PKCE.
+        occ config:system:set allow_local_remote_servers --value=true --type=boolean
+        occ config:system:set user_oidc use_pkce --value=true --type=boolean
+        occ user_oidc:provider MatIdentity --clientid="$$MATIDENTITY_CLIENT_ID" --clientsecret="$$MATIDENTITY_CLIENT_SECRET" \
+          --discoveryuri="$${MATIDENTITY_AUTHORITY%/}/.well-known/openid-configuration" --scope="openid email profile" \
+          --unique-uid=0 --mapping-uid=preferred_username --mapping-display-name=name --mapping-email=email
+      elif occ app:getpath user_oidc >/dev/null 2>&1; then
+        occ user_oidc:provider:delete MatIdentity --force >/dev/null 2>&1 || true
+      fi
+
+      if [ -n "$$MATSMTP_HOST" ]; then
+        occ config:system:set mail_smtpmode --value=smtp
+        occ config:system:set mail_smtphost --value="$$MATSMTP_HOST"
+        occ config:system:set mail_smtpport --value="$$MATSMTP_PORT" --type=integer
+        occ config:system:set mail_smtpauth --value=true --type=boolean
+        occ config:system:set mail_smtpname --value="$$MATSMTP_USERNAME"
+        occ config:system:set mail_smtppassword --value="$$MATSMTP_PASSWORD"
+        occ config:system:set mail_from_address --value="$${MATSMTP_FROM%@*}"
+        occ config:system:set mail_domain --value="$${MATSMTP_FROM#*@}"
+        if [ "$$MATSMTP_TLS" = tls ]; then occ config:system:set mail_smtpsecure --value=ssl; else occ config:system:delete mail_smtpsecure; fi
+      fi
+      exit 0
+
+volumes:
+  nextcloud-html:
+  nextcloud-db:

@@ -1,0 +1,40 @@
+# Uptime Kuma – watches websites and services (https://uptime.kuma.pet).
+x-matos:
+  id: uptime-kuma
+  name: Uptime Kuma
+  tagline: Is everything up? It tells you
+  description: >-
+    Uptime Kuma checks websites, servers, ports and containers every minute, draws their response times and tells you by mail, chat or push
+    when something goes down. Public status pages show others how things are.
+  category: Monitoring
+  role: app
+  state: third-party
+  stateNote: Has its own account and no single sign-on; its notifications are set up in its own settings.
+  icon: uptime-kuma.svg
+  homepage: https://uptime.kuma.pet
+  screenshots:
+    - src: uptime-kuma/first-start.webp
+      caption: The first start
+  ui:
+    service: uptime-kuma
+    port: 3001
+    hostPort: 3001
+  notes:
+    - On the first visit Uptime Kuma asks you to create its administrator account.
+    - It reaches the other apps of MatOS at their public addresses, or at their container names when you add it to the shared network of MatOS.
+  credentials:
+    - label: First sign-in
+      value: Uptime Kuma asks you to create the administrator account.
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    restart: unless-stopped
+    environment:
+      # Its own SQLite database: no question about the database on the first visit.
+      UPTIME_KUMA_DB_TYPE: sqlite
+    volumes:
+      - uptime-kuma-data:/app/data
+
+volumes:
+  uptime-kuma-data:
