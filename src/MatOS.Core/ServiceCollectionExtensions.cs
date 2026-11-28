@@ -37,6 +37,7 @@ public static class ServiceCollectionExtensions
         // Per-request services (depend on the scoped DbContext).
         services.AddScoped<AuthService>();
         services.AddScoped<SessionService>();
+        services.AddScoped<AccessTokenService>();
         services.AddScoped<UserService>();
 
         // Apps and the engines that run them.

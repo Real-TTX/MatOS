@@ -85,7 +85,7 @@ builder.Services.AddHostedService<DockerStartupService>();
 // ---------------------------------------------------------------------------
 // Authentication / authorization
 // ---------------------------------------------------------------------------
-builder.Services.AddAuthentication(AuthConstants.CookieScheme)
+var authentication = builder.Services.AddAuthentication(AuthConstants.CookieScheme)
     .AddCookie(AuthConstants.CookieScheme, options =>
     {
         options.Cookie.Name = "matos.auth";
@@ -110,6 +110,8 @@ builder.Services.AddAuthentication(AuthConstants.CookieScheme)
     .AddOpenIdConnect(MatIdentitySignIn.Scheme, _ => { });
 builder.Services.AddSingleton<Microsoft.Extensions.Options.IConfigureOptions<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>, MatIdentitySignIn>();
 builder.Services.AddSingleton<MatOS.Core.Auth.LogoutReplayCache>();
+// The MCP endpoint for AI clients (docs/ARCHITECTURE.md "MCP"): its own sign-in by a personal access token, never the cookie.
+builder.Services.AddMatOSMcp(authentication);
 
 builder.Services.AddAuthorization(options =>
 {
@@ -195,6 +197,8 @@ app.MapSetupApi();
 app.MapReachApi();
 // MatIdentity ends the sessions of a person who signed out there (server to server).
 app.MapBackchannelLogout();
+// The Model Context Protocol for AI clients, signed in by an access token of the account.
+app.MapMatOSMcp();
 
 // ---------------------------------------------------------------------------
 // Database migration + first-run seed

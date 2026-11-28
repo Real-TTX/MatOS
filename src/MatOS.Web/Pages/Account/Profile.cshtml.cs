@@ -53,16 +53,7 @@ public class ProfileModel : PageModel
     /// <summary>The wallpaper of the account (an id of <see cref="Wallpapers.All"/>).</summary>
     public string Wallpaper { get; private set; } = Wallpapers.Default;
 
-    public TabBarModel Tabs => new()
-    {
-        Tabs =
-        [
-            new TabItem { Title = "General", Href = "/Account/Profile", Icon = "user", Active = !PasswordTab && !HomeTab && !SecurityTab },
-            new TabItem { Title = "Home screen", Href = "/Account/Profile?tab=home", Icon = "image", Active = HomeTab },
-            new TabItem { Title = "Password", Href = "/Account/Profile?tab=password", Icon = "key", Active = PasswordTab },
-            new TabItem { Title = "Security", Href = "/Account/Profile?tab=security", Icon = "shield", Active = SecurityTab },
-        ],
-    };
+    public TabBarModel Tabs => AccountTabs.For(PasswordTab ? AccountTabs.Password : HomeTab ? AccountTabs.Home : SecurityTab ? AccountTabs.Security : AccountTabs.General);
 
     public class InputModel
     {

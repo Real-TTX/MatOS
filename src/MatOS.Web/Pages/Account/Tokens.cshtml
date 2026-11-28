@@ -1,0 +1,85 @@
+@page
+@model MatOS.Web.Pages.Account.TokensModel
+@{
+    ViewData["Title"] = "Access tokens";
+    ViewData["PageSub"] = "Let an AI assistant such as Claude work with MatOS for you.";
+    ViewData["Crumbs"] = Crumbs.Of(("Account", "/Account/Profile"), ("Access tokens", null));
+    var list = Model.List;
+    var now = DateTime.UtcNow;
+}
+
+<div class="mv-winnav">
+    <div class="mv-winnav__head"><span class="mat-avatar" aria-hidden="true">@Ui.Initials(User.GetDisplayName())</span><span><strong>@User.GetDisplayName()</strong><small>@User.GetRole()</small></span></div>
+    <tab-bar model="Model.Tabs" label="Account" />
+</div>
+
+<p class="mat-muted">An AI assistant (Claude Desktop, Claude Code and others that speak the Model Context Protocol) connects to <span class="mat-mono">@Model.Endpoint</span> with a token. It then acts as you, with your role: @(User.IsAdmin() ? "it can install, update, back up and remove apps, so keep the token as safe as your password." : "it can see the apps you may use.") Revoke a token you no longer use.</p>
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="list.Toolbar" />
+
+    @if (list.Items.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon"><icon name="plug" /></span>
+            @if (list.Toolbar.Total == 0)
+            {
+                <div class="mat-empty__title">No tokens yet</div>
+                <p>Make a token for the AI assistant you want to connect.</p>
+                <a class="mat-btn mat-btn--primary" href="/Account/TokenAdd"><icon name="plus" /><span>New token</span></a>
+            }
+            else
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>No token matches. Change the search.</p>
+                <a class="mat-btn mat-btn--secondary" href="/Account/Tokens">Reset the tools</a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Access tokens</caption>
+                <thead>
+                    <tr><th scope="col">Name</th><th scope="col" class="mat-hide-sm">Token</th><th scope="col">Status</th><th scope="col" class="mat-hide-sm">Last used</th><th scope="col" class="mat-hide-sm">Expires</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in list.Items)
+                    {
+                        <tr>
+                            <td data-label="Name"><div class="mat-table__name">@t.Name</div></td>
+                            <td data-label="Token" class="mat-hide-sm mat-mono">@(t.Hint)…</td>
+                            <td data-label="Status" class="mv-statuscell">
+                                @if (t.ExpiresAt <= now)
+                                {
+                                    <span class="mat-pill mat-pill--warn">Expired</span>
+                                }
+                                else
+                                {
+                                    <span class="mat-pill mat-pill--ok">Valid</span>
+                                }
+                            </td>
+                            <td data-label="Last used" class="mat-hide-sm mat-muted mat-nowrap">@(t.LastUsedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                            <td data-label="Expires" class="mat-hide-sm mat-muted mat-nowrap">@t.ExpiresAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                            <td class="mat-table__cell-actions">
+                                <div class="mat-table__actions">
+                                    <form method="post" asp-page-handler="Revoke" data-confirm="Revoke the token @t.Name? The assistant that uses it can no longer sign in." data-confirm-ok="Revoke" data-confirm-danger>
+                                        <input type="hidden" name="token" value="@t.Token" />
+                                        <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Revoke @t.Name" data-tip="Revoke"><icon name="trash" /></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <partial name="_Pager" model="list.Pager" />
+
+    <div class="mat-actions">
+        <a href="/Account/TokenAdd" class="mat-btn mat-btn--primary"><icon name="plus" /><span>New token</span></a>
+    </div>
+</div>
