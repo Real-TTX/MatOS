@@ -448,7 +448,7 @@ The machine MatOS runs on is MatDock's local environment, *This machine*; every 
   `<name>-node<id>` for each other node with apps, and treats them as one. Updates (by hand and the automatic ones) run per app, so on its node.
 - **Moving an app to another node** (*Move* on the app page, a job `AppJobs.Move`): a consistent backup on the old node (containers stopped), the
   stack is rendered for the new node and saved there, MatDock restores the volumes of that backup into the new node (`POST /backups/{id}/restore` with
-  `environment` and `volumesOnly`, MatDock apiVersion 7), the app is deployed there and waits until it runs, the bindings and the route follow its new
+  `environment` and `volumesOnly`, MatDock apiVersion 8), the app is deployed there and waits until it runs, the bindings and the route follow its new
   address, and only then the stack on the old node is removed with its volumes (the backup stays). A failure before the app runs on the new node leaves it
   on the old one and starts it again.
 - **What a node needs:** Docker with the compose plugin, SSH reachable from MatDock's container, a user in the group `docker`, and the ports of its apps

@@ -45,8 +45,8 @@ you can edit it there, and MatOS keeps your change when it updates the app.
   the menu of an icon (*New document*) and widgets with its numbers, all from its own description: MatOS has no code for any app
 - **Apps connect themselves**: install MatDrive and MatOffice, and MatDrive opens its office files in MatOffice, with no key to copy. Each app says what it
   offers and what it uses; MatOS connects them, and every app shows its connections on one page (and works without MatOS, connected by hand)
-- **Wallpapers** drawn for MatOS: *Orbit* (the planet of the logo, light or dark with the theme; the default), the Earth from orbit,
-  a jungle, a lagoon and mountains seen from above, or none. Each person picks their own
+- **Wallpapers** drawn for MatOS: *Orbit* (the planet of the logo, light or dark with the theme; the default) and twelve more, from the Earth seen from orbit
+  to a skyline at night and northern lights, or none. Each person picks their own
 - Inside a window MatOS looks and behaves like every other Mat app: it is built on **MatUi**, the toolkit of
   [MatDesign](https://github.com/Real-TTX/MatDesign), with its lists, forms, dialogs and dark mode
 
@@ -65,8 +65,9 @@ you can edit it there, and MatOS keeps your change when it updates the app.
   with See all, a search, filters and sorting; every app a card with its icon, its line, marks for **the one sign-in** and **mail through MatOS**, and Get or Open
 - The page of an app: its **pictures**, what it gets from MatOS, its facts, Open and **Update** when it is installed, and more apps of its category
 - Catalog of the Mat apps (MatBoard, MatBu, MatCloud, MatCMS with MatCMS Cloud, MatContactHub, MatDo, MatDown, MatDrive, MatFile, MatGame, MatMail, MatOffice, MatPaper, MatPhoto, MatPlay,
-  MatRegistry, MatShape, MatSplit, MatTrakr, and as first versions MatBill, MatCan, Matmon, MatNotes, MatPhone, MatTicket),
-  [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all of them) and a few infrastructure apps
+  MatRegistry, MatShape, MatSplit, MatTrakr, and as first versions MatBill, MatCan, Matmon, MatNotes, MatPhone, MatTicket; announced: MatAi, MatBiz),
+  [MatDesign](https://github.com/Real-TTX/MatDesign) (the design and identity of all of them), a few infrastructure apps, and **well-known apps**: Nextcloud,
+  Immich, Jellyfin, Vaultwarden, Paperless-ngx, Uptime Kuma and Home Assistant (Nextcloud, Vaultwarden and Paperless-ngx sign in with your MatOS account, Nextcloud only under https, and mail through MatOS)
 - Every app has a **state** (Integrated, Beta, Alpha, Preview, Third-party; see [Apps and their state](#apps-and-their-state)); the store shows it where it tells something
 - **Passwords are generated** and shown (hidden until you ask) on the app's page
 - Add your **own apps** by dropping a compose file into `/data/catalog` (see [docs/CATALOG.md](docs/CATALOG.md))
@@ -75,11 +76,17 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 - **Install, update, start, stop, restart, uninstall**: every long task is a job with a **live log**, and the status bar shows that it runs
 - **Update** pulls newer images, re-creates only what changed, and backs up first if you want; **automatic updates** do it at night (off, apps and engines, or MatOS too)
 - **MatOS updates itself**: it shows a new version, and one click (or the night) restarts it on it, with the old version put back if the new one does not start
+- **The updates of this computer** too (Settings, *Updates*, *This computer*): the system updates waiting (how many for security, a new Docker), *Install updates*
+  with a live log, and *Restart the computer*, which waits on the page until it is back. MatDock does the work. MatOS updates Debian and Ubuntu; any other system (Docker Desktop too) it names and leaves to its maker
 - **Backups** are MatDock's: compose + `.env` + all volumes, optionally with the app stopped (consistent databases),
   **schedules with retention**, restore even after the app was uninstalled, download as `.tar`. They show up in MatDock too.
   **Kept on another machine too**: an SFTP folder, a WebDAV folder (Nextcloud) or a network share (SMB), tested when it is saved, chosen per backup and per schedule
 - If you **change a stack in MatDock**, the next update keeps your version
-- The **Task Manager** (`/Tasks`) lists every container with its CPU and memory, as MatDock reports them
+- The **Task Manager** (`/Tasks`): the processor and memory of the host, what its containers send and write, and how full its disk is, with live charts;
+  every container grouped by app (the apps, the system, the rest of the host) with its CPU, memory, network and disk, sorted by what uses the most.
+  The log of each; the apps can be started, stopped and restarted, the engines restarted
+- **Nodes** (Settings, *Nodes*): more Docker hosts, like the VMs of a homelab, reached by SSH through MatDock. An app is installed on the node you choose,
+  moved to another later, backed up and updated there; the Task Manager has a tab per node
 - **Volumes** (`/Volumes`): the volumes of the apps and your own, with their size and who uses them; make one **on this machine or a network share** (SMB or NFS of
   your NAS), tested before it is saved, its password never shown again. An app can keep a **data folder** there (MatPhoto's photo library), chosen at the install or
   later on the app's page. A **file explorer** for every volume: folders, upload, download, rename, move, delete, a preview of pictures and texts
@@ -94,6 +101,25 @@ you can edit it there, and MatOS keeps your change when it updates the app.
 
 ## Screenshots
 
+All pictures come from a test install with three apps from the store (MatDo, MatDrive and Uptime Kuma), set up through its first start.
+
+### The first start
+
+| Welcome | Your account | The engines |
+|---|---|---|
+| ![Welcome: this computer is ready](docs/images/setup-welcome.png) | ![Your account: name, e-mail and password](docs/images/setup-account.png) | ![The engines MatOS installs, in plain words, and the question of the updates](docs/images/setup-engines.png) |
+
+| How you reach your apps | Setting up | Ready |
+|---|---|---|
+| ![How do you reach your apps: a free address, your own domain, or only at home](docs/images/setup-choose.png) | ![Setting up your MatOS: a line per step, live](docs/images/setup-progress.png) | ![Your MatOS is ready: every step done](docs/images/setup-progress-done.png) |
+
+*Next* on the engines starts the first installs while you answer the next question. The progress screen shows every step as it
+happens, with *Try again* for one that did not work. Then come your sign-in for all apps and the mail, and the home screen opens with *Getting started*:
+
+| Your sign-in | Mail | Getting started |
+|---|---|---|
+| ![Your account in MatIdentity: the same e-mail and password for every app](docs/images/setup-signin.png) | ![Notifications and mail: MatSMTP and where MatOS writes to you](docs/images/setup-mail.png) | ![Getting started: a few things to do next, in a window](docs/images/start.png) |
+
 ### The home screen
 
 | Light | On a phone | A window on a phone |
@@ -105,11 +131,15 @@ bar at the bottom goes home.
 
 | The folder *System* | The menu of an app | Your wallpaper |
 |---|---|---|
-| ![The folder System: the five engines and all engines](docs/images/folder-system.png) | ![The menu of an app: open, in a new tab, always in a new tab, details, manage, and where it sits on the home screen](docs/images/app-menu.png) | ![Your account, Home screen: the wallpapers to choose from](docs/images/wallpapers.png) |
+| ![The folder System: the five engines and their overview](docs/images/folder-system.png) | ![The menu of an app: open, in a new tab, always in a new tab, its own entries, details, manage, and where it sits on the home screen](docs/images/app-menu.png) | ![Your account, Home screen: the wallpapers to choose from](docs/images/wallpapers.png) |
 
-| Orbit | Earth | Jungle | Lagoon | Mountains |
-|---|---|---|---|---|
-| ![Orbit](src/MatOS.Web/wwwroot/img/wallpapers/orbit-dark-thumb.jpg) | ![Earth](src/MatOS.Web/wwwroot/img/wallpapers/earth-thumb.jpg) | ![Jungle](src/MatOS.Web/wwwroot/img/wallpapers/jungle-thumb.jpg) | ![Lagoon](src/MatOS.Web/wwwroot/img/wallpapers/lagoon-thumb.jpg) | ![Mountains](src/MatOS.Web/wwwroot/img/wallpapers/mountains-thumb.jpg) |
+| Orbit | Earth | Jungle | Lagoon | Mountains | Dawn | Coast |
+|---|---|---|---|---|---|---|
+| ![Orbit](src/MatOS.Web/wwwroot/img/wallpapers/orbit-dark-thumb.jpg) | ![Earth](src/MatOS.Web/wwwroot/img/wallpapers/earth-thumb.jpg) | ![Jungle](src/MatOS.Web/wwwroot/img/wallpapers/jungle-thumb.jpg) | ![Lagoon](src/MatOS.Web/wwwroot/img/wallpapers/lagoon-thumb.jpg) | ![Mountains](src/MatOS.Web/wwwroot/img/wallpapers/mountains-thumb.jpg) | ![Dawn](src/MatOS.Web/wwwroot/img/wallpapers/dawn-thumb.jpg) | ![Coast](src/MatOS.Web/wwwroot/img/wallpapers/coast-thumb.jpg) |
+
+| Dunes | City | Forest | Aurora | Nebula | Marble |
+|---|---|---|---|---|---|
+| ![Dunes](src/MatOS.Web/wwwroot/img/wallpapers/dunes-thumb.jpg) | ![City](src/MatOS.Web/wwwroot/img/wallpapers/city-thumb.jpg) | ![Forest](src/MatOS.Web/wwwroot/img/wallpapers/forest-thumb.jpg) | ![Aurora](src/MatOS.Web/wwwroot/img/wallpapers/aurora-thumb.jpg) | ![Nebula](src/MatOS.Web/wwwroot/img/wallpapers/nebula-thumb.jpg) | ![Marble](src/MatOS.Web/wwwroot/img/wallpapers/marble-thumb.jpg) |
 
 ### Windows
 
@@ -121,15 +151,38 @@ gets a dot), the red one closes it, the green one fills the screen.
 Let go at the top of the screen a window fills it, at the left or right edge it takes that half. The dock is the taskbar: a dot under every
 app that has a window, a click brings it to the front. The windows come back after a reload, and every app remembers where its window was.
 
-| One window | The settings, with their sidebar | The menu of a window |
-|---|---|---|
-| ![The store in a window: the traffic lights, Back, the title, Reload and open in a new tab](docs/images/store.png) | ![The settings in a window: General, Engines, System and the setup wizard in a sidebar](docs/images/settings.png) | ![A right click on the bar of a window: reload, a new tab, fill the screen, a half, put away, close](docs/images/window-menu.png) |
+| The settings, with their sidebar | The menu of a window |
+|---|---|
+| ![The settings in a window: General, Address, Engines, Nodes, Updates, System and the setup wizard in a sidebar](docs/images/settings.png) | ![A right click on the bar of a window: reload, a new tab, fill the screen, a half, put away, close](docs/images/window-menu.png) |
+
+### The store
+
+| The store | The page of an app |
+|---|---|
+| ![The store: the app of the day, Made for MatOS and a shelf per category](docs/images/store.png) | ![The page of MatPhoto in the store: its state, Install, what it gets from MatOS and its pictures](docs/images/store-app.png) |
 
 | An app | Installing, with a live log |
 |---|---|
-| ![App details: address, credentials, stack and actions](docs/images/app-details.png) | ![The live log of an install](docs/images/install-log.png) |
+| ![App details: address, the first sign-in, stack and actions](docs/images/app-details.png) | ![The log of an install](docs/images/install-log.png) |
 
 Buttons read from positive to negative: **Open, Stop, Restart, Update, Back up**, then a gap, then **Uninstall**.
+
+### The Task Manager
+
+![The Task Manager: processor, memory, network, disk and storage of the host with charts, and every container grouped by app](docs/images/tasks.png)
+
+The host at the top (live charts while the page is open), below it every container grouped by app: the apps, the system (MatOS and its engines)
+and the rest of the host, sorted by what uses the most. Every container shows its log; an app can be started, stopped and restarted, an engine restarted.
+With more nodes there is a tab per node.
+
+### Volumes and files
+
+| Volumes | The file explorer | A preview |
+|---|---|---|
+| ![Volumes: your own and those of the apps, with kind, app, users and size](docs/images/volumes.png) | ![The file explorer of a volume: folders and files, upload, new folder](docs/images/files.png) | ![The preview of a picture in the file explorer](docs/images/files-preview.png) |
+
+A volume on this machine or a network share (SMB, NFS) of your NAS, tested before it is saved. An app keeps a data folder there when it offers one
+(MatPhoto's photo library). The file explorer uploads, downloads, renames, moves and deletes, and shows pictures and texts.
 
 ### The engines
 
@@ -141,8 +194,11 @@ The window of an engine says what it keeps for which app (a stack in MatDock, a 
 MatIdentity, a relay user in MatSMTP). It opens the engine itself in a window when the engine allows MatOS to frame it, otherwise in a
 new tab. The *Engines* tab of the settings hands the domain and the DNS account over again (*Connect again*).
 
-![Settings, System: Docker as MatDock reports it, with processor, memory and disk, and the version and data folder of MatOS](docs/images/system.png)
+| Updates | Nodes | System |
+|---|---|---|
+| ![Settings, Updates: MatOS's own version and a newer one, this computer, and what updates by itself at night](docs/images/updates.png) | ![Settings, Nodes: this machine and how to add another Docker host](docs/images/nodes.png) | ![Settings, System: Docker as MatDock reports it, with processor, memory and disk, and the version and data folder of MatOS](docs/images/system.png) |
 
+*Updates* has MatOS's own version (one click, or the night), the updates of this computer, and what updates by itself. *Nodes* adds more Docker hosts.
 *System* shows Docker as MatDock reports it: the load of the processor, the memory and the disk of the host, and how many containers run.
 
 ### Manage an app
@@ -158,25 +214,26 @@ the actions it offers and its settings as a form. MatOS knows nothing about the 
 
 ![The activity: installs, updates and backups with their state and duration](docs/images/jobs.png)
 
-| Backups | A schedule |
-|---|---|
-| ![Backups: app, time, kind, size and state](docs/images/backups.png) | ![A backup schedule: apps, time, how many are kept](docs/images/backup-schedules.png) |
+| Backups | A schedule | A place on another machine |
+|---|---|---|
+| ![Backups: app, time, kind, size and state](docs/images/backups.png) | ![The backup schedules: apps, time, how many are kept](docs/images/backup-schedules.png) | ![A backup target: SFTP, WebDAV or SMB, tested when it is saved](docs/images/backup-target.png) |
 
-One list for all backups: those MatDock made (also visible in MatDock) next to those of MatOS's own runner.
+One list for all backups: those MatDock made (also visible in MatDock) next to those of MatOS's own runner. A backup is kept on this machine
+or at a target (an SFTP folder, a WebDAV folder such as Nextcloud, a network share), chosen per backup and per schedule.
 Every list has its toolbar on top (a search field, *Filter* and *Sort* open dialogs), its actions below and pagination directly under the table.
 
 | Apps | The tools of a list |
 |---|---|
 | ![The apps list](docs/images/apps.png) | ![The filter dialog of a list](docs/images/toolbar-filter.png) |
 
-### The setup wizard
+### People and the setup wizard
 
-| The engines | The DNS account |
-|---|---|
-| ![Setup wizard: the five engines, MatDock required](docs/images/wizard.png) | ![Setup wizard: the DNS provider and its API token](docs/images/wizard-dns.png) |
+| People | The setup wizard | Its addresses |
+|---|---|---|
+| ![People: the people of MatIdentity, their role and what they may use](docs/images/people.png) | ![The setup wizard: run it again to change the addresses, the engines or the DNS account](docs/images/wizard.png) | ![The setup wizard: where your apps live](docs/images/wizard-addresses.png) |
 
-The wizard warns when a port it needs is taken (for example when another proxy holds 80 and 443) and leaves
-alone what is installed already. The DNS account is asked once and handed to Matcad and Matddns.
+*People* manages the people, groups and what each may use, kept in MatIdentity. The setup wizard changes later what the first start set up:
+the addresses, the engines and the DNS account. It warns when a port it needs is taken and leaves alone what is installed already.
 
 ## Quick start
 
@@ -454,7 +511,7 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | Apps as MatDock stacks, routes in Matcad, DNS records in Matddns, domain and DNS account asked once | ✅ |
 | Stack edited in MatDock survives an update | ✅ |
 | Single sign-on through MatIdentity (installed and wired by MatOS: the apps and MatOS itself) | ✅ |
-| Mail through MatSMTP (installed by the wizard; a relay user and the `MATSMTP_*` variables for every app that sends mail) | ✅ (the apps still have to read the variables) |
+| Mail through MatSMTP (installed by the first start; a relay user and the `MATSMTP_*` variables for every app that sends mail) | ✅ (the apps still have to read the variables) |
 | Apps that describe themselves (platform contract): the tab Manage with their tiles, settings and buttons | ✅ |
 | The engines inside a window (`MAT_FRAME_ANCESTORS`, MatPlatform 1.5.0) | ✅ in MatOS; the engines on their `feature/frame-ancestors` branches, in their images with the next release |
 | Apps that connect themselves (bindings) and bring their own icons, widgets and menu entries (contract 2, MatPlatform 2.0) | ✅ MatOffice and MatDrive; the engines move onto the bindings next |
@@ -467,6 +524,10 @@ GitHub Action, which also builds the multi-arch image (`amd64`, `arm64`).
 | Microsoft Entra ID sign-in | planned (the login is already behind `AuthService` / `SessionService`) |
 | Backup targets: SFTP, WebDAV, SMB (create, test, choose per backup and schedule, restore from them) | ✅ with MatDock's `feature/backup-targets-api` (apiVersion 5) |
 | Volumes (on this machine, SMB, NFS), data folders of the apps on them, a file explorer | ✅ with MatDock's `feature/volumes-api` (apiVersion 9) |
+| The Task Manager: the host and every container live, with charts and actions | ✅ with MatDock apiVersion 6 |
+| The updates of this computer (the system's packages, a restart) through MatDock | ✅ with MatDock apiVersion 7 (a Linux host with apt) |
+| Nodes: more Docker hosts over SSH, an app installed on one and moved to another | ✅ with MatDock's `feature/nodes-api` (apiVersion 8) |
+| Well-known apps in the store (Nextcloud, Immich, Jellyfin, Vaultwarden, Paperless-ngx, Uptime Kuma, Home Assistant) | ✅ |
 
 ## License
 
