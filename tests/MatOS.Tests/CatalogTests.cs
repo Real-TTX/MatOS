@@ -300,6 +300,20 @@ public class CatalogTests
     }
 
     [Fact]
+    public void MatCMS_signs_its_admins_in_through_MatIdentity_and_mails_through_MatSMTP()
+    {
+        // MatCMS has no /api, so its entry says it: the back office signs in through MatIdentity (MatPlatform's default paths) and mails
+        // through MatSMTP as matcms@<domain>; both are optional in the image (without the variables the site keeps its own).
+        var cms = CreateCatalog().Get("matcms")!;
+        var identity = Assert.Single(cms.Consumes, c => c.Capability == Capabilities.IdentityOidc);
+        Assert.Empty(identity.Params);
+        var mail = Assert.Single(cms.Consumes, c => c.Capability == Capabilities.MailSmtp);
+        Assert.Empty(mail.Params);
+        Assert.Equal("/login", cms.Ui!.SignIn);
+        Assert.Equal(("matcms", 8080), (cms.Ui.Service, cms.Ui.Port));
+    }
+
+    [Fact]
     public void No_service_has_an_empty_environment()
     {
         // "environment:" with nothing under it is null, which docker compose refuses ("must be a mapping"): MatCMS could not be installed with it.

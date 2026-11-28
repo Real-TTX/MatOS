@@ -7,7 +7,7 @@ x-matos:
   category: Websites
   role: app
   state: beta
-  stateNote: Joins a MatCMS Cloud installed beside it by itself; no sign-in through MatIdentity yet (its own accounts).
+  stateNote: Joins a MatCMS Cloud installed beside it by itself, signs its admins in through MatIdentity and mails through MatSMTP; not yet tested end to end through MatOS.
   icon: matcms.svg
   homepage: https://github.com/Real-TTX/MatCMS
   # Pictures for its page in the store: files below wwwroot/img/store (taken from the app's repository).
@@ -20,12 +20,19 @@ x-matos:
       caption: Overview
   # What MatCMS uses of other apps (MatCMS has no /api of the contract, so its entry says it): cms.cloud, the link to a MatCMS Cloud
   # installed beside it. The broker passes MAT_CMS_CLOUD_URL, _INTERNAL_URL and _KEY, and the site joins the cloud by itself (no join code).
+  # The sign-in of its BACK-OFFICE admins through MatIdentity (MATIDENTITY_*; the site's members keep their own sign-in, /login?local=1 always
+  # stays) and its mail through MatSMTP (MATSMTP_*; the site's name is the sender name, its own address the Reply-To). Both since
+  # MatPlatform came to the site (Real-TTX/MatCMS#6); an older image ignores the variables and keeps its own sign-in and SMTP.
   consumes:
     - capability: cms.cloud
+    - capability: identity.oidc   # the default paths of MatPlatform: /signin-oidc, /signout-callback-oidc, /signout-backchannel
+    - capability: mail.smtp       # sender matcms@<domain>
   ui:
     service: matcms
     port: 8080
     hostPort: 9101
+    # With MatIdentity the back office is opened here: /login goes straight on to MatIdentity and back into /admin.
+    signIn: /login
   credentials:
     - label: Username
       value: admin
