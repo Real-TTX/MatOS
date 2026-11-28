@@ -1,0 +1,79 @@
+@page
+@model MatOS.Web.Pages.Account.TokenAddModel
+@using MatOS.Core.Auth
+@{
+    ViewData["Title"] = "New access token";
+    ViewData["PageSub"] = "A token for an AI assistant. It acts as you, with your role.";
+    ViewData["Crumbs"] = Crumbs.Of(("Account", "/Account/Profile"), ("Access tokens", "/Account/Tokens"), ("New token", null));
+    ViewData["Width"] = "narrow";
+}
+
+<div class="mv-winnav">
+    <div class="mv-winnav__head"><span class="mat-avatar" aria-hidden="true">@Ui.Initials(User.GetDisplayName())</span><span><strong>@User.GetDisplayName()</strong><small>@User.GetRole()</small></span></div>
+    <tab-bar model="Model.Tabs" label="Account" />
+</div>
+
+@if (Model.Secret is { } secret)
+{
+    var claudeCode = McpEndpoint.ClaudeCodeLine(Model.Endpoint, secret);
+    var claudeDesktop = McpEndpoint.ClaudeDesktopConfig(Model.Endpoint, secret);
+    <div class="mat-alert mat-alert--success" role="status"><icon name="check-circle" /><div class="mat-alert__body"><strong>The token is ready.</strong> Copy it now: MatOS keeps only a fingerprint of it and cannot show it again. It is valid until @Model.ExpiresAt!.Value.ToLocalTime().ToString("yyyy-MM-dd").</div></div>
+
+    <div class="mat-card" role="group" aria-label="Your new token">
+        <div class="mat-card__head"><icon name="key" /><span class="mat-card__title">@Model.Name</span></div>
+        <div class="mat-card__body mat-stack">
+            <pre class="mat-code" tabindex="0">@secret</pre>
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="button" class="mat-btn mat-btn--primary" data-copy="@secret"><icon name="copy" /><span>Copy the token</span></button>
+            </div>
+
+            <h2 class="mat-label">Claude Code</h2>
+            <p class="mat-hint">Run this line in a terminal.</p>
+            <pre class="mat-code" tabindex="0">@claudeCode</pre>
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="button" class="mat-btn mat-btn--secondary" data-copy="@claudeCode"><icon name="copy" /><span>Copy the line</span></button>
+            </div>
+
+            <h2 class="mat-label">Claude Desktop</h2>
+            <p class="mat-hint">Add this to <span class="mat-mono">claude_desktop_config.json</span> (Settings, Developer, Edit Config) and restart Claude Desktop. It needs Node.js for <span class="mat-mono">mcp-remote</span>.</p>
+            <pre class="mat-code" tabindex="0">@claudeDesktop</pre>
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="button" class="mat-btn mat-btn--secondary" data-copy="@claudeDesktop"><icon name="copy" /><span>Copy the config</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mat-btn-row">
+        <a href="/Account/Tokens" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back to the tokens</span></a>
+    </div>
+}
+else
+{
+    <form method="post" class="mat-form" novalidate>
+        <partial name="_ValidationSummary" />
+
+        <div class="mat-card">
+            <div class="mat-card__body">
+                <div class="mat-form__grid">
+                    <mat-field label="Name" asp-for="Name" required="true" hint="Where you use it, so you know later which one to revoke: Claude Desktop on my laptop.">
+                        <input asp-for="Name" class="mat-input" autocomplete="off" maxlength="@AccessTokenService.MaxNameLength" required data-msg-required="Please give the token a name." />
+                    </mat-field>
+
+                    <mat-field label="Valid for" asp-for="Days" hint="After that it stops working and you make a new one.">
+                        <select asp-for="Days" class="mat-select">
+                            @foreach (var days in AccessTokenService.LifetimeChoices)
+                            {
+                                <option value="@days">@(days == 365 ? "One year" : $"{days} days")</option>
+                            }
+                        </select>
+                    </mat-field>
+                </div>
+            </div>
+        </div>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--primary"><icon name="plus" /><span>Make the token</span></button>
+            <a href="/Account/Tokens" class="mat-btn mat-btn--secondary"><icon name="back" /><span>Back</span></a>
+        </div>
+    </form>
+}

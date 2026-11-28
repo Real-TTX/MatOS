@@ -14,6 +14,8 @@
 // Volumes (docs/ARCHITECTURE.md "Volumes and the file explorer"): a volume on this machine and its files, always (it needs MatDock with apiVersion 9 and Docker here to
 // plant a link). MATOS_E2E_SMB="<host>:<share>:<user>:<password>" adds an SMB share (a dperson/samba container), MATOS_E2E_FOLDER_APP the catalog id of a small app
 // with a data folder (`folders`) that is installed with it on the share and uninstalled again. MATOS_E2E_ONLY=volumes runs only that section.
+// MCP (docs/ARCHITECTURE.md "MCP"): a token made in the account, the endpoint called with it, then revoked. MATOS_E2E_MCP_APP=<catalog id> also installs that app
+// through install_app and removes it through uninstall_app. MATOS_E2E_ONLY=mcp runs only that section.
 const { chromium } = require('playwright-core');
 const { execFileSync } = require('child_process');
 
@@ -49,7 +51,7 @@ function expectEqual(actual, expected, what) {
 
 const pages = [
   '/', '/Apps', '/Store', '/Store/Install?id=matfile', '/Backups', '/Backups?tab=schedules', '/Backups/Create', '/Backups/ScheduleEdit', '/Backups/Targets', '/Backups/TargetEdit', '/Volumes', '/Volumes/Edit', '/Jobs', '/Tasks',
-  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Nodes', '/Settings/NodeAdd', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security',
+  '/Users', '/Users/Edit', '/Settings', '/Settings/Address', '/Settings/Engines', '/Settings/Nodes', '/Settings/NodeAdd', '/Settings/Updates', '/Settings/System', '/Wizard', '/Account/Profile', '/Account/Profile?tab=home', '/Account/Profile?tab=password', '/Account/Profile?tab=security', '/Account/Tokens', '/Account/TokenAdd',
   '/Start',
 ];
 
@@ -111,9 +113,14 @@ const pages = [
   }
 
   const { ctx, page } = await signedIn({ viewport: { width: 1360, height: 900 } });
-  if (process.env.MATOS_E2E_ONLY === 'volumes') {
-    console.log('Volumes and the file explorer');
-    await volumes(page);
+  if (process.env.MATOS_E2E_ONLY === 'volumes' || process.env.MATOS_E2E_ONLY === 'mcp') {
+    if (process.env.MATOS_E2E_ONLY === 'mcp') {
+      console.log('MCP');
+      await mcp(page);
+    } else {
+      console.log('Volumes and the file explorer');
+      await volumes(page);
+    }
     await check('no script errors on any page', async () => { expectEqual(errors, [], 'errors'); });
     await browser.close();
     const failedOnly = results.filter(r => !r.ok).length;
@@ -749,6 +756,8 @@ ${results.length - failedOnly} of ${results.length} checks passed`);
   await nodes(page);
   console.log('Volumes and the file explorer');
   await volumes(page);
+  console.log('MCP');
+  await mcp(page);
   await check('the wizard (to change the setup later) walks through four steps, the engines under Advanced', async () => {
     await page.goto(BASE + '/Wizard');
     expectEqual(await page.locator('.mv-step').count(), 4, 'steps');
@@ -1588,4 +1597,152 @@ async function firstStart(browser, errors) {
   const failed = results.filter(r => !r.ok).length;
   console.log('\n' + (results.length - failed) + ' of ' + results.length + ' checks passed');
   process.exit(failed ? 1 : 0);
+}
+
+// The MCP endpoint (docs/ARCHITECTURE.md "MCP"): a token made on the page, initialize, tools/list, read tools, the rules (an engine stays, an unknown app), with
+// MATOS_E2E_MCP_APP (the catalog id of a small app) an install through install_app followed with get_job and its removal through uninstall_app (which asks for
+// confirm first); then the token revoked and refused.
+async function mcp(page) {
+  const name = 'e2e mcp ' + Date.now();
+  let secret = null;
+  let rpcId = 0;
+  const call = async (method, params, token = secret) => {
+    const response = await fetch(BASE + '/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-06-18', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
+    });
+    const text = await response.text();
+    if (!response.ok) { return { status: response.status, text }; }
+    const json = (response.headers.get('content-type') || '').includes('text/event-stream')
+      ? JSON.parse(text.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5)).join(''))
+      : JSON.parse(text);
+    return { status: response.status, json };
+  };
+  const tool = async (toolName, args = {}) => {
+    const { status, json, text } = await call('tools/call', { name: toolName, arguments: args });
+    if (status !== 200) { throw new Error(`${toolName}: HTTP ${status} ${text}`); }
+    if (json.error) { throw new Error(`${toolName}: ${json.error.message}`); }
+    const content = json.result.content.map(c => c.text).join('');
+    return { error: json.result.isError === true, text: content, value: json.result.isError ? null : JSON.parse(content) };
+  };
+
+  await check('mcp: without a token /mcp answers 401 with a Bearer challenge', async () => {
+    const response = await fetch(BASE + '/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: '{}' });
+    expectEqual(response.status, 401, 'status');
+    expectTrue((response.headers.get('www-authenticate') || '').startsWith('Bearer'), 'a Bearer challenge');
+  });
+
+  await check('mcp: a token is made in the account, shown once with the lines for Claude, and listed', async () => {
+    await page.goto(BASE + '/Account/TokenAdd');
+    await page.click('form.mat-form button[type=submit]');
+    expectTrue(page.url().includes('/Account/TokenAdd'), 'an empty name stays on the form');
+    await page.fill('#Name', name);
+    await page.selectOption('#Days', '7');
+    await Promise.all([page.waitForLoadState('load'), page.click('form.mat-form button[type=submit]')]);
+    await page.locator('pre.mat-code').first().waitFor();
+    secret = (await page.locator('pre.mat-code').first().innerText()).trim();
+    expectTrue(/^mos_[A-Za-z0-9_-]{43}$/.test(secret), 'the secret has its shape: ' + secret.slice(0, 8));
+    expectTrue((await page.locator('pre.mat-code').nth(1).innerText()).includes('claude mcp add --transport http'), 'the line for Claude Code');
+    await page.goto(BASE + '/Account/Tokens?q=' + encodeURIComponent(name));
+    const row = page.locator('table.mat-table tbody tr', { hasText: name });
+    expectEqual(await row.count(), 1, 'the token is listed');
+    expectTrue((await row.innerText()).includes(secret.slice(0, 12)), 'with the start of its secret');
+    expectTrue(!(await page.content()).includes(secret), 'the list never shows the whole secret');
+  });
+
+  if (!secret) {
+    return;
+  }
+
+  await check('mcp: initialize names MatOS, tools/list has the tools with their annotations', async () => {
+    const init = await call('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
+    expectEqual(init.status, 200, 'initialize status ' + (init.text || ''));
+    expectEqual(init.json.result.serverInfo.name, 'matos', 'server name');
+    const list = await call('tools/list', {});
+    const tools = Object.fromEntries(list.json.result.tools.map(t => [t.name, t]));
+    for (const n of ['whoami', 'list_apps', 'get_app', 'search_store', 'list_jobs', 'get_job', 'list_backups', 'list_backup_schedules', 'get_tasks', 'list_volumes', 'list_engines', 'get_update_state',
+      'install_app', 'start_app', 'stop_app', 'restart_app', 'update_app', 'uninstall_app', 'backup_app', 'restore_backup', 'check_for_updates']) {
+      expectTrue(tools[n], 'the tool ' + n);
+    }
+    expectEqual(tools.uninstall_app.annotations.destructiveHint, true, 'uninstall_app is destructive');
+    expectEqual(tools.restore_backup.annotations.destructiveHint, true, 'restore_backup is destructive');
+    expectEqual(tools.list_apps.annotations.readOnlyHint, true, 'list_apps only reads');
+    expectTrue(tools.uninstall_app.inputSchema.properties.confirm, 'uninstall_app takes confirm');
+  });
+
+  await check('mcp: whoami, list_apps, get_app, search_store, list_jobs, get_tasks and get_update_state answer', async () => {
+    const me = await tool('whoami');
+    expectEqual(me.value.role, 'Admin', 'the role of the token');
+    const apps = await tool('list_apps');
+    const matdock = apps.value.find(a => a.catalogId === 'matdock');
+    expectTrue(matdock, 'MatDock is among the apps');
+    const details = await tool('get_app', { app: matdock.app });
+    expectTrue(!details.error && details.value.engine === true, 'get_app: ' + details.text.slice(0, 200));
+    const store = await tool('search_store', { query: 'file', limit: 5 });
+    expectTrue(store.value.apps.length > 0, 'the store finds something');
+    const jobs = await tool('list_jobs', { limit: 3 });
+    expectTrue(Array.isArray(jobs.value), 'the jobs are a list');
+    const tasks = await tool('get_tasks');
+    expectTrue(!tasks.error && tasks.value.total > 0, 'the Task Manager has containers: ' + tasks.text.slice(0, 200));
+    const updates = await tool('get_update_state');
+    expectTrue(!updates.error && updates.value.version, 'the update state names the version');
+  });
+
+  await check('mcp: an engine is never removed, an unknown app and a missing backup are errors, nothing is queued', async () => {
+    const before = (await tool('list_jobs', { limit: 1 })).value[0]?.id ?? 0;
+    const matdock = (await tool('list_apps')).value.find(a => a.catalogId === 'matdock');
+    const engine = await tool('uninstall_app', { app: matdock.app, confirm: true });
+    expectTrue(engine.error && engine.text.includes('engine'), 'an engine stays: ' + engine.text);
+    const nothing = await tool('get_app', { app: 'no-such-app' });
+    expectTrue(nothing.error, 'an unknown app is an error');
+    const restore = await tool('restore_backup', { backupId: 'matdock:0' });
+    expectTrue(restore.error, 'a restore without a backup is an error');
+    expectEqual((await tool('list_jobs', { limit: 1 })).value[0]?.id ?? 0, before, 'no job queued');
+  });
+
+  const appId = process.env.MATOS_E2E_MCP_APP;
+  if (appId) {
+    await check(`mcp: install_app installs ${appId} as a job, get_job follows it, uninstall_app asks for confirm and removes it`, async () => {
+      const follow = async (jobId, minutes) => {
+        const deadline = Date.now() + minutes * 60000;
+        let offset = 0;
+        let log = '';
+        for (;;) {
+          const job = (await tool('get_job', { id: jobId, offset })).value;
+          log += job.log;
+          offset = job.nextOffset;
+          if (job.finished) {
+            expectEqual(job.status, 'succeeded', `job ${jobId}: ${job.error || ''} ${log.split('\n').filter(Boolean).slice(-3).join(' | ')}`);
+            return log;
+          }
+          expectTrue(Date.now() < deadline, `job ${jobId} did not end in ${minutes} minutes`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      };
+      const started = await tool('install_app', { catalogId: appId, name: 'E2E MCP' });
+      expectTrue(!started.error, 'install_app: ' + started.text);
+      await follow(started.value.jobId, 8);
+      const slug = started.value.app;
+      const details = await tool('get_app', { app: slug });
+      expectEqual(details.value.lifecycle, 'installed', 'the app is installed');
+      const unconfirmed = await tool('uninstall_app', { app: slug });
+      expectTrue(unconfirmed.error && unconfirmed.text.includes('confirm'), 'without confirm it asks for it: ' + unconfirmed.text);
+      const removed = await tool('uninstall_app', { app: slug, confirm: true, deleteData: true, backupFirst: false });
+      expectTrue(!removed.error, 'uninstall_app: ' + removed.text);
+      await follow(removed.value.jobId, 6);
+      expectTrue(!(await tool('list_apps')).value.some(a => a.app === slug), 'the app is gone');
+    });
+  }
+
+  await check('mcp: the revoked token is refused at once', async () => {
+    await page.goto(BASE + '/Account/Tokens?q=' + encodeURIComponent(name));
+    await page.locator('table.mat-table tbody tr', { hasText: name }).locator('button[aria-label^="Revoke"]').click();
+    await page.locator('dialog.mat-dialog[open] .mat-btn--danger').click();
+    await page.waitForLoadState('networkidle');
+    await page.goto(BASE + '/Account/Tokens?q=' + encodeURIComponent(name));
+    expectEqual(await page.locator('table.mat-table tbody tr', { hasText: name }).count(), 0, 'the token is gone from the list');
+    const refused = await call('tools/call', { name: 'whoami', arguments: {} });
+    expectEqual(refused.status, 401, 'a revoked token gets 401');
+  });
 }

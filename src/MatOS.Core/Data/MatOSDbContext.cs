@@ -27,6 +27,7 @@ public class MatOSDbContext : DbContext
     public DbSet<BackupSchedule> BackupSchedules => Set<BackupSchedule>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
     public DbSet<AppBinding> AppBindings => Set<AppBinding>();
+    public DbSet<AccessToken> AccessTokens => Set<AccessToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -141,6 +142,22 @@ public class MatOSDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.AppId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasQueryFilter(x => x.UpdateState != UpdateState.Deleted);
+        });
+
+        modelBuilder.Entity<AccessToken>(e =>
+        {
+            e.ToTable("AccessToken");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Token).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            e.Property(x => x.SecretHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Hint).HasMaxLength(16).IsRequired();
+            e.Property(x => x.LastUsedFrom).HasMaxLength(64);
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.SecretHash).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasQueryFilter(x => x.UpdateState != UpdateState.Deleted);
         });
 
