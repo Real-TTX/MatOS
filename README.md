@@ -420,7 +420,7 @@ before you install it, and a preview cannot be installed yet. Your own apps in `
 | [MatBoard](https://github.com/Real-TTX/MatBoard) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatBu](https://github.com/Real-TTX/MatBu) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [MatCloud](https://github.com/Real-TTX/MatCloud) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
-| [MatCMS](https://github.com/Real-TTX/MatCMS) | Beta | Joins a MatCMS Cloud installed beside it by itself; no sign-in through MatIdentity yet (its own accounts). |
+| [MatCMS](https://github.com/Real-TTX/MatCMS) | Beta | Joins a MatCMS Cloud installed beside it by itself, signs its admins in through MatIdentity and mails through MatSMTP; not yet tested end to end through MatOS. |
 | [MatCMS Cloud](https://github.com/Real-TTX/MatCMS) | Beta | Works with one sign-in and mail through MatSMTP and links the MatCMS sites by itself; tested end to end through MatOS. |
 | [MatContactHub](https://github.com/Real-TTX/MatContactHub) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |
 | [Matddns](https://github.com/Real-TTX/Matddns) | Beta | Works with one sign-in; not yet tested end to end through MatOS. |

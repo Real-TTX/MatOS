@@ -124,7 +124,7 @@ MatIdentity unless `?local=1`). **Mail**: really sends mail through `MATSMTP_*` 
 | MatFile, MatPlay, MatSplit, MatTrakr, MatMail | beta | ✅ | – | route headers | ✅ (kit 1.4) | `MAT_FRAME_ANCESTORS` (kit 2.x); MatMail's note "not in the window" may be stale (it sends no CSP of its own) |
 | MatNotes, MatBill, MatTicket, MatPhone, MatCan | alpha (new) | – | – (own settings) | – (`frame-ancestors 'self'`) | – | the MatPlatform kit: the one sign-in, `MAT_API_KEY` and `/api`, `MAT_FRAME_ANCESTORS`, a seeded administrator (today the first visitor becomes it); MatPhone publishes SIP 5060 and RTP 6100-6199/udp |
 | MatCMS Cloud | beta | ✅ (`/login`) | ✅ | ✅ | ✅ (MatPlatform 2.4.0) | released with MatCMS `main` on 2026-11-27 (`matcms-cloud` 1.14.262); see "MatCMS Cloud" below |
-| MatCMS | beta (the owner's choice, without the one sign-in) | – | – (own settings) | – | – | the kit; it consumes `cms.cloud` in its entry (no `/api`): a site joins a MatCMS Cloud installed beside it (`matcms` 1.13.405) |
+| MatCMS | beta | ✅ (`/login`, back-office admins only; members stay local) | ✅ | – | – | the end-to-end test through MatOS (sign-in and mail since Real-TTX/MatCMS#6, both optional in the image, `/login?local=1` always stays); no `/api`, so its entry says what it consumes: `cms.cloud` (a site joins a MatCMS Cloud installed beside it, `matcms` 1.13.405), `identity.oidc`, `mail.smtp` |
 | Matmon | alpha | – | – (own settings) | – | – | the kit; its entry no longer claims `mail.smtp` (the image never read `MATSMTP_*`, the binding only made a relay user) |
 | MatDesign | alpha | – | – | – | – | – |
 | MatAi | preview | ✅ | – | – (own CSP) | ✅ | a remote and a published image |
@@ -158,4 +158,4 @@ The integration (MatCMS branch `feature/matos-integration`, merged into MatCMS `
   updates (and its hosting on this Docker) need the socket; a catalog copy can add it.
 
 Open: the capability `cms.cloud` belongs into MatDesign's docs/PLATFORM.md table of capabilities; the cloud has no Connections area page (`<mat-connections />`, its
-admin is not MatUi's shell yet); MatCMS itself has no `/api` and no sign-in through MatIdentity (the kit).
+admin is not MatUi's shell yet); MatCMS itself has no `/api` (its entry says what it consumes).
